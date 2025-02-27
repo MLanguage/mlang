@@ -22,15 +22,15 @@ let format_application fmt (app : application) = Format.fprintf fmt "%s" app
 
 let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
-let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
+let format_variable_name fmt (v : string) = Format.fprintf fmt "%s" v
 
-let format_variable_generic_name fmt (v : variable_generic_name) =
+let format_variable_generic_name fmt (v : Com.variable_generic_name) =
   Format.fprintf fmt "%s" v.base
 
-let format_variable fmt (v : variable) =
+let format_variable fmt (v : Com.variable_name) =
   match v with
-  | Normal v -> format_variable_name fmt v
-  | Generic v -> format_variable_generic_name fmt v
+  | Com.Normal v -> format_variable_name fmt v
+  | Com.Generic v -> format_variable_generic_name fmt v
 
 let format_error_name fmt (e : error_name) = Format.fprintf fmt "%s" e
 

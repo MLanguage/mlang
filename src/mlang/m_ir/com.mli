@@ -225,9 +225,18 @@ type func =
     number or characters and there can be multiple of them. We have to store all
     this information. *)
 
+type variable_generic_name = { base : string; parameters : char list }
+(** For generic variables, we record the list of their lowercase parameters *)
+
+(** A variable is either generic (with loop parameters) or normal *)
+type variable_name = Normal of string | Generic of variable_generic_name
+
 type 'v access =
   | VarAccess of 'v
+  | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
+
+and 'v m_access = 'v access Pos.marked
 
 (** Values that can be substituted for loop parameters *)
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
@@ -249,7 +258,7 @@ and 'v loop_variables =
 
 and 'v set_value =
   | FloatValue of float Pos.marked
-  | VarValue of 'v access Pos.marked
+  | VarValue of 'v m_access
   | IntervalValue of int Pos.marked * int Pos.marked
 
 and 'v expression =
@@ -259,7 +268,7 @@ and 'v expression =
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v access Pos.marked * 'v m_expression
+  | Index of 'v m_access * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -269,8 +278,8 @@ and 'v expression =
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v access Pos.marked * string Pos.marked
-  | Size of 'v access Pos.marked
+  | Attribut of 'v m_access * string Pos.marked
+  | Size of 'v m_access
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -312,6 +321,10 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
+  | PrintConcName of
+      variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | PrintConcAlias of
+      variable_name Pos.marked * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
   | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
@@ -372,6 +385,10 @@ type ('v, 'e) instruction =
   | FinalizeErrors
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+
+val get_variable_name : variable_name -> string
+
+val get_normal_var : variable_name -> string
 
 val set_loc_int : loc -> int -> loc
 

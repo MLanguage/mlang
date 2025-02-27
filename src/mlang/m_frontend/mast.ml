@@ -34,24 +34,13 @@ type application = string
 type chaining = string
 (** "enchaineur" in the M source code, utility unknown *)
 
-type variable_name = string
-(** Variables are just strings *)
-
 type func_name = string
 (** Func names are just string for the moment *)
-
-type variable_generic_name = { base : string; parameters : char list }
-(** For generic variables, we record the list of their lowercase parameters *)
 
 type error_name = string
 (** Ununsed for now *)
 
 (**{2 Literals}*)
-
-(** A variable is either generic (with loop parameters) or normal *)
-type variable = Normal of variable_name | Generic of variable_generic_name
-
-let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
 type table_size = LiteralSize of int | SymbolSize of string
 
@@ -68,9 +57,9 @@ let get_table_size_opt = function
 
 type var_category_id = string Pos.marked list Pos.marked
 
-type set_value = variable Com.set_value
+type set_value = Com.variable_name Com.set_value
 
-type expression = variable Com.expression
+type expression = Com.variable_name Com.expression
 
 type m_expression = expression Pos.marked
 
@@ -81,7 +70,7 @@ type m_expression = expression Pos.marked
 (** The rule is the main feature of the M language. It defines the expression of
     one or several variables. *)
 
-type instruction = (variable, error_name) Com.instruction
+type instruction = (Com.variable_name, error_name) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
@@ -132,17 +121,17 @@ type rule_domain_decl = rule_domain_data domain_decl
 type variable_attribute = string Pos.marked * int Pos.marked
 
 type input_variable = {
-  input_name : variable_name Pos.marked;
+  input_name : string Pos.marked;
   input_category : string Pos.marked list;
   input_attributes : variable_attribute list;
-  input_alias : variable_name Pos.marked;  (** Unused for now *)
+  input_alias : string Pos.marked;  (** Unused for now *)
   input_is_givenback : bool;
   input_description : string Pos.marked;
   input_typ : Com.value_typ Pos.marked option;
 }
 
 type computed_variable = {
-  comp_name : variable_name Pos.marked;
+  comp_name : string Pos.marked;
   comp_table : table_size Pos.marked option;
       (** size of the table, [None] for non-table variables *)
   comp_attributes : variable_attribute list;
@@ -154,7 +143,7 @@ type computed_variable = {
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of variable_name Pos.marked * variable Com.atom Pos.marked
+  | ConstVar of string Pos.marked * Com.variable_name Com.atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 
@@ -182,7 +171,7 @@ let givenback_category = "restituee"
 
 type verification_condition = {
   verif_cond_expr : expression Pos.marked;
-  verif_cond_error : error_name Pos.marked * variable_name Pos.marked option;
+  verif_cond_error : error_name Pos.marked * string Pos.marked option;
       (** A verification condition error can ba associated to a variable *)
 }
 
@@ -219,7 +208,7 @@ type source_file_item =
   | Target of target
   | Verification of verification
   | Error of error_  (** Declares an error *)
-  | Output of variable_name Pos.marked  (** Declares an output variable *)
+  | Output of string Pos.marked  (** Declares an output variable *)
   | Func  (** Declares a function, unused *)
   | VarCatDecl of var_category_decl Pos.marked
   | RuleDomDecl of rule_domain_decl
@@ -230,8 +219,3 @@ type source_file_item =
 type source_file = source_file_item Pos.marked list
 
 type program = source_file list
-
-(** {1 Helper functions} *)
-
-let get_variable_name (v : variable) : string =
-  match v with Normal s -> s | Generic s -> s.base

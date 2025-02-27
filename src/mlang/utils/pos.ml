@@ -96,7 +96,7 @@ let mark pos value = (value, pos)
 
 let unmark ((x, _) : 'a marked) : 'a = x
 
-let get_position ((_, x) : 'a marked) : t = x
+let get ((_, x) : 'a marked) : t = x
 
 let map_under_mark (f : 'a -> 'b) ((x, y) : 'a marked) : 'b marked = (f x, y)
 

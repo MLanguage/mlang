@@ -57,7 +57,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let mk_assign name value l =
     if var_exists name then
       let no_pos x = (x, Pos.no_pos) in
-      let m_access = no_pos (Com.VarAccess (Normal name)) in
+      let m_access = no_pos (Com.VarAccess (Com.Normal name)) in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
       let cmd = Com.SingleFormula (VarDecl (m_access, None, no_pos litt)) in
       no_pos cmd :: l
@@ -82,7 +82,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
                  |> mk_assign "APPLI_ILIAD" iliad)
              in
              ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
-               Pos.get_position item )
+               Pos.get item )
          | _ -> item))
     program
 
@@ -218,8 +218,7 @@ let driver (files : string list) (application_names : string list)
       let test : string =
         match run_test with Some s -> s | _ -> assert false
       in
-      ignore (Test_interpreter.check_test m_program test value_sort round_ops);
-      Cli.result_print "Test passed!"
+      Test_interpreter.check_one_test m_program test value_sort round_ops
     end
     else begin
       Cli.debug_print

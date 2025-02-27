@@ -266,3 +266,52 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     StrMap.iter
       (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
       f)
+
+let check_one_test (p : Mir.program) (name : string)
+    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) =
+  Mir_interpreter.exit_on_rte := false;
+  (* sort by increasing size, hoping that small files = simple tests *)
+  let dbg_warning = !Cli.warning_flag in
+  let dbg_time = !Cli.display_time in
+  Cli.warning_flag := false;
+  Cli.display_time := false;
+  (* let _, finish = Cli.create_progress_bar "Testing files" in*)
+  let is_ok =
+    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
+                           : Mir_interpreter.S)
+    in
+    try
+      Cli.debug_flag := false;
+      check_test p name value_sort round_ops;
+      Cli.debug_flag := true;
+      Cli.result_print "%s" name;
+      None
+    with
+    | InterpError nbErr -> Some nbErr
+    | Errors.StructuredError (msg, pos, kont) ->
+        Cli.error_print "Error in test %s: %a" name
+          Errors.format_structured_error (msg, pos);
+        (match kont with None -> () | Some kont -> kont ());
+        Some 0
+    | Interp.RuntimeError (run_error, _) -> (
+        match run_error with
+        | Interp.StructuredError (msg, pos, kont) ->
+            Cli.error_print "Error in test %s: %a" name
+              Errors.format_structured_error (msg, pos);
+            (match kont with None -> () | Some kont -> kont ());
+            Some 0
+        | Interp.NanOrInf (msg, (_, pos)) ->
+            Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
+              msg Pos.format_position pos;
+            Some 0)
+    | e ->
+        Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
+        raise e
+  in
+  (* finish "done!"; *)
+  Cli.warning_flag := dbg_warning;
+  Cli.display_time := dbg_time;
+  match is_ok with
+  | None -> Cli.result_print "No failure!"
+  | Some 0 -> Cli.error_print "Unexpected failure"
+  | Some nbErr -> Cli.error_print "Failure: %d errors in file %s" nbErr name

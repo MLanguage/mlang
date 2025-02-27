@@ -42,7 +42,7 @@ val mark : t -> 'a -> 'a marked
 
 val unmark : 'a marked -> 'a
 
-val get_position : 'a marked -> t
+val get : 'a marked -> t
 
 val map_under_mark : ('a -> 'b) -> 'a marked -> 'b marked
 

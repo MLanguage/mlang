@@ -99,7 +99,7 @@ let find_var_name_by_alias (p : program) (alias : string Pos.marked) : string =
   | None ->
       Errors.raise_spanned_error
         (Format.asprintf "alias not found: %s" (Pos.unmark alias))
-        (Pos.get_position alias)
+        (Pos.get alias)
 
 let find_var_by_name (p : program) (name : string Pos.marked) : Com.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
@@ -108,7 +108,7 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Com.Var.t =
       let name = find_var_name_by_alias p name in
       StrMap.find name p.program_vars
     with Not_found ->
-      Errors.raise_spanned_error "unknown variable" (Pos.get_position name))
+      Errors.raise_spanned_error "unknown variable" (Pos.get name))
 
 let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
     'var Com.expression Pos.marked =
@@ -145,6 +145,10 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
   | Index ((VarAccess v, pos), e1) ->
       let new_e1 = expand_functions_expr e1 in
       Pos.same_pos_as (Index ((VarAccess v, pos), new_e1)) e
+  | Index ((ConcAccess (m_v, m_if, i), pos), e1) ->
+      let new_i = expand_functions_expr i in
+      let new_e1 = expand_functions_expr e1 in
+      Pos.same_pos_as (Index ((ConcAccess (m_v, m_if, new_i), pos), new_e1)) e
   | Index ((FieldAccess (ie, f, i_f), pos), e1) ->
       let new_ie = expand_functions_expr ie in
       let new_e1 = expand_functions_expr e1 in
@@ -201,10 +205,16 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
   | FuncCall (fn, args) ->
       Pos.same_pos_as (FuncCall (fn, List.map expand_functions_expr args)) e
   | Attribut ((VarAccess _, _), _) -> e
+  | Attribut ((ConcAccess (m_v, m_if, i), pos), a) ->
+      let new_i = expand_functions_expr i in
+      Pos.same_pos_as (Attribut ((ConcAccess (m_v, m_if, new_i), pos), a)) e
   | Attribut ((FieldAccess (ie, f, i_f), pos), a) ->
       let new_ie = expand_functions_expr ie in
       Pos.same_pos_as (Attribut ((FieldAccess (new_ie, f, i_f), pos), a)) e
   | Size (VarAccess _, _) -> e
+  | Size (ConcAccess (m_v, m_if, i), pos) ->
+      let new_i = expand_functions_expr i in
+      Pos.same_pos_as (Size (ConcAccess (m_v, m_if, new_i), pos)) e
   | Size (FieldAccess (ie, f, i_f), pos) ->
       let new_ie = expand_functions_expr ie in
       Pos.same_pos_as (Size (FieldAccess (new_ie, f, i_f), pos)) e
@@ -228,6 +238,9 @@ let expand_functions (p : program) : program =
           let m_acc =
             match Pos.unmark v_acc with
             | VarAccess _ -> v_acc
+            | ConcAccess (m_v, m_if, i) ->
+                let i' = expand_functions_expr i in
+                Pos.same_pos_as (ConcAccess (m_v, m_if, i')) v_acc
             | FieldAccess (v_i, f, i_f) ->
                 let m_i = expand_functions_expr v_i in
                 Pos.same_pos_as (FieldAccess (m_i, f, i_f)) v_acc
@@ -263,6 +276,12 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 let arg, arg_pos = m_arg in
                 match arg with
+                | Com.PrintConcName (m_v, m_if, i) ->
+                    let i' = expand_functions_expr i in
+                    (Com.PrintConcName (m_v, m_if, i'), arg_pos)
+                | Com.PrintConcAlias (m_v, m_if, i) ->
+                    let i' = expand_functions_expr i in
+                    (Com.PrintConcAlias (m_v, m_if, i'), arg_pos)
                 | Com.PrintEventName (e, f, i) ->
                     let e' = expand_functions_expr e in
                     (Com.PrintEventName (e', f, i), arg_pos)

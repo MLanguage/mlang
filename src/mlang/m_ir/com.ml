@@ -372,9 +372,18 @@ type func =
   | NbEvents
   | Func of string
 
+type variable_generic_name = { base : string; parameters : char list }
+(** For generic variables, we record the list of their lowercase parameters *)
+
+(** A variable is either generic (with loop parameters) or normal *)
+type variable_name = Normal of string | Generic of variable_generic_name
+
 type 'v access =
   | VarAccess of 'v
+  | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
+
+and 'v m_access = 'v access Pos.marked
 
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
 
@@ -391,7 +400,7 @@ and 'v loop_variables =
 
 and 'v set_value =
   | FloatValue of float Pos.marked
-  | VarValue of 'v access Pos.marked
+  | VarValue of 'v m_access
   | IntervalValue of int Pos.marked * int Pos.marked
 
 and 'v expression =
@@ -401,7 +410,7 @@ and 'v expression =
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v access Pos.marked * 'v m_expression
+  | Index of 'v m_access * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -411,8 +420,8 @@ and 'v expression =
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v access Pos.marked * string Pos.marked
-  | Size of 'v access Pos.marked
+  | Attribut of 'v m_access * string Pos.marked
+  | Size of 'v m_access
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -488,6 +497,10 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
+  | PrintConcName of
+      variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | PrintConcAlias of
+      variable_name Pos.marked * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
   | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
@@ -544,6 +557,10 @@ type ('v, 'e) instruction =
   | FinalizeErrors
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+
+let get_variable_name v = match v with Normal s -> s | Generic s -> s.base
+
+let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
 let set_loc_int loc loc_int =
   match loc with
@@ -646,6 +663,10 @@ let format_comp_op fmt op =
 
 let format_access form_var form_expr fmt = function
   | VarAccess v -> form_var fmt v
+  | ConcAccess (m_vn, m_idxf, idx) ->
+      Format.fprintf fmt "%s{%s, %a}"
+        (get_variable_name (Pos.unmark m_vn))
+        (Pos.unmark m_idxf) form_expr (Pos.unmark idx)
   | FieldAccess (e, f, _) ->
       Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
         (Pos.unmark f)
@@ -738,10 +759,20 @@ let format_print_arg form_var fmt =
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
   | PrintName v -> Format.fprintf fmt "nom(%a)" (Pp.unmark form_var) v
   | PrintAlias v -> Format.fprintf fmt "alias(%a)" (Pp.unmark form_var) v
+  | PrintConcName (m_vn, m_idxf, idx) ->
+      Format.fprintf fmt "nom(%s{%s, %a})"
+        (get_variable_name (Pos.unmark m_vn))
+        (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
+  | PrintConcAlias (m_vn, m_idxf, idx) ->
+      Format.fprintf fmt "alias(%s{%s, %a})"
+        (get_variable_name (Pos.unmark m_vn))
+        (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
   | PrintEventName (e, f, _) ->
-      Format.fprintf fmt "nom(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
+      Format.fprintf fmt "nom(champ_evenement(%a, %s))" form_expr (Pos.unmark e)
+        (Pos.unmark f)
   | PrintEventAlias (e, f, _) ->
-      Format.fprintf fmt "alias(%a, %s)" form_expr (Pos.unmark e) (Pos.unmark f)
+      Format.fprintf fmt "alias(champt_evenement(%a, %s))" form_expr
+        (Pos.unmark e) (Pos.unmark f)
   | PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
         (Pp.unmark (format_expression form_var))

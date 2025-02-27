@@ -364,7 +364,7 @@ type verif = {
   verif_domain : Com.verif_domain;
   verif_expr : Mast.expression Pos.marked;
   verif_error : Mast.error_name Pos.marked;
-  verif_var : Mast.variable_name Pos.marked option;
+  verif_var : string Pos.marked option;
   verif_is_blocking : bool;
   verif_cat_var_stats : int Com.CatVar.Map.t;
   verif_var_stats : int StrMap.t;
@@ -615,7 +615,7 @@ let check_global_var (var : Com.Var.t) (prog : program) : program =
   let prog_vars =
     match StrMap.find_opt name prog.prog_vars with
     | Some (gvar : Com.Var.t) ->
-        let old_pos = Pos.get_position gvar.name in
+        let old_pos = Pos.get gvar.name in
         Err.variable_already_declared name old_pos name_pos
     | None -> (
         match StrMap.find_opt name prog.prog_alias with
@@ -694,8 +694,8 @@ let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
           let index = index + 1 in
           (map, index)
       | Some old_ef ->
-          let old_pos = Pos.get_position old_ef.name in
-          let name_pos = Pos.get_position ef.name in
+          let old_pos = Pos.get old_ef.name in
+          let name_pos = Pos.get ef.name in
           Err.event_field_already_declared name old_pos name_pos
     in
     fst (List.fold_left fold (StrMap.empty, 0) evt_decl)
@@ -732,7 +732,7 @@ let check_error (error : Mast.error_) (prog : program) : program =
   let name, name_pos = err.name in
   match StrMap.find_opt name prog.prog_errors with
   | Some old_err ->
-      let old_pos = Pos.get_position old_err.name in
+      let old_pos = Pos.get old_err.name in
       Err.error_already_declared name old_pos name_pos
   | None ->
       let prog_errors = StrMap.add name err prog.prog_errors in
@@ -977,7 +977,7 @@ type var_env = {
 
 let rec fold_var_expr
     (fold_var :
-      Mast.variable Pos.marked -> unit var_mem_type -> var_env -> 'a -> 'a)
+      Com.variable_name Pos.marked -> unit var_mem_type -> var_env -> 'a -> 'a)
     (is_filter : bool) (acc : 'a) (m_expr : Mast.expression Pos.marked)
     (env : var_env) : 'a =
   let expr, expr_pos = m_expr in
@@ -991,6 +991,8 @@ let rec fold_var_expr
               if is_filter then Err.forbidden_expresion_in_filter a_pos;
               match a with
               | VarAccess v -> fold_var (v, a_pos) (OneOf None) env res
+              | ConcAccess (_m_v, _m_if, i) ->
+                  fold_var_expr fold_var is_filter acc i env
               | FieldAccess (ie, f, _) ->
                   let f_name, f_pos = f in
                   (match StrMap.find_opt f_name env.prog.prog_event_fields with
@@ -1001,7 +1003,7 @@ let rec fold_var_expr
           | Com.FloatValue _ -> res
           | Com.IntervalValue (bn, en) ->
               if Pos.unmark bn > Pos.unmark en then
-                Err.wrong_interval_bounds (Pos.get_position bn);
+                Err.wrong_interval_bounds (Pos.get bn);
               res)
         res values
   | Comparison (_op, e1, e2) ->
@@ -1011,19 +1013,21 @@ let rec fold_var_expr
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
   | Unop (_op, e) -> fold_var_expr fold_var is_filter acc e env
-  | Index ((VarAccess t, pos), e) ->
+  | Index ((access, pos), e) -> (
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      let acc = fold_var_expr fold_var is_filter acc e env in
-      fold_var (t, pos) (OneOf (Some ())) env acc
-  | Index ((FieldAccess (ie, f, _), _), e) ->
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      let f_name, f_pos = f in
-      (match StrMap.find_opt f_name env.prog.prog_event_fields with
-      | Some ef when ef.is_var -> ()
-      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
-      | None -> Err.unknown_event_field f_name f_pos);
-      let acc = fold_var_expr fold_var is_filter acc ie env in
-      fold_var_expr fold_var is_filter acc e env
+      match access with
+      | VarAccess t ->
+          let acc = fold_var_expr fold_var is_filter acc e env in
+          fold_var (t, pos) (OneOf (Some ())) env acc
+      | ConcAccess (_, _, i) -> fold_var_expr fold_var is_filter acc i env
+      | FieldAccess (ie, f, _) ->
+          let f_name, f_pos = f in
+          (match StrMap.find_opt f_name env.prog.prog_event_fields with
+          | Some ef when ef.is_var -> ()
+          | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+          | None -> Err.unknown_event_field f_name f_pos);
+          let acc = fold_var_expr fold_var is_filter acc ie env in
+          fold_var_expr fold_var is_filter acc e env)
   | Conditional (e1, e2, e3_opt) -> (
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       let acc = fold_var_expr fold_var is_filter acc e2 env in
@@ -1054,7 +1058,7 @@ let rec fold_var_expr
                   | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                   | None -> Err.unknown_event_field f_name f_pos);
                   fold_var_expr fold_var is_filter acc e env
-              | _ -> Err.second_arg_of_multimax (Pos.get_position var_expr))
+              | _ -> Err.second_arg_of_multimax (Pos.get var_expr))
           | _ -> Err.multimax_require_two_args expr_pos)
       | Com.SumFunc -> check_func (-1)
       | Com.VerifNumber -> check_func 0
@@ -1083,14 +1087,15 @@ let rec fold_var_expr
           in
           check_func (List.length fd.target_args))
   | Literal _ -> acc
-  | Var (VarAccess var) ->
+  | Var access -> (
       if is_filter then Err.variable_forbidden_in_filter expr_pos;
-      fold_var (var, expr_pos) (OneOf None) env acc
-  | Var (FieldAccess (e, f, _)) -> (
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
-      | Some _ -> fold_var_expr fold_var is_filter acc e env
-      | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get_position f))
+      match access with
+      | VarAccess var -> fold_var (var, expr_pos) (OneOf None) env acc
+      | ConcAccess (_, _, i) -> fold_var_expr fold_var is_filter acc i env
+      | FieldAccess (e, f, _) -> (
+          match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
+          | Some _ -> fold_var_expr fold_var is_filter acc e env
+          | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get f)))
   | NbCategory cs ->
       if not is_filter then Err.expression_only_in_filter expr_pos;
       let cats = mast_to_catvars cs env.prog.prog_var_cats in
@@ -1100,59 +1105,68 @@ let rec fold_var_expr
             Err.unknown_domain Verif pos)
         cats;
       acc
-  | Attribut ((VarAccess v, pos), a) ->
-      let name, var_pos =
-        match v with
-        | Mast.Normal name -> (name, pos)
-        | Mast.Generic _ -> assert false
-      in
-      (match StrMap.find_opt name env.prog.prog_vars with
-      | Some var ->
-          let cat = Com.Var.cat var in
-          if not (StrMap.mem (Pos.unmark a) (Com.Var.attrs var)) then
-            Err.unknown_attribut_for_var cat (Pos.get_position a)
-      | None -> (
-          match StrMap.find_opt name env.tmp_vars with
-          | Some _ -> Err.tmp_vars_have_no_attrs var_pos
-          | None -> ()));
-      fold_var (v, pos) Both env acc
-  | Attribut ((FieldAccess (e, f, _), _), a) ->
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      let f_name, f_pos = f in
-      (match StrMap.find_opt f_name env.prog.prog_event_fields with
-      | Some ef when ef.is_var ->
-          let attr = Pos.unmark a in
-          let fold _ (cvd : Com.CatVar.data) res =
-            res || StrMap.mem attr cvd.attributs
+  | Attribut ((access, pos), a) -> (
+      match access with
+      | VarAccess v ->
+          let name, var_pos =
+            match v with
+            | Com.Normal name -> (name, pos)
+            | Com.Generic _ -> assert false
           in
-          if not (Com.CatVar.Map.fold fold env.prog.prog_var_cats false) then
-            Err.unknown_attribut attr (Pos.get_position a)
-      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
-      | None -> Err.unknown_event_field f_name f_pos);
-      fold_var_expr fold_var is_filter acc e env
-  | Size (VarAccess v, pos) -> fold_var (v, pos) Both env acc
-  | Size (FieldAccess (e, f, _), _) ->
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      let f_name, f_pos = f in
-      (match StrMap.find_opt f_name env.prog.prog_event_fields with
-      | Some ef when ef.is_var -> ()
-      | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
-      | None -> Err.unknown_event_field f_name f_pos);
-      fold_var_expr fold_var is_filter acc e env
+          (match StrMap.find_opt name env.prog.prog_vars with
+          | Some var ->
+              let cat = Com.Var.cat var in
+              if not (StrMap.mem (Pos.unmark a) (Com.Var.attrs var)) then
+                Err.unknown_attribut_for_var cat (Pos.get a)
+          | None -> (
+              match StrMap.find_opt name env.tmp_vars with
+              | Some _ -> Err.tmp_vars_have_no_attrs var_pos
+              | None -> ()));
+          fold_var (v, pos) Both env acc
+      | ConcAccess (_, _, i) ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          fold_var_expr fold_var is_filter acc i env
+      | FieldAccess (e, f, _) ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          let f_name, f_pos = f in
+          (match StrMap.find_opt f_name env.prog.prog_event_fields with
+          | Some ef when ef.is_var ->
+              let attr = Pos.unmark a in
+              let fold _ (cvd : Com.CatVar.data) res =
+                res || StrMap.mem attr cvd.attributs
+              in
+              if not (Com.CatVar.Map.fold fold env.prog.prog_var_cats false)
+              then Err.unknown_attribut attr (Pos.get a)
+          | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+          | None -> Err.unknown_event_field f_name f_pos);
+          fold_var_expr fold_var is_filter acc e env)
+  | Size (access, pos) -> (
+      match access with
+      | VarAccess v -> fold_var (v, pos) Both env acc
+      | ConcAccess (_, _, i) ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          fold_var_expr fold_var is_filter acc i env
+      | FieldAccess (e, f, _) ->
+          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          let f_name, f_pos = f in
+          (match StrMap.find_opt f_name env.prog.prog_event_fields with
+          | Some ef when ef.is_var -> ()
+          | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+          | None -> Err.unknown_event_field f_name f_pos);
+          fold_var_expr fold_var is_filter acc e env)
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if is_filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
   | FuncCallLoop _ | Loop _ -> assert false
 
-let check_variable (var : Mast.variable Pos.marked)
+let check_variable (var : Com.variable_name Pos.marked)
     (idx_mem : unit var_mem_type) (env : var_env) : string =
   let var_data, var_pos = var in
   let name, decl_mem, decl_pos =
     match var_data with
     | Normal vn -> (
         match StrMap.find_opt vn env.prog.prog_vars with
-        | Some v ->
-            (vn, OneOf (Com.Var.is_table v), Pos.get_position (Com.Var.name v))
+        | Some v -> (vn, OneOf (Com.Var.is_table v), Pos.get (Com.Var.name v))
         | None -> (
             match StrMap.find_opt vn env.tmp_vars with
             | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
@@ -1209,8 +1223,8 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       | Some (dom_id, _) ->
           let rdom = Com.DomainIdMap.find dom_id prog.prog_rdoms in
           if not rdom.Com.dom_data.rdom_computable then
-            Err.rule_domain_not_computable (Pos.get_position l)
-      | None -> Err.unknown_domain Rule (Pos.get_position l))
+            Err.rule_domain_not_computable (Pos.get l)
+      | None -> Err.unknown_domain Rule (Pos.get l))
   | Com.ComputeChaining (ch_name, ch_pos) -> (
       Buffer.add_string buf "_chaining_";
       Buffer.add_string buf ch_name;
@@ -1227,8 +1241,8 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
       | Some (dom_id, _) ->
           let vdom = Com.DomainIdMap.find dom_id prog.prog_vdoms in
           if not vdom.Com.dom_data.vdom_verifiable then
-            Err.verif_domain_not_verifiable (Pos.get_position l)
-      | None -> Err.unknown_domain Verif (Pos.get_position l))
+            Err.verif_domain_not_verifiable (Pos.get l)
+      | None -> Err.unknown_domain Verif (Pos.get l))
   | _ -> assert false);
   Buffer.contents buf
 
@@ -1252,8 +1266,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
   (* the use of def_vars is to track variables definitions within a rule and warn if one is defined twice
      we use a `Pos.t StrMap` instead of marked variable names because it is enough information in our case *)
   let check_it_var env var =
-    let var_pos = Pos.get_position var in
-    let var_name = Mast.get_normal_var (Pos.unmark var) in
+    let var_pos = Pos.get var in
+    let var_name = Com.get_normal_var (Pos.unmark var) in
     (match StrMap.find_opt var_name env.prog.prog_vars with
     | Some Com.Var.{ name = _, old_pos; _ } ->
         Err.variable_already_declared var_name old_pos var_pos
@@ -1334,13 +1348,21 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     in
                     let out_vars = StrMap.add out_var access_pos out_vars in
                     let def_vars =
-                      let vn = Mast.get_normal_var v in
+                      let vn = Com.get_normal_var v in
                       let def_list =
                         match StrMap.find_opt vn def_vars with
                         | None -> [ access_pos ]
                         | Some l -> access_pos :: l
                       in
                       StrMap.add vn def_list def_vars
+                    in
+                    aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
+                | ConcAccess (_, _, i) ->
+                    if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+                    let in_vars_i = check_expression false i env in
+                    let in_vars_aff = StrSet.union in_vars_i in_vars_aff in
+                    let in_vars =
+                      StrSet.union in_vars (diff_set_map in_vars_aff out_vars)
                     in
                     aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
                 | FieldAccess (i, f, _) ->
@@ -1502,6 +1524,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                 | Com.PrintString _ -> ()
                 | Com.PrintName v | Com.PrintAlias v ->
                     ignore (check_variable v Both env)
+                | Com.PrintConcName (_, _, i) | Com.PrintConcAlias (_, _, i) ->
+                    ignore (check_expression false i env)
                 | Com.PrintEventName (e, f, _) | Com.PrintEventAlias (e, f, _)
                   -> (
                     let f_name, f_pos = f in
@@ -1524,8 +1548,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             ignore
               (List.fold_left
                  (fun seen var ->
-                   let var_pos = Pos.get_position var in
-                   let var_name = Mast.get_normal_var (Pos.unmark var) in
+                   let var_pos = Pos.get var in
+                   let var_name = Com.get_normal_var (Pos.unmark var) in
                    ignore (check_variable var Both env);
                    match StrMap.find_opt var_name seen with
                    | None -> StrMap.add var_name var_pos seen
@@ -1586,8 +1610,8 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
             ignore
               (List.fold_left
                  (fun seen var ->
-                   let var_pos = Pos.get_position var in
-                   let var_name = Mast.get_normal_var (Pos.unmark var) in
+                   let var_pos = Pos.get var in
+                   let var_name = Com.get_normal_var (Pos.unmark var) in
                    ignore (check_variable var Both env);
                    match StrMap.find_opt var_name seen with
                    | None -> StrMap.add var_name var_pos seen
@@ -1767,7 +1791,7 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
     let tmp_vars =
       StrMap.map
         (fun (var, size) ->
-          let vpos = Pos.get_position var in
+          let vpos = Pos.get var in
           let sz =
             match size with
             | None -> None
@@ -1840,7 +1864,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     let rid, rid_pos =
       match Com.DomainIdMap.find_opt rdom_id prog.prog_rdom_syms with
       | Some m_rid -> m_rid
-      | None -> Err.unknown_domain Rule (Pos.get_position r.Mast.rule_tag_names)
+      | None -> Err.unknown_domain Rule (Pos.get r.Mast.rule_tag_names)
     in
     let rule_domain = Com.DomainIdMap.find rid prog.prog_rdoms in
     (rule_domain, rid_pos)
@@ -1870,7 +1894,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   let tmp_vars =
     StrMap.map
       (fun (var, size) ->
-        let vpos = Pos.get_position var in
+        let vpos = Pos.get var in
         let sz =
           match size with
           | None -> None
@@ -1901,7 +1925,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
   in
   (match IntMap.find_opt id prog.prog_rules with
   | Some r ->
-      let rule_pos = Pos.get_position r.rule_id in
+      let rule_pos = Pos.get r.rule_id in
       Err.rov_already_defined Rule id rule_pos id_pos
   | None -> ());
   let prog_rules = IntMap.add id rule prog.prog_rules in
@@ -1912,9 +1936,7 @@ let convert_rules (prog : program) : program =
     IntMap.fold
       (fun id rule prog_targets ->
         let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
-        let target_file =
-          Some (get_target_file (Pos.get_position rule.rule_id))
-        in
+        let target_file = Some (get_target_file (Pos.get rule.rule_id)) in
         let target =
           Mast.
             {
@@ -2028,7 +2050,7 @@ let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
   (match rdom.Com.dom_used with
   | Some (rdom_seq, seq_pos) ->
       if rdom_seq <= rule.rule_seq then
-        Err.domain_already_used Rule seq_pos (Pos.get_position rule.rule_id)
+        Err.domain_already_used Rule seq_pos (Pos.get rule.rule_id)
   | None -> ());
   let rdom_id = Pos.unmark rdom.dom_id in
   let rule_rdom_id = Pos.unmark rule.rule_domain.dom_id in
@@ -2224,8 +2246,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
     let vid =
       match Com.DomainIdMap.find_opt vdom_id prog.prog_vdom_syms with
       | Some (vid, _) -> vid
-      | None ->
-          Err.unknown_domain Verif (Pos.get_position v.Mast.verif_tag_names)
+      | None -> Err.unknown_domain Verif (Pos.get v.Mast.verif_tag_names)
     in
     Com.DomainIdMap.find vid prog.prog_vdoms
   in
@@ -2256,7 +2277,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             let var_data = StrMap.find name env.prog.prog_vars in
             let cat = Com.Var.cat var_data in
             if not (Com.CatVar.Map.mem cat verif_domain.dom_data.vdom_auth) then
-              Err.variable_with_forbidden_category (Pos.get_position var);
+              Err.variable_with_forbidden_category (Pos.get var);
             let incr = function None -> Some 1 | Some i -> Some (i + 1) in
             let vdom_sts = Com.CatVar.Map.update cat incr vdom_sts in
             let var_sts = StrMap.update name incr var_sts in
@@ -2290,7 +2311,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
         in
         (match IntMap.find_opt id prog.prog_verifs with
         | Some v ->
-            let verif_pos = Pos.get_position v.verif_id in
+            let verif_pos = Pos.get v.verif_id in
             Err.rov_already_defined Verif id verif_pos cond_pos
         | None -> ());
         let prog_verifs = IntMap.add id verif prog_verifs in
@@ -2305,9 +2326,7 @@ let convert_verifs (prog : program) : program =
     IntMap.fold
       (fun id verif prog_targets ->
         let tname = Format.sprintf "%s_verif_%d" prog.prog_prefix id in
-        let target_file =
-          Some (get_target_file (Pos.get_position verif.verif_id))
-        in
+        let target_file = Some (get_target_file (Pos.get verif.verif_id)) in
         let target_prog =
           [
             ( Com.IfThenElse
@@ -2355,14 +2374,14 @@ let eval_expr_verif (prog : program) (verif : verif)
     match Pos.unmark expr with
     | Com.Literal (Com.Float f) -> Some f
     | Literal Com.Undefined -> None
-    | Var _ -> Err.variable_forbidden_in_filter (Pos.get_position expr)
+    | Var _ -> Err.variable_forbidden_in_filter (Pos.get expr)
     | Attribut ((VarAccess v, _), m_attr) ->
-        let var = match v with Mast.Normal var -> var | _ -> assert false in
+        let var = match v with Com.Normal var -> var | _ -> assert false in
         let attrs = Com.Var.attrs (StrMap.find var prog.prog_vars) in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
     | Size (VarAccess v, _) -> (
-        let var = match v with Mast.Normal var -> var | _ -> assert false in
+        let var = match v with Com.Normal var -> var | _ -> assert false in
         match Com.Var.is_table (StrMap.find var prog.prog_vars) with
         | Some sz -> Some (float sz)
         | None -> Some 1.0)
@@ -2502,7 +2521,7 @@ let vdom_rule_filter (prog : program) (vdom : Com.verif_domain_data Com.domain)
   (match vdom.Com.dom_used with
   | Some (vdom_seq, seq_pos) ->
       if vdom_seq <= verif.verif_seq then
-        Err.domain_already_used Verif seq_pos (Pos.get_position verif.verif_id)
+        Err.domain_already_used Verif seq_pos (Pos.get verif.verif_id)
   | None -> ());
   let filter_expr =
     match eval_expr_verif prog verif expr with Some 1.0 -> true | _ -> false
@@ -2828,6 +2847,9 @@ let complete_vars_stack (prog : program) : program =
               in
               match Pos.unmark m_access with
               | VarAccess _ -> (nb, sz, nbRef, tdata)
+              | ConcAccess (_, _, mi) ->
+                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
+                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
               | FieldAccess (mei, _, _) ->
                   let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
                   (max nbI nb, max szI sz, max nbRefI nbRef, tdata))
@@ -2867,6 +2889,8 @@ let complete_vars_stack (prog : program) : program =
             match a with
             | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
                 (nb, sz, nbRef, tdata)
+            | Com.PrintConcName (_, _, me)
+            | Com.PrintConcAlias (_, _, me)
             | Com.PrintEventName (me, _, _)
             | Com.PrintEventAlias (me, _, _)
             | Com.PrintIndent me
@@ -2964,6 +2988,7 @@ let complete_vars_stack (prog : program) : program =
       match expr with
       | Com.TestInSet (_, me, values) ->
           let fold (nb, sz, nbRef, tdata) = function
+            | Com.VarValue (ConcAccess (_, _, mei), _)
             | Com.VarValue (FieldAccess (mei, _, _), _) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata mei in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
@@ -2976,10 +3001,14 @@ let complete_vars_stack (prog : program) : program =
           (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
       | Com.Index ((VarAccess _, _), me)
+      | Com.Var (ConcAccess (_, _, me))
       | Com.Var (FieldAccess (me, _, _))
+      | Com.Size (ConcAccess (_, _, me), _)
       | Com.Size (FieldAccess (me, _, _), _)
+      | Com.Attribut ((ConcAccess (_, _, me), _), _)
       | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
           aux_expr tdata me
+      | Com.Index ((ConcAccess (_, _, me0), _), me1)
       | Com.Index ((FieldAccess (me0, _, _), _), me1)
       | Com.Comparison (_, me0, me1)
       | Com.Binop (_, me0, me1) ->
@@ -3068,7 +3097,7 @@ let proceed (p : Mast.program) (main_target : string) : program =
   StrMap.iter
     (fun name (ef : Com.event_field) ->
       if ef.is_var && StrMap.cardinal prog.prog_vars = 0 then
-        Err.event_field_need_a_variable name (Pos.get_position ef.name))
+        Err.event_field_need_a_variable name (Pos.get ef.name))
     prog.prog_event_fields;
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs

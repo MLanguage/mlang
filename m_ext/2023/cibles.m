@@ -1020,12 +1020,34 @@ afficher_erreur "\n";
 iterer : variable I : 0..NB increment 1 : dans (
   afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
 )
-afficher_erreur indenter(-2) "test_tableaux\n";
-
+afficher_erreur indenter(-2) "test_tableaux\n\n";
+#{
+cible test_varcons:
+application: iliad;
+variables_temporaires: TOTO, TUTU;
+afficher_erreur "test_varcons\n";
+STR_TR{00, 3} = 5;
+afficher_erreur nom(STR_TR{00, 3}) " = " (STR_TR{00, 3}) "\n";
+TOTO = 22;
+STR_TR{00, TOTO} = 12;
+afficher_erreur nom(STR_TR{00, TOTO}) " = " (STR_TR{00, TOTO}) "\n";
+TUTU = indefini;
+iterer : variable TRUC2 : TUTU : dans (
+  TRUC{0, 2} = 11;
+  afficher_erreur nom(TRUC{0, 2}) " = " (TRUC{0, 2}) "\n";
+)
+TUTU = indefini;
+TOTO = 2;
+iterer : variable TRUC2 : TUTU : dans (
+  TRUC{0, TOTO} = 11;
+  afficher_erreur nom(TRUC{0, TOTO}) " = " (TRUC{0, TOTO}) "\n";
+)
+}#
 cible test:
 application: iliad;
 calculer cible test_evenements;
 calculer cible test_tableaux;
+#calculer cible test_varcons;
 
 cible enchainement_primitif:
 application: iliad;

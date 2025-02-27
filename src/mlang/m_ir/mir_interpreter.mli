@@ -51,6 +51,7 @@ module type S = sig
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx = {
+    ctx_prog : Mir.program;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
@@ -81,10 +82,7 @@ module type S = sig
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   val update_ctx_with_events :
-    ctx ->
-    Mir.program ->
-    (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
-    unit
+    ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
 
   (** Interpreter runtime errors *)
   type run_error =
@@ -101,9 +99,9 @@ module type S = sig
   (** Returns the comparison between two numbers in the rounding and precision
       context of the interpreter. *)
 
-  val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
+  val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Mir.program -> ctx -> unit
+  val evaluate_program : ctx -> unit
 end
 
 module FloatDefInterp :

@@ -14,6 +14,15 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+let concat_int str f i =
+  let is = Pp.spr "%d" (abs i) in
+  let lis = String.length is in
+  let lf = String.length f in
+  if lis >= lf then str ^ is
+  else
+    let f' = String.sub f 0 (lf - lis) in
+    str ^ f' ^ is
+
 (* let sanitize_str (s, p) =
    String.map
      (fun c ->

@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) : variable Com.atom =
+ let parse_to_atom (v: parse_val) : Com.variable_name Com.atom =
    match v with
    | ParseVar v -> AtomVar v
    | ParseInt v -> AtomLiteral (Float (float_of_int v))
@@ -42,6 +42,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
+%token LBRACE RBRACE
 %token RANGE
 
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
@@ -405,14 +406,14 @@ rule_etc:
       let uname = Pos.unmark name in
       let begPos =
         match uname with
-        | h :: _ -> Pos.get_position h
+        | h :: _ -> Pos.get h
         | [] -> assert false
       in
       let rec aux tags endPos = function
       | [num] ->
            let pos = Pos.make_position_between begPos endPos in
            num, (tags, pos)
-      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
       in
       aux [] begPos uname
@@ -422,7 +423,7 @@ rule_etc:
       with _ ->
         Errors.raise_spanned_error
           "this rule doesn't have an execution number"
-          (Pos.get_position num)
+          (Pos.get num)
     in
     let rule_apps, rule_chainings, rule_tmp_vars =
       let rec aux apps_opt chs_opt vars_opt = function
@@ -482,7 +483,7 @@ rule_etc:
             | None ->
                 Errors.raise_spanned_error
                 "this rule doesn't belong to an application"
-                (Pos.get_position num)
+                (Pos.get num)
           in
           let chs =
             match chs_opt with
@@ -680,7 +681,7 @@ instruction:
   VARIABLE vn = symbol_with_pos COLON
   it_params = nonempty_list(with_pos(it_param))
   IN LPAREN instrs = instruction_list_rev RPAREN {
-    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
     match it_params with
     | (`VarInterval _, _) :: _ ->
         let var_intervals =
@@ -813,6 +814,14 @@ print_argument:
     | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
     | _ -> assert false
   }
+| f = with_pos(print_function) LPAREN v = symbol_with_pos LBRACE
+  idxFmt = symbol_with_pos COMMA idx = with_pos(sum_expression) RBRACE RPAREN {
+    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    match Pos.unmark f with
+    | "nom" -> Com.PrintConcName (m_v, idxFmt, idx)
+    | "alias" -> Com.PrintConcAlias (m_v, idxFmt, idx)
+    | _ -> assert false
+  }
 | f = with_pos(print_function) LPAREN EVENT_FIELD LPAREN
   expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN RPAREN {
     match Pos.unmark f with
@@ -869,7 +878,7 @@ print_precision:
 it_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
-      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+      List.map (fun vn -> Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn) vars
     in
     `VarList vl
   }
@@ -900,13 +909,13 @@ it_param_with_expr:
 rest_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
-      List.map (fun vn -> Pos.same_pos_as (Normal (Pos.unmark vn)) vn) vars
+      List.map (fun vn -> Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn) vars
     in
     `VarList vl
   }
 | VARIABLE vn = symbol_with_pos COLON
   vparams = nonempty_list(rest_param_category) {
-    let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+    let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
     let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
     `VarCatsRest filters
   }
@@ -914,7 +923,7 @@ rest_param:
     `EventList expr_list
   }
 | EVENT vn = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
-     let var = Pos.same_pos_as (Normal (Pos.unmark vn)) vn in
+     let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
     `EventFilter (var, expr)
   }
 
@@ -942,12 +951,12 @@ rest_param_with_expr:
 arrange_events_param:
 | SORT v0 = symbol_with_pos COMMA v1 = symbol_with_pos
   COLON WITH expr = with_pos(expression) COLON {
-    let var0 = Pos.same_pos_as (Normal (Pos.unmark v0)) v0 in
-    let var1 = Pos.same_pos_as (Normal (Pos.unmark v1)) v1 in  
+    let var0 = Pos.same_pos_as (Com.Normal (Pos.unmark v0)) v0 in
+    let var1 = Pos.same_pos_as (Com.Normal (Pos.unmark v1)) v1 in  
     `ArrangeEventsSort (var0, var1, expr)
   }
 | FILTER v = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
-    let var = Pos.same_pos_as (Normal (Pos.unmark v)) v in
+    let var = Pos.same_pos_as (Com.Normal (Pos.unmark v)) v in
     `ArrangeEventsFilter (var, expr)
   }
 | ADD expr = with_pos(expression) COLON {
@@ -965,6 +974,11 @@ var_access:
 | s = symbol_with_pos {
     let v = parse_variable $sloc (Pos.unmark s) in
     Pos.same_pos_as (Com.VarAccess v) s
+  }
+| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
+  COMMA idx = with_pos(sum_expression) RBRACE {
+    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    (Com.ConcAccess (m_v, idxFmt, idx), mk_position $sloc)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
@@ -998,14 +1012,14 @@ verification:
       let uname = Pos.unmark name in
       let begPos =
         match uname with
-        | h :: _ -> Pos.get_position h
+        | h :: _ -> Pos.get h
         | [] -> assert false
       in
       let rec aux tags endPos = function
       | [num] ->
            let pos = Pos.make_position_between begPos endPos in
            num, (tags, pos)
-      | h :: t -> aux (h :: tags) (Pos.get_position h) t
+      | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
       in
       aux [] begPos uname
@@ -1015,14 +1029,14 @@ verification:
       with _ ->
         Errors.raise_spanned_error
           "this verification doesn't have an execution number"
-          (Pos.get_position num)
+          (Pos.get num)
     in
     let verif_apps =
       match apps with
       | [] ->
           Errors.raise_spanned_error
             "this verification doesn't belong to an application"
-            (Pos.get_position verif_number)
+            (Pos.get verif_number)
       | _ ->
         List.fold_left
           (fun res (app, pos) ->
@@ -1157,6 +1171,12 @@ enumeration_item:
     let pos = mk_position $sloc in
     Com.VarValue (FieldAccess (idx, field, -1), pos)
   }
+| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
+  COMMA idx = with_pos(sum_expression) RBRACE {
+    let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let pos = mk_position $sloc in
+    Com.VarValue (ConcAccess (m_v, idxFmt, idx), pos)
+  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
@@ -1232,6 +1252,13 @@ factor:
     match i_opt with
     | Some i -> Com.Index ((FieldAccess (idx, field, -1), mk_position $sloc), i)
     | None -> Var (FieldAccess (idx, field, -1))
+  }
+| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
+  COMMA idx = with_pos(sum_expression) RBRACE i_opt = with_pos(brackets)? {
+    let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    match i_opt with
+    | Some i -> Com.Index ((ConcAccess (m_v, idxFmt, idx), mk_position $sloc), i)
+    | None -> Var (ConcAccess (m_v, idxFmt, idx))
   }
 | s = symbol_with_pos i = with_pos(brackets) {
     let v = parse_variable $sloc (Pos.unmark s) in

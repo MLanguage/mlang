@@ -20,7 +20,7 @@ let mk_position sloc = Pos.make_position (fst sloc).Lexing.pos_fname sloc
 
 (** {1 Frontend variable names}*)
 
-let parse_variable_name sloc (s : string) : Mast.variable_name =
+let parse_variable_name sloc (s : string) : string =
   if not (String.equal (String.uppercase_ascii s) s) then
     E.raise_spanned_error "invalid variable name" (mk_position sloc)
   else s
@@ -44,7 +44,7 @@ let dup_exists l =
   dup_consecutive (List.sort sort_on_third l)
 
 (** Parse variable with parameters, parameters have to be lowercase letters *)
-let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
+let parse_variable_generic_name sloc (s : string) : Com.variable_generic_name =
   let parameters = ref [] in
   for i = String.length s - 1 downto 0 do
     let p = s.[i] in
@@ -58,23 +58,23 @@ let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
   if dup_exists !parameters then
     E.raise_spanned_error "variable parameters should have distinct names"
       (mk_position sloc);
-  { Mast.parameters = !parameters; Mast.base = s }
+  { Com.parameters = !parameters; Com.base = s }
 
 let parse_variable sloc (s : string) =
-  try Mast.Normal (parse_variable_name sloc s)
+  try Com.Normal (parse_variable_name sloc s)
   with E.StructuredError _ -> (
-    try Mast.Generic (parse_variable_generic_name sloc s)
+    try Com.Generic (parse_variable_generic_name sloc s)
     with E.StructuredError _ ->
       E.raise_spanned_error "invalid variable name" (mk_position sloc))
 
-type parse_val = ParseVar of Mast.variable | ParseInt of int
+type parse_val = ParseVar of Com.variable_name | ParseInt of int
 
 let parse_variable_or_int sloc (s : string) : parse_val =
   try ParseInt (int_of_string s)
   with Failure _ -> (
-    try ParseVar (Mast.Normal (parse_variable_name sloc s))
+    try ParseVar (Com.Normal (parse_variable_name sloc s))
     with E.StructuredError _ -> (
-      try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
+      try ParseVar (Com.Generic (parse_variable_generic_name sloc s))
       with E.StructuredError _ ->
         E.raise_spanned_error "invalid variable name" (mk_position sloc)))
 
@@ -87,7 +87,7 @@ let parse_literal sloc (s : string) : Com.literal =
   try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_atom sloc (s : string) : Mast.variable Com.atom =
+let parse_atom sloc (s : string) : Com.variable_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
   with Failure _ -> Com.AtomVar (parse_variable sloc s)
 
@@ -264,7 +264,7 @@ let parse_target_or_function_header name is_function header =
               let ty = if is_function then "function" else "target" in
               Errors.raise_spanned_error
                 (Format.sprintf "this %s doesn't belong to an application" ty)
-                (Pos.get_position name)
+                (Pos.get name)
         in
         let args = match args_opt with None -> [] | Some (l, _) -> l in
         let vars =
@@ -287,7 +287,7 @@ let parse_target_or_function_header name is_function header =
           | None ->
               if is_function then
                 Errors.raise_spanned_error "this function doesn't have a result"
-                  (Pos.get_position name)
+                  (Pos.get name)
               else None
           | Some (rvar, _) -> Some rvar
         in

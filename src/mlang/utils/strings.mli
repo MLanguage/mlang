@@ -19,6 +19,8 @@
     backend compilers such as Java and Python, this function transforms illegal
     characters with a space. - not useful anymore (for now) *)
 
+val concat_int : string -> string -> int -> string
+
 val sanitize_c_str : string -> string
 
 val compare_default : string -> string -> int

@@ -22,13 +22,13 @@
 
 (** {2 General translation context} *)
 
-let get_var_from_name (var_data : Com.Var.t StrMap.t)
-    (name : Mast.variable_name Pos.marked) : Com.Var.t =
+let get_var_from_name (var_data : Com.Var.t StrMap.t) (name : string Pos.marked)
+    : Com.Var.t =
   try StrMap.find (Pos.unmark name) var_data
   with Not_found ->
     Errors.raise_spanned_error
       (Format.asprintf "variable %s has not been declared" (Pos.unmark name))
-      (Pos.get_position name)
+      (Pos.get name)
 
 (**{1 Translation}*)
 
@@ -37,13 +37,13 @@ let get_var_from_name (var_data : Com.Var.t StrMap.t)
 (**{2 SSA construction}*)
 
 let translate_variable (var_data : Com.Var.t StrMap.t)
-    (var : Mast.variable Pos.marked) : Com.Var.t Pos.marked =
+    (var : Com.variable_name Pos.marked) : Com.Var.t Pos.marked =
   match Pos.unmark var with
-  | Mast.Normal name ->
+  | Com.Normal name ->
       Pos.same_pos_as
         (get_var_from_name var_data (Pos.same_pos_as name var))
         var
-  | Mast.Generic _ -> assert false
+  | Com.Generic _ -> assert false
 
 (** {2 Translation of expressions}*)
 
@@ -59,17 +59,25 @@ let rec translate_expression (p : Check_validity.program)
           List.map
             (function
               | FloatValue f -> FloatValue f
-              | VarValue (VarAccess v, pos) ->
-                  let new_v =
-                    match v with
-                    | Mast.Normal name -> StrMap.find name var_data
-                    | Mast.Generic _ -> assert false
+              | VarValue (access, pos) ->
+                  let access' =
+                    match access with
+                    | VarAccess v ->
+                        let v' =
+                          match v with
+                          | Com.Normal name -> StrMap.find name var_data
+                          | Com.Generic _ -> assert false
+                        in
+                        VarAccess v'
+                    | ConcAccess (m_vn, m_if, i) ->
+                        let i' = translate_expression p var_data i in
+                        ConcAccess (m_vn, m_if, i')
+                    | FieldAccess (e, ((fn, _) as f), _) ->
+                        let e' = translate_expression p var_data e in
+                        let i_f = (StrMap.find fn p.prog_event_fields).index in
+                        FieldAccess (e', f, i_f)
                   in
-                  VarValue (VarAccess new_v, pos)
-              | VarValue (FieldAccess (e, ((fn, _) as f), _), pos) ->
-                  let new_e = translate_expression p var_data e in
-                  let i_f = (StrMap.find fn p.prog_event_fields).index in
-                  VarValue (FieldAccess (new_e, f, i_f), pos)
+                  VarValue (access', pos)
               | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
             values
         in
@@ -87,22 +95,31 @@ let rec translate_expression (p : Check_validity.program)
              (* It is difficult to do a broader or deeper analysis because of
                 constant substitutions that could wrongly trigger the warning *)
              Errors.print_spanned_warning
-               "Nullifying constant multiplication found." (Pos.get_position f);*)
+               "Nullifying constant multiplication found." (Pos.get f);*)
         let new_e1 = translate_expression p var_data e1 in
         let new_e2 = translate_expression p var_data e2 in
         Binop (op, new_e1, new_e2)
     | Unop (op, e) ->
         let new_e = translate_expression p var_data e in
         Unop (op, new_e)
-    | Index ((VarAccess t, pos), i) ->
-        let t_var, t_pos = translate_variable var_data (t, pos) in
-        let new_i = translate_expression p var_data i in
-        Index ((VarAccess t_var, t_pos), new_i)
-    | Index ((FieldAccess (e, f, _), pos), i) ->
-        let new_e = translate_expression p var_data e in
-        let new_i = translate_expression p var_data i in
-        let i_f = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-        Index ((FieldAccess (new_e, f, i_f), pos), new_i)
+    | Index ((access, pos), idx) ->
+        let access', pos' =
+          match access with
+          | VarAccess t ->
+              let t_var, t_pos = translate_variable var_data (t, pos) in
+              (VarAccess t_var, t_pos)
+          | ConcAccess (m_vn, m_if, i) ->
+              let i' = translate_expression p var_data i in
+              (ConcAccess (m_vn, m_if, i'), pos)
+          | FieldAccess (e, f, _) ->
+              let e' = translate_expression p var_data e in
+              let i_f =
+                (StrMap.find (Pos.unmark f) p.prog_event_fields).index
+              in
+              (FieldAccess (e', f, i_f), pos)
+        in
+        let idx' = translate_expression p var_data idx in
+        Index ((access', pos'), idx')
     | Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression p var_data e1 in
         let new_e2 = translate_expression p var_data e2 in
@@ -114,43 +131,57 @@ let rec translate_expression (p : Check_validity.program)
         in
         FuncCall (f_name, new_args)
     | Literal l -> Literal l
-    | Var (VarAccess var) ->
-        let new_var = translate_variable var_data (Pos.same_pos_as var f) in
-        Var (VarAccess (Pos.unmark new_var))
-    | Var (FieldAccess (e, f, _)) ->
-        let new_e = translate_expression p var_data e in
-        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-        Var (FieldAccess (new_e, f, i))
+    | Var access ->
+        let access' =
+          match access with
+          | VarAccess v ->
+              let m_v = translate_variable var_data (Pos.same_pos_as v f) in
+              VarAccess (Pos.unmark m_v)
+          | ConcAccess (m_vn, m_if, i) ->
+              let i' = translate_expression p var_data i in
+              ConcAccess (m_vn, m_if, i')
+          | FieldAccess (e, f, _) ->
+              let e' = translate_expression p var_data e in
+              let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+              FieldAccess (e', f, i)
+        in
+        Var access'
     | NbCategory cs ->
         NbCategory (Check_validity.mast_to_catvars cs p.prog_var_cats)
-    | Attribut ((VarAccess v, v_pos), a) -> (
-        let v_name =
-          match v with Mast.Normal v_name -> v_name | _ -> assert false
-        in
-        let var = StrMap.find v_name var_data in
-        if Com.Var.is_ref var then Attribut ((VarAccess var, v_pos), a)
-        else
-          match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-          | Some l -> Literal (Float (float (Pos.unmark l)))
-          | None -> Literal Undefined)
-    | Attribut ((FieldAccess (e, f, _), pos), a) ->
-        let new_e = translate_expression p var_data e in
-        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-        Attribut ((FieldAccess (new_e, f, i), pos), a)
-    | Size (VarAccess v, pos) -> (
-        let v_name =
-          match v with Mast.Normal v_name -> v_name | _ -> assert false
-        in
-        let var = StrMap.find v_name var_data in
-        if Com.Var.is_ref var then Size (VarAccess var, pos)
-        else
-          match Com.Var.is_table var with
-          | Some i -> Literal (Float (float_of_int i))
-          | None -> Literal (Float 1.0))
-    | Size (FieldAccess (e, f, _), pos) ->
-        let new_e = translate_expression p var_data e in
-        let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-        Size (FieldAccess (new_e, f, i), pos)
+    | Attribut ((access, pos), a) -> (
+        match access with
+        | VarAccess v -> (
+            let v_name = Com.get_normal_var v in
+            let var = StrMap.find v_name var_data in
+            if Com.Var.is_ref var then Attribut ((VarAccess var, pos), a)
+            else
+              match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
+              | Some l -> Literal (Float (float (Pos.unmark l)))
+              | None -> Literal Undefined)
+        | ConcAccess (m_vn, m_if, i) ->
+            let i' = translate_expression p var_data i in
+            Attribut ((ConcAccess (m_vn, m_if, i'), pos), a)
+        | FieldAccess (e, f, _) ->
+            let e' = translate_expression p var_data e in
+            let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+            Attribut ((FieldAccess (e', f, i), pos), a))
+    | Size (access, pos) -> (
+        match access with
+        | VarAccess v -> (
+            let v_name = Com.get_normal_var v in
+            let var = StrMap.find v_name var_data in
+            if Com.Var.is_ref var then Size (VarAccess var, pos)
+            else
+              match Com.Var.is_table var with
+              | Some i -> Literal (Float (float_of_int i))
+              | None -> Literal (Float 1.0))
+        | ConcAccess (m_vn, m_if, i) ->
+            let i' = translate_expression p var_data i in
+            Size (ConcAccess (m_vn, m_if, i'), pos)
+        | FieldAccess (e, f, _) ->
+            let e' = translate_expression p var_data e in
+            let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+            Size (FieldAccess (e', f, i), pos))
     | NbAnomalies -> NbAnomalies
     | NbDiscordances -> NbDiscordances
     | NbInformatives -> NbInformatives
@@ -175,6 +206,9 @@ let rec translate_prog (p : Check_validity.program)
                 | VarAccess v ->
                     let v', v_pos' = translate_variable var_data (v, a_pos) in
                     (Com.VarAccess v', v_pos')
+                | ConcAccess (m_vn, m_if, i) ->
+                    let i' = translate_expression p var_data i in
+                    (Com.ConcAccess (m_vn, m_if, i'), a_pos)
                 | FieldAccess (i, f, _) ->
                     let i' = translate_expression p var_data i in
                     let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
@@ -222,11 +256,7 @@ let rec translate_prog (p : Check_validity.program)
                    match Pos.unmark arg with
                    | Com.PrintString s -> Com.PrintString s
                    | Com.PrintName v -> (
-                       let name =
-                         match Pos.unmark v with
-                         | Mast.Normal name -> name
-                         | Mast.Generic _ -> assert false
-                       in
+                       let name = Com.get_normal_var (Pos.unmark v) in
                        match StrMap.find_opt name var_data with
                        | Some var ->
                            if Com.Var.is_ref var then
@@ -236,13 +266,9 @@ let rec translate_prog (p : Check_validity.program)
                            let msg =
                              Format.sprintf "unknown variable %s" name
                            in
-                           Errors.raise_spanned_error msg (Pos.get_position v))
+                           Errors.raise_spanned_error msg (Pos.get v))
                    | Com.PrintAlias v -> (
-                       let name =
-                         match Pos.unmark v with
-                         | Mast.Normal name -> name
-                         | Mast.Generic _ -> assert false
-                       in
+                       let name = Com.get_normal_var (Pos.unmark v) in
                        match StrMap.find_opt name var_data with
                        | Some var ->
                            if Com.Var.is_ref var then
@@ -252,7 +278,13 @@ let rec translate_prog (p : Check_validity.program)
                            let msg =
                              Format.sprintf "unknown variable %s" name
                            in
-                           Errors.raise_spanned_error msg (Pos.get_position v))
+                           Errors.raise_spanned_error msg (Pos.get v))
+                   | Com.PrintConcName (m_vn, m_if, i) ->
+                       let i' = translate_expression p var_data i in
+                       Com.PrintConcName (m_vn, m_if, i')
+                   | Com.PrintConcAlias (m_vn, m_if, i) ->
+                       let i' = translate_expression p var_data i in
+                       Com.PrintConcAlias (m_vn, m_if, i')
                    | Com.PrintEventName (e, f, _) ->
                        let e' = translate_expression p var_data e in
                        let i =
@@ -276,13 +308,13 @@ let rec translate_prog (p : Check_validity.program)
         in
         aux ((Com.Print (std, mir_args), pos) :: res) il
     | (Com.Iterate (vn, vars, var_params, instrs), pos) :: il ->
-        let var_pos = Pos.get_position vn in
-        let var_name = Mast.get_normal_var (Pos.unmark vn) in
+        let var_pos = Pos.get vn in
+        let var_name = Com.get_normal_var (Pos.unmark vn) in
         (match StrMap.find_opt var_name var_data with
         | Some v ->
             let msg =
               Format.asprintf "variable already declared %a" Pos.format_position
-                (Pos.get_position v.name)
+                (Pos.get v.name)
             in
             Errors.raise_spanned_error msg pos
         | _ -> ());
@@ -292,7 +324,7 @@ let rec translate_prog (p : Check_validity.program)
           List.map
             (fun vn ->
               Pos.same_pos_as
-                (StrMap.find (Mast.get_normal_var (Pos.unmark vn)) var_data)
+                (StrMap.find (Com.get_normal_var (Pos.unmark vn)) var_data)
                 vn)
             vars
         in
@@ -312,13 +344,13 @@ let rec translate_prog (p : Check_validity.program)
         let m_var = Pos.same_pos_as var vn in
         aux ((Com.Iterate (m_var, vars', var_params', prog_it), pos) :: res) il
     | (Com.Iterate_values (vn, var_intervals, instrs), pos) :: il ->
-        let var_pos = Pos.get_position vn in
-        let var_name = Mast.get_normal_var (Pos.unmark vn) in
+        let var_pos = Pos.get vn in
+        let var_name = Com.get_normal_var (Pos.unmark vn) in
         (match StrMap.find_opt var_name var_data with
         | Some v ->
             let msg =
               Format.asprintf "variable already declared %a" Pos.format_position
-                (Pos.get_position v.name)
+                (Pos.get v.name)
             in
             Errors.raise_spanned_error msg pos
         | _ -> ());
@@ -348,15 +380,15 @@ let rec translate_prog (p : Check_validity.program)
           List.map
             (fun vn ->
               Pos.same_pos_as
-                (StrMap.find (Mast.get_normal_var (Pos.unmark vn)) var_data)
+                (StrMap.find (Com.get_normal_var (Pos.unmark vn)) var_data)
                 vn)
             vars
         in
         let var_params' =
           List.map
             (fun (vn, vcats, expr) ->
-              let var_pos = Pos.get_position vn in
-              let var_name = Mast.get_normal_var (Pos.unmark vn) in
+              let var_pos = Pos.get vn in
+              let var_name = Com.get_normal_var (Pos.unmark vn) in
               let var =
                 Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth
               in
@@ -372,8 +404,8 @@ let rec translate_prog (p : Check_validity.program)
         let evtfs' =
           List.map
             (fun (vn, expr) ->
-              let var_pos = Pos.get_position vn in
-              let var_name = Mast.get_normal_var (Pos.unmark vn) in
+              let var_pos = Pos.get vn in
+              let var_name = Com.get_normal_var (Pos.unmark vn) in
               let var =
                 Com.Var.new_temp ~name:(var_name, var_pos) ~is_table:None
                   ~loc_int:itval_depth
@@ -392,13 +424,13 @@ let rec translate_prog (p : Check_validity.program)
         let sort', itval_depth' =
           match sort with
           | Some (var0, var1, expr) ->
-              let var0_pos = Pos.get_position var0 in
-              let var0_name = Mast.get_normal_var (Pos.unmark var0) in
+              let var0_pos = Pos.get var0 in
+              let var0_name = Com.get_normal_var (Pos.unmark var0) in
               (match StrMap.find_opt var0_name var_data with
               | Some v ->
                   let msg =
                     Format.asprintf "variable already declared %a"
-                      Pos.format_position (Pos.get_position v.name)
+                      Pos.format_position (Pos.get v.name)
                   in
                   Errors.raise_spanned_error msg pos
               | _ -> ());
@@ -406,13 +438,13 @@ let rec translate_prog (p : Check_validity.program)
                 Com.Var.new_temp ~name:(var0_name, var0_pos) ~is_table:None
                   ~loc_int:itval_depth
               in
-              let var1_pos = Pos.get_position var1 in
-              let var1_name = Mast.get_normal_var (Pos.unmark var1) in
+              let var1_pos = Pos.get var1 in
+              let var1_name = Com.get_normal_var (Pos.unmark var1) in
               (match StrMap.find_opt var1_name var_data with
               | Some v ->
                   let msg =
                     Format.asprintf "variable already declared %a"
-                      Pos.format_position (Pos.get_position v.name)
+                      Pos.format_position (Pos.get v.name)
                   in
                   Errors.raise_spanned_error msg pos
               | _ -> ());
@@ -433,13 +465,13 @@ let rec translate_prog (p : Check_validity.program)
         let filter', itval_depth' =
           match filter with
           | Some (var, expr) ->
-              let var_pos = Pos.get_position var in
-              let var_name = Mast.get_normal_var (Pos.unmark var) in
+              let var_pos = Pos.get var in
+              let var_name = Com.get_normal_var (Pos.unmark var) in
               (match StrMap.find_opt var_name var_data with
               | Some v ->
                   let msg =
                     Format.asprintf "variable already declared %a"
-                      Pos.format_position (Pos.get_position v.name)
+                      Pos.format_position (Pos.get v.name)
                   in
                   Errors.raise_spanned_error msg pos
               | _ -> ());
