@@ -124,6 +124,7 @@ module Var = struct
     cat : CatVar.t;
     is_given_back : bool;
     typ : value_typ option;
+    in_verif : bool;
   }
 
   type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
@@ -177,6 +178,8 @@ module Var = struct
 
   let is_given_back v = (tgv v).is_given_back
 
+  let in_verif v = (tgv v).in_verif
+
   let loc_tgv v =
     match v.loc with
     | LocTgv (_, l) -> l
@@ -214,12 +217,23 @@ module Var = struct
   let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
-      ~(cat : CatVar.t) ~(typ : value_typ option) : t =
+      ~(cat : CatVar.t) ~(typ : value_typ option) ~(in_verif : bool) : t =
     {
       name;
       id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc cat);
-      scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
+      scope =
+        Tgv
+          {
+            is_table;
+            alias;
+            descr;
+            attrs;
+            cat;
+            is_given_back;
+            typ;
+            in_verif : bool;
+          };
     }
 
   let new_temp ~(name : string Pos.marked) ~(is_table : int option)
