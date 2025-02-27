@@ -102,6 +102,8 @@ module Var : sig
 
   val is_given_back : t -> bool
 
+  val is_base : t -> bool
+
   val in_verif : t -> bool
 
   val loc_tgv : t -> loc_tgv
