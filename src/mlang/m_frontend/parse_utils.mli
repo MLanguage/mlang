@@ -54,6 +54,8 @@ val parse_atom :
 
 val parse_function_name : string Pos.marked -> Com.func Pos.marked
 
+val parse_index_format : string Pos.marked -> string Pos.marked
+
 val parse_if_then_etc :
   (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
   list ->

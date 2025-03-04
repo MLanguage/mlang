@@ -126,6 +126,12 @@ let gen_val_ptr (v : Com.Var.t) =
   | LocArg (_, i) -> gen_arg_val_ptr i
   | LocRes _ -> gen_res_val_ptr ()
 
+let gen_ref_name_ptr (v : Com.Var.t) =
+  let vn = Pos.unmark v.name in
+  match v.loc with
+  | LocRef (_, i) -> Printf.sprintf "NR_((%d)/*%s*/)" i vn
+  | _ -> assert false
+
 let gen_pos_from_start (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with

@@ -163,9 +163,12 @@ module Var = struct
 
   let size v = match is_table v with None -> 1 | Some sz -> sz
 
-  let alias v = (tgv v).alias
+  let alias v = match v.scope with Tgv s -> s.alias | _ -> None
 
-  let alias_str v = Option.fold ~none:"" ~some:Pos.unmark (tgv v).alias
+  let alias_str v =
+    match v.scope with
+    | Tgv s -> Option.fold ~none:"" ~some:Pos.unmark s.alias
+    | _ -> ""
 
   let descr v = (tgv v).descr
 

@@ -817,6 +817,7 @@ print_argument:
 | f = with_pos(print_function) LPAREN v = symbol_with_pos LBRACE
   idxFmt = symbol_with_pos COMMA idx = with_pos(sum_expression) RBRACE RPAREN {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
     match Pos.unmark f with
     | "nom" -> Com.PrintConcName (m_v, idxFmt, idx)
     | "alias" -> Com.PrintConcAlias (m_v, idxFmt, idx)
@@ -978,6 +979,7 @@ var_access:
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
   COMMA idx = with_pos(sum_expression) RBRACE {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
     (Com.ConcAccess (m_v, idxFmt, idx), mk_position $sloc)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
@@ -1174,6 +1176,7 @@ enumeration_item:
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
   COMMA idx = with_pos(sum_expression) RBRACE {
     let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
     let pos = mk_position $sloc in
     Com.VarValue (ConcAccess (m_v, idxFmt, idx), pos)
   }
@@ -1256,6 +1259,7 @@ factor:
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
   COMMA idx = with_pos(sum_expression) RBRACE i_opt = with_pos(brackets)? {
     let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
     match i_opt with
     | Some i -> Com.Index ((ConcAccess (m_v, idxFmt, idx), mk_position $sloc), i)
     | None -> Var (ConcAccess (m_v, idxFmt, idx))

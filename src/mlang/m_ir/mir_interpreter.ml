@@ -31,10 +31,11 @@ module type S = sig
 
   type ctx = {
     ctx_prog : Mir.program;
+    mutable ctx_target : Mir.target_data;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_ref : (Com.Var.t * int) Array.t;
+    ctx_ref : (Com.Var.t * (Com.Var.t * int)) Array.t;
     mutable ctx_ref_org : int;
     mutable ctx_args : value Array.t list;
     mutable ctx_res : value list;
@@ -112,10 +113,11 @@ struct
 
   type ctx = {
     ctx_prog : Mir.program;
+    mutable ctx_target : Mir.target_data;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
-    ctx_ref : (Com.Var.t * int) Array.t;
+    ctx_ref : (Com.Var.t * (Com.Var.t * int)) Array.t;
     mutable ctx_ref_org : int;
     mutable ctx_args : value Array.t list;
     mutable ctx_res : value list;
@@ -134,10 +136,12 @@ struct
 
   let empty_ctx (p : Mir.program) : ctx =
     let dummy_ref =
-      (Com.Var.new_ref ~name:("", Pos.no_pos) ~loc_int:(-1), -1)
+      let var = Com.Var.new_ref ~name:("", Pos.no_pos) ~loc_int:(-1) in
+      (var, (var, -1))
     in
     {
       ctx_prog = p;
+      ctx_target = snd (Com.TargetMap.min_binding p.program_targets);
       ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
       ctx_tmps_org = 0;
@@ -275,7 +279,7 @@ struct
 
   let get_var ctx (var : Com.Var.t) =
     match var.loc with
-    | LocRef (_, i) -> ctx.ctx_ref.(ctx.ctx_ref_org + i)
+    | LocRef (_, i) -> snd ctx.ctx_ref.(ctx.ctx_ref_org + i)
     | LocTgv (_, { loc_int; _ }) -> (var, loc_int)
     | LocTmp (_, i) -> (var, ctx.ctx_tmps_org + i)
     | LocArg (_, i) -> (var, i)
@@ -305,6 +309,21 @@ struct
 
   exception BlockingError
 
+  let get_var_by_name ctx name =
+    match StrMap.find_opt name ctx.ctx_prog.program_vars with
+    | Some v -> Some (fst (get_var ctx v))
+    | None -> (
+        match StrMap.find_opt name ctx.ctx_target.target_tmp_vars with
+        | Some (v, _, _) -> Some (fst (get_var ctx v))
+        | None ->
+            let rec searchRef i =
+              if i < ctx.ctx_target.target_nb_refs then
+                let v, (v', _) = ctx.ctx_ref.(ctx.ctx_ref_org - 1 - i) in
+                if Com.Var.name_str v = name then Some v' else searchRef (i + 1)
+              else None
+            in
+            searchRef 0)
+
   let rec get_access_value ctx access (i : int) =
     match access with
     | Com.VarAccess v -> get_var_value ctx (fst (get_var ctx v)) i
@@ -318,7 +337,7 @@ struct
                   (Com.get_normal_var (Pos.unmark m_vn))
                   (Pos.unmark m_idxf) zi
               in
-              match StrMap.find_opt name ctx.ctx_prog.program_vars with
+              match get_var_by_name ctx name with
               | Some v -> get_var_value ctx (fst (get_var ctx v)) i
               | None -> Undefined
             else Undefined
@@ -349,9 +368,7 @@ struct
                   (Com.get_normal_var (Pos.unmark m_vn))
                   (Pos.unmark m_if) zi
               in
-              match StrMap.find_opt name ctx.ctx_prog.program_vars with
-              | Some v -> Some (fst (get_var ctx v))
-              | None -> None
+              get_var_by_name ctx name
             else None
         | _ -> None)
     | Com.FieldAccess (e, _, j) -> (
@@ -559,7 +576,7 @@ struct
             let atab = Array.of_list (List.map (evaluate_expr ctx) args) in
             ctx.ctx_args <- atab :: ctx.ctx_args;
             ctx.ctx_res <- Undefined :: ctx.ctx_res;
-            evaluate_target false ctx fn fd;
+            evaluate_target false ctx fd;
             ctx.ctx_args <- List.tl ctx.ctx_args;
             let res = List.hd ctx.ctx_res in
             ctx.ctx_res <- List.tl ctx.ctx_res;
@@ -652,8 +669,8 @@ struct
           | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
           | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
 
-  and evaluate_stmt (tn : string) (canBlock : bool) (ctx : ctx)
-      (stmt : Mir.m_instruction) : unit =
+  and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
+      unit =
     match Pos.unmark stmt with
     | Com.Affectation (SingleFormula (VarDecl (m_acc, vidx_opt, vexpr)), _) -> (
         match get_access_var ctx (Pos.unmark m_acc) with
@@ -677,34 +694,35 @@ struct
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx b with
-        | Number z when N.(z =. zero ()) -> evaluate_stmts tn canBlock ctx f
-        | Number _ -> evaluate_stmts tn canBlock ctx t
+        | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx f
+        | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
     | Com.WhenDoElse (wdl, ed) ->
         let rec aux = function
           | (expr, dl, _) :: l -> (
               match evaluate_expr ctx expr with
               | Number z when N.(z =. zero ()) ->
-                  evaluate_stmts tn canBlock ctx (Pos.unmark ed)
+                  evaluate_stmts canBlock ctx (Pos.unmark ed)
               | Number _ ->
-                  evaluate_stmts tn canBlock ctx dl;
+                  evaluate_stmts canBlock ctx dl;
                   aux l
               | Undefined -> aux l)
           | [] -> ()
         in
         aux wdl
-    | Com.VerifBlock stmts -> evaluate_stmts tn true ctx stmts
+    | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
     | Com.ComputeTarget ((tn, _), args) ->
         let tf = Com.TargetMap.find tn ctx.ctx_prog.program_targets in
         let rec set_args n = function
           | [] -> ()
           | m_a :: al' ->
-              let a = m_a |> Pos.unmark |> get_var ctx in
-              ctx.ctx_ref.(ctx.ctx_ref_org + n) <- a;
+              let v_a = Pos.unmark m_a in
+              let a = get_var ctx v_a in
+              ctx.ctx_ref.(ctx.ctx_ref_org + n) <- (v_a, a);
               set_args (n + 1) al'
         in
         set_args 0 args;
-        evaluate_target canBlock ctx tn tf
+        evaluate_target canBlock ctx tf
     | Com.Print (std, args) -> begin
         let std_fmt, ctx_pr =
           match std with
@@ -755,7 +773,7 @@ struct
                           (Com.get_normal_var (Pos.unmark m_vn))
                           (Pos.unmark m_if) zi
                       in
-                      match StrMap.find_opt name ctx.ctx_prog.program_vars with
+                      match get_var_by_name ctx name with
                       | Some v -> pr_raw ctx_pr (Com.Var.name_str v)
                       | None -> ())
                 | _ -> ())
@@ -769,7 +787,7 @@ struct
                           (Com.get_normal_var (Pos.unmark m_vn))
                           (Pos.unmark m_if) zi
                       in
-                      match StrMap.find_opt name ctx.ctx_prog.program_vars with
+                      match get_var_by_name ctx name with
                       | Some v -> pr_raw ctx_pr (Com.Var.alias_str v)
                       | None -> ())
                 | _ -> ())
@@ -816,8 +834,8 @@ struct
         in
         List.iter
           (fun (v, _) ->
-            ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
-            evaluate_stmts tn canBlock ctx stmts)
+            ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, get_var ctx v);
+            evaluate_stmts canBlock ctx stmts)
           vars;
         List.iter
           (fun (vcs, expr) ->
@@ -825,10 +843,10 @@ struct
               StrMap.iter
                 (fun _ v ->
                   if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                    ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- get_var ctx v;
+                    ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, get_var ctx v);
                     match evaluate_expr ctx expr with
                     | Number z when N.(z =. one ()) ->
-                        evaluate_stmts tn canBlock ctx stmts
+                        evaluate_stmts canBlock ctx stmts
                     | _ -> ()))
                 ctx.ctx_prog.program_vars
             in
@@ -853,7 +871,7 @@ struct
                             if N.(i <=. z1) then (
                               ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <-
                                 Number i;
-                              evaluate_stmts tn canBlock ctx stmts;
+                              evaluate_stmts canBlock ctx stmts;
                               loop N.(i +. zStep))
                           in
                           loop z0
@@ -862,7 +880,7 @@ struct
                             if N.(i >=. z1) then (
                               ctx.ctx_tmps.(ctx.ctx_tmps_org + var_i) <-
                                 Number i;
-                              evaluate_stmts tn canBlock ctx stmts;
+                              evaluate_stmts canBlock ctx stmts;
                               loop N.(i +. zStep))
                           in
                           loop z0
@@ -896,14 +914,14 @@ struct
                   StrMap.fold
                     (fun _ v backup_vars ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                        let var, vi = get_var ctx v in
-                        ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, vi);
+                        let vv, vi = get_var ctx v in
+                        ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, (vv, vi));
                         match evaluate_expr ctx expr with
                         | Number z when N.(z =. one ()) ->
                             let rec aux backup_vars i =
-                              if i = Com.Var.size var then backup_vars
+                              if i = Com.Var.size vv then backup_vars
                               else
-                                let value = get_var_value ctx var i in
+                                let value = get_var_value ctx vv i in
                                 aux ((v, vi + i, value) :: backup_vars) (i + 1)
                             in
                             aux backup_vars 0
@@ -951,7 +969,7 @@ struct
               aux backup_evts 0)
             backup_evts evtfs
         in
-        evaluate_stmts tn canBlock ctx stmts;
+        evaluate_stmts canBlock ctx stmts;
         List.iter
           (fun ((v : Com.Var.t), i, value) ->
             match v.scope with
@@ -1051,7 +1069,7 @@ struct
             in
             Sorting.mergeSort sort_fun nbAdd (Array.length events) events
         | None -> ());
-        evaluate_stmts tn canBlock ctx stmts;
+        evaluate_stmts canBlock ctx stmts;
         ctx.ctx_events <- List.tl ctx.ctx_events
     | Com.RaiseError (m_err, var_opt) ->
         let err = Pos.unmark m_err in
@@ -1097,21 +1115,23 @@ struct
     | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
         assert false
 
-  and evaluate_stmts (tn : string) canBlock (ctx : ctx)
-      (stmts : Mir.m_instruction list) : unit =
-    try List.iter (evaluate_stmt tn canBlock ctx) stmts
+  and evaluate_stmts canBlock (ctx : ctx) (stmts : Mir.m_instruction list) :
+      unit =
+    try List.iter (evaluate_stmt canBlock ctx) stmts
     with BlockingError as b_err -> if canBlock then raise b_err
 
-  and evaluate_target canBlock (ctx : ctx) (tn : string) (tf : Mir.target_data)
-      : unit =
-    for i = 0 to tf.target_sz_tmps - 1 do
+  and evaluate_target canBlock (ctx : ctx) (target : Mir.target_data) : unit =
+    for i = 0 to target.target_sz_tmps - 1 do
       ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
     done;
-    ctx.ctx_tmps_org <- ctx.ctx_tmps_org + tf.target_sz_tmps;
-    ctx.ctx_ref_org <- ctx.ctx_ref_org + tf.target_nb_refs;
-    evaluate_stmts tn canBlock ctx tf.target_prog;
-    ctx.ctx_ref_org <- ctx.ctx_ref_org - tf.target_nb_refs;
-    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - tf.target_sz_tmps
+    let sav_target = ctx.ctx_target in
+    ctx.ctx_target <- target;
+    ctx.ctx_tmps_org <- ctx.ctx_tmps_org + target.target_sz_tmps;
+    ctx.ctx_ref_org <- ctx.ctx_ref_org + target.target_nb_refs;
+    evaluate_stmts canBlock ctx target.target_prog;
+    ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
+    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps;
+    ctx.ctx_target <- sav_target
 
   let evaluate_program (ctx : ctx) : unit =
     try
@@ -1124,9 +1144,9 @@ struct
         | None ->
             Errors.raise_error "Unable to find main function of Bir program"
       in
-      evaluate_target false ctx ctx.ctx_prog.program_main_target main_target;
-      evaluate_stmt ctx.ctx_prog.program_main_target false ctx
-        (Com.ExportErrors, Pos.no_pos)
+      ctx.ctx_target <- main_target;
+      evaluate_target false ctx main_target;
+      evaluate_stmt false ctx (Com.ExportErrors, Pos.no_pos)
     with RuntimeError (e, ctx) ->
       if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))

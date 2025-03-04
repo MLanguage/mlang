@@ -387,9 +387,12 @@ struct S_irdata {
   char *def_tmps;
   char **def_ref;
   T_varinfo *info_tmps;
+  char **ref_name;
   T_varinfo **info_ref;
   int tmps_org;
+  int nb_tmps_target;
   int ref_org;
+  int nb_refs_target;
   T_keep_discord *keep_discords;
   T_discord *discords;
   int nb_anos;
@@ -447,6 +450,7 @@ typedef struct S_irdata T_irdata;
 
 #define DR_(idx) (irdata->def_ref[irdata->ref_org + (idx)])
 #define R_(idx) (irdata->ref[irdata->ref_org + (idx)])
+#define NR_(idx) (irdata->ref_name[irdata->ref_org + (idx)])
 #define IR_(idx) (irdata->info_ref[irdata->ref_org + (idx)])
 
 extern T_event *event(T_irdata *irdata, char idx_def, double idx_val);
@@ -632,16 +636,54 @@ extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
 extern int nb_evenements(T_irdata *irdata);
 
+extern char *concat_nom_index(char *nom, const char *fmt, char def, double val);
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
 extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
+extern char lis_varinfo(
+  T_irdata *irdata,
+  T_varinfo *info,
+  char *res_def, double *res_val
+);
 extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
 extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
-extern int lis_varinfo_tab(T_irdata *irdata, T_varinfo *info, char idx_def, double idx_val, char *res_def, double *res_val);
+extern int lis_varinfo_tab(
+  T_irdata *irdata,
+  T_varinfo *info,
+  char idx_def, double idx_val,
+  char *res_def, double *res_val
+);
 extern char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info);
 extern double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info);
 extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
 extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
+extern char lis_concat_nom_index(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char *res_def, double *res_val
+);
+extern char lis_concat_nom_index_tab(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char eidx_def, double eidx_val,
+  char *res_def, double *res_val
+);
+extern T_varinfo *lis_concat_nom_index_var(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val
+);
+extern void ecris_concat_nom_index(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char def, double val
+);
+extern void ecris_concat_nom_index_tab(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  int idx,
+  char def, double val
+);
+
 extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
 extern void pr_out_var(T_irdata *irdata, char *nom);
 extern void pr_err_var(T_irdata *irdata, char *nom);
@@ -1278,6 +1320,7 @@ void detruis_irdata(T_irdata *irdata) {
   if (irdata->info_tmps != NULL) free(irdata->info_tmps);
   if (irdata->ref != NULL) free(irdata->ref);
   if (irdata->def_ref != NULL) free(irdata->def_ref);
+  if (irdata->ref_name != NULL) free(irdata->ref_name);
   if (irdata->info_ref != NULL) free(irdata->info_ref);
   init_erreur(irdata);
   if (irdata->err_finalise != NULL) free(irdata->err_finalise);
@@ -1338,17 +1381,22 @@ T_irdata *cree_irdata(void) {
   }
   irdata->ref = NULL;
   irdata->def_ref = NULL;
+  irdata->ref_name = NULL;
   irdata->info_ref = NULL;
   if (TAILLE_REFS > 0) {
     irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
     if (irdata->ref == NULL) goto erreur_cree_irdata;
     irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
     if (irdata->def_ref == NULL) goto erreur_cree_irdata;
+    irdata->ref_name = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
+    if (irdata->ref_name == NULL) goto erreur_cree_irdata;
     irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
     if (irdata->info_ref == NULL) goto erreur_cree_irdata;
   }
   irdata->tmps_org = 0;
+  irdata->nb_tmps_target = 0;
   irdata->ref_org = 0;
+  irdata->nb_refs_target = 0;
   irdata->keep_discords = NULL;
   irdata->discords = NULL;
   irdata->sz_err_finalise = 0;
@@ -1555,12 +1603,57 @@ int nb_evenements(T_irdata *irdata) {
   return irdata->nb_events;
 }
 
+char *concat_nom_index(char *nom, const char *fmt, char def, double val) {
+  char *res;
+  int sz = 0;
+  int szNom, szFmt;
+  int idx = (int)val;
+  int j, k;
+  if (nom == NULL || fmt == NULL || def == 0 || idx < 0) return NULL;
+  j = idx;
+  while (j > 0) {
+    j = j / 10;
+    sz++;
+  }
+  szNom = strlen(nom);
+  szFmt = strlen(fmt);
+  sz = szNom + (szFmt > sz ? szFmt : sz);
+  res = (char *)malloc((sz + 1) * (sizeof (char)));
+  res[sz] = 0;
+  for (k = 0; k < szNom; k++) {
+    res[k] = nom[k];
+  }
+  for (k = 0; k < szFmt; k++) {
+    res[szNom + k] = fmt[k];
+  }
+  j = idx;
+  k = sz - 1;
+  while (j > 0) {
+    switch (j % 10) {
+      case 0: res[k] = '0'; break;
+      case 1: res[k] = '1'; break;
+      case 2: res[k] = '2'; break;
+      case 3: res[k] = '3'; break;
+      case 4: res[k] = '4'; break;
+      case 5: res[k] = '5'; break;
+      case 6: res[k] = '6'; break;
+      case 7: res[k] = '7'; break;
+      case 8: res[k] = '8'; break;
+      case 9: res[k] = '9'; break;
+    }
+    k--;
+    j = j / 10;
+  }
+  return res;
+}
+
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   T_varinfo_map *map = NULL;
   int res = -1;
   int inf = 0;
   int sup = NB_variable + NB_saisie;
   int millieu = 0;
+  int i;
 
   if (irdata == NULL || nom == NULL) return NULL;
   while ((res != 0) && (inf < sup)) {
@@ -1576,6 +1669,18 @@ T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   if (res == 0) {
     return map->info;
   }
+  for (i = 1; i <= irdata->nb_tmps_target; i++) {
+    T_varinfo *info = &(irdata->info_tmps[irdata->tmps_org - i]);
+    if (strcmp(nom, info->name) == 0) {
+      return info;
+    }
+  }
+  for (i = 1; i <= irdata->nb_refs_target; i++) {
+    char *ref_name = irdata->ref_name[irdata->ref_org - i];
+    if (strcmp(nom, ref_name) == 0) {
+      return irdata->info_ref[irdata->ref_org - i];
+    }
+  }
   return NULL;
 }
 
@@ -1588,6 +1693,8 @@ char lis_varinfo_def(T_irdata *irdata, T_varinfo *info) {
       return irdata->def_calculee[info->idx];
     case EST_BASE:
       return irdata->def_base[info->idx];
+    case EST_TEMPORAIRE:
+      return irdata->def_tmps[info->idx];
     default:
       return 0;
   }
@@ -1602,8 +1709,40 @@ double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
       return irdata->calculee[info->idx];
     case EST_BASE:
       return irdata->base[info->idx];
+    case EST_TEMPORAIRE:
+      return irdata->tmps[info->idx];
     default:
       return 0.0;
+  }
+}
+
+char lis_varinfo(
+  T_irdata *irdata,
+  T_varinfo *info,
+  char *res_def, double *res_val
+) {
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || info == NULL) return 0.0;
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      *res_def = irdata->def_saisie[info->idx];
+      *res_val = irdata->saisie[info->idx];
+      return *res_def;
+    case EST_CALCULEE:
+      *res_def = irdata->def_calculee[info->idx];
+      *res_val = irdata->calculee[info->idx];
+      return *res_def;
+    case EST_BASE:
+      *res_def = irdata->def_base[info->idx];
+      *res_val = irdata->base[info->idx];
+      return *res_def;
+    case EST_TEMPORAIRE:
+      *res_def = irdata->def_tmps[info->idx];
+      *res_val = irdata->tmps[info->idx];
+      return *res_def;
+    default:
+      return *res_def;
   }
 }
 
@@ -1617,6 +1756,8 @@ char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
       return irdata->def_calculee[info->idx + idx];
     case EST_BASE:
       return irdata->def_base[info->idx + idx];
+    case EST_TEMPORAIRE:
+      return irdata->def_tmps[info->idx + idx];
     default:
       return 0;
   }
@@ -1631,6 +1772,8 @@ double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
       return irdata->calculee[info->idx + idx];
     case EST_BASE:
       return irdata->base[info->idx + idx];
+    case EST_TEMPORAIRE:
+      return irdata->tmps[info->idx + idx];
     default:
       return 0.0;
   }
@@ -1647,7 +1790,6 @@ int lis_varinfo_tab(T_irdata *irdata, T_varinfo *info, char idx_def, double idx_
   return *res_def;
 }
 
-
 char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info) {
   if (irdata == NULL || info == NULL) return NULL;
   switch (info->loc_cat) {
@@ -1657,6 +1799,8 @@ char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info) {
       return &(irdata->def_calculee[info->idx]);
     case EST_BASE:
       return &(irdata->def_base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->def_tmps[info->idx]);
     default:
       return NULL;
   }
@@ -1671,6 +1815,8 @@ double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info) {
       return &(irdata->calculee[info->idx]);
     case EST_BASE:
       return &(irdata->base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->tmps[info->idx]);
     default:
       return NULL;
   }
@@ -1695,6 +1841,10 @@ void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
     case EST_BASE:
       irdata->def_base[info->idx] = def;
       irdata->base[info->idx] = val;
+      return;
+    case EST_TEMPORAIRE:
+      irdata->def_tmps[info->idx] = def;
+      irdata->tmps[info->idx] = val;
       return;
     default:
       return;
@@ -1724,9 +1874,71 @@ void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, dou
       irdata->def_base[var_idx] = def;
       irdata->base[var_idx] = val;
       return;
+    case EST_TEMPORAIRE:
+      irdata->def_tmps[var_idx] = def;
+      irdata->tmps[var_idx] = val;
+      return;
     default:
       return;
   }
+}
+
+char lis_concat_nom_index(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char *res_def, double *res_val
+) {
+  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
+  T_varinfo *info = cherche_varinfo(irdata, vn);
+  *res_def = lis_varinfo(irdata, info, res_def, res_val);
+  free(vn);
+  return *res_def;
+}
+
+char lis_concat_nom_index_tab(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char eidx_def, double eidx_val,
+  char *res_def, double *res_val
+) {
+  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
+  T_varinfo *info = cherche_varinfo(irdata, vn);
+  *res_def = lis_varinfo_tab(irdata, info, eidx_def, eidx_val, res_def, res_val);
+  free(vn);
+  return *res_def;
+}
+
+T_varinfo *lis_concat_nom_index_var(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val
+) {
+  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
+  T_varinfo *info = cherche_varinfo(irdata, vn);
+  free(vn);
+  return info;
+}
+
+void ecris_concat_nom_index(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char def, double val
+) {
+  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
+  T_varinfo *info = cherche_varinfo(irdata, vn);
+  free(vn);
+  ecris_varinfo(irdata, info, def, val);
+}
+
+void ecris_concat_nom_index_tab(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  int idx,
+  char def, double val
+) {
+  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
+  T_varinfo *info = cherche_varinfo(irdata, vn);
+  free(vn);
+  ecris_varinfo_tab(irdata, info, idx, def, val);
 }
 
 /* !!! */

@@ -333,6 +333,8 @@ module Err = struct
       Format.asprintf "event field \"%s\" is not a variable reference" name
     in
     Errors.raise_spanned_error msg pos
+
+  let has_no_target () = Errors.raise_error "this program has no target"
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -3099,6 +3101,7 @@ let proceed (p : Mast.program) (main_target : string) : program =
       if ef.is_var && StrMap.cardinal prog.prog_vars = 0 then
         Err.event_field_need_a_variable name (Pos.get ef.name))
     prog.prog_event_fields;
+  if StrMap.is_empty prog.prog_targets then Err.has_no_target ();
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
   |> complete_verif_calls |> complete_vars |> complete_vars_stack
