@@ -79,7 +79,7 @@ type rule = {
   rule_tag_names : string Pos.marked list Pos.marked;
   rule_apps : application Pos.marked StrMap.t;
   rule_chainings : chaining Pos.marked StrMap.t;
-  rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
+  rule_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
   rule_formulaes : instruction Pos.marked list;
       (** A rule can contain many variable definitions *)
 }
@@ -87,14 +87,11 @@ type rule = {
 type target = {
   target_name : string Pos.marked;
   target_file : string option;
-  target_apps : application Pos.marked StrMap.t;
+  target_apps : string Pos.marked StrMap.t;
   target_args : string Pos.marked list;
   target_result : string Pos.marked option;
-  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) StrMap.t;
-  target_nb_tmps : int;
-  target_sz_tmps : int;
-  target_nb_refs : int;
-  target_prog : instruction Pos.marked list;
+  target_tmp_vars : (string Pos.marked * table_size Pos.marked option) list;
+  target_prog : m_instruction list;
 }
 
 type 'a domain_decl = {

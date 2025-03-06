@@ -504,10 +504,10 @@ let rec translate_prog (p : Check_validity.program)
   aux [] prog
 
 let get_targets (is_function : bool) (p : Check_validity.program)
-    (var_data : Com.Var.t StrMap.t) (ts : Mast.target StrMap.t) :
-    Mir.target_data Com.TargetMap.t =
+    (var_data : Com.Var.t StrMap.t) (ts : Check_validity.target StrMap.t) :
+    Mir.target Com.TargetMap.t =
   StrMap.fold
-    (fun _ (t : Mast.target) targets ->
+    (fun _ (t : Check_validity.target) targets ->
       let target_name = t.target_name in
       let target_file = t.target_file in
       let target_apps = t.target_apps in
@@ -533,9 +533,8 @@ let get_targets (is_function : bool) (p : Check_validity.program)
       let tmp_var_data, itval_depth =
         StrMap.fold
           (fun name ((_, pos), size) (tmp_var_data, n) ->
-            let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
             let var =
-              Com.Var.new_temp ~name:(name, pos) ~is_table:size' ~loc_int:n
+              Com.Var.new_temp ~name:(name, pos) ~is_table:size ~loc_int:n
             in
             let tmp_var_data = StrMap.add name var tmp_var_data in
             (tmp_var_data, n + Com.Var.size var))
@@ -544,22 +543,20 @@ let get_targets (is_function : bool) (p : Check_validity.program)
       in
       let tmp_var_data =
         if is_function then
-          let vn, vpos = Option.get t.target_result in
-          let var = Com.Var.new_res ~name:(vn, vpos) in
-          StrMap.add vn var tmp_var_data
+          let name, vpos = Option.get t.target_result in
+          let var = Com.Var.new_res ~name:(name, vpos) in
+          StrMap.add name var tmp_var_data
         else tmp_var_data
       in
       let target_args =
-        List.map
-          (fun (vn, pos) -> (StrMap.find vn tmp_var_data, pos))
-          t.target_args
+        let map (vn, pos) = (StrMap.find vn tmp_var_data, pos) in
+        List.map map t.target_args
       in
       let target_tmp_vars =
         StrMap.mapi
           (fun vn ((_, pos), size) ->
             let var = StrMap.find vn tmp_var_data in
-            let size' = Pos.unmark_option (Mast.get_table_size_opt size) in
-            (var, pos, size'))
+            ((var, pos), size))
           t.target_tmp_vars
       in
       let target_result =
@@ -572,8 +569,8 @@ let get_targets (is_function : bool) (p : Check_validity.program)
           (List.length target_args - target_nb_refs)
           itval_depth t.target_prog
       in
-      let target_data =
-        Mir.
+      let target =
+        Com.
           {
             target_name;
             target_file;
@@ -587,7 +584,7 @@ let get_targets (is_function : bool) (p : Check_validity.program)
             target_nb_refs;
           }
       in
-      Com.TargetMap.add (Pos.unmark target_name) target_data targets)
+      Com.TargetMap.add (Pos.unmark target_name) target targets)
     ts Com.TargetMap.empty
 
 let translate (p : Mast.program) (main_target : string) : Mir.program =

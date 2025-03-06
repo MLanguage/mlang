@@ -503,23 +503,7 @@ rule_etc:
                   chs
             | None -> StrMap.empty
           in
-          let vars =
-            List.fold_left
-              (fun res (vnm, vt) ->
-                let vn, pos = vnm in
-                match StrMap.find_opt vn res with
-                | Some ((_, old_pos), _) ->
-                    let msg =
-                      Format.asprintf
-                        "temporary variable %s already declared %a"
-                        vn
-                        Pos.format_position old_pos
-                    in
-                    Errors.raise_spanned_error msg pos
-                | None -> StrMap.add vn (vnm, vt) res)
-              StrMap.empty
-              (match vars_opt with None -> [] | Some (l, _) -> l)
-          in
+          let vars = match vars_opt with None -> [] | Some (l, _) -> l in
           apps, chs, vars
       in
       aux None None None header
@@ -559,9 +543,6 @@ target_etc:
       target_args;
       target_result = None;
       target_tmp_vars;
-      target_nb_tmps = -1;
-      target_sz_tmps = -1;
-      target_nb_refs = -1;
       target_prog;
     } in
     Pos.same_pos_as (Target target) name :: l
@@ -570,11 +551,13 @@ target_etc:
 target_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
 | INPUT_ARGS COLON
-  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
-  { Target_input_arg inputs }
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON {
+    Target_input_arg inputs
+  }
 | TEMP_VARS COLON
-  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
-  { Target_tmp_vars tmp_vars }
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON {
+    Target_tmp_vars tmp_vars
+  }
 
 function_etc:
 | FONCTION name = symbol_with_pos COLON
@@ -592,9 +575,6 @@ function_etc:
       target_args;
       target_result;
       target_tmp_vars;
-      target_nb_tmps = -1;
-      target_sz_tmps = -1;
-      target_nb_refs = -1;
       target_prog;
     } in
     Pos.same_pos_as (Function target) name :: l
@@ -603,12 +583,16 @@ function_etc:
 function_header_elt:
 | APPLICATION COLON apps = symbol_enumeration SEMICOLON { Target_apps apps }
 | INPUT_ARGS COLON
-  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON
-  { Target_input_arg inputs }
+  inputs = separated_nonempty_list(COMMA, with_pos(variable_name)) SEMICOLON {
+    Target_input_arg inputs
+  }
 | TEMP_VARS COLON
-  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON
-  { Target_tmp_vars tmp_vars }
-| RESULT COLON res = with_pos(variable_name) SEMICOLON { Function_result res }
+  tmp_vars = separated_nonempty_list(COMMA, temporary_variable_name) SEMICOLON {
+    Target_tmp_vars tmp_vars
+  }
+| RESULT COLON res = with_pos(variable_name) SEMICOLON {
+    Function_result res
+  }
 
 temporary_variable_name:
 | name = symbol_with_pos size = with_pos(comp_variable_table)? {

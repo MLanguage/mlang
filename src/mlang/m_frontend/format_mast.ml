@@ -71,15 +71,14 @@ let format_table_size fmt = function
 
 let format_target fmt (t : target) =
   let format_tmp_var fmt (name, size) =
-    let name = Pos.unmark name in
-    Format.fprintf fmt "%s%a" name format_table_size size
+    Format.fprintf fmt "%s%a" (Pos.unmark name) format_table_size size
   in
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
     (Pos.unmark t.target_name)
     (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
     t.target_apps
-    (StrMap.pp ~pp_key:Pp.nil ~sep:"," format_tmp_var)
+    (Pp.list "," format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_input_attribute fmt ((n, v) : variable_attribute) =

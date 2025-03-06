@@ -22,18 +22,7 @@ type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
-type target_data = {
-  target_name : string Pos.marked;
-  target_file : string option;
-  target_apps : string Pos.marked StrMap.t;
-  target_args : (Com.Var.t * Pos.t) list;
-  target_result : (Com.Var.t * Pos.t) option;
-  target_tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t;
-  target_nb_tmps : int;
-  target_sz_tmps : int;
-  target_nb_refs : int;
-  target_prog : m_instruction list;
-}
+type target = (Com.Var.t, Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
   nb_calculated : int;
@@ -63,8 +52,8 @@ type program = {
   program_verifs : string IntMap.t;
   program_chainings : string StrMap.t;
   program_errors : Com.Error.t StrMap.t;
-  program_functions : target_data Com.TargetMap.t;
-  program_targets : target_data Com.TargetMap.t;
+  program_functions : target Com.TargetMap.t;
+  program_targets : target Com.TargetMap.t;
   program_main_target : string;
   program_stats : stats;
 }

@@ -697,10 +697,10 @@ let gen_decl_functions fmt (cprog : Mir.program) =
       args
   in
   Format.fprintf fmt "@[<v 0>%a@]@,"
-    (Format.pp_print_list (fun fmt (fn, fd) ->
+    (Format.pp_print_list (fun fmt (fn, (fd : Mir.target)) ->
          Format.fprintf fmt
            "extern int %s(T_irdata* irdata, char *res_def, double *res_val%a);"
-           fn pp_args fd.Mir.target_args))
+           fn pp_args fd.target_args))
     functions
 
 let gen_decl_targets fmt (cprog : Mir.program) =

@@ -69,6 +69,14 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
+  let temporary_variable_already_declared name old_pos pos =
+    let msg =
+      Format.asprintf
+        "temporary variable \"%s\" declared more than once: already declared %a"
+        name Pos.format_position old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
   let error_already_declared name old_pos pos =
     let msg =
       Format.asprintf
@@ -352,8 +360,7 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
-  rule_tmp_vars :
-    (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
+  rule_tmp_vars : (string Pos.marked * int option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
@@ -373,6 +380,8 @@ type verif = {
   verif_seq : int;
 }
 
+type target = (string, Com.variable_name, Mast.error_name) Com.target
+
 type program = {
   prog_prefix : string;
   prog_seq : int;
@@ -390,13 +399,13 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Com.verif_domain_data doms;
   prog_vdom_syms : syms;
-  prog_functions : Mast.target StrMap.t;
+  prog_functions : target StrMap.t;
   prog_rules : rule IntMap.t;
   prog_rdom_calls : (int Pos.marked * Com.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;
   prog_vdom_calls :
     (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
-  prog_targets : Mast.target StrMap.t;
+  prog_targets : target StrMap.t;
   prog_main_target : string;
   prog_stats : Mir.stats;
 }
@@ -1759,7 +1768,17 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
             Err.variable_already_declared vn old_pos vpos
         | None -> ())
       target_args;
-    let target_tmp_vars = t.target_tmp_vars in
+    let target_tmp_vars =
+      List.fold_left
+        (fun res ((vn, vpos), sz) ->
+          match StrMap.find_opt vn res with
+          | Some ((_, old_pos), _) ->
+              Err.temporary_variable_already_declared vn old_pos vpos
+          | None ->
+              let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
+              StrMap.add vn ((vn, vpos), size) res)
+        StrMap.empty t.target_tmp_vars
+    in
     StrMap.iter
       (fun _ ((vn, vpos), _) ->
         match StrMap.find_opt vn prog.prog_vars with
@@ -1791,17 +1810,7 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
         | None -> ())
     | None -> if is_function then Err.function_result_missing tname tpos);
     let tmp_vars =
-      StrMap.map
-        (fun (var, size) ->
-          let vpos = Pos.get var in
-          let sz =
-            match size with
-            | None -> None
-            | Some (Mast.LiteralSize i, _) -> Some i
-            | Some (Mast.SymbolSize _, _) -> assert false
-          in
-          (sz, vpos))
-        target_tmp_vars
+      StrMap.map (fun (var, size) -> (size, Pos.get var)) target_tmp_vars
     in
     let ref_vars =
       List.fold_left
@@ -1832,16 +1841,19 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
       (prog, target_prog)
     in
     let target =
-      {
-        t with
-        target_name;
-        target_file;
-        target_apps;
-        target_args;
-        target_result;
-        target_tmp_vars;
-        target_prog;
-      }
+      Com.
+        {
+          target_name;
+          target_file;
+          target_apps;
+          target_args;
+          target_result;
+          target_tmp_vars;
+          target_nb_tmps = 0;
+          target_sz_tmps = 0;
+          target_nb_refs = 0;
+          target_prog;
+        }
     in
     (target, prog)
   in
@@ -1885,7 +1897,17 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
-  let rule_tmp_vars = r.Mast.rule_tmp_vars in
+  let rule_tmp_vars =
+    List.fold_left
+      (fun res ((vn, vpos), sz) ->
+        match StrMap.find_opt vn res with
+        | Some ((_, old_pos), _) ->
+            Err.temporary_variable_already_declared vn old_pos vpos
+        | None ->
+            let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
+            StrMap.add vn ((vn, vpos), size) res)
+      StrMap.empty r.Mast.rule_tmp_vars
+  in
   StrMap.iter
     (fun _ ((vn, vpos), _) ->
       match StrMap.find_opt vn prog.prog_vars with
@@ -1894,17 +1916,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
       | None -> ())
     rule_tmp_vars;
   let tmp_vars =
-    StrMap.map
-      (fun (var, size) ->
-        let vpos = Pos.get var in
-        let sz =
-          match size with
-          | None -> None
-          | Some (Mast.LiteralSize i, _) -> Some i
-          | Some (Mast.SymbolSize _, _) -> assert false
-        in
-        (sz, vpos))
-      rule_tmp_vars
+    StrMap.map (fun (var, size) -> (size, Pos.get var)) rule_tmp_vars
   in
   let rule_instrs = r.Mast.rule_formulaes in
   let prog, rule_instrs, rule_in_vars, rule_out_vars, _ =
@@ -1940,7 +1952,7 @@ let convert_rules (prog : program) : program =
         let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
         let target_file = Some (get_target_file (Pos.get rule.rule_id)) in
         let target =
-          Mast.
+          Com.
             {
               target_name = (tname, Pos.no_pos);
               target_file;
@@ -2118,7 +2130,7 @@ let complete_rule_domains (prog : program) : program =
             get_compute_id_str (Com.ComputeDomain (spl, Pos.no_pos)) prog
           in
           let target =
-            Mast.
+            Com.
               {
                 target_name = (tname, Pos.no_pos);
                 target_file = None;
@@ -2217,7 +2229,7 @@ let complete_chainings (prog : program) : program =
           get_compute_id_str (Com.ComputeChaining (ch_name, Pos.no_pos)) prog
         in
         let target =
-          Mast.
+          Com.
             {
               target_name = (tname, Pos.no_pos);
               target_file = None;
@@ -2342,7 +2354,7 @@ let convert_verifs (prog : program) : program =
           ]
         in
         let target =
-          Mast.
+          Com.
             {
               target_name = (tname, Pos.no_pos);
               target_file;
@@ -2584,7 +2596,7 @@ let complete_verif_calls (prog : program) : program =
               [ (Com.ComputeTarget ((tn, Pos.no_pos), []), Pos.no_pos) ]
             in
             let target =
-              Mast.
+              Com.
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
@@ -2617,7 +2629,7 @@ let complete_verif_calls (prog : program) : program =
             in
             let target_prog = [ (Com.VerifBlock instrs, Pos.no_pos) ] in
             let target =
-              Mast.
+              Com.
                 {
                   target_name = (tname, Pos.no_pos);
                   target_file = None;
@@ -2790,14 +2802,12 @@ let complete_vars_stack (prog : program) : program =
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
     in
-    let map (t : Mast.target) =
+    let map (t : target) =
       let nbRef, nbIt = aux_instrs t.target_prog in
       let target_nb_tmps = StrMap.cardinal t.target_tmp_vars + nbIt in
       let target_sz_tmps =
         let fold _ (_, tsz_opt) sz =
-          match tsz_opt with
-          | None -> sz + 1
-          | Some (tsz, _) -> sz + Mast.get_table_size tsz
+          match tsz_opt with None -> sz + 1 | Some tsz -> sz + tsz
         in
         StrMap.fold fold t.target_tmp_vars nbIt
       in
@@ -2817,7 +2827,7 @@ let complete_vars_stack (prog : program) : program =
       match StrMap.find_opt name tdata with
       | Some (nb, sz, nbRef) -> (nb, sz, nbRef, tdata)
       | None -> (
-          let eval_call (t : Mast.target) =
+          let eval_call (t : target) =
             let nb, sz, nbRef =
               ( t.target_nb_tmps,
                 t.target_sz_tmps,

@@ -27,8 +27,7 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
-  rule_tmp_vars :
-    (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t;
+  rule_tmp_vars : (string Pos.marked * int option) StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
@@ -48,6 +47,8 @@ type verif = {
   verif_seq : int;
 }
 
+type target = (string, Com.variable_name, Mast.error_name) Com.target
+
 type program = {
   prog_prefix : string;
   prog_seq : int;
@@ -65,13 +66,13 @@ type program = {
   prog_rdom_syms : syms;
   prog_vdoms : Com.verif_domain_data doms;
   prog_vdom_syms : syms;
-  prog_functions : Mast.target StrMap.t;
+  prog_functions : target StrMap.t;
   prog_rules : rule IntMap.t;
   prog_rdom_calls : (int Pos.marked * Com.DomainId.t) StrMap.t;
   prog_verifs : verif IntMap.t;
   prog_vdom_calls :
     (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
-  prog_targets : Mast.target StrMap.t;
+  prog_targets : target StrMap.t;
   prog_main_target : string;
   prog_stats : Mir.stats;
 }

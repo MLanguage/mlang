@@ -31,7 +31,7 @@ module type S = sig
 
   type ctx = {
     ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target_data;
+    mutable ctx_target : Mir.target;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
@@ -113,7 +113,7 @@ struct
 
   type ctx = {
     ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target_data;
+    mutable ctx_target : Mir.target;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     mutable ctx_tmps_org : int;
@@ -314,7 +314,7 @@ struct
     | Some v -> Some (fst (get_var ctx v))
     | None -> (
         match StrMap.find_opt name ctx.ctx_target.target_tmp_vars with
-        | Some (v, _, _) -> Some (fst (get_var ctx v))
+        | Some ((v, _), _) -> Some (fst (get_var ctx v))
         | None ->
             let rec searchRef i =
               if i < ctx.ctx_target.target_nb_refs then
@@ -1120,7 +1120,7 @@ struct
     try List.iter (evaluate_stmt canBlock ctx) stmts
     with BlockingError as b_err -> if canBlock then raise b_err
 
-  and evaluate_target canBlock (ctx : ctx) (target : Mir.target_data) : unit =
+  and evaluate_target canBlock (ctx : ctx) (target : Mir.target) : unit =
     for i = 0 to target.target_sz_tmps - 1 do
       ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
     done;

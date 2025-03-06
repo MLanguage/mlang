@@ -386,6 +386,23 @@ type ('v, 'e) instruction =
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
+type ('vd, 'v, 'e) target = {
+  target_name : string Pos.marked;
+  target_file : string option;
+  target_apps : string Pos.marked StrMap.t;
+  target_args : 'vd Pos.marked list;
+  target_result : 'vd Pos.marked option;
+  target_tmp_vars : ('vd Pos.marked * int option) StrMap.t;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_refs : int;
+  target_prog : ('v, 'e) m_instruction list;
+}
+
+val expr_map_var : ('v -> 'w) -> 'v expression -> 'w expression
+
+val m_expr_map_var : ('v -> 'w) -> 'v m_expression -> 'w m_expression
+
 val get_variable_name : variable_name -> string
 
 val get_normal_var : variable_name -> string

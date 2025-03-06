@@ -216,7 +216,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   in
                   if StrMap.is_empty verif_apps then (apps_env, prog_file)
                   else
-                    let verif = { verif with Mast.verif_apps } in
+                    let verif = Mast.{ verif with verif_apps } in
                     let prog_file =
                       (Mast.Verification verif, pos_item) :: prog_file
                     in
@@ -227,7 +227,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   in
                   if StrMap.is_empty target_apps then (apps_env, prog_file)
                   else
-                    let target = { target with Mast.target_apps } in
+                    let target = Mast.{ target with target_apps } in
                     let prog_file =
                       (Mast.Target target, pos_item) :: prog_file
                     in
@@ -238,7 +238,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   in
                   if StrMap.is_empty target_apps then (apps_env, prog_file)
                   else
-                    let target = { target with Mast.target_apps } in
+                    let target = Mast.{ target with target_apps } in
                     let prog_file =
                       (Mast.Function target, pos_item) :: prog_file
                     in
@@ -922,7 +922,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                   | _ -> (const_map, source_item :: prog_file))
               | Mast.Rule rule ->
                   let rule_tmp_vars =
-                    StrMap.map
+                    List.map
                       (fun (name, tsz) ->
                         (name, expand_table_size const_map tsz))
                       rule.Mast.rule_tmp_vars
@@ -953,7 +953,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                   (const_map, prog_file)
               | Mast.Target target ->
                   let target_tmp_vars =
-                    StrMap.map
+                    List.map
                       (fun (name, tsz) ->
                         (name, expand_table_size const_map tsz))
                       target.Mast.target_tmp_vars
@@ -962,7 +962,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                     expand_instructions const_map target.Mast.target_prog
                   in
                   let target' =
-                    { target with Mast.target_tmp_vars; Mast.target_prog }
+                    Mast.{ target with target_tmp_vars; target_prog }
                   in
                   let prog_file =
                     (Mast.Target target', pos_item) :: prog_file
@@ -970,7 +970,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                   (const_map, prog_file)
               | Mast.Function target ->
                   let target_tmp_vars =
-                    StrMap.map
+                    List.map
                       (fun (name, tsz) ->
                         (name, expand_table_size const_map tsz))
                       target.Mast.target_tmp_vars
@@ -979,7 +979,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                     expand_instructions const_map target.Mast.target_prog
                   in
                   let target' =
-                    { target with Mast.target_tmp_vars; Mast.target_prog }
+                    Mast.{ target with target_tmp_vars; target_prog }
                   in
                   let prog_file =
                     (Mast.Function target', pos_item) :: prog_file

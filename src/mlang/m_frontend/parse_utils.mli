@@ -79,5 +79,5 @@ val parse_target_or_function_header :
   target_header Pos.marked list ->
   Mast.application Pos.marked StrMap.t
   * string Pos.marked list
-  * (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t
+  * (string Pos.marked * Mast.table_size Pos.marked option) list
   * string Pos.marked option

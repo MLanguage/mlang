@@ -276,21 +276,7 @@ let parse_target_or_function_header name is_function header =
                 (Pos.get name)
         in
         let args = match args_opt with None -> [] | Some (l, _) -> l in
-        let vars =
-          List.fold_left
-            (fun res (vnm, vt) ->
-              let vn, pos = vnm in
-              match StrMap.find_opt vn res with
-              | Some ((_, old_pos), _) ->
-                  let msg =
-                    Format.asprintf "temporary variable %s already declared %a"
-                      vn Pos.format_position old_pos
-                  in
-                  Errors.raise_spanned_error msg pos
-              | None -> StrMap.add vn (vnm, vt) res)
-            StrMap.empty
-            (match vars_opt with None -> [] | Some (l, _) -> l)
-        in
+        let vars = match vars_opt with None -> [] | Some (l, _) -> l in
         let res =
           match res_opt with
           | None ->

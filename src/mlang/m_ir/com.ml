@@ -561,6 +561,110 @@ type ('v, 'e) instruction =
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
+type ('vd, 'v, 'e) target = {
+  target_name : string Pos.marked;
+  target_file : string option;
+  target_apps : string Pos.marked StrMap.t;
+  target_args : 'vd Pos.marked list;
+  target_result : 'vd Pos.marked option;
+  target_tmp_vars : ('vd Pos.marked * int option) StrMap.t;
+  target_nb_tmps : int;
+  target_sz_tmps : int;
+  target_nb_refs : int;
+  target_prog : ('v, 'e) m_instruction list;
+}
+
+let rec access_map_var f = function
+  | VarAccess v -> VarAccess (f v)
+  | ConcAccess (vname, m_ifmt, m_i) ->
+      let m_i' = m_expr_map_var f m_i in
+      ConcAccess (vname, m_ifmt, m_i')
+  | FieldAccess (m_i, field, id) ->
+      let m_i' = m_expr_map_var f m_i in
+      FieldAccess (m_i', field, id)
+
+and m_access_map_var f m_access = Pos.map_under_mark (access_map_var f) m_access
+
+and set_value_map_var f = function
+  | FloatValue value -> FloatValue value
+  | VarValue m_access ->
+      let m_access' = m_access_map_var f m_access in
+      VarValue m_access'
+  | IntervalValue (i0, i1) -> IntervalValue (i0, i1)
+
+and atom_map_var f = function
+  | AtomVar v -> AtomVar (f v)
+  | AtomLiteral l -> AtomLiteral l
+
+and m_atom_map_var f m_a = Pos.map_under_mark (atom_map_var f) m_a
+
+and set_value_loop_map_var f = function
+  | Single m_a0 -> Single (m_atom_map_var f m_a0)
+  | Range (m_a0, m_a1) ->
+      let m_a0' = m_atom_map_var f m_a0 in
+      let m_a1' = m_atom_map_var f m_a1 in
+      Range (m_a0', m_a1')
+  | Interval (m_a0, m_a1) ->
+      let m_a0' = m_atom_map_var f m_a0 in
+      let m_a1' = m_atom_map_var f m_a1 in
+      Interval (m_a0', m_a1')
+
+and loop_variable_map_var f (m_ch, svl) =
+  let svl' = List.map (set_value_loop_map_var f) svl in
+  (m_ch, svl')
+
+and loop_variables_map_var f = function
+  | ValueSets lvl -> ValueSets (List.map (loop_variable_map_var f) lvl)
+  | Ranges lvl -> Ranges (List.map (loop_variable_map_var f) lvl)
+
+and expr_map_var f = function
+  | TestInSet (positive, m_e0, values) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let values' = List.map (set_value_map_var f) values in
+      TestInSet (positive, m_e0', values')
+  | Unop (op, m_e0) -> Unop (op, m_expr_map_var f m_e0)
+  | Comparison (op, m_e0, m_e1) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let m_e1' = m_expr_map_var f m_e1 in
+      Comparison (op, m_e0', m_e1')
+  | Binop (op, m_e0, m_e1) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let m_e1' = m_expr_map_var f m_e1 in
+      Binop (op, m_e0', m_e1')
+  | Index (m_access, m_idx) ->
+      let m_access' = m_access_map_var f m_access in
+      let m_idx' = m_expr_map_var f m_idx in
+      Index (m_access', m_idx')
+  | Conditional (m_e0, m_e1, m_e2_opt) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let m_e1' = m_expr_map_var f m_e1 in
+      let m_e2_opt' = Option.map (m_expr_map_var f) m_e2_opt in
+      Conditional (m_e0', m_e1', m_e2_opt')
+  | FuncCall (fn, m_el) ->
+      let m_el' = List.map (m_expr_map_var f) m_el in
+      FuncCall (fn, m_el')
+  | FuncCallLoop (fn, m_loop, m_e0) ->
+      let m_loop' = Pos.map_under_mark (loop_variables_map_var f) m_loop in
+      let m_e0' = m_expr_map_var f m_e0 in
+      FuncCallLoop (fn, m_loop', m_e0')
+  | Literal l -> Literal l
+  | Var access -> Var (access_map_var f access)
+  | Loop (m_loop, m_e0) ->
+      let m_loop' = Pos.map_under_mark (loop_variables_map_var f) m_loop in
+      let m_e0' = m_expr_map_var f m_e0 in
+      Loop (m_loop', m_e0')
+  | NbCategory cvm -> NbCategory cvm
+  | Attribut (m_access, attr) ->
+      let m_access' = Pos.map_under_mark (access_map_var f) m_access in
+      Attribut (m_access', attr)
+  | Size m_access -> Size (Pos.map_under_mark (access_map_var f) m_access)
+  | NbAnomalies -> NbAnomalies
+  | NbDiscordances -> NbDiscordances
+  | NbInformatives -> NbInformatives
+  | NbBloquantes -> NbBloquantes
+
+and m_expr_map_var f e = Pos.map_under_mark (expr_map_var f) e
+
 let get_variable_name v = match v with Normal s -> s | Generic s -> s.base
 
 let get_normal_var = function Normal name -> name | Generic _ -> assert false
