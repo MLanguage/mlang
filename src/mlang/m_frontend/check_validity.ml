@@ -254,9 +254,14 @@ module Err = struct
       let rec aux first cycle =
         match cycle with
         | [] -> ()
-        | (v, Some e) :: tl ->
+        | (v, Some l) :: tl ->
             if first then Format.fprintf fmt "rule %d\n" v
-            else Format.fprintf fmt " -(%s)-> rule %d\n" (Pos.unmark e) v;
+            else
+              Format.fprintf fmt " -(%a)-> rule %d\n"
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                   (fun fmt e -> Format.fprintf fmt "%s" (Pos.unmark e)))
+                l v;
             aux false tl
         | (v, None) :: tl ->
             if first then Format.fprintf fmt "rule %d\n" v
@@ -1955,7 +1960,7 @@ let convert_rules (prog : program) : program =
 
 let create_rule_graph (in_vars_from : rule -> MarkedVarNames.Set.t)
     (out_vars_from : rule -> MarkedVarNames.Set.t) (rules : 'a IntMap.t) :
-    MarkedVarNames.t IntMap.t option IntMap.t =
+    MarkedVarNames.t list IntMap.t option IntMap.t =
   let in_vars_of_rules =
     IntMap.fold
       (fun id rule var_map ->
@@ -1981,7 +1986,14 @@ let create_rule_graph (in_vars_from : rule -> MarkedVarNames.Set.t)
               match MarkedVarNames.Map.find_opt out_var in_vars_of_rules with
               | Some out_rules ->
                   IntSet.fold
-                    (fun out_id edges -> IntMap.add out_id out_var edges)
+                    (fun out_id edges ->
+                      IntMap.add out_id
+                        (out_var
+                        ::
+                        (match IntMap.find_opt out_id edges with
+                        | None -> []
+                        | Some l -> l))
+                        edges)
                     out_rules edges
               | None -> edges)
           (out_vars_from rule) IntMap.empty
@@ -1990,18 +2002,18 @@ let create_rule_graph (in_vars_from : rule -> MarkedVarNames.Set.t)
     rules
 
 let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
-    (rule_graph : MarkedVarNames.t IntMap.t option IntMap.t) :
+    (rule_graph : MarkedVarNames.t list IntMap.t option IntMap.t) :
     Mast.instruction Pos.marked list =
   let module RuleGraph :
     TopologicalSorting.GRAPH
-      with type 'a t = MarkedVarNames.t IntMap.t option IntMap.t
+      with type 'a t = MarkedVarNames.t list IntMap.t option IntMap.t
        and type vertex = int
-       and type edge = MarkedVarNames.t = struct
-    type 'a t = MarkedVarNames.t IntMap.t option IntMap.t
+       and type edge = MarkedVarNames.t list = struct
+    type 'a t = MarkedVarNames.t list IntMap.t option IntMap.t
 
     type vertex = int
 
-    type edge = MarkedVarNames.t
+    type edge = MarkedVarNames.t list
 
     type 'a vertexMap = 'a IntMap.t
 
@@ -2025,12 +2037,18 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   let module RulesSorting = TopologicalSorting.Make (RuleGraph) in
   let auto_cycle =
     Some
-      (function
-      | id, (var_name, var_pos) ->
-          Errors.print_spanned_warning
-            (Format.asprintf
-               "Rule %d needs variable %s as both input and output" id var_name)
-            var_pos)
+      (fun (id, l) ->
+        let rec ac = function
+          | [] -> ()
+          | (var_name, var_pos) :: t ->
+              Errors.print_spanned_warning
+                (Format.asprintf
+                   "Rule %d needs variable %s as both input and output" id
+                   var_name)
+                var_pos;
+              ac t
+        in
+        ac l)
   in
   let sorted_rules =
     try RulesSorting.sort ~auto_cycle rule_graph with
