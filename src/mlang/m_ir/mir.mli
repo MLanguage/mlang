@@ -18,11 +18,13 @@ type set_value = Com.Var.t Com.set_value
 
 type expression = Com.Var.t Com.expression
 
+type m_expression = expression Pos.marked
+
 type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
-type target = (Com.Var.t, Com.Var.t, Com.Error.t) Com.target
+type target = (Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
   nb_calculated : int;

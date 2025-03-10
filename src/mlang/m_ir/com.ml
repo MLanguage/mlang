@@ -561,13 +561,13 @@ type ('v, 'e) instruction =
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
-type ('vd, 'v, 'e) target = {
+type ('v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_args : 'vd Pos.marked list;
-  target_result : 'vd Pos.marked option;
-  target_tmp_vars : ('vd Pos.marked * int option) StrMap.t;
+  target_args : 'v Pos.marked list;
+  target_result : 'v Pos.marked option;
+  target_tmp_vars : ('v Pos.marked * int option) StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
@@ -664,6 +664,149 @@ and expr_map_var f = function
   | NbBloquantes -> NbBloquantes
 
 and m_expr_map_var f e = Pos.map_under_mark (expr_map_var f) e
+
+let rec print_arg_map_var f = function
+  | PrintString s -> PrintString s
+  | PrintName m_v -> PrintName (Pos.map_under_mark f m_v)
+  | PrintAlias m_v -> PrintAlias (Pos.map_under_mark f m_v)
+  | PrintConcName (m_vn, m_if, m_e0) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      PrintConcName (m_vn, m_if, m_e0')
+  | PrintConcAlias (m_vn, m_if, m_e0) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      PrintConcAlias (m_vn, m_if, m_e0')
+  | PrintEventName (m_idx, m_field, id) ->
+      let m_idx' = m_expr_map_var f m_idx in
+      PrintEventName (m_idx', m_field, id)
+  | PrintEventAlias (m_idx, m_field, id) ->
+      let m_idx' = m_expr_map_var f m_idx in
+      PrintEventAlias (m_idx', m_field, id)
+  | PrintIndent m_e0 -> PrintIndent (m_expr_map_var f m_e0)
+  | PrintExpr (m_e0, i0, i1) -> PrintExpr (m_expr_map_var f m_e0, i0, i1)
+
+and formula_loop_map_var f m_lvs =
+  Pos.map_under_mark (loop_variables_map_var f) m_lvs
+
+and formula_decl_map_var f = function
+  | VarDecl (m_access, m_e0_opt, m_e1) ->
+      let m_access' = m_access_map_var f m_access in
+      let m_e0_opt' = Option.map (m_expr_map_var f) m_e0_opt in
+      let m_e1' = m_expr_map_var f m_e1 in
+      VarDecl (m_access', m_e0_opt', m_e1')
+  | EventFieldRef (m_e0, m_if, id, m_v) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let m_v' = Pos.map_under_mark f m_v in
+      EventFieldRef (m_e0', m_if, id, m_v')
+
+and formula_map_var f = function
+  | SingleFormula fd -> SingleFormula (formula_decl_map_var f fd)
+  | MultipleFormulaes (fl, fd) ->
+      let fl' = formula_loop_map_var f fl in
+      let fd' = formula_decl_map_var f fd in
+      MultipleFormulaes (fl', fd')
+
+and instr_map_var f g = function
+  | Affectation m_f -> Affectation (Pos.map_under_mark (formula_map_var f) m_f)
+  | IfThenElse (m_e0, m_il0, m_il1) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      let m_il0' = List.map (m_instr_map_var f g) m_il0 in
+      let m_il1' = List.map (m_instr_map_var f g) m_il1 in
+      IfThenElse (m_e0', m_il0', m_il1')
+  | WhenDoElse (m_eil, m_il) ->
+      let map (m_e0, m_il0, pos) =
+        let m_e0' = m_expr_map_var f m_e0 in
+        let m_il0' = List.map (m_instr_map_var f g) m_il0 in
+        (m_e0', m_il0', pos)
+      in
+      let m_eil' = List.map map m_eil in
+      let m_il' = Pos.map_under_mark (List.map (m_instr_map_var f g)) m_il in
+      WhenDoElse (m_eil', m_il')
+  | ComputeDomain dom -> ComputeDomain dom
+  | ComputeChaining ch -> ComputeChaining ch
+  | ComputeVerifs (m_sl, m_e0) ->
+      let m_e0' = m_expr_map_var f m_e0 in
+      ComputeVerifs (m_sl, m_e0')
+  | ComputeTarget (tn, args) ->
+      let args' = List.map (Pos.map_under_mark f) args in
+      ComputeTarget (tn, args')
+  | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
+  | Print (pr_std, pr_args) ->
+      let pr_args' =
+        List.map (Pos.map_under_mark (print_arg_map_var f)) pr_args
+      in
+      Print (pr_std, pr_args')
+  | Iterate (m_v, m_vl, cvml, m_il) ->
+      let m_v' = Pos.map_under_mark f m_v in
+      let m_vl' = List.map (Pos.map_under_mark f) m_vl in
+      let cvml' =
+        let map (cvm, m_e) = (cvm, m_expr_map_var f m_e) in
+        List.map map cvml
+      in
+      let m_il' = List.map (m_instr_map_var f g) m_il in
+      Iterate (m_v', m_vl', cvml', m_il')
+  | Iterate_values (m_v, e3l, m_il) ->
+      let m_v' = Pos.map_under_mark f m_v in
+      let e3l' =
+        let map (m_e0, m_e1, m_e2) =
+          let m_e0' = m_expr_map_var f m_e0 in
+          let m_e1' = m_expr_map_var f m_e1 in
+          let m_e2' = m_expr_map_var f m_e2 in
+          (m_e0', m_e1', m_e2')
+        in
+        List.map map e3l
+      in
+      let m_il' = List.map (m_instr_map_var f g) m_il in
+      Iterate_values (m_v', e3l', m_il')
+  | Restore (m_vl, cvml, el, vel, m_il) ->
+      let m_vl' = List.map (Pos.map_under_mark f) m_vl in
+      let cvml' =
+        let map (m_v, cvm, m_e0) =
+          let m_v' = Pos.map_under_mark f m_v in
+          let m_e0' = m_expr_map_var f m_e0 in
+          (m_v', cvm, m_e0')
+        in
+        List.map map cvml
+      in
+      let el' = List.map (m_expr_map_var f) el in
+      let vel' =
+        let map (m_v, m_e0) =
+          let m_v' = Pos.map_under_mark f m_v in
+          let m_e0' = m_expr_map_var f m_e0 in
+          (m_v', m_e0')
+        in
+        List.map map vel
+      in
+      let m_il' = List.map (m_instr_map_var f g) m_il in
+      Restore (m_vl', cvml', el', vel', m_il')
+  | ArrangeEvents (vve_opt, ve_opt, e_opt, m_il) ->
+      let vve_opt' =
+        let map (m_v0, m_v1, m_e0) =
+          let m_v0' = Pos.map_under_mark f m_v0 in
+          let m_v1' = Pos.map_under_mark f m_v1 in
+          let m_e0' = m_expr_map_var f m_e0 in
+          (m_v0', m_v1', m_e0')
+        in
+        Option.map map vve_opt
+      in
+      let ve_opt' =
+        let map (m_v, m_e0) =
+          let m_v' = Pos.map_under_mark f m_v in
+          let m_e0' = m_expr_map_var f m_e0 in
+          (m_v', m_e0')
+        in
+        Option.map map ve_opt
+      in
+      let e_opt' = Option.map (m_expr_map_var f) e_opt in
+      let m_il' = List.map (m_instr_map_var f g) m_il in
+      ArrangeEvents (vve_opt', ve_opt', e_opt', m_il')
+  | RaiseError (m_err, m_s_opt) ->
+      let m_err' = Pos.map_under_mark g m_err in
+      RaiseError (m_err', m_s_opt)
+  | CleanErrors -> CleanErrors
+  | ExportErrors -> ExportErrors
+  | FinalizeErrors -> FinalizeErrors
+
+and m_instr_map_var f g m_i = Pos.map_under_mark (instr_map_var f g) m_i
 
 let get_variable_name v = match v with Normal s -> s | Generic s -> s.base
 

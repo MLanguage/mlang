@@ -21,7 +21,7 @@
 val get_var_from_name :
   Com.Var.t StrMap.t ->
   (* name of the variable to query *) string Pos.marked ->
-  Com.Var.t
+  Com.Var.t Pos.marked
 (** Queries a [type: Mir.variable.t] from an [type:idmap] mapping, the name of a
     variable and the rule number from which the variable is requested. Returns
     the variable with the same name and highest rule number that is below the

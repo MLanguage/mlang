@@ -47,7 +47,7 @@ type verif = {
   verif_seq : int;
 }
 
-type target = (string, Com.variable_name, Mast.error_name) Com.target
+type target = (string, Mast.error_name) Com.target
 
 type program = {
   prog_prefix : string;

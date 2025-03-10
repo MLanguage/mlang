@@ -24,6 +24,8 @@ type set_value = Com.Var.t Com.set_value
 
 type expression = Com.Var.t Com.expression
 
+type m_expression = expression Pos.marked
+
 (** The definitions here are modeled closely to the source M language. One could
     also adopt a more lambda-calculus-compatible model with functions used to
     model tables. *)
@@ -32,7 +34,7 @@ type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
-type target = (Com.Var.t, Com.Var.t, Com.Error.t) Com.target
+type target = (Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
   nb_calculated : int;

@@ -380,7 +380,7 @@ type verif = {
   verif_seq : int;
 }
 
-type target = (string, Com.variable_name, Mast.error_name) Com.target
+type target = (string, Mast.error_name) Com.target
 
 type program = {
   prog_prefix : string;
@@ -1823,6 +1823,10 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
       let prog, target_prog, in_vars, out_vars, _ =
         check_instructions t.target_prog is_function env
       in
+      let target_prog =
+        let map = Com.m_instr_map_var Com.get_normal_var Fun.id in
+        List.map map target_prog
+      in
       if is_function then (
         let vr = Pos.unmark (Option.get target_result) in
         let bad_in_vars =
@@ -1951,6 +1955,10 @@ let convert_rules (prog : program) : program =
       (fun id rule prog_targets ->
         let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
         let target_file = Some (get_target_file (Pos.get rule.rule_id)) in
+        let target_prog =
+          let map = Com.m_instr_map_var Com.get_normal_var Fun.id in
+          List.map map rule.rule_instrs
+        in
         let target =
           Com.
             {
@@ -1960,7 +1968,7 @@ let convert_rules (prog : program) : program =
               target_args = [];
               target_result = None;
               target_tmp_vars = rule.rule_tmp_vars;
-              target_prog = rule.rule_instrs;
+              target_prog;
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
@@ -2121,7 +2129,9 @@ let complete_rule_domains (prog : program) : program =
               rdom_rules
           in
           let target_prog =
+            let map = Com.m_instr_map_var Com.get_normal_var Fun.id in
             rule_graph_to_instrs (RuleDomain rdom_id) prog rule_graph
+            |> List.map map
           in
           let tname =
             let spl =
@@ -2223,7 +2233,9 @@ let complete_chainings (prog : program) : program =
             rules
         in
         let target_prog =
+          let map = Com.m_instr_map_var Com.get_normal_var Fun.id in
           rule_graph_to_instrs (Chaining ch_name) prog rule_graph
+          |> List.map map
         in
         let tname =
           get_compute_id_str (Com.ComputeChaining (ch_name, Pos.no_pos)) prog
@@ -2342,16 +2354,18 @@ let convert_verifs (prog : program) : program =
         let tname = Format.sprintf "%s_verif_%d" prog.prog_prefix id in
         let target_file = Some (get_target_file (Pos.get verif.verif_id)) in
         let target_prog =
-          [
-            ( Com.IfThenElse
-                ( verif.verif_expr,
-                  [
-                    ( Com.RaiseError (verif.verif_error, verif.verif_var),
-                      Pos.no_pos );
-                  ],
-                  [] ),
-              Pos.no_pos );
-          ]
+          List.map
+            (Com.m_instr_map_var Com.get_normal_var Fun.id)
+            [
+              ( Com.IfThenElse
+                  ( verif.verif_expr,
+                    [
+                      ( Com.RaiseError (verif.verif_error, verif.verif_var),
+                        Pos.no_pos );
+                    ],
+                    [] ),
+                Pos.no_pos );
+            ]
         in
         let target =
           Com.
