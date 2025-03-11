@@ -16,6 +16,436 @@
 
 (** {!module: Mast} to {!module: Mir} translation of M programs. *)
 
+let complete_vars (prog : Validator.program) : Validator.program =
+  let prog_vars = prog.prog_vars in
+  let prog_vars =
+    let incr_cpt cat cpt =
+      let i = Com.CatVar.Map.find cat cpt in
+      let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
+      (cpt, i)
+    in
+    let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
+    let prog_vars, _ =
+      StrMap.fold
+        (fun vn (var : Com.Var.t) (res, cpt) ->
+          let tgv = Com.Var.tgv var in
+          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
+          let cpt, i = incr_cpt tgv.cat cpt in
+          let var = Com.Var.set_loc_tgv_cat var dcat i in
+          let res = StrMap.add vn var res in
+          (res, cpt))
+        prog_vars (StrMap.empty, cat_cpt)
+    in
+    prog_vars
+  in
+  let module CatLoc = struct
+    type t = Com.CatVar.loc
+
+    let pp fmt (loc : t) =
+      match loc with
+      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
+      | Com.CatVar.LocBase -> Format.fprintf fmt "base"
+      | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
+
+    let compare x y = compare x y
+  end in
+  let module CatLocMap = struct
+    include MapExt.Make (CatLoc)
+
+    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end in
+  let loc_vars, sz_loc_vars, sz_vars =
+    let fold _ (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
+      let var = Com.Var.set_loc_int var n in
+      let loc_cat =
+        (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
+      in
+      let loc_vars =
+        let upd = function
+          | None -> Some (Com.Var.Set.one var)
+          | Some set -> Some (Com.Var.Set.add var set)
+        in
+        CatLocMap.update loc_cat upd loc_vars
+      in
+      let sz = Com.Var.size var in
+      let sz_loc_vars =
+        let upd = function
+          | None -> Some sz
+          | Some n_loc -> Some (n_loc + sz)
+        in
+        CatLocMap.update loc_cat upd sz_loc_vars
+      in
+      (loc_vars, sz_loc_vars, n + sz)
+    in
+    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
+  in
+  let update_loc (var : Com.Var.t) (vars, n) =
+    let var = Com.Var.set_loc_tgv_idx var n in
+    let vars = StrMap.add (Com.Var.name_str var) var vars in
+    (vars, n + Com.Var.size var)
+  in
+  let prog_vars =
+    CatLocMap.fold
+      (fun _loc_cat vars prog_vars ->
+        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
+      loc_vars StrMap.empty
+  in
+  let nb_loc loc_cat =
+    match CatLocMap.find_opt loc_cat loc_vars with
+    | Some set -> Com.Var.Set.cardinal set
+    | None -> 0
+  in
+  let sz_loc loc_cat =
+    match CatLocMap.find_opt loc_cat sz_loc_vars with
+    | Some sz -> sz
+    | None -> 0
+  in
+  let prog_stats =
+    Mir.
+      {
+        prog.prog_stats with
+        nb_calculated = nb_loc Com.CatVar.LocComputed;
+        nb_input = nb_loc Com.CatVar.LocInput;
+        nb_base = nb_loc Com.CatVar.LocBase;
+        nb_vars = StrMap.cardinal prog_vars;
+        sz_calculated = sz_loc Com.CatVar.LocComputed;
+        sz_input = sz_loc Com.CatVar.LocInput;
+        sz_base = sz_loc Com.CatVar.LocBase;
+        sz_vars;
+      }
+  in
+  { prog with prog_vars; prog_stats }
+
+let complete_vars_stack (prog : Validator.program) : Validator.program =
+  let prog_functions, prog_targets =
+    let rec aux_instrs mil =
+      let fold (nbRef, nbIt) mi =
+        let nbRef', nbIt' = aux_instr mi in
+        (max nbRef nbRef', max nbIt nbIt')
+      in
+      List.fold_left fold (0, 0) mil
+    and aux_instr (instr, _pos) =
+      match instr with
+      | Com.IfThenElse (_, ilThen, ilElse) ->
+          let nbRefThen, nbItThen = aux_instrs ilThen in
+          let nbRefElse, nbItElse = aux_instrs ilElse in
+          (max nbRefThen nbRefElse, max nbItThen nbItElse)
+      | Com.WhenDoElse (wdl, ed) ->
+          let rec wde (nbRef, nbIt) = function
+            | (_, dl, _) :: wdl' ->
+                let nbRefD, nbItD = aux_instrs dl in
+                wde (max nbRef nbRefD, max nbIt nbItD) wdl'
+            | [] ->
+                let nbRefD, nbItD = aux_instrs (Pos.unmark ed) in
+                (max nbRef nbRefD, max nbIt nbItD)
+          in
+          wde (0, 0) wdl
+      | Com.VerifBlock instrs -> aux_instrs instrs
+      | Com.Iterate (_, _, _, instrs) ->
+          let nbRef, nbIt = aux_instrs instrs in
+          (nbRef + 1, nbIt)
+      | Com.Iterate_values (_, _, instrs) ->
+          let nbRef, nbIt = aux_instrs instrs in
+          (nbRef, nbIt + 1)
+      | Com.Restore (_, _, _, _, instrs) ->
+          let nbRef, nbIt = aux_instrs instrs in
+          (max nbRef 1, nbIt)
+      | Com.ArrangeEvents (sort, filter, _, instrs) ->
+          let nbItSort = match sort with Some _ -> 2 | None -> 0 in
+          let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
+          let nbRef, nbIt = aux_instrs instrs in
+          (nbRef, max nbIt @@ max nbItSort nbItFilter)
+      | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
+      | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
+          (0, 0)
+      | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
+          assert false
+    in
+    let map (t : Validator.target) =
+      let nbRef, nbIt = aux_instrs t.target_prog in
+      let target_nb_tmps = StrMap.cardinal t.target_tmp_vars + nbIt in
+      let target_sz_tmps =
+        let fold _ (_, tsz_opt) sz =
+          match tsz_opt with None -> sz + 1 | Some tsz -> sz + tsz
+        in
+        StrMap.fold fold t.target_tmp_vars nbIt
+      in
+      let target_nb_refs = List.length t.target_args + nbRef in
+      { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
+    in
+    (StrMap.map map prog.prog_functions, StrMap.map map prog.prog_targets)
+  in
+  let nb_all_tmps, sz_all_tmps, nb_all_refs =
+    let rec aux_instrs tdata mil =
+      let fold (nb, sz, nbRef, tdata) mi =
+        let nb', sz', nbRef', tdata = aux_instr tdata mi in
+        (max nb nb', max sz sz', max nbRef nbRef', tdata)
+      in
+      List.fold_left fold (0, 0, 0, tdata) mil
+    and aux_call tdata name =
+      match StrMap.find_opt name tdata with
+      | Some (nb, sz, nbRef) -> (nb, sz, nbRef, tdata)
+      | None -> (
+          let eval_call (t : Validator.target) =
+            let nb, sz, nbRef =
+              ( t.target_nb_tmps,
+                t.target_sz_tmps,
+                List.length t.target_args + t.target_nb_refs )
+            in
+            let nb', sz', nbRef', tdata = aux_instrs tdata t.target_prog in
+            let nb = nb + nb' in
+            let sz = sz + sz' in
+            let nbRef = nbRef + nbRef' in
+            let tdata = StrMap.add name (nb, sz, nbRef) tdata in
+            (nb, sz, nbRef, tdata)
+          in
+          match StrMap.find_opt name prog_functions with
+          | Some t -> eval_call t
+          | None -> eval_call (StrMap.find name prog_targets))
+    and aux_instr tdata (instr, _pos) =
+      match instr with
+      | Com.Affectation mf -> (
+          match Pos.unmark mf with
+          | SingleFormula (VarDecl (m_access, mei_opt, mev)) -> (
+              let nbI, szI, nbRefI, tdata =
+                match mei_opt with
+                | None -> (0, 0, 0, tdata)
+                | Some mei -> aux_expr tdata mei
+              in
+              let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
+              let nb, sz, nbRef =
+                (max nbI nbV, max szI szV, max nbRefI nbRefV)
+              in
+              match Pos.unmark m_access with
+              | VarAccess _ -> (nb, sz, nbRef, tdata)
+              | TabAccess (_, mi) ->
+                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
+                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
+              | ConcAccess (_, _, mi) ->
+                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
+                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
+              | FieldAccess (mei, _, _) ->
+                  let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
+                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata))
+          | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
+          | MultipleFormulaes _ -> assert false)
+      | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)
+      | Com.IfThenElse (meI, ilT, ilE) ->
+          let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
+          let nbT, szT, nbRefT, tdata = aux_instrs tdata ilT in
+          let nbE, szE, nbRefE, tdata = aux_instrs tdata ilE in
+          let nb = max nbI @@ max nbT nbE in
+          let sz = max szI @@ max szT szE in
+          let nbRef = max nbRefI @@ max nbRefT nbRefE in
+          (nb, sz, nbRef, tdata)
+      | Com.WhenDoElse (wdl, ed) ->
+          let rec wde (nb, sz, nbRef, tdata) = function
+            | (me, dl, _) :: wdl' ->
+                let nbE, szE, nbRefE, tdata = aux_expr tdata me in
+                let nbD, szD, nbRefD, tdata = aux_instrs tdata dl in
+                let nb = max nb @@ max nbE nbD in
+                let sz = max sz @@ max szE szD in
+                let nbRef = max nbRef @@ max nbRefE nbRefD in
+                wde (nb, sz, nbRef, tdata) wdl'
+            | [] ->
+                let nbD, szD, nbRefD, tdata =
+                  aux_instrs tdata (Pos.unmark ed)
+                in
+                let nb = max nb nbD in
+                let sz = max sz szD in
+                let nbRef = max nbRef nbRefD in
+                (nb, sz, nbRef, tdata)
+          in
+          wde (0, 0, 0, tdata) wdl
+      | Com.VerifBlock instrs -> aux_instrs tdata instrs
+      | Com.Print (_, pal) ->
+          let fold (nb, sz, nbRef, tdata) (a, _pos) =
+            match a with
+            | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
+                (nb, sz, nbRef, tdata)
+            | Com.PrintConcName (_, _, me)
+            | Com.PrintConcAlias (_, _, me)
+            | Com.PrintEventName (me, _, _)
+            | Com.PrintEventAlias (me, _, _)
+            | Com.PrintIndent me
+            | Com.PrintExpr (me, _, _) ->
+                let nb', sz', nbRef', tdata = aux_expr tdata me in
+                (max nb nb', max sz sz', max nbRef nbRef', tdata)
+          in
+          List.fold_left fold (0, 0, 0, tdata) pal
+      | Com.Iterate (_, _, mel, instrs) ->
+          let fold (nb, sz, nbRef, tdata) (_, me) =
+            let nb', sz', nbRef', tdata = aux_expr tdata me in
+            (max nb nb', max sz sz', max nbRef nbRef', tdata)
+          in
+          let nb', sz', nbRef', tdata =
+            List.fold_left fold (0, 0, 0, tdata) mel
+          in
+          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
+          let nb = max nb nb' in
+          let sz = max sz sz' in
+          let nbRef = 1 + max nbRef nbRef' in
+          (nb, sz, nbRef, tdata)
+      | Com.Iterate_values (_, me2l, instrs) ->
+          let fold (nb, sz, nbRef, tdata) (me0, me1, mstep) =
+            let nb', sz', nbRef', tdata = aux_expr tdata me0 in
+            let nb'', sz'', nbRef'', tdata = aux_expr tdata me1 in
+            let nb''', sz''', nbRef''', tdata = aux_expr tdata mstep in
+            let nb = max nb @@ max nb' @@ max nb'' nb''' in
+            let sz = max sz @@ max sz' @@ max sz'' sz''' in
+            let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
+            (nb, sz, nbRef, tdata)
+          in
+          let nb', sz', nbRef', tdata =
+            List.fold_left fold (0, 0, 0, tdata) me2l
+          in
+          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
+          let nb = 1 + max nb nb' in
+          let sz = 1 + max sz sz' in
+          let nbRef = max nbRef nbRef' in
+          (nb, sz, nbRef, tdata)
+      | Com.Restore (_, var_params, evts, evtfs, instrs) ->
+          let nb', sz', nbRef', tdata =
+            let fold (nb, sz, nbRef, tdata) (_, _, me) =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) var_params
+          in
+          let nb'', sz'', nbRef'', tdata =
+            let fold (nb, sz, nbRef, tdata) me =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) evts
+          in
+          let nb''', sz''', nbRef''', tdata =
+            let fold (nb, sz, nbRef, tdata) (_, me) =
+              let nb', sz', nbRef', tdata = aux_expr tdata me in
+              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) evtfs
+          in
+          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
+          let nb = max nb @@ max nb' @@ max nb'' nb''' in
+          let sz = max sz @@ max sz' @@ max sz'' sz''' in
+          (* ??? *)
+          let nbRef = 1 + (max nbRef @@ max nbRef' @@ max nbRef'' nbRef''') in
+          (nb, sz, nbRef, tdata)
+      | Com.ArrangeEvents (sort, filter, add, instrs) ->
+          let n', (nb', sz', nbRef', tdata) =
+            match sort with
+            | Some (_, _, expr) -> (2, aux_expr tdata expr)
+            | None -> (0, (0, 0, 0, tdata))
+          in
+          let n'', (nb'', sz'', nbRef'', tdata) =
+            match filter with
+            | Some (_, expr) -> (1, aux_expr tdata expr)
+            | None -> (0, (0, 0, 0, tdata))
+          in
+          let nb''', sz''', nbRef''', tdata =
+            match add with
+            | Some expr -> aux_expr tdata expr
+            | None -> (0, 0, 0, tdata)
+          in
+          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
+          let nb = max n' n'' + (max nb @@ max nb' @@ max nb'' nb''') in
+          let sz = max n' n'' + (max sz @@ max sz' @@ max sz'' sz''') in
+          let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
+          (nb, sz, nbRef, tdata)
+      | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
+      | Com.FinalizeErrors ->
+          (0, 0, 0, tdata)
+      | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
+          assert false
+    and aux_expr tdata (expr, _pos) =
+      match expr with
+      | Com.TestInSet (_, me, values) ->
+          let fold (nb, sz, nbRef, tdata) = function
+            | Com.VarValue (TabAccess (_, mei), _)
+            | Com.VarValue (ConcAccess (_, _, mei), _)
+            | Com.VarValue (FieldAccess (mei, _, _), _) ->
+                let nb', sz', nbRef', tdata = aux_expr tdata mei in
+                (max nb nb', max sz sz', max nbRef nbRef', tdata)
+            | _ -> (nb, sz, nbRef, tdata)
+          in
+          let nb', sz', nbRef', tdata =
+            List.fold_left fold (0, 0, 0, tdata) values
+          in
+          let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
+          (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
+      | Com.Unop (_, me)
+      | Com.Index ((VarAccess _, _), me)
+      | Com.Var (TabAccess (_, me))
+      | Com.Var (ConcAccess (_, _, me))
+      | Com.Var (FieldAccess (me, _, _))
+      | Com.Size (TabAccess (_, me), _)
+      | Com.Size (ConcAccess (_, _, me), _)
+      | Com.Size (FieldAccess (me, _, _), _)
+      | Com.Attribut ((TabAccess (_, me), _), _)
+      | Com.Attribut ((ConcAccess (_, _, me), _), _)
+      | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
+          aux_expr tdata me
+      | Com.Index ((ConcAccess (_, _, me0), _), me1)
+      | Com.Index ((FieldAccess (me0, _, _), _), me1)
+      | Com.Comparison (_, me0, me1)
+      | Com.Binop (_, me0, me1) ->
+          let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
+          let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
+          (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)
+      | Com.Conditional (meI, meT, meEOpt) ->
+          let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
+          let nbT, szT, nbRefT, tdata = aux_expr tdata meT in
+          let nbE, szE, nbRefE, tdata =
+            match meEOpt with
+            | None -> (0, 0, 0, tdata)
+            | Some meE -> aux_expr tdata meE
+          in
+          let nb = max nbI @@ max nbT nbE in
+          let sz = max szI @@ max szT szE in
+          let nbRef = max nbRefI @@ max nbRefT nbRefE in
+          (nb, sz, nbRef, tdata)
+      | Com.FuncCall (func, mel) ->
+          let fold (nb, sz, nbRef, tdata) me =
+            let nb', sz', nbRef', tdata = aux_expr tdata me in
+            (max nb nb', max sz sz', max nbRef nbRef', tdata)
+          in
+          let nb', sz', nbRef', tdata =
+            List.fold_left fold (0, 0, 0, tdata) mel
+          in
+          let nb, sz, nbRef, tdata =
+            match Pos.unmark func with
+            | Func name -> aux_call tdata name
+            | _ -> (0, 0, 0, tdata)
+          in
+          (max nb nb', max sz sz', max nbRef nbRef', tdata)
+      | Com.Literal _
+      | Com.Var (VarAccess _)
+      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.NbAnomalies
+      | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
+          (0, 0, 0, tdata)
+      | Com.Index ((TabAccess _, _), _) | Com.FuncCallLoop _ | Com.Loop _ ->
+          assert false
+    in
+    let nb, sz, nbRef, _ =
+      let fold tn _ (nb, sz, nbRef, tdata) =
+        let nb', sz', nbRef', tdata = aux_call tdata tn in
+        (max nb nb', max sz sz', max nbRef nbRef', tdata)
+      in
+      (0, 0, 0, StrMap.empty)
+      |> StrMap.fold fold prog_functions
+      |> StrMap.fold fold prog_targets
+    in
+    (nb, sz, nbRef)
+  in
+  let prog_stats =
+    Mir.{ prog.prog_stats with nb_all_tmps; sz_all_tmps; nb_all_refs }
+  in
+  { prog with prog_functions; prog_targets; prog_stats }
+
 (** {1 Translation } *)
 
 (** {2 General translation context} *)
@@ -30,7 +460,7 @@ let get_var_from_name (var_data : Com.Var.t StrMap.t) (name : string Pos.marked)
 
 (** {2 Translation of expressions} *)
 
-let rec translate_expression (p : Check_validity.program)
+let rec translate_expression (p : Validator.program)
     (var_data : Com.Var.t StrMap.t) (f : string Com.m_expression) :
     Mir.m_expression =
   let open Com in
@@ -46,6 +476,12 @@ let rec translate_expression (p : Check_validity.program)
                   let access' =
                     match access with
                     | VarAccess v -> VarAccess (StrMap.find v var_data)
+                    | TabAccess (m_v, m_i) ->
+                        let v, v_pos = m_v in
+                        let v' = StrMap.find v var_data in
+                        (* faux !!! *)
+                        let m_i' = translate_expression p var_data m_i in
+                        TabAccess ((v', v_pos), m_i')
                     | ConcAccess (m_vn, m_if, i) ->
                         let i' = translate_expression p var_data i in
                         ConcAccess (m_vn, m_if, i')
@@ -85,6 +521,7 @@ let rec translate_expression (p : Check_validity.program)
           | VarAccess t ->
               let t_var, t_pos = get_var_from_name var_data (t, pos) in
               (VarAccess t_var, t_pos)
+          | TabAccess _ -> assert false
           | ConcAccess (m_vn, m_if, i) ->
               let i' = translate_expression p var_data i in
               (ConcAccess (m_vn, m_if, i'), pos)
@@ -114,6 +551,10 @@ let rec translate_expression (p : Check_validity.program)
           | VarAccess v ->
               let m_v = get_var_from_name var_data (Pos.same_pos_as v f) in
               VarAccess (Pos.unmark m_v)
+          | TabAccess (m_v, m_i) ->
+              let m_v' = get_var_from_name var_data m_v in
+              let m_i' = translate_expression p var_data m_i in
+              TabAccess (m_v', m_i')
           | ConcAccess (m_vn, m_if, i) ->
               let i' = translate_expression p var_data i in
               ConcAccess (m_vn, m_if, i')
@@ -123,8 +564,7 @@ let rec translate_expression (p : Check_validity.program)
               FieldAccess (e', f, i)
         in
         Var access'
-    | NbCategory cs ->
-        NbCategory (Check_validity.mast_to_catvars cs p.prog_var_cats)
+    | NbCategory cs -> NbCategory (Validator.mast_to_catvars cs p.prog_var_cats)
     | Attribut ((access, pos), a) -> (
         match access with
         | VarAccess v_name -> (
@@ -134,6 +574,11 @@ let rec translate_expression (p : Check_validity.program)
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
               | None -> Literal Undefined)
+        | TabAccess (m_v, _) -> (
+            let var = StrMap.find (Pos.unmark m_v) var_data in
+            match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
+            | Some l -> Literal (Float (float (Pos.unmark l)))
+            | None -> Literal Undefined)
         | ConcAccess (m_vn, m_if, i) ->
             let i' = translate_expression p var_data i in
             Attribut ((ConcAccess (m_vn, m_if, i'), pos), a)
@@ -150,6 +595,7 @@ let rec translate_expression (p : Check_validity.program)
               match Com.Var.is_table var with
               | Some i -> Literal (Float (float_of_int i))
               | None -> Literal (Float 1.0))
+        | TabAccess _ -> Literal (Float 1.0)
         | ConcAccess (m_vn, m_if, i) ->
             let i' = translate_expression p var_data i in
             Size (ConcAccess (m_vn, m_if, i'), pos)
@@ -167,8 +613,8 @@ let rec translate_expression (p : Check_validity.program)
 
 (** {2 Translation of instructions} *)
 
-let rec translate_prog (p : Check_validity.program)
-    (var_data : Com.Var.t StrMap.t) (it_depth : int) (itval_depth : int) prog =
+let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
+    (it_depth : int) (itval_depth : int) prog =
   let rec aux res = function
     | [] -> List.rev res
     | (Com.Affectation (SingleFormula decl, _), pos) :: il ->
@@ -181,6 +627,10 @@ let rec translate_prog (p : Check_validity.program)
                 | VarAccess v ->
                     let v', v_pos' = get_var_from_name var_data (v, a_pos) in
                     (Com.VarAccess v', v_pos')
+                | TabAccess (m_v, m_i) ->
+                    let m_v' = get_var_from_name var_data m_v in
+                    let m_i' = translate_expression p var_data m_i in
+                    (Com.TabAccess (m_v', m_i'), a_pos)
                 | ConcAccess (m_vn, m_if, i) ->
                     let i' = translate_expression p var_data i in
                     (Com.ConcAccess (m_vn, m_if, i'), a_pos)
@@ -302,9 +752,7 @@ let rec translate_prog (p : Check_validity.program)
         let var_params' =
           List.map
             (fun (vcats, expr) ->
-              let catSet =
-                Check_validity.mast_to_catvars vcats p.prog_var_cats
-              in
+              let catSet = Validator.mast_to_catvars vcats p.prog_var_cats in
               let mir_expr = translate_expression p var_data expr in
               (catSet, mir_expr))
             var_params
@@ -362,9 +810,7 @@ let rec translate_prog (p : Check_validity.program)
                 Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth
               in
               let var_data = StrMap.add var_name var var_data in
-              let catSet =
-                Check_validity.mast_to_catvars vcats p.prog_var_cats
-              in
+              let catSet = Validator.mast_to_catvars vcats p.prog_var_cats in
               let mir_expr = translate_expression p var_data expr in
               (Pos.mark var_pos var, catSet, mir_expr))
             var_params
@@ -472,11 +918,11 @@ let rec translate_prog (p : Check_validity.program)
   in
   aux [] prog
 
-let get_targets (is_function : bool) (p : Check_validity.program)
-    (var_data : Com.Var.t StrMap.t) (ts : Check_validity.target StrMap.t) :
-    Mir.target Com.TargetMap.t =
+let get_targets (is_function : bool) (p : Validator.program)
+    (var_data : Com.Var.t StrMap.t) (ts : Validator.target StrMap.t) :
+    Mir.target StrMap.t =
   StrMap.fold
-    (fun _ (t : Check_validity.target) targets ->
+    (fun _ (t : Validator.target) targets ->
       let target_name = t.target_name in
       let target_file = t.target_file in
       let target_apps = t.target_apps in
@@ -553,57 +999,54 @@ let get_targets (is_function : bool) (p : Check_validity.program)
             target_nb_refs;
           }
       in
-      Com.TargetMap.add (Pos.unmark target_name) target targets)
-    ts Com.TargetMap.empty
+      StrMap.add (Pos.unmark target_name) target targets)
+    ts StrMap.empty
 
-let translate (p : Mast.program) (main_target : string) : Mir.program =
-  let p = Expand_macros.proceed p in
-  let prog = Check_validity.proceed p main_target in
-  let prog_functions = prog.prog_functions in
-  let prog_targets = prog.prog_targets in
-  let var_category_map = prog.prog_var_cats in
-  let var_data = prog.prog_vars in
-  let rules =
-    let map_rule (rule : Check_validity.rule) =
+let translate (p : Validator.program) : Mir.program =
+  let p = p |> complete_vars |> complete_vars_stack in
+  let program_rules =
+    let map_rule (rule : Validator.rule) =
       let id = Pos.unmark rule.rule_id in
-      Format.sprintf "%s_regle_%d" prog.prog_prefix id
+      Format.sprintf "%s_regle_%d" p.prog_prefix id
     in
-    IntMap.map map_rule prog.prog_rules
+    IntMap.map map_rule p.prog_rules
   in
-  let verifs =
-    let map_verif (verif : Check_validity.verif) =
+  let program_verifs =
+    let map_verif (verif : Validator.verif) =
       let id = Pos.unmark verif.verif_id in
-      Format.sprintf "%s_verif_%d" prog.prog_prefix id
+      Format.sprintf "%s_verif_%d" p.prog_prefix id
     in
-    IntMap.map map_verif prog.prog_verifs
+    IntMap.map map_verif p.prog_verifs
   in
-  let chainings =
-    let map_chainings (chaining : Check_validity.chaining) =
+  let program_chainings =
+    let map_chainings (chaining : Validator.chaining) =
       let name = Pos.unmark chaining.chain_name in
-      Format.sprintf "%s_chaining_%s" prog.prog_prefix name
+      Format.sprintf "%s_chaining_%s" p.prog_prefix name
     in
-    StrMap.map map_chainings prog.prog_chainings
+    StrMap.map map_chainings p.prog_chainings
   in
-  let errs = prog.prog_errors in
-  let functions = get_targets true prog var_data prog_functions in
-  let targets = get_targets false prog var_data prog_targets in
+  let program_errors = p.prog_errors in
+  let program_vars = p.prog_vars in
+  let program_functions = get_targets true p program_vars p.prog_functions in
+  let program_targets = get_targets false p program_vars p.prog_targets in
   Mir.
     {
-      program_safe_prefix = prog.prog_prefix;
-      program_applications = prog.prog_apps;
-      program_var_categories = var_category_map;
-      program_rule_domains = prog.prog_rdoms;
-      program_verif_domains = prog.prog_vdoms;
-      program_vars = var_data;
-      program_alias = prog.prog_alias;
-      program_event_fields = prog.prog_event_fields;
-      program_event_field_idxs = prog.prog_event_field_idxs;
-      program_rules = rules;
-      program_verifs = verifs;
-      program_chainings = chainings;
-      program_errors = errs;
-      program_functions = functions;
-      program_targets = targets;
-      program_main_target = prog.prog_main_target;
-      program_stats = prog.prog_stats;
+      program_safe_prefix = p.prog_prefix;
+      program_applications = p.prog_apps;
+      program_var_categories = p.prog_var_cats;
+      program_rule_domains = p.prog_rdoms;
+      program_verif_domains = p.prog_vdoms;
+      program_vars;
+      program_tabs = p.prog_tabs;
+      program_alias = p.prog_alias;
+      program_event_fields = p.prog_event_fields;
+      program_event_field_idxs = p.prog_event_field_idxs;
+      program_rules;
+      program_verifs;
+      program_chainings;
+      program_errors;
+      program_functions;
+      program_targets;
+      program_main_target = p.prog_main_target;
+      program_stats = p.prog_stats;
     }

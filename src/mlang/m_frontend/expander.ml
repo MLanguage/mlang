@@ -19,8 +19,14 @@ module Err = struct
 
   let unknown_constant pos = Errors.raise_spanned_error "unknown constant" pos
 
+  let table_size_must_be_int pos =
+    Errors.raise_spanned_error "table size must be an integer" pos
+
   let table_size_must_be_positive pos =
-    Errors.raise_spanned_error "table size must be a positive integer" pos
+    Errors.raise_spanned_error "table size must be positive" pos
+
+  let table_cannot_be_empty pos =
+    Errors.raise_spanned_error "table cannot be empty" pos
 
   let unbounded_parameter_in_variable_name p pos =
     Errors.raise_spanned_error
@@ -304,8 +310,10 @@ let expand_table_size (const_map : const_context) table_size =
       match ConstMap.find_opt c const_map with
       | Some (f, _) ->
           let i = int_of_float f in
-          if f = float i && i >= 0 then Some (Mast.LiteralSize i, size_pos)
-          else Err.table_size_must_be_positive size_pos
+          if f <> float i then Err.table_size_must_be_int size_pos
+          else if i < 0 then Err.table_size_must_be_positive size_pos
+          else if i = 0 then Err.table_cannot_be_empty size_pos
+          else Some (Mast.LiteralSize i, size_pos)
       | None -> Err.unknown_constant size_pos)
   | _ -> table_size
 
@@ -546,6 +554,13 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
       match expand_variable const_map loop_map (v, a_pos) with
       | AtomLiteral lit, _ -> ExpLiteral lit
       | AtomVar var, var_pos -> ExpAccess (VarAccess var, var_pos))
+  | TabAccess (m_v, m_i) -> (
+      match expand_variable const_map loop_map m_v with
+      | AtomLiteral _, var_pos -> Err.constant_forbidden_as_table var_pos
+      | AtomVar v, v_pos ->
+          let m_v' = (v, v_pos) in
+          let m_i' = expand_expression const_map loop_map m_i in
+          ExpAccess (TabAccess (m_v', m_i'), v_pos))
   | ConcAccess (m_v, m_if, i) -> (
       match expand_variable const_map loop_map m_v with
       | AtomLiteral _, var_pos -> Err.constant_forbidden_as_arg var_pos
@@ -554,16 +569,15 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
           | Com.Literal Undefined, i_pos -> Err.constant_forbidden_as_arg i_pos
           | Com.Literal (Float f), i_pos ->
               let fi = int_of_float f in
-              if fi < 0 then Err.constant_forbidden_as_arg i_pos
-              else
-                let v' =
-                  match v with
-                  | Com.Normal n ->
-                      let n' = Strings.concat_int n (Pos.unmark m_if) fi in
-                      Com.Normal n'
-                  | _ -> assert false
-                in
-                ExpAccess (VarAccess v', a_pos)
+              if fi < 0 then Err.constant_forbidden_as_arg i_pos;
+              let v' =
+                match v with
+                | Com.Normal n ->
+                    let n' = Strings.concat_int n (Pos.unmark m_if) fi in
+                    Com.Normal n'
+                | _ -> assert false
+              in
+              ExpAccess (VarAccess v', a_pos)
           | i' -> ExpAccess (ConcAccess ((v, v_pos), m_if, i'), a_pos)))
   | FieldAccess (e, f, i_f) ->
       let e' = expand_expression const_map loop_map e in

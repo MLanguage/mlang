@@ -1072,9 +1072,9 @@ afficher_erreur indenter(-2) "test_varcons\n\n";
 
 cible test:
 application: iliad;
-calculer cible test_evenements;
+#calculer cible test_evenements;
 calculer cible test_tableaux;
-calculer cible test_varcons;
+#calculer cible test_varcons;
 
 cible enchainement_primitif:
 application: iliad;
@@ -1130,4 +1130,70 @@ sinon_si V_IND_TRAIT = 5 alors # correctif
   calculer cible enchainement_correctif;
 finsi
 #calculer cible test;
+
+#{
+
+# debug
+
+cible toto:
+application: iliad;
+afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
+afficher_erreur "toto " nom(FLAG_PVRO) " " alias(FLAG_PVRO) "+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
+afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
+
+cible tutu:
+application: iliad;
+iterer
+: variable ITC
+: categorie saisie revenu
+: avec attribut(ITC, acompte) = 0
+: dans (
+  afficher_erreur "tutu0 " nom(ITC) " (" alias(ITC) ") = " (ITC) : 0..2 "\n";
+  afficher_erreur "tutu1 attribut(" nom(ITC) ", acompte) = " (attribut(ITC, acompte)) : 0 "\n";
+  afficher_erreur "tutu1 attribut(" nom(V_VAR7WZ) ", acompte) = " (attribut(V_VAR7WZ, acompte)) : 0 "\n";
+)
+
+cible titi:
+application : iliad;
+variables_temporaires: TOTO tableau[3];
+TOTO[0] = 0;
+TOTO[1] = 1 + TOTO[0];
+TOTO[2] = 2 + TOTO[1];
+afficher_erreur "titi debut\n";
+afficher_erreur "titi0 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+afficher_erreur "titi0 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+iterer
+: variable ITC : categorie saisie contexte : avec present(ITC)
+: dans (
+  afficher_erreur "titi0 " nom(ITC) " = " (ITC) "\n";
+)
+afficher_erreur "\n";
+restaurer
+: variables FLAG_PVRO, TOTO
+: variable RESTREV : categorie saisie contexte : avec present(RESTREV)
+: apres (
+  FLAG_PVRO = indefini;
+  afficher_erreur "titi1 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+  TOTO[0] = indefini;
+  TOTO[1] = indefini;
+  TOTO[2] = indefini;
+  afficher_erreur "titi1 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+  iterer
+  : variable ITC : categorie saisie contexte : avec present(ITC)
+  : dans (
+    ITC = indefini;
+    afficher_erreur "titi1 " nom(ITC) " = " (ITC) "\n";
+  )
+)
+afficher_erreur "\n";
+afficher_erreur "toiti2 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+afficher_erreur "titi2 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+iterer
+: variable ITC : categorie saisie contexte : avec present(ITC)
+: dans (
+  afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
+)
+afficher_erreur "titi fin\n\n";
+
+}#
 

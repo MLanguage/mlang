@@ -139,8 +139,8 @@ module Var = struct
     match v.scope with
     | Tgv s -> s
     | _ ->
-        Errors.raise_error
-          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+        let msg = Pp.spr "%s is not a TGV variable" (Pos.unmark v.name) in
+        Errors.raise_error msg
 
   let name v = v.name
 
@@ -184,16 +184,45 @@ module Var = struct
     match v.loc with
     | LocTgv (_, l) -> l
     | _ ->
-        Errors.raise_error
-          (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+        let msg = Pp.spr "%s is not a TGV variable" (Pos.unmark v.name) in
+        Errors.raise_error msg
+
+  let set_loc_tgv_cat v (cv : CatVar.data) i =
+    match v.loc with
+    | LocTgv (id, tgv) ->
+        let loc_cat = cv.loc in
+        let loc_cat_str = cv.id_str in
+        let tgv = { tgv with loc_cat; loc_cat_str; loc_cat_idx = i } in
+        { v with loc = LocTgv (id, tgv) }
+    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+        Errors.raise_error (Pp.spr "%s has not a TGV location" id)
+
+  let set_loc_tgv_idx v i =
+    match v.loc with
+    | LocTgv (id, tgv) -> { v with loc = LocTgv (id, { tgv with loc_idx = i }) }
+    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+        Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
   let loc_int v =
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_int
     | LocTmp (_, li) | LocRef (_, li) | LocArg (_, li) -> li
     | LocRes id ->
-        Errors.raise_error
-          (Format.sprintf "variable %s doesn't have an index" id)
+        let msg = Pp.spr "variable %s doesn't have an index" id in
+        Errors.raise_error msg
+
+  let set_loc_int v loc_int =
+    let loc =
+      match v.loc with
+      | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
+      | LocTmp (id, _) -> LocTmp (id, loc_int)
+      | LocRef (id, _) -> LocRef (id, loc_int)
+      | LocArg (id, _) -> LocArg (id, loc_int)
+      | LocRes id ->
+          let msg = Pp.spr "variable %s doesn't have an index" id in
+          Errors.raise_error msg
+    in
+    { v with loc }
 
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
@@ -298,6 +327,101 @@ type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
 type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
 
+module Tab = struct
+  type id = int
+
+  let id_cpt = ref 0
+
+  let new_id () =
+    let id = !id_cpt in
+    incr id_cpt;
+    id
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    id : id;
+    size : int;
+    iFmt : string;
+    vars : Var.t Array.t;
+  }
+
+  let tgv t = Var.tgv t.vars.(0)
+
+  let name t = t.name
+
+  let name_str t = Pos.unmark t.name
+
+  let size t = t.size
+
+  let descr t = (tgv t).descr
+
+  let descr_str t = Pos.unmark (tgv t).descr
+
+  let attrs t = (tgv t).attrs
+
+  let cat t = (tgv t).cat
+
+  let is_given_back t = (tgv t).is_given_back
+
+  let is_temp t = Var.is_temp t.vars.(0)
+
+  let new_tab ~(prog_vars : Var.t StrMap.t) ~(name : string Pos.marked)
+      ~(size : int) : t =
+    let size = max size 1 in
+    let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" size) in
+    let vars =
+      let init i =
+        let vn = Strings.concat_int (Pos.unmark name) iFmt i in
+        StrMap.find vn prog_vars
+      in
+      Array.init size init
+    in
+    { name; id = new_id (); size; iFmt; vars }
+
+  let int_of_scope tab = if Var.is_temp tab.vars.(0) then 1 else 0
+
+  let compare (tab1 : t) (tab2 : t) =
+    let c = compare (int_of_scope tab1) (int_of_scope tab2) in
+    if c <> 0 then c
+    else
+      let c = compare (Pos.unmark tab1.name) (Pos.unmark tab2.name) in
+      if c <> 0 then c else compare tab1.id tab2.id
+
+  let pp fmt (tab : t) =
+    Format.fprintf fmt "(%d)%s" tab.id (Pos.unmark tab.name)
+
+  type t_tab = t
+
+  let pp_tab = pp
+
+  let compare_tab t0 t1 = Int.compare t0.id t1.id
+
+  module Set = struct
+    include SetExt.Make (struct
+      type t = t_tab
+
+      let compare = compare_tab
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = pp_tab) (_ : unit) (fmt : Format.formatter)
+        (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module Map = struct
+    include MapExt.Make (struct
+      type t = t_tab
+
+      let compare = compare_tab
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = pp_tab) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
+end
+
 module DomainId = StrSet
 
 module DomainIdSet = struct
@@ -344,8 +468,6 @@ type verif_domain_data = {
 
 type verif_domain = verif_domain_data domain
 
-module TargetMap = StrMap
-
 type literal = Float of float | Undefined
 
 (** Unary operators *)
@@ -383,6 +505,7 @@ type variable_name = Normal of string | Generic of variable_generic_name
 
 type 'v access =
   | VarAccess of 'v
+  | TabAccess of 'v Pos.marked * 'v m_expression
   | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
@@ -576,6 +699,10 @@ type ('v, 'e) target = {
 
 let rec access_map_var f = function
   | VarAccess v -> VarAccess (f v)
+  | TabAccess (m_v, m_i) ->
+      let m_v' = Pos.map_under_mark f m_v in
+      let m_i' = m_expr_map_var f m_i in
+      TabAccess (m_v', m_i')
   | ConcAccess (vname, m_ifmt, m_i) ->
       let m_i' = m_expr_map_var f m_i in
       ConcAccess (vname, m_ifmt, m_i')
@@ -812,28 +939,6 @@ let get_variable_name v = match v with Normal s -> s | Generic s -> s.base
 
 let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
-let set_loc_int loc loc_int =
-  match loc with
-  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
-  | LocTmp (id, _) -> LocTmp (id, loc_int)
-  | LocRef (id, _) -> LocRef (id, loc_int)
-  | LocArg (id, _) -> LocArg (id, loc_int)
-  | LocRes id ->
-      Errors.raise_error (Format.sprintf "variable %s doesn't have an index" id)
-
-let set_loc_tgv_cat loc loc_cat loc_cat_str loc_cat_idx =
-  match loc with
-  | LocTgv (id, tgv) ->
-      LocTgv (id, { tgv with loc_cat; loc_cat_str; loc_cat_idx })
-  | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
-      Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
-
-let set_loc_tgv_idx loc loc_idx =
-  match loc with
-  | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
-  | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
-      Errors.raise_error (Format.sprintf "%s has not a TGV location" id)
-
 let format_value_typ fmt t =
   Pp.string fmt
     (match t with
@@ -913,6 +1018,9 @@ let format_comp_op fmt op =
 
 let format_access form_var form_expr fmt = function
   | VarAccess v -> form_var fmt v
+  | TabAccess (m_v, m_i) ->
+      Format.fprintf fmt "%a[%a]" form_var (Pos.unmark m_v) form_expr
+        (Pos.unmark m_i)
   | ConcAccess (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "%s{%s, %a}"
         (get_variable_name (Pos.unmark m_vn))

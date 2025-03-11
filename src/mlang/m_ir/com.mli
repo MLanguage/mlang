@@ -103,7 +103,13 @@ module Var : sig
 
   val loc_tgv : t -> loc_tgv
 
+  val set_loc_tgv_cat : t -> CatVar.data -> int -> t
+
+  val set_loc_tgv_idx : t -> int -> t
+
   val loc_int : t -> int
+
+  val set_loc_int : t -> int -> t
 
   val is_temp : t -> bool
 
@@ -154,6 +160,51 @@ type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
 type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
 
+module Tab : sig
+  type id = int
+
+  type t = {
+    name : string Pos.marked;  (** The position is the variable declaration *)
+    id : id;
+    size : int;
+    iFmt : string;
+    vars : Var.t Array.t;
+  }
+
+  val tgv : t -> Var.tgv
+
+  val name : t -> string Pos.marked
+
+  val name_str : t -> string
+
+  val size : t -> int
+
+  val descr : t -> string Pos.marked
+
+  val descr_str : t -> string
+
+  val attrs : t -> int Pos.marked StrMap.t
+
+  val cat : t -> CatVar.t
+
+  val is_given_back : t -> bool
+
+  val is_temp : t -> bool
+
+  val new_tab :
+    prog_vars:Var.t StrMap.t -> name:string Pos.marked -> size:int -> t
+
+  val pp : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+
+  module Set : SetExt.T with type elt = t
+
+  module Map : sig
+    include MapExt.T with type key = t
+  end
+end
+
 module DomainId : StrSet.T
 
 module DomainIdSet :
@@ -182,8 +233,6 @@ type verif_domain_data = {
 }
 
 type verif_domain = verif_domain_data domain
-
-module TargetMap : StrMap.T
 
 type literal = Float of float | Undefined
 
@@ -233,6 +282,7 @@ type variable_name = Normal of string | Generic of variable_generic_name
 
 type 'v access =
   | VarAccess of 'v
+  | TabAccess of 'v Pos.marked * 'v m_expression
   | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
@@ -412,12 +462,6 @@ val m_instr_map_var :
 val get_variable_name : variable_name -> string
 
 val get_normal_var : variable_name -> string
-
-val set_loc_int : loc -> int -> loc
-
-val set_loc_tgv_cat : loc -> CatVar.loc -> string -> int -> loc
-
-val set_loc_tgv_idx : loc -> int -> loc
 
 val format_value_typ : Pp.t -> value_typ -> unit
 

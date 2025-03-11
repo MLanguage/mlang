@@ -29,7 +29,7 @@ val get_var_from_name :
 
 (** {1 Main translation function}*)
 
-val translate : Mast.program -> string -> Mir.program
+val translate : Validator.program -> Mir.program
 (** Main translation function from the M AST to the M Variable Graph. This
     function performs 6 linear passes on the input code:
 

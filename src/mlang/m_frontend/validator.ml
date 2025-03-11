@@ -390,6 +390,7 @@ type program = {
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
+  prog_tabs : Com.Tab.t StrMap.t;
   prog_alias : string Pos.marked StrMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
@@ -412,6 +413,42 @@ type program = {
 
 let is_vartmp (var : string) =
   String.length var >= 6 && String.sub var 0 6 = "VARTMP"
+
+let check_name_in_tgv prog m_name =
+  let vn, vpos = m_name in
+  let err old_pos = Err.variable_already_declared vn old_pos vpos in
+  let check_var next () =
+    match StrMap.find_opt vn prog.prog_vars with
+    | Some Com.Var.{ name = _, old_pos; _ } -> err old_pos
+    | None -> next ()
+  in
+  let check_tab () =
+    match StrMap.find_opt vn prog.prog_tabs with
+    | Some Com.Tab.{ name = _, old_pos; _ } -> err old_pos
+    | None -> ()
+  in
+  check_var check_tab ()
+
+let check_alias_in_tgv prog m_alias =
+  let an, apos = m_alias in
+  let err old_pos = Err.alias_already_declared an old_pos apos in
+  match StrMap.find_opt an prog.prog_alias with
+  | Some (_, old_pos) -> err old_pos
+  | None -> ()
+
+let check_name_in_tmp tmps m_name =
+  let vn, vpos = m_name in
+  let err old_pos = Err.variable_already_declared vn old_pos vpos in
+  match StrMap.find_opt vn tmps with
+  | Some ((_, old_pos), _) -> err old_pos
+  | None -> ()
+
+let check_name_in_args args m_name =
+  let vn, vpos = m_name in
+  let err old_pos = Err.variable_already_declared vn old_pos vpos in
+  match List.find_opt (fun (va, _) -> vn = va) args with
+  | Some (_, old_pos) -> err old_pos
+  | None -> ()
 
 let get_target_file (pos : Pos.t) : string =
   let file = Pos.get_file pos |> Filename.basename in
@@ -472,6 +509,7 @@ let empty_program (p : Mast.program) main_target =
     prog_chainings = StrMap.empty;
     prog_var_cats = Com.CatVar.Map.empty;
     prog_vars = StrMap.empty;
+    prog_tabs = StrMap.empty;
     prog_event_fields = StrMap.empty;
     prog_event_field_idxs = IntMap.empty;
     prog_event_pos = Pos.no_pos;
@@ -624,26 +662,24 @@ let check_global_var (var : Com.Var.t) (prog : program) : program =
         Err.attribute_is_not_defined name attr name_pos)
     cat.attributs;
   let prog_vars =
-    match StrMap.find_opt name prog.prog_vars with
-    | Some (gvar : Com.Var.t) ->
-        let old_pos = Pos.get gvar.name in
-        Err.variable_already_declared name old_pos name_pos
-    | None -> (
-        match StrMap.find_opt name prog.prog_alias with
-        | None -> StrMap.add name var prog.prog_vars
-        | Some (_, old_pos) ->
-            Err.variable_already_declared name old_pos name_pos)
+    check_name_in_tgv prog var.name;
+    StrMap.add name var prog.prog_vars
   in
   let prog_alias =
     match Com.Var.alias var with
-    | Some (alias, alias_pos) -> (
-        match StrMap.find_opt alias prog.prog_alias with
-        | Some (_, old_pos) ->
-            Err.alias_already_declared alias old_pos alias_pos
-        | None -> StrMap.add alias var.name prog.prog_alias)
+    | Some m_alias ->
+        check_alias_in_tgv prog m_alias;
+        StrMap.add (Pos.unmark m_alias) var.name prog.prog_alias
     | None -> prog.prog_alias
   in
   { prog with prog_vars; prog_alias }
+
+let check_global_tab (tab : Com.Tab.t) (prog : program) : program =
+  let prog_tabs =
+    (* check_name_in_tgv prog tab.name; *)
+    StrMap.add (Pos.unmark tab.name) tab prog.prog_tabs
+  in
+  { prog with prog_tabs }
 
 let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
   match var_decl with
@@ -667,7 +703,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
       in
       check_global_var var prog
-  | Mast.ComputedVar (comp_var, _decl_pos) ->
+  | Mast.ComputedVar (comp_var, _decl_pos) -> (
       let global_category =
         let is_base =
           List.fold_left
@@ -676,21 +712,47 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         in
         Com.CatVar.Computed { is_base }
       in
-      let global_table =
+      let is_table =
         match comp_var.Mast.comp_table with
         | Some (Mast.LiteralSize sz, _pos) -> Some sz
         | Some _ -> assert false
         | None -> None
       in
+      let is_given_back = comp_var.comp_is_givenback in
+      let alias = None in
+      let descr = comp_var.Mast.comp_description in
+      let attrs = get_attributes comp_var.Mast.comp_attributes in
+      let cat = global_category in
+      let typ = Option.map Pos.unmark comp_var.Mast.comp_typ in
       let var =
-        Com.Var.new_tgv ~name:comp_var.Mast.comp_name ~is_table:global_table
-          ~is_given_back:comp_var.comp_is_givenback ~alias:None
-          ~descr:comp_var.Mast.comp_description
-          ~attrs:(get_attributes comp_var.Mast.comp_attributes)
-          ~cat:global_category
-          ~typ:(Option.map Pos.unmark comp_var.Mast.comp_typ)
+        Com.Var.new_tgv ~name:comp_var.Mast.comp_name ~is_table ~is_given_back
+          ~alias ~descr ~attrs ~cat ~typ
       in
-      check_global_var var prog
+      let prog = check_global_var var prog in
+      match is_table with
+      | None -> prog
+      | Some sz ->
+          let prog =
+            let name, npos = comp_var.Mast.comp_name in
+            let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
+            let rec loop prog i =
+              if i >= sz then prog
+              else
+                let iName = Strings.concat_int name iFmt i in
+                let iVar =
+                  Com.Var.new_tgv ~name:(iName, npos) ~is_table:None
+                    ~is_given_back ~alias ~descr ~attrs ~cat ~typ
+                in
+                let prog = check_global_var iVar prog in
+                loop prog (i + 1)
+            in
+            loop prog 0
+          in
+          let tab =
+            Com.Tab.new_tab ~prog_vars:prog.prog_vars
+              ~name:comp_var.Mast.comp_name ~size:sz
+          in
+          check_global_tab tab prog)
 
 let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
     (prog : program) : program =
@@ -982,9 +1044,24 @@ type 'a var_mem_type = Both | OneOf of 'a option
 type var_env = {
   prog : program;
   tmp_vars : int option Pos.marked StrMap.t;
+  (* ajouter tmp_tabs !!! *)
   ref_vars : Pos.t StrMap.t;
   res_var : string Pos.marked option;
 }
+
+let check_name_in_env env m_name =
+  let name, pos = m_name in
+  check_name_in_tgv env.prog m_name;
+  let err old_pos = Err.variable_already_declared name old_pos pos in
+  (match StrMap.find_opt name env.tmp_vars with
+  | Some (_, old_pos) -> err old_pos
+  | None -> ());
+  (match StrMap.find_opt name env.ref_vars with
+  | Some old_pos -> err old_pos
+  | None -> ());
+  match env.res_var with
+  | Some (res_name, old_pos) when res_name = name -> err old_pos
+  | Some _ | None -> ()
 
 let rec fold_var_expr
     (fold_var :
@@ -994,14 +1071,17 @@ let rec fold_var_expr
   let expr, expr_pos = m_expr in
   match expr with
   | TestInSet (_positive, e, values) ->
-      let res = fold_var_expr fold_var is_filter acc e env in
+      let acc = fold_var_expr fold_var is_filter acc e env in
       List.fold_left
-        (fun res set_value ->
+        (fun acc set_value ->
           match set_value with
           | Com.VarValue (a, a_pos) -> (
               if is_filter then Err.forbidden_expresion_in_filter a_pos;
               match a with
-              | VarAccess v -> fold_var (v, a_pos) (OneOf None) env res
+              | VarAccess v -> fold_var (v, a_pos) (OneOf None) env acc
+              | TabAccess (m_v, m_i) ->
+                  let acc = fold_var_expr fold_var is_filter acc m_i env in
+                  fold_var m_v (OneOf (Some ())) env acc
               | ConcAccess (_m_v, _m_if, i) ->
                   fold_var_expr fold_var is_filter acc i env
               | FieldAccess (ie, f, _) ->
@@ -1011,12 +1091,12 @@ let rec fold_var_expr
                   | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                   | None -> Err.unknown_event_field f_name f_pos);
                   fold_var_expr fold_var is_filter acc ie env)
-          | Com.FloatValue _ -> res
+          | Com.FloatValue _ -> acc
           | Com.IntervalValue (bn, en) ->
               if Pos.unmark bn > Pos.unmark en then
                 Err.wrong_interval_bounds (Pos.get bn);
-              res)
-        res values
+              acc)
+        acc values
   | Comparison (_op, e1, e2) ->
       let acc = fold_var_expr fold_var is_filter acc e1 env in
       fold_var_expr fold_var is_filter acc e2 env
@@ -1030,6 +1110,7 @@ let rec fold_var_expr
       | VarAccess t ->
           let acc = fold_var_expr fold_var is_filter acc e env in
           fold_var (t, pos) (OneOf (Some ())) env acc
+      | TabAccess _ -> assert false
       | ConcAccess (_, _, i) -> fold_var_expr fold_var is_filter acc i env
       | FieldAccess (ie, f, _) ->
           let f_name, f_pos = f in
@@ -1102,6 +1183,9 @@ let rec fold_var_expr
       if is_filter then Err.variable_forbidden_in_filter expr_pos;
       match access with
       | VarAccess var -> fold_var (var, expr_pos) (OneOf None) env acc
+      | TabAccess (m_v, m_i) ->
+          let acc = fold_var_expr fold_var is_filter acc m_i env in
+          fold_var m_v (OneOf (Some ())) env acc
       | ConcAccess (_, _, i) -> fold_var_expr fold_var is_filter acc i env
       | FieldAccess (e, f, _) -> (
           match StrMap.find_opt (Pos.unmark f) env.prog.prog_event_fields with
@@ -1119,11 +1203,7 @@ let rec fold_var_expr
   | Attribut ((access, pos), a) -> (
       match access with
       | VarAccess v ->
-          let name, var_pos =
-            match v with
-            | Com.Normal name -> (name, pos)
-            | Com.Generic _ -> assert false
-          in
+          let name, var_pos = (Com.get_normal_var v, pos) in
           (match StrMap.find_opt name env.prog.prog_vars with
           | Some var ->
               let cat = Com.Var.cat var in
@@ -1134,6 +1214,21 @@ let rec fold_var_expr
               | Some _ -> Err.tmp_vars_have_no_attrs var_pos
               | None -> ()));
           fold_var (v, pos) Both env acc
+      | TabAccess (m_v, m_i) ->
+          let name, _var_pos = Pos.map_under_mark Com.get_normal_var m_v in
+          (match StrMap.find_opt name env.prog.prog_tabs with
+          | Some tab ->
+              let cat = Com.Tab.cat tab in
+              if not (StrMap.mem (Pos.unmark a) (Com.Tab.attrs tab)) then
+                Err.unknown_attribut_for_var cat (Pos.get a)
+          | None ->
+              (*
+              match StrMap.find_opt name env.tmp_vars with
+              | Some _ -> Err.tmp_vars_have_no_attrs var_pos
+              | None -> ()*)
+              assert false);
+          let acc = fold_var_expr fold_var is_filter acc m_i env in
+          fold_var m_v (OneOf (Some ())) env acc
       | ConcAccess (_, _, i) ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           fold_var_expr fold_var is_filter acc i env
@@ -1154,6 +1249,9 @@ let rec fold_var_expr
   | Size (access, pos) -> (
       match access with
       | VarAccess v -> fold_var (v, pos) Both env acc
+      | TabAccess (m_v, m_i) ->
+          let acc = fold_var_expr fold_var is_filter acc m_i env in
+          fold_var m_v (OneOf (Some ())) env acc
       | ConcAccess (_, _, i) ->
           if is_filter then Err.forbidden_expresion_in_filter expr_pos;
           fold_var_expr fold_var is_filter acc i env
@@ -1174,22 +1272,28 @@ let check_variable (var : Com.variable_name Pos.marked)
     (idx_mem : unit var_mem_type) (env : var_env) : string =
   let var_data, var_pos = var in
   let name, decl_mem, decl_pos =
-    match var_data with
-    | Normal vn -> (
-        match StrMap.find_opt vn env.prog.prog_vars with
-        | Some v -> (vn, OneOf (Com.Var.is_table v), Pos.get (Com.Var.name v))
-        | None -> (
-            match StrMap.find_opt vn env.tmp_vars with
-            | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
-            | None -> (
-                match StrMap.find_opt vn env.ref_vars with
-                | Some decl_pos -> (vn, Both, decl_pos)
-                | None -> (
-                    match env.res_var with
-                    | Some (vr, decl_pos) when vr = vn ->
-                        (vn, OneOf None, decl_pos)
-                    | Some _ | None -> Err.unknown_variable var_pos))))
-    | Generic _ -> assert false
+    let vn = Com.get_normal_var var_data in
+    let find_tgv_var next () =
+      match StrMap.find_opt vn env.prog.prog_vars with
+      | Some v -> (vn, OneOf (Com.Var.is_table v), Pos.get (Com.Var.name v))
+      | None -> next ()
+    in
+    let find_tmp_var next () =
+      match StrMap.find_opt vn env.tmp_vars with
+      | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
+      | None -> next ()
+    in
+    let find_ref next () =
+      match StrMap.find_opt vn env.ref_vars with
+      | Some decl_pos -> (vn, Both, decl_pos)
+      | None -> next ()
+    in
+    let find_res () =
+      match env.res_var with
+      | Some (vr, decl_pos) when vr = vn -> (vn, OneOf None, decl_pos)
+      | Some _ | None -> Err.unknown_variable var_pos
+    in
+    () |> find_tgv_var @@ find_tmp_var @@ find_ref @@ find_res
   in
   match (idx_mem, decl_mem) with
   | Both, _ | _, Both -> name
@@ -1200,11 +1304,28 @@ let check_variable (var : Com.variable_name Pos.marked)
       | Some _, Some _ -> name
       | Some _, None -> Err.table_used_as_variable decl_pos var_pos)
 
+let check_table (tab : Com.variable_name Pos.marked) (env : var_env) :
+    Pos.t StrMap.t =
+  let tab_data, tab_pos = tab in
+  let tn = Com.get_normal_var tab_data in
+  let find_tgv_var next () =
+    match StrMap.find_opt tn env.prog.prog_tabs with
+    | Some t ->
+        let fold map var = StrMap.add (Com.Var.name_str var) tab_pos map in
+        Array.fold_left fold (StrMap.one tn tab_pos) t.vars
+    | None -> next ()
+  in
+  let find_tmp_var () = (* Err.unknown_variable tab_pos *) StrMap.empty in
+  () |> find_tgv_var @@ find_tmp_var
+
 let check_expression (is_filter : bool) (m_expr : Mast.expression Pos.marked)
     (env : var_env) : StrSet.t =
   let fold_var var idx_mem env acc =
-    let name = check_variable var idx_mem env in
-    StrSet.add name acc
+    match idx_mem with
+    | OneOf None | Both ->
+        let name = check_variable var idx_mem env in
+        StrSet.add name acc
+    | OneOf (Some ()) -> StrSet.union (StrMap.keySet (check_table var env)) acc
   in
   fold_var_expr fold_var is_filter StrSet.empty m_expr env
 
@@ -1274,27 +1395,10 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
     * StrSet.t
     * Pos.t StrMap.t
     * Pos.t list StrMap.t =
-  (* the use of def_vars is to track variables definitions within a rule and warn if one is defined twice
-     we use a `Pos.t StrMap` instead of marked variable names because it is enough information in our case *)
   let check_it_var env var =
-    let var_pos = Pos.get var in
-    let var_name = Com.get_normal_var (Pos.unmark var) in
-    (match StrMap.find_opt var_name env.prog.prog_vars with
-    | Some Com.Var.{ name = _, old_pos; _ } ->
-        Err.variable_already_declared var_name old_pos var_pos
-    | None -> ());
-    (match StrMap.find_opt var_name env.tmp_vars with
-    | Some (_, old_pos) ->
-        Err.variable_already_declared var_name old_pos var_pos
-    | None -> ());
-    (match StrMap.find_opt var_name env.ref_vars with
-    | Some old_pos -> Err.variable_already_declared var_name old_pos var_pos
-    | None -> ());
-    (match env.res_var with
-    | Some (vr, old_pos) when vr = var_name ->
-        Err.variable_already_declared var_name old_pos var_pos
-    | Some _ | None -> ());
-    (var_name, var_pos)
+    let m_name = Pos.same_pos_as (Com.get_normal_var (Pos.unmark var)) var in
+    check_name_in_env env m_name;
+    m_name
   in
   let union_map map0 map1 =
     let merge _vn po0 po1 =
@@ -1360,6 +1464,24 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     let out_vars = StrMap.add out_var access_pos out_vars in
                     let def_vars =
                       let vn = Com.get_normal_var v in
+                      let def_list =
+                        match StrMap.find_opt vn def_vars with
+                        | None -> [ access_pos ]
+                        | Some l -> access_pos :: l
+                      in
+                      StrMap.add vn def_list def_vars
+                    in
+                    aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
+                | TabAccess (m_v, m_i) ->
+                    let out_vars_tab = check_table m_v env in
+                    let in_vars_i = check_expression false m_i env in
+                    let in_vars_aff = StrSet.union in_vars_i in_vars_aff in
+                    let in_vars =
+                      StrSet.union in_vars (diff_set_map in_vars_aff out_vars)
+                    in
+                    let out_vars = union_map out_vars out_vars_tab in
+                    let def_vars =
+                      let vn = Com.get_normal_var (Pos.unmark m_v) in
                       let def_list =
                         match StrMap.find_opt vn def_vars with
                         | None -> [ access_pos ]
@@ -1760,54 +1882,59 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
     t.target_apps
   in
   let target, prog =
-    let target_args = t.target_args in
-    List.iter
-      (fun (vn, vpos) ->
-        match StrMap.find_opt vn prog.prog_vars with
-        | Some Com.Var.{ name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_args;
-    let target_tmp_vars =
+    let target_tmp_vars, target_tmp_tabs =
       List.fold_left
-        (fun res ((vn, vpos), sz) ->
-          match StrMap.find_opt vn res with
-          | Some ((_, old_pos), _) ->
+        (fun (vars, tabs) ((vn, vpos), sz) ->
+          let check_tmp (vars, tabs) (vn, vpos) =
+            let err old_pos =
               Err.temporary_variable_already_declared vn old_pos vpos
-          | None ->
-              let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
-              StrMap.add vn ((vn, vpos), size) res)
-        StrMap.empty t.target_tmp_vars
+            in
+            (match StrMap.find_opt vn vars with
+            | Some ((_, old_pos), _) -> err old_pos
+            | None -> ());
+            match StrMap.find_opt vn tabs with
+            | Some ((_, old_pos), _) -> err old_pos
+            | None -> ()
+          in
+          check_tmp (vars, tabs) (vn, vpos);
+          let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
+          match size with
+          | None -> (StrMap.add vn ((vn, vpos), size) vars, tabs)
+          | Some sz_int ->
+              let vars =
+                let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
+                let rec loop vars i =
+                  if i >= sz_int then vars
+                  else
+                    let iName = Strings.concat_int vn iFmt i in
+                    check_tmp (vars, tabs) (iName, vpos);
+                    let vars = StrMap.add iName ((iName, vpos), None) vars in
+                    loop vars (i + 1)
+                in
+                loop vars 0
+              in
+              check_tmp (vars, tabs) (vn, vpos);
+              let vars = StrMap.add vn ((vn, vpos), size) vars in
+              (*check_tmp (vars, tabs) (vn, vpos);*)
+              let tabs = StrMap.add vn ((vn, vpos), sz_int) tabs in
+              (vars, tabs))
+        (StrMap.empty, StrMap.empty)
+        t.target_tmp_vars
     in
-    StrMap.iter
-      (fun _ ((vn, vpos), _) ->
-        match StrMap.find_opt vn prog.prog_vars with
-        | Some Com.Var.{ name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_tmp_vars;
-    List.iter
-      (fun (vn, vpos) ->
-        match StrMap.find_opt vn target_tmp_vars with
-        | Some ((_, old_pos), _) ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
-      target_args;
+    StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) target_tmp_vars;
+    StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) target_tmp_tabs;
+    let target_args = t.target_args in
+    List.iter (check_name_in_tgv prog) target_args;
+    List.iter (check_name_in_tmp target_tmp_vars) target_args;
+    List.iter (check_name_in_tmp target_tmp_tabs) target_args;
     let target_result = t.target_result in
     (match target_result with
-    | Some (vn, vpos) -> (
+    | Some m_name ->
         if not is_function then Err.target_must_not_have_a_result tname tpos;
-        (match StrMap.find_opt vn prog.prog_vars with
-        | Some { name = _, old_pos; _ } ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ());
-        (match List.find_opt (fun (va, _) -> vn = va) target_args with
-        | Some (_, old_pos) -> Err.variable_already_declared vn old_pos vpos
-        | None -> ());
-        match StrMap.find_opt vn target_tmp_vars with
-        | Some ((_, old_pos), _) ->
-            Err.variable_already_declared vn old_pos vpos
-        | None -> ())
+        check_name_in_tgv prog m_name;
+        check_name_in_tmp target_tmp_vars m_name;
+        check_name_in_tmp target_tmp_tabs m_name;
+        check_name_in_args target_args m_name
     | None -> if is_function then Err.function_result_missing tname tpos);
     let tmp_vars =
       StrMap.map (fun (var, size) -> (size, Pos.get var)) target_tmp_vars
@@ -1901,24 +2028,47 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
-  let rule_tmp_vars =
+  let rule_tmp_vars, rule_tmp_tabs =
     List.fold_left
-      (fun res ((vn, vpos), sz) ->
-        match StrMap.find_opt vn res with
-        | Some ((_, old_pos), _) ->
+      (fun (vars, tabs) ((vn, vpos), sz) ->
+        let check_tmp (vars, tabs) (vn, vpos) =
+          let err old_pos =
             Err.temporary_variable_already_declared vn old_pos vpos
-        | None ->
-            let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
-            StrMap.add vn ((vn, vpos), size) res)
-      StrMap.empty r.Mast.rule_tmp_vars
+          in
+          (match StrMap.find_opt vn vars with
+          | Some ((_, old_pos), _) -> err old_pos
+          | None -> ());
+          match StrMap.find_opt vn tabs with
+          | Some ((_, old_pos), _) -> err old_pos
+          | None -> ()
+        in
+        check_tmp (vars, tabs) (vn, vpos);
+        let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
+        match size with
+        | None -> (StrMap.add vn ((vn, vpos), size) vars, tabs)
+        | Some sz_int ->
+            let vars =
+              let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
+              let rec loop vars i =
+                if i >= sz_int then vars
+                else
+                  let iName = Strings.concat_int vn iFmt i in
+                  check_tmp (vars, tabs) (iName, vpos);
+                  let vars = StrMap.add iName ((iName, vpos), None) vars in
+                  loop vars (i + 1)
+              in
+              loop vars 0
+            in
+            check_tmp (vars, tabs) (vn, vpos);
+            let vars = StrMap.add vn ((vn, vpos), size) vars in
+            (*check_tmp (vars, tabs) (vn, vpos);*)
+            let tabs = StrMap.add vn ((vn, vpos), sz_int) tabs in
+            (vars, tabs))
+      (StrMap.empty, StrMap.empty)
+      r.Mast.rule_tmp_vars
   in
-  StrMap.iter
-    (fun _ ((vn, vpos), _) ->
-      match StrMap.find_opt vn prog.prog_vars with
-      | Some Com.Var.{ name = _, old_pos; _ } ->
-          Err.variable_already_declared vn old_pos vpos
-      | None -> ())
-    rule_tmp_vars;
+  StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) rule_tmp_vars;
+  StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) rule_tmp_tabs;
   let tmp_vars =
     StrMap.map (fun (var, size) -> (size, Pos.get var)) rule_tmp_vars
   in
@@ -2665,435 +2815,7 @@ let complete_verif_calls (prog : program) : program =
   in
   { prog with prog_targets }
 
-let complete_vars (prog : program) : program =
-  let prog_vars = prog.prog_vars in
-  let prog_vars =
-    let incr_cpt cat cpt =
-      let i = Com.CatVar.Map.find cat cpt in
-      let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
-      (cpt, i)
-    in
-    let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
-    let prog_vars, _ =
-      StrMap.fold
-        (fun vn (var : Com.Var.t) (res, cpt) ->
-          let tgv = Com.Var.tgv var in
-          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
-          let cpt, i = incr_cpt tgv.cat cpt in
-          let loc = Com.set_loc_tgv_cat var.loc dcat.loc dcat.id_str i in
-          let var = Com.Var.{ var with loc } in
-          let res = StrMap.add vn var res in
-          (res, cpt))
-        prog_vars (StrMap.empty, cat_cpt)
-    in
-    prog_vars
-  in
-  let module CatLoc = struct
-    type t = Com.CatVar.loc
-
-    let pp fmt (loc : t) =
-      match loc with
-      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
-      | Com.CatVar.LocBase -> Format.fprintf fmt "base"
-      | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
-
-    let compare x y = compare x y
-  end in
-  let module CatLocMap = struct
-    include MapExt.Make (CatLoc)
-
-    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
-        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-        (map : 'a t) : unit =
-      pp ~sep ~pp_key ~assoc pp_val fmt map
-  end in
-  let loc_vars, sz_loc_vars, sz_vars =
-    let fold _ (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
-      let var = Com.Var.{ var with loc = Com.set_loc_int var.loc n } in
-      let loc_cat =
-        (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
-      in
-      let loc_vars =
-        let upd = function
-          | None -> Some (Com.Var.Set.one var)
-          | Some set -> Some (Com.Var.Set.add var set)
-        in
-        CatLocMap.update loc_cat upd loc_vars
-      in
-      let sz = Com.Var.size var in
-      let sz_loc_vars =
-        let upd = function
-          | None -> Some sz
-          | Some n_loc -> Some (n_loc + sz)
-        in
-        CatLocMap.update loc_cat upd sz_loc_vars
-      in
-      (loc_vars, sz_loc_vars, n + sz)
-    in
-    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
-  in
-  let update_loc (var : Com.Var.t) (vars, n) =
-    let loc = Com.set_loc_tgv_idx var.loc n in
-    let vars =
-      StrMap.add (Com.Var.name_str var) Com.Var.{ var with loc } vars
-    in
-    (vars, n + Com.Var.size var)
-  in
-  let prog_vars =
-    CatLocMap.fold
-      (fun _loc_cat vars prog_vars ->
-        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
-      loc_vars StrMap.empty
-  in
-  let nb_loc loc_cat =
-    match CatLocMap.find_opt loc_cat loc_vars with
-    | Some set -> Com.Var.Set.cardinal set
-    | None -> 0
-  in
-  let sz_loc loc_cat =
-    match CatLocMap.find_opt loc_cat sz_loc_vars with
-    | Some sz -> sz
-    | None -> 0
-  in
-  let prog_stats =
-    Mir.
-      {
-        prog.prog_stats with
-        nb_calculated = nb_loc Com.CatVar.LocComputed;
-        nb_input = nb_loc Com.CatVar.LocInput;
-        nb_base = nb_loc Com.CatVar.LocBase;
-        nb_vars = StrMap.cardinal prog_vars;
-        sz_calculated = sz_loc Com.CatVar.LocComputed;
-        sz_input = sz_loc Com.CatVar.LocInput;
-        sz_base = sz_loc Com.CatVar.LocBase;
-        sz_vars;
-      }
-  in
-  { prog with prog_vars; prog_stats }
-
-let complete_vars_stack (prog : program) : program =
-  let prog_functions, prog_targets =
-    let rec aux_instrs mil =
-      let fold (nbRef, nbIt) mi =
-        let nbRef', nbIt' = aux_instr mi in
-        (max nbRef nbRef', max nbIt nbIt')
-      in
-      List.fold_left fold (0, 0) mil
-    and aux_instr (instr, _pos) =
-      match instr with
-      | Com.IfThenElse (_, ilThen, ilElse) ->
-          let nbRefThen, nbItThen = aux_instrs ilThen in
-          let nbRefElse, nbItElse = aux_instrs ilElse in
-          (max nbRefThen nbRefElse, max nbItThen nbItElse)
-      | Com.WhenDoElse (wdl, ed) ->
-          let rec wde (nbRef, nbIt) = function
-            | (_, dl, _) :: wdl' ->
-                let nbRefD, nbItD = aux_instrs dl in
-                wde (max nbRef nbRefD, max nbIt nbItD) wdl'
-            | [] ->
-                let nbRefD, nbItD = aux_instrs (Pos.unmark ed) in
-                (max nbRef nbRefD, max nbIt nbItD)
-          in
-          wde (0, 0) wdl
-      | Com.VerifBlock instrs -> aux_instrs instrs
-      | Com.Iterate (_, _, _, instrs) ->
-          let nbRef, nbIt = aux_instrs instrs in
-          (nbRef + 1, nbIt)
-      | Com.Iterate_values (_, _, instrs) ->
-          let nbRef, nbIt = aux_instrs instrs in
-          (nbRef, nbIt + 1)
-      | Com.Restore (_, _, _, _, instrs) ->
-          let nbRef, nbIt = aux_instrs instrs in
-          (max nbRef 1, nbIt)
-      | Com.ArrangeEvents (sort, filter, _, instrs) ->
-          let nbItSort = match sort with Some _ -> 2 | None -> 0 in
-          let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
-          let nbRef, nbIt = aux_instrs instrs in
-          (nbRef, max nbIt @@ max nbItSort nbItFilter)
-      | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
-      | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
-          (0, 0)
-      | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
-          assert false
-    in
-    let map (t : target) =
-      let nbRef, nbIt = aux_instrs t.target_prog in
-      let target_nb_tmps = StrMap.cardinal t.target_tmp_vars + nbIt in
-      let target_sz_tmps =
-        let fold _ (_, tsz_opt) sz =
-          match tsz_opt with None -> sz + 1 | Some tsz -> sz + tsz
-        in
-        StrMap.fold fold t.target_tmp_vars nbIt
-      in
-      let target_nb_refs = List.length t.target_args + nbRef in
-      { t with target_nb_tmps; target_sz_tmps; target_nb_refs }
-    in
-    (StrMap.map map prog.prog_functions, StrMap.map map prog.prog_targets)
-  in
-  let nb_all_tmps, sz_all_tmps, nb_all_refs =
-    let rec aux_instrs tdata mil =
-      let fold (nb, sz, nbRef, tdata) mi =
-        let nb', sz', nbRef', tdata = aux_instr tdata mi in
-        (max nb nb', max sz sz', max nbRef nbRef', tdata)
-      in
-      List.fold_left fold (0, 0, 0, tdata) mil
-    and aux_call tdata name =
-      match StrMap.find_opt name tdata with
-      | Some (nb, sz, nbRef) -> (nb, sz, nbRef, tdata)
-      | None -> (
-          let eval_call (t : target) =
-            let nb, sz, nbRef =
-              ( t.target_nb_tmps,
-                t.target_sz_tmps,
-                List.length t.target_args + t.target_nb_refs )
-            in
-            let nb', sz', nbRef', tdata = aux_instrs tdata t.target_prog in
-            let nb = nb + nb' in
-            let sz = sz + sz' in
-            let nbRef = nbRef + nbRef' in
-            let tdata = StrMap.add name (nb, sz, nbRef) tdata in
-            (nb, sz, nbRef, tdata)
-          in
-          match StrMap.find_opt name prog_functions with
-          | Some t -> eval_call t
-          | None -> eval_call (StrMap.find name prog_targets))
-    and aux_instr tdata (instr, _pos) =
-      match instr with
-      | Com.Affectation mf -> (
-          match Pos.unmark mf with
-          | SingleFormula (VarDecl (m_access, mei_opt, mev)) -> (
-              let nbI, szI, nbRefI, tdata =
-                match mei_opt with
-                | None -> (0, 0, 0, tdata)
-                | Some mei -> aux_expr tdata mei
-              in
-              let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
-              let nb, sz, nbRef =
-                (max nbI nbV, max szI szV, max nbRefI nbRefV)
-              in
-              match Pos.unmark m_access with
-              | VarAccess _ -> (nb, sz, nbRef, tdata)
-              | ConcAccess (_, _, mi) ->
-                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
-                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
-              | FieldAccess (mei, _, _) ->
-                  let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
-                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata))
-          | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
-          | MultipleFormulaes _ -> assert false)
-      | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)
-      | Com.IfThenElse (meI, ilT, ilE) ->
-          let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
-          let nbT, szT, nbRefT, tdata = aux_instrs tdata ilT in
-          let nbE, szE, nbRefE, tdata = aux_instrs tdata ilE in
-          let nb = max nbI @@ max nbT nbE in
-          let sz = max szI @@ max szT szE in
-          let nbRef = max nbRefI @@ max nbRefT nbRefE in
-          (nb, sz, nbRef, tdata)
-      | Com.WhenDoElse (wdl, ed) ->
-          let rec wde (nb, sz, nbRef, tdata) = function
-            | (me, dl, _) :: wdl' ->
-                let nbE, szE, nbRefE, tdata = aux_expr tdata me in
-                let nbD, szD, nbRefD, tdata = aux_instrs tdata dl in
-                let nb = max nb @@ max nbE nbD in
-                let sz = max sz @@ max szE szD in
-                let nbRef = max nbRef @@ max nbRefE nbRefD in
-                wde (nb, sz, nbRef, tdata) wdl'
-            | [] ->
-                let nbD, szD, nbRefD, tdata =
-                  aux_instrs tdata (Pos.unmark ed)
-                in
-                let nb = max nb nbD in
-                let sz = max sz szD in
-                let nbRef = max nbRef nbRefD in
-                (nb, sz, nbRef, tdata)
-          in
-          wde (0, 0, 0, tdata) wdl
-      | Com.VerifBlock instrs -> aux_instrs tdata instrs
-      | Com.Print (_, pal) ->
-          let fold (nb, sz, nbRef, tdata) (a, _pos) =
-            match a with
-            | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
-                (nb, sz, nbRef, tdata)
-            | Com.PrintConcName (_, _, me)
-            | Com.PrintConcAlias (_, _, me)
-            | Com.PrintEventName (me, _, _)
-            | Com.PrintEventAlias (me, _, _)
-            | Com.PrintIndent me
-            | Com.PrintExpr (me, _, _) ->
-                let nb', sz', nbRef', tdata = aux_expr tdata me in
-                (max nb nb', max sz sz', max nbRef nbRef', tdata)
-          in
-          List.fold_left fold (0, 0, 0, tdata) pal
-      | Com.Iterate (_, _, mel, instrs) ->
-          let fold (nb, sz, nbRef, tdata) (_, me) =
-            let nb', sz', nbRef', tdata = aux_expr tdata me in
-            (max nb nb', max sz sz', max nbRef nbRef', tdata)
-          in
-          let nb', sz', nbRef', tdata =
-            List.fold_left fold (0, 0, 0, tdata) mel
-          in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb nb' in
-          let sz = max sz sz' in
-          let nbRef = 1 + max nbRef nbRef' in
-          (nb, sz, nbRef, tdata)
-      | Com.Iterate_values (_, me2l, instrs) ->
-          let fold (nb, sz, nbRef, tdata) (me0, me1, mstep) =
-            let nb', sz', nbRef', tdata = aux_expr tdata me0 in
-            let nb'', sz'', nbRef'', tdata = aux_expr tdata me1 in
-            let nb''', sz''', nbRef''', tdata = aux_expr tdata mstep in
-            let nb = max nb @@ max nb' @@ max nb'' nb''' in
-            let sz = max sz @@ max sz' @@ max sz'' sz''' in
-            let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
-            (nb, sz, nbRef, tdata)
-          in
-          let nb', sz', nbRef', tdata =
-            List.fold_left fold (0, 0, 0, tdata) me2l
-          in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = 1 + max nb nb' in
-          let sz = 1 + max sz sz' in
-          let nbRef = max nbRef nbRef' in
-          (nb, sz, nbRef, tdata)
-      | Com.Restore (_, var_params, evts, evtfs, instrs) ->
-          let nb', sz', nbRef', tdata =
-            let fold (nb, sz, nbRef, tdata) (_, _, me) =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
-            in
-            List.fold_left fold (0, 0, 0, tdata) var_params
-          in
-          let nb'', sz'', nbRef'', tdata =
-            let fold (nb, sz, nbRef, tdata) me =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
-            in
-            List.fold_left fold (0, 0, 0, tdata) evts
-          in
-          let nb''', sz''', nbRef''', tdata =
-            let fold (nb, sz, nbRef, tdata) (_, me) =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
-            in
-            List.fold_left fold (0, 0, 0, tdata) evtfs
-          in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb @@ max nb' @@ max nb'' nb''' in
-          let sz = max sz @@ max sz' @@ max sz'' sz''' in
-          (* ??? *)
-          let nbRef = 1 + (max nbRef @@ max nbRef' @@ max nbRef'' nbRef''') in
-          (nb, sz, nbRef, tdata)
-      | Com.ArrangeEvents (sort, filter, add, instrs) ->
-          let n', (nb', sz', nbRef', tdata) =
-            match sort with
-            | Some (_, _, expr) -> (2, aux_expr tdata expr)
-            | None -> (0, (0, 0, 0, tdata))
-          in
-          let n'', (nb'', sz'', nbRef'', tdata) =
-            match filter with
-            | Some (_, expr) -> (1, aux_expr tdata expr)
-            | None -> (0, (0, 0, 0, tdata))
-          in
-          let nb''', sz''', nbRef''', tdata =
-            match add with
-            | Some expr -> aux_expr tdata expr
-            | None -> (0, 0, 0, tdata)
-          in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max n' n'' + (max nb @@ max nb' @@ max nb'' nb''') in
-          let sz = max n' n'' + (max sz @@ max sz' @@ max sz'' sz''') in
-          let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
-          (nb, sz, nbRef, tdata)
-      | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
-      | Com.FinalizeErrors ->
-          (0, 0, 0, tdata)
-      | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
-          assert false
-    and aux_expr tdata (expr, _pos) =
-      match expr with
-      | Com.TestInSet (_, me, values) ->
-          let fold (nb, sz, nbRef, tdata) = function
-            | Com.VarValue (ConcAccess (_, _, mei), _)
-            | Com.VarValue (FieldAccess (mei, _, _), _) ->
-                let nb', sz', nbRef', tdata = aux_expr tdata mei in
-                (max nb nb', max sz sz', max nbRef nbRef', tdata)
-            | _ -> (nb, sz, nbRef, tdata)
-          in
-          let nb', sz', nbRef', tdata =
-            List.fold_left fold (0, 0, 0, tdata) values
-          in
-          let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
-          (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
-      | Com.Unop (_, me)
-      | Com.Index ((VarAccess _, _), me)
-      | Com.Var (ConcAccess (_, _, me))
-      | Com.Var (FieldAccess (me, _, _))
-      | Com.Size (ConcAccess (_, _, me), _)
-      | Com.Size (FieldAccess (me, _, _), _)
-      | Com.Attribut ((ConcAccess (_, _, me), _), _)
-      | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
-          aux_expr tdata me
-      | Com.Index ((ConcAccess (_, _, me0), _), me1)
-      | Com.Index ((FieldAccess (me0, _, _), _), me1)
-      | Com.Comparison (_, me0, me1)
-      | Com.Binop (_, me0, me1) ->
-          let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
-          let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
-          (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)
-      | Com.Conditional (meI, meT, meEOpt) ->
-          let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
-          let nbT, szT, nbRefT, tdata = aux_expr tdata meT in
-          let nbE, szE, nbRefE, tdata =
-            match meEOpt with
-            | None -> (0, 0, 0, tdata)
-            | Some meE -> aux_expr tdata meE
-          in
-          let nb = max nbI @@ max nbT nbE in
-          let sz = max szI @@ max szT szE in
-          let nbRef = max nbRefI @@ max nbRefT nbRefE in
-          (nb, sz, nbRef, tdata)
-      | Com.FuncCall (func, mel) ->
-          let fold (nb, sz, nbRef, tdata) me =
-            let nb', sz', nbRef', tdata = aux_expr tdata me in
-            (max nb nb', max sz sz', max nbRef nbRef', tdata)
-          in
-          let nb', sz', nbRef', tdata =
-            List.fold_left fold (0, 0, 0, tdata) mel
-          in
-          let nb, sz, nbRef, tdata =
-            match Pos.unmark func with
-            | Func name -> aux_call tdata name
-            | _ -> (0, 0, 0, tdata)
-          in
-          (max nb nb', max sz sz', max nbRef nbRef', tdata)
-      | Com.Literal _
-      | Com.Var (VarAccess _)
-      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.NbAnomalies
-      | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
-          (0, 0, 0, tdata)
-      | Com.FuncCallLoop _ | Com.Loop _ -> assert false
-    in
-    let nb, sz, nbRef, _ =
-      let fold tn _ (nb, sz, nbRef, tdata) =
-        let nb', sz', nbRef', tdata = aux_call tdata tn in
-        (max nb nb', max sz sz', max nbRef nbRef', tdata)
-      in
-      (0, 0, 0, StrMap.empty)
-      |> StrMap.fold fold prog_functions
-      |> StrMap.fold fold prog_targets
-    in
-    (nb, sz, nbRef)
-  in
-  (match StrMap.find_opt prog.prog_main_target prog_targets with
-  | None -> Err.main_target_not_found prog.prog_main_target
-  | Some _ -> ());
-  let prog_stats =
-    Mir.{ prog.prog_stats with nb_all_tmps; sz_all_tmps; nb_all_refs }
-  in
-  { prog with prog_functions; prog_targets; prog_stats }
-
-let proceed (p : Mast.program) (main_target : string) : program =
+let proceed (main_target : string) (p : Mast.program) : program =
   (* à paramétrer *)
   let prog =
     List.fold_left
@@ -3126,6 +2848,9 @@ let proceed (p : Mast.program) (main_target : string) : program =
         Err.event_field_need_a_variable name (Pos.get ef.name))
     prog.prog_event_fields;
   if StrMap.is_empty prog.prog_targets then Err.has_no_target ();
+  (match StrMap.find_opt prog.prog_main_target prog.prog_targets with
+  | None -> Err.main_target_not_found prog.prog_main_target
+  | Some _ -> ());
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
-  |> complete_verif_calls |> complete_vars |> complete_vars_stack
+  |> complete_verif_calls

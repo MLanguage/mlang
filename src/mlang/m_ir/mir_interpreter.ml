@@ -141,7 +141,7 @@ struct
     in
     {
       ctx_prog = p;
-      ctx_target = snd (Com.TargetMap.min_binding p.program_targets);
+      ctx_target = snd (StrMap.min_binding p.program_targets);
       ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
       ctx_tmps_org = 0;
@@ -572,7 +572,7 @@ struct
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
         | FuncCall ((Func fn, _), args) ->
-            let fd = Com.TargetMap.find fn ctx.ctx_prog.program_functions in
+            let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             let atab = Array.of_list (List.map (evaluate_expr ctx) args) in
             ctx.ctx_args <- atab :: ctx.ctx_args;
             ctx.ctx_res <- Undefined :: ctx.ctx_res;
@@ -712,7 +712,7 @@ struct
         aux wdl
     | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
     | Com.ComputeTarget ((tn, _), args) ->
-        let tf = Com.TargetMap.find tn ctx.ctx_prog.program_targets in
+        let tf = StrMap.find tn ctx.ctx_prog.program_targets in
         let rec set_args n = function
           | [] -> ()
           | m_a :: al' ->
@@ -1137,7 +1137,7 @@ struct
     try
       let main_target =
         match
-          Com.TargetMap.find_opt ctx.ctx_prog.program_main_target
+          StrMap.find_opt ctx.ctx_prog.program_main_target
             ctx.ctx_prog.program_targets
         with
         | Some t -> t

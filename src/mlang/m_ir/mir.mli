@@ -47,6 +47,7 @@ type program = {
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
+  program_tabs : Com.Tab.t StrMap.t;
   program_alias : string Pos.marked StrMap.t;
   program_event_fields : Com.event_field StrMap.t;
   program_event_field_idxs : string IntMap.t;
@@ -54,8 +55,8 @@ type program = {
   program_verifs : string IntMap.t;
   program_chainings : string StrMap.t;
   program_errors : Com.Error.t StrMap.t;
-  program_functions : target Com.TargetMap.t;
-  program_targets : target Com.TargetMap.t;
+  program_functions : target StrMap.t;
+  program_targets : target StrMap.t;
   program_main_target : string;
   program_stats : stats;
 }

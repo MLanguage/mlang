@@ -57,6 +57,7 @@ type program = {
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
   program_vars : Com.Var.t StrMap.t;
+  program_tabs : Com.Tab.t StrMap.t;
   program_alias : string Pos.marked StrMap.t;
   program_event_fields : Com.event_field StrMap.t;
   program_event_field_idxs : string IntMap.t;
@@ -64,8 +65,8 @@ type program = {
   program_verifs : string IntMap.t;
   program_chainings : string StrMap.t;
   program_errors : Com.Error.t StrMap.t;
-  program_functions : target Com.TargetMap.t;
-  program_targets : target Com.TargetMap.t;
+  program_functions : target StrMap.t;
+  program_targets : target StrMap.t;
   program_main_target : string;
   program_stats : stats;
 }
@@ -109,9 +110,18 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_e0 = expand_functions_expr e0 in
       let new_values =
         let map = function
-          | Com.VarValue (FieldAccess (mei, f, i_f), pos) ->
-              let new_mei = expand_functions_expr mei in
-              Com.VarValue (FieldAccess (new_mei, f, i_f), pos)
+          | Com.VarValue (access, pos) -> (
+              match access with
+              | VarAccess v -> Com.VarValue (VarAccess v, pos)
+              | TabAccess (m_v, i) ->
+                  let new_i = expand_functions_expr i in
+                  Com.VarValue (TabAccess (m_v, new_i), pos)
+              | ConcAccess (m_vn, m_if, i) ->
+                  let new_i = expand_functions_expr i in
+                  Com.VarValue (ConcAccess (m_vn, m_if, new_i), pos)
+              | FieldAccess (mei, f, i_f) ->
+                  let new_mei = expand_functions_expr mei in
+                  Com.VarValue (FieldAccess (new_mei, f, i_f), pos))
           | value -> value
         in
         List.map map values
@@ -136,6 +146,7 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
   | Index ((VarAccess v, pos), e1) ->
       let new_e1 = expand_functions_expr e1 in
       Pos.same_pos_as (Index ((VarAccess v, pos), new_e1)) e
+  | Index ((TabAccess _, _), _) -> assert false
   | Index ((ConcAccess (m_v, m_if, i), pos), e1) ->
       let new_i = expand_functions_expr i in
       let new_e1 = expand_functions_expr e1 in
@@ -196,6 +207,9 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
   | FuncCall (fn, args) ->
       Pos.same_pos_as (FuncCall (fn, List.map expand_functions_expr args)) e
   | Attribut ((VarAccess _, _), _) -> e
+  | Attribut ((TabAccess (m_v, i), pos), a) ->
+      let new_i = expand_functions_expr i in
+      Pos.same_pos_as (Attribut ((TabAccess (m_v, new_i), pos), a)) e
   | Attribut ((ConcAccess (m_v, m_if, i), pos), a) ->
       let new_i = expand_functions_expr i in
       Pos.same_pos_as (Attribut ((ConcAccess (m_v, m_if, new_i), pos), a)) e
@@ -203,6 +217,9 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_ie = expand_functions_expr ie in
       Pos.same_pos_as (Attribut ((FieldAccess (new_ie, f, i_f), pos), a)) e
   | Size (VarAccess _, _) -> e
+  | Size (TabAccess (m_v, i), pos) ->
+      let new_i = expand_functions_expr i in
+      Pos.same_pos_as (Size (TabAccess (m_v, new_i), pos)) e
   | Size (ConcAccess (m_v, m_if, i), pos) ->
       let new_i = expand_functions_expr i in
       Pos.same_pos_as (Size (ConcAccess (m_v, m_if, new_i), pos)) e
@@ -229,6 +246,9 @@ let expand_functions (p : program) : program =
           let m_acc =
             match Pos.unmark v_acc with
             | VarAccess _ -> v_acc
+            | TabAccess (m_v, i) ->
+                let i' = expand_functions_expr i in
+                Pos.same_pos_as (TabAccess (m_v, i')) v_acc
             | ConcAccess (m_v, m_if, i) ->
                 let i' = expand_functions_expr i in
                 Pos.same_pos_as (ConcAccess (m_v, m_if, i')) v_acc
@@ -345,7 +365,7 @@ let expand_functions (p : program) : program =
       | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in
-    Com.TargetMap.map
+    StrMap.map
       (fun t ->
         let target_prog = List.map map_instr t.target_prog in
         { t with target_prog })

@@ -1506,7 +1506,7 @@ let generate_function_prototype (add_semicolon : bool) (oc : Format.formatter)
 let generate_function (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (fn : string) =
   let pr fmt = Format.fprintf oc fmt in
-  let fd = Com.TargetMap.find fn program.program_functions in
+  let fd = StrMap.find fn program.program_functions in
   pr "@.@[<v 2>%a {" (generate_function_prototype false) fd;
   let sav = fresh_c_local "sav" in
   let sav_nb_tmps = Pp.spr "%s_nb_tmps_target" sav in
@@ -1533,7 +1533,7 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
 let generate_functions (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t) =
-  let functions = Com.TargetMap.bindings program.program_functions in
+  let functions = StrMap.bindings program.program_functions in
   List.iter
     (fun (name, ({ target_file; _ } : Mir.target)) ->
       let file_str = match target_file with Some s -> s | None -> "" in
@@ -1549,7 +1549,7 @@ let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
   let pr fmt = Format.fprintf oc fmt in
-  let tf = Com.TargetMap.find f program.program_targets in
+  let tf = StrMap.find f program.program_targets in
   pr "@.@[<v 2>%a {" (generate_target_prototype false) f;
   let sav = fresh_c_local "sav" in
   let sav_nb_tmps = Pp.spr "%s_nb_tmps_target" sav in
@@ -1575,7 +1575,7 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (filemap : (out_channel * Format.formatter) StrMap.t) =
-  let targets = Com.TargetMap.bindings program.program_targets in
+  let targets = StrMap.bindings program.program_targets in
   List.iter
     (fun (name, ({ target_file; _ } : Mir.target)) ->
       let file_str = match target_file with Some s -> s | None -> "" in
@@ -1606,7 +1606,7 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags)
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a@\n@." generate_implem_header Prelude.message;
   let filemap =
-    Com.TargetMap.fold
+    StrMap.fold
       (fun _ (t : Mir.target) filemap ->
         let file_str = match t.target_file with Some s -> s | None -> "" in
         let update = function
