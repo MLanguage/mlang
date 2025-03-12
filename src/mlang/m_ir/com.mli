@@ -56,7 +56,7 @@ module Var : sig
   type id = int
 
   type tgv = {
-    is_table : int option;
+    is_table : t Array.t option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -66,9 +66,9 @@ module Var : sig
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
+  and scope = Tgv of tgv | Temp of t Array.t option | Ref | Arg | Res
 
-  type t = {
+  and t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
     loc : loc;
@@ -81,7 +81,9 @@ module Var : sig
 
   val name_str : t -> string
 
-  val is_table : t -> int option
+  val is_table : t -> t Array.t option
+
+  val set_is_table : t -> t Array.t option -> t
 
   val cat_var_loc : t -> CatVar.loc option
 
@@ -123,7 +125,7 @@ module Var : sig
 
   val new_tgv :
     name:string Pos.marked ->
-    is_table:int option ->
+    is_table:t Array.t option ->
     is_given_back:bool ->
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
@@ -133,7 +135,7 @@ module Var : sig
     t
 
   val new_temp :
-    name:string Pos.marked -> is_table:int option -> loc_int:int -> t
+    name:string Pos.marked -> is_table:t Array.t option -> loc_int:int -> t
 
   val new_ref : name:string Pos.marked -> loc_int:int -> t
 
@@ -159,51 +161,6 @@ end
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
 type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
-
-module Tab : sig
-  type id = int
-
-  type t = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    id : id;
-    size : int;
-    iFmt : string;
-    vars : Var.t Array.t;
-  }
-
-  val tgv : t -> Var.tgv
-
-  val name : t -> string Pos.marked
-
-  val name_str : t -> string
-
-  val size : t -> int
-
-  val descr : t -> string Pos.marked
-
-  val descr_str : t -> string
-
-  val attrs : t -> int Pos.marked StrMap.t
-
-  val cat : t -> CatVar.t
-
-  val is_given_back : t -> bool
-
-  val is_temp : t -> bool
-
-  val new_tab :
-    prog_vars:Var.t StrMap.t -> name:string Pos.marked -> size:int -> t
-
-  val pp : Format.formatter -> t -> unit
-
-  val compare : t -> t -> int
-
-  module Set : SetExt.T with type elt = t
-
-  module Map : sig
-    include MapExt.T with type key = t
-  end
-end
 
 module DomainId : StrSet.T
 

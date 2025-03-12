@@ -591,10 +591,7 @@ struct
             | None -> Undefined)
         | Size m_acc -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some v -> (
-                match Com.Var.is_table v with
-                | Some i -> Number (N.of_float (float_of_int i))
-                | None -> Number (N.of_float 1.0))
+            | Some v -> Number (N.of_float @@ float @@ Com.Var.size v)
             | None -> Undefined)
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
@@ -638,7 +635,8 @@ struct
         | Com.Var.Ref -> assert false
         | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
         | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res)
-    | Some sz -> (
+    | Some _ -> (
+        let sz = Com.Var.size var in
         match var.scope with
         | Com.Var.Tgv _ ->
             for i = 0 to sz - 1 do

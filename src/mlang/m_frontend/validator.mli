@@ -57,7 +57,6 @@ type program = {
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
-  prog_tabs : Com.Tab.t StrMap.t;
   prog_alias : string Pos.marked StrMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;

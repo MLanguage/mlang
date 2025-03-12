@@ -390,7 +390,6 @@ type program = {
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
   prog_vars : Com.Var.t StrMap.t;
-  prog_tabs : Com.Tab.t StrMap.t;
   prog_alias : string Pos.marked StrMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
@@ -417,17 +416,9 @@ let is_vartmp (var : string) =
 let check_name_in_tgv prog m_name =
   let vn, vpos = m_name in
   let err old_pos = Err.variable_already_declared vn old_pos vpos in
-  let check_var next () =
-    match StrMap.find_opt vn prog.prog_vars with
-    | Some Com.Var.{ name = _, old_pos; _ } -> err old_pos
-    | None -> next ()
-  in
-  let check_tab () =
-    match StrMap.find_opt vn prog.prog_tabs with
-    | Some Com.Tab.{ name = _, old_pos; _ } -> err old_pos
-    | None -> ()
-  in
-  check_var check_tab ()
+  match StrMap.find_opt vn prog.prog_vars with
+  | Some Com.Var.{ name = _, old_pos; _ } -> err old_pos
+  | None -> ()
 
 let check_alias_in_tgv prog m_alias =
   let an, apos = m_alias in
@@ -509,7 +500,6 @@ let empty_program (p : Mast.program) main_target =
     prog_chainings = StrMap.empty;
     prog_var_cats = Com.CatVar.Map.empty;
     prog_vars = StrMap.empty;
-    prog_tabs = StrMap.empty;
     prog_event_fields = StrMap.empty;
     prog_event_field_idxs = IntMap.empty;
     prog_event_pos = Pos.no_pos;
@@ -674,13 +664,6 @@ let check_global_var (var : Com.Var.t) (prog : program) : program =
   in
   { prog with prog_vars; prog_alias }
 
-let check_global_tab (tab : Com.Tab.t) (prog : program) : program =
-  let prog_tabs =
-    (* check_name_in_tgv prog tab.name; *)
-    StrMap.add (Pos.unmark tab.name) tab prog.prog_tabs
-  in
-  { prog with prog_tabs }
-
 let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
   match var_decl with
   | Mast.ConstVar _ -> assert false
@@ -703,7 +686,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
       in
       check_global_var var prog
-  | Mast.ComputedVar (comp_var, _decl_pos) -> (
+  | Mast.ComputedVar (comp_var, _decl_pos) ->
       let global_category =
         let is_base =
           List.fold_left
@@ -712,47 +695,37 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         in
         Com.CatVar.Computed { is_base }
       in
-      let is_table =
-        match comp_var.Mast.comp_table with
-        | Some (Mast.LiteralSize sz, _pos) -> Some sz
-        | Some _ -> assert false
-        | None -> None
-      in
+      let m_name = comp_var.Mast.comp_name in
       let is_given_back = comp_var.comp_is_givenback in
       let alias = None in
       let descr = comp_var.Mast.comp_description in
       let attrs = get_attributes comp_var.Mast.comp_attributes in
       let cat = global_category in
       let typ = Option.map Pos.unmark comp_var.Mast.comp_typ in
-      let var =
-        Com.Var.new_tgv ~name:comp_var.Mast.comp_name ~is_table ~is_given_back
-          ~alias ~descr ~attrs ~cat ~typ
-      in
-      let prog = check_global_var var prog in
-      match is_table with
-      | None -> prog
-      | Some sz ->
-          let prog =
-            let name, npos = comp_var.Mast.comp_name in
+      let is_table =
+        match comp_var.Mast.comp_table with
+        | Some (Mast.LiteralSize sz, _pos) ->
+            let name, name_pos = m_name in
             let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
-            let rec loop prog i =
-              if i >= sz then prog
-              else
-                let iName = Strings.concat_int name iFmt i in
-                let iVar =
-                  Com.Var.new_tgv ~name:(iName, npos) ~is_table:None
-                    ~is_given_back ~alias ~descr ~attrs ~cat ~typ
-                in
-                let prog = check_global_var iVar prog in
-                loop prog (i + 1)
+            let init i =
+              let m_iName = (Strings.concat_int name iFmt i, name_pos) in
+              Com.Var.new_tgv ~name:m_iName ~is_table:None ~is_given_back ~alias
+                ~descr ~attrs ~cat ~typ
             in
-            loop prog 0
-          in
-          let tab =
-            Com.Tab.new_tab ~prog_vars:prog.prog_vars
-              ~name:comp_var.Mast.comp_name ~size:sz
-          in
-          check_global_tab tab prog)
+            Some (Array.init sz init)
+        | Some _ -> assert false
+        | None -> None
+      in
+      let var =
+        Com.Var.new_tgv ~name:m_name ~is_table ~is_given_back ~alias ~descr
+          ~attrs ~cat ~typ
+      in
+      let prog =
+        match is_table with
+        | Some tab -> Array.fold_left (fun p v -> check_global_var v p) prog tab
+        | None -> prog
+      in
+      check_global_var var prog
 
 let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
     (prog : program) : program =
@@ -1215,18 +1188,16 @@ let rec fold_var_expr
               | None -> ()));
           fold_var (v, pos) Both env acc
       | TabAccess (m_v, m_i) ->
-          let name, _var_pos = Pos.map_under_mark Com.get_normal_var m_v in
-          (match StrMap.find_opt name env.prog.prog_tabs with
-          | Some tab ->
-              let cat = Com.Tab.cat tab in
-              if not (StrMap.mem (Pos.unmark a) (Com.Tab.attrs tab)) then
+          let name, var_pos = Pos.map_under_mark Com.get_normal_var m_v in
+          (match StrMap.find_opt name env.prog.prog_vars with
+          | Some var ->
+              let cat = Com.Var.cat var in
+              if not (StrMap.mem (Pos.unmark a) (Com.Var.attrs var)) then
                 Err.unknown_attribut_for_var cat (Pos.get a)
-          | None ->
-              (*
+          | None -> (
               match StrMap.find_opt name env.tmp_vars with
               | Some _ -> Err.tmp_vars_have_no_attrs var_pos
-              | None -> ()*)
-              assert false);
+              | None -> ()));
           let acc = fold_var_expr fold_var is_filter acc m_i env in
           fold_var m_v (OneOf (Some ())) env acc
       | ConcAccess (_, _, i) ->
@@ -1273,14 +1244,15 @@ let check_variable (var : Com.variable_name Pos.marked)
   let var_data, var_pos = var in
   let name, decl_mem, decl_pos =
     let vn = Com.get_normal_var var_data in
+    let to_mem is_t = OneOf (Option.map (fun _ -> ()) is_t) in
     let find_tgv_var next () =
       match StrMap.find_opt vn env.prog.prog_vars with
-      | Some v -> (vn, OneOf (Com.Var.is_table v), Pos.get (Com.Var.name v))
+      | Some v -> (vn, to_mem (Com.Var.is_table v), Pos.get (Com.Var.name v))
       | None -> next ()
     in
     let find_tmp_var next () =
       match StrMap.find_opt vn env.tmp_vars with
-      | Some (decl_size, decl_pos) -> (vn, OneOf decl_size, decl_pos)
+      | Some (decl_size, decl_pos) -> (vn, to_mem decl_size, decl_pos)
       | None -> next ()
     in
     let find_ref next () =
@@ -1304,28 +1276,11 @@ let check_variable (var : Com.variable_name Pos.marked)
       | Some _, Some _ -> name
       | Some _, None -> Err.table_used_as_variable decl_pos var_pos)
 
-let check_table (tab : Com.variable_name Pos.marked) (env : var_env) :
-    Pos.t StrMap.t =
-  let tab_data, tab_pos = tab in
-  let tn = Com.get_normal_var tab_data in
-  let find_tgv_var next () =
-    match StrMap.find_opt tn env.prog.prog_tabs with
-    | Some t ->
-        let fold map var = StrMap.add (Com.Var.name_str var) tab_pos map in
-        Array.fold_left fold (StrMap.one tn tab_pos) t.vars
-    | None -> next ()
-  in
-  let find_tmp_var () = (* Err.unknown_variable tab_pos *) StrMap.empty in
-  () |> find_tgv_var @@ find_tmp_var
-
 let check_expression (is_filter : bool) (m_expr : Mast.expression Pos.marked)
     (env : var_env) : StrSet.t =
   let fold_var var idx_mem env acc =
-    match idx_mem with
-    | OneOf None | Both ->
-        let name = check_variable var idx_mem env in
-        StrSet.add name acc
-    | OneOf (Some ()) -> StrSet.union (StrMap.keySet (check_table var env)) acc
+    let name = check_variable var idx_mem env in
+    StrSet.add name acc
   in
   fold_var_expr fold_var is_filter StrSet.empty m_expr env
 
@@ -1473,7 +1428,10 @@ let rec check_instructions (instrs : Mast.instruction Pos.marked list)
                     in
                     aux (env, m_instr :: res, in_vars, out_vars, def_vars) il
                 | TabAccess (m_v, m_i) ->
-                    let out_vars_tab = check_table m_v env in
+                    let out_vars_tab =
+                      let name = check_variable m_v (OneOf (Some ())) env in
+                      StrMap.one name (Pos.get m_v)
+                    in
                     let in_vars_i = check_expression false m_i env in
                     let in_vars_aff = StrSet.union in_vars_i in_vars_aff in
                     let in_vars =
@@ -1882,24 +1840,21 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
     t.target_apps
   in
   let target, prog =
-    let target_tmp_vars, target_tmp_tabs =
+    let target_tmp_vars =
       List.fold_left
-        (fun (vars, tabs) ((vn, vpos), sz) ->
-          let check_tmp (vars, tabs) (vn, vpos) =
+        (fun vars ((vn, vpos), sz) ->
+          let check_tmp vars (vn, vpos) =
             let err old_pos =
               Err.temporary_variable_already_declared vn old_pos vpos
             in
-            (match StrMap.find_opt vn vars with
-            | Some ((_, old_pos), _) -> err old_pos
-            | None -> ());
-            match StrMap.find_opt vn tabs with
+            match StrMap.find_opt vn vars with
             | Some ((_, old_pos), _) -> err old_pos
             | None -> ()
           in
-          check_tmp (vars, tabs) (vn, vpos);
+          check_tmp vars (vn, vpos);
           let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
           match size with
-          | None -> (StrMap.add vn ((vn, vpos), size) vars, tabs)
+          | None -> StrMap.add vn ((vn, vpos), size) vars
           | Some sz_int ->
               let vars =
                 let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
@@ -1907,33 +1862,26 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
                   if i >= sz_int then vars
                   else
                     let iName = Strings.concat_int vn iFmt i in
-                    check_tmp (vars, tabs) (iName, vpos);
+                    check_tmp vars (iName, vpos);
                     let vars = StrMap.add iName ((iName, vpos), None) vars in
                     loop vars (i + 1)
                 in
                 loop vars 0
               in
-              check_tmp (vars, tabs) (vn, vpos);
-              let vars = StrMap.add vn ((vn, vpos), size) vars in
-              (*check_tmp (vars, tabs) (vn, vpos);*)
-              let tabs = StrMap.add vn ((vn, vpos), sz_int) tabs in
-              (vars, tabs))
-        (StrMap.empty, StrMap.empty)
-        t.target_tmp_vars
+              check_tmp vars (vn, vpos);
+              StrMap.add vn ((vn, vpos), size) vars)
+        StrMap.empty t.target_tmp_vars
     in
     StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) target_tmp_vars;
-    StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) target_tmp_tabs;
     let target_args = t.target_args in
     List.iter (check_name_in_tgv prog) target_args;
     List.iter (check_name_in_tmp target_tmp_vars) target_args;
-    List.iter (check_name_in_tmp target_tmp_tabs) target_args;
     let target_result = t.target_result in
     (match target_result with
     | Some m_name ->
         if not is_function then Err.target_must_not_have_a_result tname tpos;
         check_name_in_tgv prog m_name;
         check_name_in_tmp target_tmp_vars m_name;
-        check_name_in_tmp target_tmp_tabs m_name;
         check_name_in_args target_args m_name
     | None -> if is_function then Err.function_result_missing tname tpos);
     let tmp_vars =
@@ -2028,24 +1976,21 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
-  let rule_tmp_vars, rule_tmp_tabs =
+  let rule_tmp_vars =
     List.fold_left
-      (fun (vars, tabs) ((vn, vpos), sz) ->
-        let check_tmp (vars, tabs) (vn, vpos) =
+      (fun vars ((vn, vpos), sz) ->
+        let check_tmp vars (vn, vpos) =
           let err old_pos =
             Err.temporary_variable_already_declared vn old_pos vpos
           in
-          (match StrMap.find_opt vn vars with
-          | Some ((_, old_pos), _) -> err old_pos
-          | None -> ());
-          match StrMap.find_opt vn tabs with
+          match StrMap.find_opt vn vars with
           | Some ((_, old_pos), _) -> err old_pos
           | None -> ()
         in
-        check_tmp (vars, tabs) (vn, vpos);
+        check_tmp vars (vn, vpos);
         let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
         match size with
-        | None -> (StrMap.add vn ((vn, vpos), size) vars, tabs)
+        | None -> StrMap.add vn ((vn, vpos), size) vars
         | Some sz_int ->
             let vars =
               let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
@@ -2053,22 +1998,17 @@ let check_rule (r : Mast.rule) (prog : program) : program =
                 if i >= sz_int then vars
                 else
                   let iName = Strings.concat_int vn iFmt i in
-                  check_tmp (vars, tabs) (iName, vpos);
+                  check_tmp vars (iName, vpos);
                   let vars = StrMap.add iName ((iName, vpos), None) vars in
                   loop vars (i + 1)
               in
               loop vars 0
             in
-            check_tmp (vars, tabs) (vn, vpos);
-            let vars = StrMap.add vn ((vn, vpos), size) vars in
-            (*check_tmp (vars, tabs) (vn, vpos);*)
-            let tabs = StrMap.add vn ((vn, vpos), sz_int) tabs in
-            (vars, tabs))
-      (StrMap.empty, StrMap.empty)
-      r.Mast.rule_tmp_vars
+            check_tmp vars (vn, vpos);
+            StrMap.add vn ((vn, vpos), size) vars)
+      StrMap.empty r.Mast.rule_tmp_vars
   in
   StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) rule_tmp_vars;
-  StrMap.iter (fun _ (n, _) -> check_name_in_tgv prog n) rule_tmp_tabs;
   let tmp_vars =
     StrMap.map (fun (var, size) -> (size, Pos.get var)) rule_tmp_vars
   in
@@ -2558,11 +2498,9 @@ let eval_expr_verif (prog : program) (verif : verif)
         let attrs = Com.Var.attrs (StrMap.find var prog.prog_vars) in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
-    | Size (VarAccess v, _) -> (
+    | Size (VarAccess v, _) ->
         let var = match v with Com.Normal var -> var | _ -> assert false in
-        match Com.Var.is_table (StrMap.find var prog.prog_vars) with
-        | Some sz -> Some (float sz)
-        | None -> Some 1.0)
+        Some (float @@ Com.Var.size @@ StrMap.find var prog.prog_vars)
     | NbCategory cs ->
         let cats = mast_to_catvars cs prog.prog_var_cats in
         let sum =

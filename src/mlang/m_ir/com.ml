@@ -116,7 +116,7 @@ module Var = struct
     id
 
   type tgv = {
-    is_table : int option;
+    is_table : t Array.t option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -126,9 +126,9 @@ module Var = struct
     typ : value_typ option;
   }
 
-  type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
+  and scope = Tgv of tgv | Temp of t Array.t option | Ref | Arg | Res
 
-  type t = {
+  and t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
     id : id;
     loc : loc;
@@ -152,6 +152,12 @@ module Var = struct
     | Temp is_table -> is_table
     | Ref | Arg | Res -> None
 
+  let set_is_table v is_table =
+    match v.scope with
+    | Tgv tgv -> { v with scope = Tgv { tgv with is_table } }
+    | Temp _ -> { v with scope = Temp is_table }
+    | Ref | Arg | Res -> v
+
   let cat_var_loc v =
     match v.scope with
     | Tgv tgv -> (
@@ -161,7 +167,7 @@ module Var = struct
         | Computed _ -> Some CatVar.LocComputed)
     | Temp _ | Ref | Arg | Res -> None
 
-  let size v = match is_table v with None -> 1 | Some sz -> sz
+  let size v = match is_table v with None -> 1 | Some tab -> Array.length tab
 
   let alias v = match v.scope with Tgv s -> s.alias | _ -> None
 
@@ -243,7 +249,7 @@ module Var = struct
       loc_int = 0;
     }
 
-  let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
+  let new_tgv ~(name : string Pos.marked) ~(is_table : t Array.t option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
       ~(cat : CatVar.t) ~(typ : value_typ option) : t =
@@ -254,7 +260,7 @@ module Var = struct
       scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
     }
 
-  let new_temp ~(name : string Pos.marked) ~(is_table : int option)
+  let new_temp ~(name : string Pos.marked) ~(is_table : t Array.t option)
       ~(loc_int : int) : t =
     let loc = LocTmp (Pos.unmark name, loc_int) in
     { name; id = new_id (); loc; scope = Temp is_table }
@@ -326,101 +332,6 @@ end
 type event_field = { name : string Pos.marked; index : int; is_var : bool }
 
 type ('n, 'v) event_value = Numeric of 'n | RefVar of 'v
-
-module Tab = struct
-  type id = int
-
-  let id_cpt = ref 0
-
-  let new_id () =
-    let id = !id_cpt in
-    incr id_cpt;
-    id
-
-  type t = {
-    name : string Pos.marked;  (** The position is the variable declaration *)
-    id : id;
-    size : int;
-    iFmt : string;
-    vars : Var.t Array.t;
-  }
-
-  let tgv t = Var.tgv t.vars.(0)
-
-  let name t = t.name
-
-  let name_str t = Pos.unmark t.name
-
-  let size t = t.size
-
-  let descr t = (tgv t).descr
-
-  let descr_str t = Pos.unmark (tgv t).descr
-
-  let attrs t = (tgv t).attrs
-
-  let cat t = (tgv t).cat
-
-  let is_given_back t = (tgv t).is_given_back
-
-  let is_temp t = Var.is_temp t.vars.(0)
-
-  let new_tab ~(prog_vars : Var.t StrMap.t) ~(name : string Pos.marked)
-      ~(size : int) : t =
-    let size = max size 1 in
-    let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" size) in
-    let vars =
-      let init i =
-        let vn = Strings.concat_int (Pos.unmark name) iFmt i in
-        StrMap.find vn prog_vars
-      in
-      Array.init size init
-    in
-    { name; id = new_id (); size; iFmt; vars }
-
-  let int_of_scope tab = if Var.is_temp tab.vars.(0) then 1 else 0
-
-  let compare (tab1 : t) (tab2 : t) =
-    let c = compare (int_of_scope tab1) (int_of_scope tab2) in
-    if c <> 0 then c
-    else
-      let c = compare (Pos.unmark tab1.name) (Pos.unmark tab2.name) in
-      if c <> 0 then c else compare tab1.id tab2.id
-
-  let pp fmt (tab : t) =
-    Format.fprintf fmt "(%d)%s" tab.id (Pos.unmark tab.name)
-
-  type t_tab = t
-
-  let pp_tab = pp
-
-  let compare_tab t0 t1 = Int.compare t0.id t1.id
-
-  module Set = struct
-    include SetExt.Make (struct
-      type t = t_tab
-
-      let compare = compare_tab
-    end)
-
-    let pp ?(sep = ", ") ?(pp_elt = pp_tab) (_ : unit) (fmt : Format.formatter)
-        (set : t) : unit =
-      pp ~sep ~pp_elt () fmt set
-  end
-
-  module Map = struct
-    include MapExt.Make (struct
-      type t = t_tab
-
-      let compare = compare_tab
-    end)
-
-    let pp ?(sep = "; ") ?(pp_key = pp_tab) ?(assoc = " => ")
-        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-        (map : 'a t) : unit =
-      pp ~sep ~pp_key ~assoc pp_val fmt map
-  end
-end
 
 module DomainId = StrSet
 
