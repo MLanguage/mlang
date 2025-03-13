@@ -44,7 +44,7 @@ let dup_exists l =
   dup_consecutive (List.sort sort_on_third l)
 
 (** Parse variable with parameters, parameters have to be lowercase letters *)
-let parse_variable_generic_name sloc (s : string) : Com.variable_generic_name =
+let parse_variable_generic_name sloc (s : string) : Com.var_name_generic =
   let parameters = ref [] in
   for i = String.length s - 1 downto 0 do
     let p = s.[i] in
@@ -67,7 +67,7 @@ let parse_variable sloc (s : string) =
     with E.StructuredError _ ->
       E.raise_spanned_error "invalid variable name" (mk_position sloc))
 
-type parse_val = ParseVar of Com.variable_name | ParseInt of int
+type parse_val = ParseVar of Com.var_name | ParseInt of int
 
 let parse_variable_or_int sloc (s : string) : parse_val =
   try ParseInt (int_of_string s)
@@ -87,7 +87,7 @@ let parse_literal sloc (s : string) : Com.literal =
   try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_atom sloc (s : string) : Com.variable_name Com.atom =
+let parse_atom sloc (s : string) : Com.var_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
   with Failure _ -> Com.AtomVar (parse_variable sloc s)
 

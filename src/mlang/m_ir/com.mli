@@ -231,16 +231,18 @@ type func =
     number or characters and there can be multiple of them. We have to store all
     this information. *)
 
-type variable_generic_name = { base : string; parameters : char list }
+type var_name_generic = { base : string; parameters : char list }
 (** For generic variables, we record the list of their lowercase parameters *)
 
 (** A variable is either generic (with loop parameters) or normal *)
-type variable_name = Normal of string | Generic of variable_generic_name
+type var_name = Normal of string | Generic of var_name_generic
+
+type m_var_name = var_name Pos.marked
 
 type 'v access =
   | VarAccess of 'v
   | TabAccess of 'v Pos.marked * 'v m_expression
-  | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
@@ -328,10 +330,8 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
-  | PrintConcName of
-      variable_name Pos.marked * string Pos.marked * 'v m_expression
-  | PrintConcAlias of
-      variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
+  | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
   | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
@@ -397,9 +397,9 @@ type ('v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_args : 'v Pos.marked list;
-  target_result : 'v Pos.marked option;
-  target_tmp_vars : ('v Pos.marked * int option) StrMap.t;
+  target_args : Var.t list;
+  target_result : Var.t option;
+  target_tmp_vars : Var.t StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
@@ -416,9 +416,9 @@ val instr_map_var :
 val m_instr_map_var :
   ('v -> 'w) -> ('e -> 'f) -> ('v, 'e) m_instruction -> ('w, 'f) m_instruction
 
-val get_variable_name : variable_name -> string
+val get_var_name : var_name -> string
 
-val get_normal_var : variable_name -> string
+val get_normal_var : var_name -> string
 
 val format_value_typ : Pp.t -> value_typ -> unit
 

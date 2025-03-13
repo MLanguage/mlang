@@ -968,12 +968,6 @@ iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
   afficher_erreur "multimax(" (I) ", " nom(TNAPCR) ") = " (multimax(I, TNAPCR)) "\n";
 )
 afficher_erreur "\n";
-iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
-  afficher_erreur
-    "multimax(" (I) ", " nom(champ_evenement(EVT, code)) " (via evenements)) = "
-    (multimax(I, champ_evenement(EVT, code))) "\n";
-)
-afficher_erreur "\n";
 afficher_erreur "taille(" nom(TNAPCR) ") = " (taille(TNAPCR)) "\n";
 afficher_erreur "taille(" nom(champ_evenement(EVT, code)) ") = " (taille(champ_evenement(EVT, code))) "\n";
 afficher_erreur "taille(" nom(champ_evenement(1000, code)) ") = " (taille(champ_evenement(1000, code))) "\n";

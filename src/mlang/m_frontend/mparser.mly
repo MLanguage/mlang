@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) : Com.variable_name Com.atom =
+ let parse_to_atom (v: parse_val) : Com.var_name Com.atom =
    match v with
    | ParseVar v -> AtomVar v
    | ParseInt v -> AtomLiteral (Float (float_of_int v))

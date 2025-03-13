@@ -39,6 +39,7 @@ module type S = sig
     mutable ctx_ref_org : int;
     mutable ctx_args : value Array.t list;
     mutable ctx_res : value list;
+    ctx_tab_map : (Com.Var.t * int) Array.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
@@ -121,6 +122,7 @@ struct
     mutable ctx_ref_org : int;
     mutable ctx_args : value Array.t list;
     mutable ctx_res : value list;
+    ctx_tab_map : (Com.Var.t * int) Array.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
@@ -139,6 +141,14 @@ struct
       let var = Com.Var.new_ref ~name:("", Pos.no_pos) ~loc_int:(-1) in
       (var, (var, -1))
     in
+    let ctx_tab_map =
+      let init i =
+        let var = IntMap.find i p.program_stats.table_map in
+        let loc_int = Com.Var.loc_int var in
+        (var, loc_int)
+      in
+      Array.init p.program_stats.sz_all_tables init
+    in
     {
       ctx_prog = p;
       ctx_target = snd (StrMap.min_binding p.program_targets);
@@ -149,6 +159,7 @@ struct
       ctx_ref_org = 0;
       ctx_args = [];
       ctx_res = [];
+      ctx_tab_map;
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
@@ -314,7 +325,7 @@ struct
     | Some v -> Some (fst (get_var ctx v))
     | None -> (
         match StrMap.find_opt name ctx.ctx_target.target_tmp_vars with
-        | Some ((v, _), _) -> Some (fst (get_var ctx v))
+        | Some v -> Some (fst (get_var ctx v))
         | None ->
             let rec searchRef i =
               if i < ctx.ctx_target.target_nb_refs then

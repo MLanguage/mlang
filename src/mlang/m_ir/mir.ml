@@ -48,6 +48,9 @@ type stats = {
   sz_input : int;
   sz_vars : int;
   sz_all_tmps : int;
+  nb_all_tables : int;
+  sz_all_tables : int;
+  table_map : Com.Var.t IntMap.t;
 }
 
 type program = {

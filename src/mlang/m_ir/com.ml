@@ -408,16 +408,18 @@ type func =
   | NbEvents
   | Func of string
 
-type variable_generic_name = { base : string; parameters : char list }
+type var_name_generic = { base : string; parameters : char list }
 (** For generic variables, we record the list of their lowercase parameters *)
 
 (** A variable is either generic (with loop parameters) or normal *)
-type variable_name = Normal of string | Generic of variable_generic_name
+type var_name = Normal of string | Generic of var_name_generic
+
+type m_var_name = var_name Pos.marked
 
 type 'v access =
   | VarAccess of 'v
   | TabAccess of 'v Pos.marked * 'v m_expression
-  | ConcAccess of variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
@@ -534,10 +536,8 @@ type 'v print_arg =
   | PrintString of string
   | PrintName of 'v Pos.marked
   | PrintAlias of 'v Pos.marked
-  | PrintConcName of
-      variable_name Pos.marked * string Pos.marked * 'v m_expression
-  | PrintConcAlias of
-      variable_name Pos.marked * string Pos.marked * 'v m_expression
+  | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
+  | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
   | PrintEventAlias of 'v m_expression * string Pos.marked * int
   | PrintIndent of 'v m_expression
@@ -599,9 +599,9 @@ type ('v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_args : 'v Pos.marked list;
-  target_result : 'v Pos.marked option;
-  target_tmp_vars : ('v Pos.marked * int option) StrMap.t;
+  target_args : Var.t list;
+  target_result : Var.t option;
+  target_tmp_vars : Var.t StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
@@ -846,7 +846,7 @@ and instr_map_var f g = function
 
 and m_instr_map_var f g m_i = Pos.map_under_mark (instr_map_var f g) m_i
 
-let get_variable_name v = match v with Normal s -> s | Generic s -> s.base
+let get_var_name v = match v with Normal s -> s | Generic s -> s.base
 
 let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
@@ -934,7 +934,7 @@ let format_access form_var form_expr fmt = function
         (Pos.unmark m_i)
   | ConcAccess (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "%s{%s, %a}"
-        (get_variable_name (Pos.unmark m_vn))
+        (get_var_name (Pos.unmark m_vn))
         (Pos.unmark m_idxf) form_expr (Pos.unmark idx)
   | FieldAccess (e, f, _) ->
       Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
@@ -1030,11 +1030,11 @@ let format_print_arg form_var fmt =
   | PrintAlias v -> Format.fprintf fmt "alias(%a)" (Pp.unmark form_var) v
   | PrintConcName (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "nom(%s{%s, %a})"
-        (get_variable_name (Pos.unmark m_vn))
+        (get_var_name (Pos.unmark m_vn))
         (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
   | PrintConcAlias (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "alias(%s{%s, %a})"
-        (get_variable_name (Pos.unmark m_vn))
+        (get_var_name (Pos.unmark m_vn))
         (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
   | PrintEventName (e, f, _) ->
       Format.fprintf fmt "nom(champ_evenement(%a, %s))" form_expr (Pos.unmark e)

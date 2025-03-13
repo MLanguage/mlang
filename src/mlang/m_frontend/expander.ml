@@ -318,8 +318,7 @@ let expand_table_size (const_map : const_context) table_size =
   | _ -> table_size
 
 let rec expand_variable (const_map : const_context) (loop_map : loop_context)
-    (m_var : Com.variable_name Pos.marked) :
-    Com.variable_name Com.atom Pos.marked =
+    (m_var : Com.m_var_name) : Com.var_name Com.atom Pos.marked =
   let var, var_pos = m_var in
   match var with
   | Com.Normal name -> (
@@ -343,7 +342,7 @@ and check_var_name (var_name : string) (var_pos : Pos.t) : unit =
   done
 
 and instantiate_params (const_map : const_context) (loop_map : loop_context)
-    (var_name : string) (pos : Pos.t) : Com.variable_name Com.atom Pos.marked =
+    (var_name : string) (pos : Pos.t) : Com.var_name Com.atom Pos.marked =
   match ParamsMap.choose_opt loop_map with
   | None ->
       check_var_name var_name pos;
@@ -395,7 +394,7 @@ let merge_loop_context (loop_map : loop_context) (lmap : loop_context)
     In thes example above, [Xi] will become [X5] because there are no string or
     integer above 9 in the list of possible values. *)
 
-type var_or_int_index = VarIndex of Com.variable_name | IntIndex of int
+type var_or_int_index = VarIndex of Com.var_name | IntIndex of int
 
 (** The M language added a new feature in its 2017 edition : you can specify
     loop variable ranges bounds with constant variables. Because we need the
@@ -403,17 +402,17 @@ type var_or_int_index = VarIndex of Com.variable_name | IntIndex of int
     const value in the context if needed. Otherwise, it might be a dynamic
     index. *)
 let var_or_int_value (const_map : const_context)
-    (m_atom : Com.variable_name Com.atom Pos.marked) : var_or_int_index =
+    (m_atom : Com.var_name Com.atom Pos.marked) : var_or_int_index =
   match Pos.unmark m_atom with
   | Com.AtomVar v -> (
-      let name = Com.get_variable_name v in
+      let name = Com.get_var_name v in
       match ConstMap.find_opt name const_map with
       | Some (fvalue, _) -> IntIndex (int_of_float fvalue)
       | None -> VarIndex v)
   | Com.AtomLiteral (Com.Float f) -> IntIndex (int_of_float f)
   | Com.AtomLiteral Com.Undefined -> assert false
 
-let var_or_int (m_atom : Com.variable_name Com.atom Pos.marked) =
+let var_or_int (m_atom : Com.var_name Com.atom Pos.marked) =
   let atom, atom_pos = m_atom in
   match atom with
   | Com.AtomVar (Normal v) -> VarName v
@@ -457,8 +456,8 @@ let make_var_range_list (v1 : string) (v2 : string) : loop_param_value list =
   in
   aux (Char.code v1.[0]) (Char.code v2.[0])
 
-let make_range_list (l1 : Com.variable_name Com.atom Pos.marked)
-    (l2 : Com.variable_name Com.atom Pos.marked) : loop_param_value list =
+let make_range_list (l1 : Com.var_name Com.atom Pos.marked)
+    (l2 : Com.var_name Com.atom Pos.marked) : loop_param_value list =
   let length_err p =
     Err.non_numeric_range_bounds_must_be_a_single_character p
   in
@@ -507,8 +506,7 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
     merge_loop_ctx} inside [...] before translating the loop body. [lc] is the
     loop context, [i] the loop sequence index and [ctx] the translation context. *)
 
-let expand_loop_variables
-    (lvs : Com.variable_name Com.loop_variables Pos.marked)
+let expand_loop_variables (lvs : Com.var_name Com.loop_variables Pos.marked)
     (const_map : const_context) : (loop_context -> 'a) -> 'a list =
   let pos = Pos.get lvs in
   match Pos.unmark lvs with
@@ -529,7 +527,7 @@ let expand_loop_variables
                          match (lb, ub) with
                          | VarIndex v, _ | _, VarIndex v ->
                              Err.variable_is_not_an_integer_constant
-                               (Com.get_variable_name v) pos
+                               (Com.get_var_name v) pos
                          | IntIndex lb, IntIndex ub -> make_int_range_list lb ub
                          ))
                    values)
@@ -547,8 +545,7 @@ type 'v access_or_literal =
   | ExpLiteral of Com.literal
 
 let rec expand_access (const_map : const_context) (loop_map : loop_context)
-    ((a, a_pos) : Com.variable_name Com.m_access) :
-    Com.variable_name access_or_literal =
+    ((a, a_pos) : Com.var_name Com.m_access) : Com.var_name access_or_literal =
   match a with
   | VarAccess v -> (
       match expand_variable const_map loop_map (v, a_pos) with
@@ -672,9 +669,9 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       m_expr
 
 let expand_formula (const_map : const_context)
-    (prev : Com.variable_name Com.formula Pos.marked list)
-    (m_form : Com.variable_name Com.formula Pos.marked) :
-    Com.variable_name Com.formula Pos.marked list =
+    (prev : Com.var_name Com.formula Pos.marked list)
+    (m_form : Com.var_name Com.formula Pos.marked) :
+    Com.var_name Com.formula Pos.marked list =
   let form, form_pos = m_form in
   match form with
   | Com.SingleFormula (VarDecl (m_access, idx, e)) ->

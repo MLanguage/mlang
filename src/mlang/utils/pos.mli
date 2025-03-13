@@ -38,7 +38,7 @@ type 'a marked = 'a * t
 val no_pos : t
 (** Placeholder t *)
 
-val mark : t -> 'a -> 'a marked
+val mark : 'a -> t -> 'a marked
 
 val unmark : 'a marked -> 'a
 

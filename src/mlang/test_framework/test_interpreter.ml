@@ -254,6 +254,9 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     Parmap.parfold ~chunksize:5 process (Parmap.A arr) ([], StrMap.empty)
       (fun (old_s, old_f) (new_s, new_f) ->
         (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))
+    (*
+    Array.fold_left (fun acc name -> process name acc) ([], StrMap.empty) arr
+*)
   in
   (* finish "done!"; *)
   Cli.warning_flag := dbg_warning;

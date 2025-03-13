@@ -57,9 +57,9 @@ let get_table_size_opt = function
 
 type var_category_id = string Pos.marked list Pos.marked
 
-type set_value = Com.variable_name Com.set_value
+type set_value = Com.var_name Com.set_value
 
-type expression = Com.variable_name Com.expression
+type expression = Com.var_name Com.expression
 
 type m_expression = expression Pos.marked
 
@@ -70,7 +70,7 @@ type m_expression = expression Pos.marked
 (** The rule is the main feature of the M language. It defines the expression of
     one or several variables. *)
 
-type instruction = (Com.variable_name, error_name) Com.instruction
+type instruction = (Com.var_name, error_name) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
@@ -140,7 +140,7 @@ type computed_variable = {
 
 type variable_decl =
   | ComputedVar of computed_variable Pos.marked
-  | ConstVar of string Pos.marked * Com.variable_name Com.atom Pos.marked
+  | ConstVar of string Pos.marked * Com.var_name Com.atom Pos.marked
       (** The literal is the constant value *)
   | InputVar of input_variable Pos.marked
 

@@ -872,10 +872,9 @@ let generate_var_def (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
       pr "@]@;}"
 
 let generate_conc_def (dgfip_flags : Dgfip_options.flags)
-    (m_vn : Com.variable_name Pos.marked) (m_if : string Pos.marked)
-    (idx_expr : Mir.expression Pos.marked)
-    (vidx_opt : Mir.expression Pos.marked option)
-    (expr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
+    (m_vn : Com.m_var_name) (m_if : string Pos.marked)
+    (idx_expr : Mir.m_expression) (vidx_opt : Mir.m_expression option)
+    (expr : Mir.m_expression) (oc : Format.formatter) : unit =
   let pr form = Format.fprintf oc form in
   pr "@;@[<v 2>{";
   let idx = fresh_c_local "idx" in
@@ -1472,7 +1471,7 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
     pr "@]@;}";
     pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
     StrMap.iter
-      (fun vn ((var, _), sz_opt) ->
+      (fun vn var ->
         let loc_str =
           Format.sprintf "irdata->tmps_org + (%d)" (Com.Var.loc_int var)
         in
@@ -1480,7 +1479,7 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
         pr "@;info->name = \"%s\";" vn;
         pr "@;info->alias = \"\";";
         pr "@;info->idx = %s;" loc_str;
-        (match sz_opt with
+        (match Option.map Array.length (Com.Var.is_table var) with
         | None -> pr "@;info->size = 1;"
         | Some i -> pr "@;info->size = %d;" i);
         pr "@;info->cat = ID_TMP_VARS;";

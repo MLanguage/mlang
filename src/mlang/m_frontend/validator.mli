@@ -27,7 +27,7 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
-  rule_tmp_vars : (string Pos.marked * int option) StrMap.t;
+  rule_tmp_vars : Com.Var.t StrMap.t;
   rule_instrs : Mast.instruction Pos.marked list;
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
@@ -74,7 +74,6 @@ type program = {
     (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
   prog_main_target : string;
-  prog_stats : Mir.stats;
 }
 
 val mast_to_catvars :
