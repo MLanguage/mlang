@@ -25,9 +25,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) : Com.var_name Com.atom =
+ let parse_to_atom (v: parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
    match v with
-   | ParseVar v -> AtomVar v
+   | ParseVar v -> AtomVar (v, pos)
    | ParseInt v -> AtomLiteral (Float (float_of_int v))
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
@@ -957,8 +957,8 @@ for_formula:
 
 var_access:
 | s = symbol_with_pos {
-    let v = parse_variable $sloc (Pos.unmark s) in
-    Pos.same_pos_as (Com.VarAccess v) s
+    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark s)) s in
+    Pos.same_pos_as (Com.VarAccess m_v) s
   }
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
   COMMA idx = with_pos(sum_expression) RBRACE {
@@ -1129,7 +1129,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Com.Single (parse_to_atom (parse_variable_or_int $sloc s), pos)
+    Com.Single (parse_to_atom (parse_variable_or_int $sloc s) pos, pos)
   }
 
 range_or_minus:
@@ -1139,8 +1139,8 @@ range_or_minus:
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let l1 = parse_to_atom (parse_variable_or_int $sloc i1), pos in
-    let l2 = parse_to_atom (parse_variable_or_int $sloc i2), pos in
+    let l1 = parse_to_atom (parse_variable_or_int $sloc i1) pos, pos in
+    let l2 = parse_to_atom (parse_variable_or_int $sloc i2) pos, pos in
     match rm with
     | `Range -> Com.Range (l1, l2)
     | `Minus -> Com.Interval (l1, l2)
@@ -1167,7 +1167,7 @@ enumeration_item:
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (VarAccess v, pos)
+    | ParseVar v -> Com.VarValue (VarAccess (v, pos), pos)
     | ParseInt i -> Com.FloatValue (float_of_int i, pos)
   }
 
@@ -1249,11 +1249,11 @@ factor:
     | None -> Var (ConcAccess (m_v, idxFmt, idx))
   }
 | s = symbol_with_pos i = with_pos(brackets) {
-    let v = parse_variable $sloc (Pos.unmark s) in
-    Com.Index (Pos.same_pos_as (Com.VarAccess v) s, i)
+    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark s)) s in
+    Com.Index (Pos.same_pos_as (Com.VarAccess m_v) s, i)
   }
-| a = with_pos(factor_atom) {
-    match Pos.unmark a with
+| a = factor_atom {
+    match a with
     | Com.AtomVar v -> Com.Var (VarAccess v)
     | Com.AtomLiteral l -> Com.Literal l
   }

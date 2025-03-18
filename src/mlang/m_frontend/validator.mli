@@ -47,7 +47,7 @@ type verif = {
   verif_seq : int;
 }
 
-type target = (string, Mast.error_name) Com.target
+type target = (string Pos.marked, Mast.error_name) Com.target
 
 type program = {
   prog_prefix : string;
@@ -56,8 +56,9 @@ type program = {
   prog_apps : Pos.t StrMap.t;
   prog_chainings : chaining StrMap.t;
   prog_var_cats : Com.CatVar.data Com.CatVar.Map.t;
-  prog_vars : Com.Var.t StrMap.t;
-  prog_alias : string Pos.marked StrMap.t;
+  prog_dict : Com.Var.t IntMap.t;
+  prog_vars : int StrMap.t;
+  prog_alias : int StrMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
   prog_event_pos : Pos.t;

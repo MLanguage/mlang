@@ -113,6 +113,8 @@ module Var : sig
 
   val set_loc_int : t -> int -> t
 
+  val is_tgv : t -> bool
+
   val is_temp : t -> bool
 
   val is_ref : t -> bool
@@ -241,7 +243,7 @@ type m_var_name = var_name Pos.marked
 
 type 'v access =
   | VarAccess of 'v
-  | TabAccess of 'v Pos.marked * 'v m_expression
+  | TabAccess of 'v * 'v m_expression
   | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
@@ -328,8 +330,8 @@ type print_std = StdOut | StdErr
 
 type 'v print_arg =
   | PrintString of string
-  | PrintName of 'v Pos.marked
-  | PrintAlias of 'v Pos.marked
+  | PrintName of 'v
+  | PrintAlias of 'v
   | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
   | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
@@ -345,7 +347,7 @@ type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
   | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
-  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v Pos.marked
+  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -363,27 +365,27 @@ type ('v, 'e) instruction =
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked * 'v Pos.marked list
+  | ComputeTarget of string Pos.marked * 'v list
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
-      'v Pos.marked
-      * 'v Pos.marked list
+      'v
+      * 'v list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Iterate_values of
-      'v Pos.marked
+      'v
       * ('v m_expression * 'v m_expression * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
-      'v Pos.marked list
-      * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      'v list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
-      * ('v Pos.marked * 'v m_expression) list
+      * ('v * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
-      ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
-      * ('v Pos.marked * 'v m_expression) option
+      ('v * 'v * 'v m_expression) option
+      * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option

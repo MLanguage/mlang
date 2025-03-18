@@ -49,7 +49,7 @@ val parse_int : Lexing.position * Lexing.position -> string -> int
 val parse_literal : Lexing.position * Lexing.position -> string -> Com.literal
 
 val parse_atom :
-  Lexing.position * Lexing.position -> string -> Com.var_name Com.atom
+  Lexing.position * Lexing.position -> string -> Com.m_var_name Com.atom
 
 val parse_function_name : string Pos.marked -> Com.func Pos.marked
 

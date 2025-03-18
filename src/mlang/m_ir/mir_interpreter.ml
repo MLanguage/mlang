@@ -309,7 +309,7 @@ struct
     match idx with
     | Undefined -> Undefined
     | Number f ->
-        let var, _vi = get_var ctx (Pos.unmark var) in
+        let var, _vi = get_var ctx var in
         let idx_f = roundf f in
         let sz = Com.Var.size var in
         if N.(idx_f >=. N.of_int (Int64.of_int sz)) then Undefined
@@ -500,7 +500,7 @@ struct
             | None -> Undefined
             | Some v ->
                 let idx = evaluate_expr ctx e1 in
-                get_var_tab ctx (Pos.same_pos_as v m_acc) idx)
+                get_var_tab ctx v idx)
         | Var access -> get_access_value ctx access 0
         | FuncCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx arg in
@@ -689,7 +689,7 @@ struct
             | None -> set_var_value ctx vi vexpr
             | Some ei -> set_var_value_tab ctx vi ei vexpr)
         | None -> ())
-    | Com.Affectation (SingleFormula (EventFieldRef (idx, _, j, m_var)), _) -> (
+    | Com.Affectation (SingleFormula (EventFieldRef (idx, _, j, var)), _) -> (
         let new_idx = evaluate_expr ctx idx in
         match new_idx with
         | Number z when N.(z >=. zero ()) -> (
@@ -697,7 +697,7 @@ struct
             let events = List.hd ctx.ctx_events in
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
-              | Com.RefVar _ -> events.(i).(j) <- Com.RefVar (Pos.unmark m_var)
+              | Com.RefVar _ -> events.(i).(j) <- Com.RefVar var
               | Com.Numeric _ -> ())
         | _ -> ())
     | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
@@ -724,8 +724,7 @@ struct
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
         let rec set_args n = function
           | [] -> ()
-          | m_a :: al' ->
-              let v_a = Pos.unmark m_a in
+          | v_a :: al' ->
               let a = get_var ctx v_a in
               ctx.ctx_ref.(ctx.ctx_ref_org + n) <- (v_a, a);
               set_args (n + 1) al'
@@ -766,10 +765,10 @@ struct
           (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
             | PrintString s -> pr_raw ctx_pr s
-            | PrintName (var, _) ->
+            | PrintName var ->
                 let var, _ = get_var ctx var in
                 pr_raw ctx_pr (Pos.unmark var.name)
-            | PrintAlias (var, _) ->
+            | PrintAlias var ->
                 let var, _ = get_var ctx var in
                 pr_raw ctx_pr (Com.Var.alias_str var)
             | PrintConcName (m_vn, m_if, i) -> (
@@ -836,13 +835,12 @@ struct
         | Com.StdOut -> ()
         | Com.StdErr -> Format.pp_print_flush Format.err_formatter ()
       end
-    | Com.Iterate ((m_var : Com.Var.t Pos.marked), vars, var_params, stmts) ->
-        let var = Pos.unmark m_var in
+    | Com.Iterate ((var : Com.Var.t), vars, var_params, stmts) ->
         let var_i =
           match var.loc with LocRef (_, i) -> i | _ -> assert false
         in
         List.iter
-          (fun (v, _) ->
+          (fun v ->
             ctx.ctx_ref.(ctx.ctx_ref_org + var_i) <- (var, get_var ctx v);
             evaluate_stmts canBlock ctx stmts)
           vars;
@@ -861,9 +859,7 @@ struct
             in
             Com.CatVar.Map.iter eval vcs)
           var_params
-    | Com.Iterate_values ((m_var : Com.Var.t Pos.marked), var_intervals, stmts)
-      ->
-        let var = Pos.unmark m_var in
+    | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) ->
         let var_i =
           match var.loc with LocTmp (_, i) -> i | _ -> assert false
         in
@@ -900,8 +896,8 @@ struct
     | Com.Restore (vars, var_params, evts, evtfs, stmts) ->
         let backup_vars =
           List.fold_left
-            (fun backup_vars (m_v : Com.Var.t Pos.marked) ->
-              let v, vi = m_v |> Pos.unmark |> get_var ctx in
+            (fun backup_vars (v : Com.Var.t) ->
+              let v, vi = get_var ctx v in
               let rec aux backup_vars i =
                 if i = Com.Var.size v then backup_vars
                 else
@@ -913,8 +909,7 @@ struct
         in
         let backup_vars =
           List.fold_left
-            (fun backup_vars ((m_var : Com.Var.t Pos.marked), vcs, expr) ->
-              let var = Pos.unmark m_var in
+            (fun backup_vars ((var : Com.Var.t), vcs, expr) ->
               let var_i =
                 match var.loc with LocRef (_, i) -> i | _ -> assert false
               in
@@ -957,8 +952,7 @@ struct
         in
         let backup_evts =
           List.fold_left
-            (fun backup_evts ((m_var : Com.Var.t Pos.marked), expr) ->
-              let var = Pos.unmark m_var in
+            (fun backup_evts ((var : Com.Var.t), expr) ->
               let var_i =
                 match var.loc with LocTmp (_, i) -> i | _ -> assert false
               in
@@ -1027,8 +1021,7 @@ struct
         in
         let events =
           match filter with
-          | Some (m_var, expr) ->
-              let var = Pos.unmark m_var in
+          | Some (var, expr) ->
               let var_i =
                 match var.loc with LocTmp (_, i) -> i | _ -> assert false
               in
@@ -1057,12 +1050,10 @@ struct
         in
         ctx.ctx_events <- events :: ctx.ctx_events;
         (match sort with
-        | Some (m_var0, m_var1, expr) ->
-            let var0 = Pos.unmark m_var0 in
+        | Some (var0, var1, expr) ->
             let var0_i =
               match var0.loc with LocTmp (_, i) -> i | _ -> assert false
             in
-            let var1 = Pos.unmark m_var1 in
             let var1_i =
               match var1.loc with LocTmp (_, i) -> i | _ -> assert false
             in

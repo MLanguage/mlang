@@ -80,81 +80,74 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
   { prog with prog_functions; prog_targets }
 
 let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
-  let prog_vars = prog.prog_vars in
-  let prog_vars =
+  let tgv_dict =
+    let fold _ v set =
+      if Com.Var.is_tgv v then Com.Var.Set.add v set else set
+    in
+    IntMap.fold fold prog.prog_dict Com.Var.Set.empty
+  in
+  let tgv_dict =
     let incr_cpt cat cpt =
       let i = Com.CatVar.Map.find cat cpt in
       let cpt = Com.CatVar.Map.add cat (i + 1) cpt in
       (cpt, i)
     in
     let cat_cpt = Com.CatVar.Map.map (fun _ -> 0) prog.prog_var_cats in
-    let prog_vars, _ =
-      StrMap.fold
-        (fun vn (var : Com.Var.t) (res, cpt) ->
-          let tgv = Com.Var.tgv var in
-          let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
-          let cpt, i = incr_cpt tgv.cat cpt in
-          let var = Com.Var.set_loc_tgv_cat var dcat i in
-          let res = StrMap.add vn var res in
-          (res, cpt))
-        prog_vars (StrMap.empty, cat_cpt)
-    in
-    prog_vars
+    fst
+    @@ Com.Var.Set.fold
+         (fun (var : Com.Var.t) (res, cpt) ->
+           let tgv = Com.Var.tgv var in
+           let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
+           let cpt, i = incr_cpt tgv.cat cpt in
+           let var = Com.Var.set_loc_tgv_cat var dcat i in
+           let res = Com.Var.Set.add var res in
+           (res, cpt))
+         tgv_dict
+         (Com.Var.Set.empty, cat_cpt)
   in
   let module CatLoc = struct
     type t = Com.CatVar.loc
 
-    let pp fmt (loc : t) =
-      match loc with
-      | Com.CatVar.LocComputed -> Format.fprintf fmt "calculee"
-      | Com.CatVar.LocBase -> Format.fprintf fmt "base"
-      | Com.CatVar.LocInput -> Format.fprintf fmt "saisie"
-
     let compare x y = compare x y
   end in
-  let module CatLocMap = struct
-    include MapExt.Make (CatLoc)
-
-    let _pp ?(sep = ", ") ?(pp_key = CatLoc.pp) ?(assoc = " => ")
-        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-        (map : 'a t) : unit =
-      pp ~sep ~pp_key ~assoc pp_val fmt map
-  end in
+  let module CatLocMap = MapExt.Make (CatLoc) in
   let loc_vars, sz_loc_vars, sz_vars =
-    let fold _ (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
-      let var = Com.Var.set_loc_int var n in
-      let loc_cat =
-        (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
-      in
-      let loc_vars =
-        let upd = function
-          | None -> Some (Com.Var.Set.one var)
-          | Some set -> Some (Com.Var.Set.add var set)
+    let fold (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
+      if Com.Var.is_tgv var then
+        let var = Com.Var.set_loc_int var n in
+        let loc_cat =
+          (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
         in
-        CatLocMap.update loc_cat upd loc_vars
-      in
-      let sz = Com.Var.size var in
-      let sz_loc_vars =
-        let upd = function
-          | None -> Some sz
-          | Some n_loc -> Some (n_loc + sz)
+        let loc_vars =
+          let upd = function
+            | None -> Some (Com.Var.Set.one var)
+            | Some set -> Some (Com.Var.Set.add var set)
+          in
+          CatLocMap.update loc_cat upd loc_vars
         in
-        CatLocMap.update loc_cat upd sz_loc_vars
-      in
-      (loc_vars, sz_loc_vars, n + sz)
+        let sz = Com.Var.size var in
+        let sz_loc_vars =
+          let upd = function
+            | None -> Some sz
+            | Some n_loc -> Some (n_loc + sz)
+          in
+          CatLocMap.update loc_cat upd sz_loc_vars
+        in
+        (loc_vars, sz_loc_vars, n + sz)
+      else (loc_vars, sz_loc_vars, n)
     in
-    StrMap.fold fold prog_vars (CatLocMap.empty, CatLocMap.empty, 0)
+    Com.Var.Set.fold fold tgv_dict (CatLocMap.empty, CatLocMap.empty, 0)
   in
   let update_loc (var : Com.Var.t) (vars, n) =
     let var = Com.Var.set_loc_tgv_idx var n in
-    let vars = StrMap.add (Com.Var.name_str var) var vars in
+    let vars = Com.Var.Set.add var vars in
     (vars, n + Com.Var.size var)
   in
-  let prog_vars =
+  let tgv_dict =
     CatLocMap.fold
-      (fun _loc_cat vars prog_vars ->
-        (prog_vars, 0) |> Com.Var.Set.fold update_loc vars |> fst)
-      loc_vars StrMap.empty
+      (fun _loc_cat vars dict ->
+        (dict, 0) |> Com.Var.Set.fold update_loc vars |> fst)
+      loc_vars Com.Var.Set.empty
   in
   let nb_loc loc_cat =
     match CatLocMap.find_opt loc_cat loc_vars with
@@ -166,13 +159,18 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
     | Some sz -> sz
     | None -> 0
   in
+  let prog_dict =
+    let fold (v : Com.Var.t) res = IntMap.add v.id v res in
+    Com.Var.Set.fold fold tgv_dict prog.prog_dict
+  in
+  let prog = { prog with prog_dict } in
   let stats =
     Mir.
       {
         nb_calculated = nb_loc Com.CatVar.LocComputed;
         nb_input = nb_loc Com.CatVar.LocInput;
         nb_base = nb_loc Com.CatVar.LocBase;
-        nb_vars = StrMap.cardinal prog_vars;
+        nb_vars = StrMap.cardinal prog.prog_vars;
         sz_calculated = sz_loc Com.CatVar.LocComputed;
         sz_input = sz_loc Com.CatVar.LocInput;
         sz_base = sz_loc Com.CatVar.LocBase;
@@ -185,7 +183,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
         table_map = IntMap.empty;
       }
   in
-  ({ prog with prog_vars }, stats)
+  (prog, stats)
 
 let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
@@ -459,13 +457,13 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
 (** {2 General translation context} *)
 
 let get_var (var_data : Com.Var.t StrMap.t) (name : string Pos.marked) :
-    Com.Var.t Pos.marked =
-  Pos.same_pos_as (StrMap.find (Pos.unmark name) var_data) name
+    Com.Var.t =
+  StrMap.find (Pos.unmark name) var_data
 
 (** {2 Translation of expressions} *)
 
 let rec translate_expression (p : Validator.program)
-    (var_data : Com.Var.t StrMap.t) (f : string Com.m_expression) :
+    (var_data : Com.Var.t StrMap.t) (f : string Pos.marked Com.m_expression) :
     Mir.m_expression =
   let open Com in
   let expr =
@@ -479,13 +477,14 @@ let rec translate_expression (p : Validator.program)
               | VarValue (access, pos) ->
                   let access' =
                     match access with
-                    | VarAccess v -> VarAccess (StrMap.find v var_data)
+                    | VarAccess m_v ->
+                        let v' = StrMap.find (Pos.unmark m_v) var_data in
+                        VarAccess v'
                     | TabAccess (m_v, m_i) ->
-                        let v, v_pos = m_v in
-                        let v' = StrMap.find v var_data in
+                        let v' = StrMap.find (Pos.unmark m_v) var_data in
                         (* faux !!! *)
                         let m_i' = translate_expression p var_data m_i in
-                        TabAccess ((v', v_pos), m_i')
+                        TabAccess (v', m_i')
                     | ConcAccess (m_vn, m_if, i) ->
                         let i' = translate_expression p var_data i in
                         ConcAccess (m_vn, m_if, i')
@@ -496,7 +495,7 @@ let rec translate_expression (p : Validator.program)
                   in
                   VarValue (access', pos)
               | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
-            (values : string set_value list)
+            (values : string Pos.marked set_value list)
         in
         TestInSet (positive, new_e, new_set_values)
     | Comparison (op, e1, e2) ->
@@ -522,9 +521,9 @@ let rec translate_expression (p : Validator.program)
     | Index ((access, pos), idx) ->
         let access', pos' =
           match access with
-          | VarAccess t ->
-              let t_var, t_pos = get_var var_data (t, pos) in
-              (VarAccess t_var, t_pos)
+          | VarAccess m_v ->
+              let v' = get_var var_data m_v in
+              (VarAccess v', pos)
           | TabAccess _ -> assert false
           | ConcAccess (m_vn, m_if, i) ->
               let i' = translate_expression p var_data i in
@@ -552,13 +551,11 @@ let rec translate_expression (p : Validator.program)
     | Var access ->
         let access' =
           match access with
-          | VarAccess v ->
-              let m_v = get_var var_data (Pos.same_pos_as v f) in
-              VarAccess (Pos.unmark m_v)
+          | VarAccess m_v -> VarAccess (get_var var_data m_v)
           | TabAccess (m_v, m_i) ->
-              let m_v' = get_var var_data m_v in
+              let v' = get_var var_data m_v in
               let m_i' = translate_expression p var_data m_i in
-              TabAccess (m_v', m_i')
+              TabAccess (v', m_i')
           | ConcAccess (m_vn, m_if, i) ->
               let i' = translate_expression p var_data i in
               ConcAccess (m_vn, m_if, i')
@@ -571,9 +568,10 @@ let rec translate_expression (p : Validator.program)
     | NbCategory cs -> NbCategory (Validator.mast_to_catvars cs p.prog_var_cats)
     | Attribut ((access, pos), a) -> (
         match access with
-        | VarAccess v_name -> (
-            let var = StrMap.find v_name var_data in
-            if Com.Var.is_ref var then Attribut ((VarAccess var, pos), a)
+        | VarAccess m_v -> (
+            let var = StrMap.find (Pos.unmark m_v) var_data in
+            if Com.Var.is_ref var then
+              Attribut (Pos.same_pos_as (VarAccess var) m_v, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
@@ -592,9 +590,10 @@ let rec translate_expression (p : Validator.program)
             Attribut ((FieldAccess (e', f, i), pos), a))
     | Size (access, pos) -> (
         match access with
-        | VarAccess v_name ->
-            let var = StrMap.find v_name var_data in
-            if Com.Var.is_ref var then Size (VarAccess var, pos)
+        | VarAccess m_v ->
+            let var = StrMap.find (Pos.unmark m_v) var_data in
+            if Com.Var.is_ref var then
+              Size (Pos.same_pos_as (VarAccess var) m_v)
             else Literal (Float (float @@ Com.Var.size var))
         | TabAccess _ -> Literal (Float 1.0)
         | ConcAccess (m_vn, m_if, i) ->
@@ -625,13 +624,13 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
               let m_access' =
                 let access, a_pos = m_access in
                 match access with
-                | VarAccess v ->
-                    let v', v_pos' = get_var var_data (v, a_pos) in
-                    (Com.VarAccess v', v_pos')
+                | VarAccess m_v ->
+                    let v' = get_var var_data m_v in
+                    (Com.VarAccess v', a_pos)
                 | TabAccess (m_v, m_i) ->
-                    let m_v' = get_var var_data m_v in
+                    let v' = get_var var_data m_v in
                     let m_i' = translate_expression p var_data m_i in
-                    (Com.TabAccess (m_v', m_i'), a_pos)
+                    (Com.TabAccess (v', m_i'), a_pos)
                 | ConcAccess (m_vn, m_if, i) ->
                     let i' = translate_expression p var_data i in
                     (Com.ConcAccess (m_vn, m_if, i'), a_pos)
@@ -643,10 +642,10 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
               let idx' = Option.map (translate_expression p var_data) idx in
               let e' = translate_expression p var_data e in
               Com.VarDecl (m_access', idx', e')
-          | EventFieldRef (idx, f, _, v) ->
+          | EventFieldRef (idx, f, _, m_v) ->
               let idx' = translate_expression p var_data idx in
               let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-              let v' = get_var var_data v in
+              let v' = get_var var_data m_v in
               Com.EventFieldRef (idx', f, i, v')
         in
         let m_form = (Com.SingleFormula decl', pos) in
@@ -684,8 +683,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
                    | Com.PrintName v -> (
                        match StrMap.find_opt (Pos.unmark v) var_data with
                        | Some var ->
-                           if Com.Var.is_ref var then
-                             Com.PrintName (Pos.same_pos_as var v)
+                           if Com.Var.is_ref var then Com.PrintName var
                            else Com.PrintString (Pos.unmark var.name)
                        | _ ->
                            let msg =
@@ -695,8 +693,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
                    | Com.PrintAlias v -> (
                        match StrMap.find_opt (Pos.unmark v) var_data with
                        | Some var ->
-                           if Com.Var.is_ref var then
-                             Com.PrintAlias (Pos.same_pos_as var v)
+                           if Com.Var.is_ref var then Com.PrintAlias var
                            else Com.PrintString (Com.Var.alias_str var)
                        | _ ->
                            let msg =
@@ -744,12 +741,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
         | _ -> ());
         let var = Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth in
         let var_data = StrMap.add var_name var var_data in
-        let vars' =
-          List.map
-            (fun vn ->
-              Pos.same_pos_as (StrMap.find (Pos.unmark vn) var_data) vn)
-            vars
-        in
+        let vars' = List.map (get_var var_data) vars in
         let var_params' =
           List.map
             (fun (vcats, expr) ->
@@ -761,8 +753,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
         let prog_it =
           translate_prog p var_data (it_depth + 1) itval_depth instrs
         in
-        let m_var = Pos.same_pos_as var vn in
-        aux ((Com.Iterate (m_var, vars', var_params', prog_it), pos) :: res) il
+        aux ((Com.Iterate (var, vars', var_params', prog_it), pos) :: res) il
     | (Com.Iterate_values (vn, var_intervals, instrs), pos) :: il ->
         let var_pos = Pos.get vn in
         let var_name = Pos.unmark vn in
@@ -791,44 +782,31 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
         let prog_it =
           translate_prog p var_data it_depth (itval_depth + 1) instrs
         in
-        let m_var = Pos.same_pos_as var vn in
-        aux
-          ((Com.Iterate_values (m_var, var_intervals', prog_it), pos) :: res)
-          il
+        aux ((Com.Iterate_values (var, var_intervals', prog_it), pos) :: res) il
     | (Com.Restore (vars, var_params, evts, evtfs, instrs), pos) :: il ->
-        let vars' =
-          List.map
-            (fun vn ->
-              Pos.same_pos_as (StrMap.find (Pos.unmark vn) var_data) vn)
-            vars
-        in
+        let vars' = List.map (get_var var_data) vars in
         let var_params' =
           List.map
             (fun (vn, vcats, expr) ->
-              let var_pos = Pos.get vn in
               let var_name = Pos.unmark vn in
-              let var =
-                Com.Var.new_ref ~name:(var_name, var_pos) ~loc_int:it_depth
-              in
+              let var = Com.Var.new_ref ~name:vn ~loc_int:it_depth in
               let var_data = StrMap.add var_name var var_data in
               let catSet = Validator.mast_to_catvars vcats p.prog_var_cats in
               let mir_expr = translate_expression p var_data expr in
-              (Pos.mark var var_pos, catSet, mir_expr))
+              (var, catSet, mir_expr))
             var_params
         in
         let evts' = List.map (translate_expression p var_data) evts in
         let evtfs' =
           List.map
             (fun (vn, expr) ->
-              let var_pos = Pos.get vn in
               let var_name = Pos.unmark vn in
               let var =
-                Com.Var.new_temp ~name:(var_name, var_pos) ~is_table:None
-                  ~loc_int:itval_depth
+                Com.Var.new_temp ~name:vn ~is_table:None ~loc_int:itval_depth
               in
               let var_data = StrMap.add var_name var var_data in
               let mir_expr = translate_expression p var_data expr in
-              (Pos.mark var var_pos, mir_expr))
+              (var, mir_expr))
             evtfs
         in
         let prog_rest = translate_prog p var_data it_depth itval_depth instrs in
@@ -840,7 +818,6 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
         let sort', itval_depth' =
           match sort with
           | Some (var0, var1, expr) ->
-              let var0_pos = Pos.get var0 in
               let var0_name = Pos.unmark var0 in
               (match StrMap.find_opt var0_name var_data with
               | Some v ->
@@ -851,10 +828,8 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
                   Errors.raise_spanned_error msg pos
               | _ -> ());
               let var0' =
-                Com.Var.new_temp ~name:(var0_name, var0_pos) ~is_table:None
-                  ~loc_int:itval_depth
+                Com.Var.new_temp ~name:var0 ~is_table:None ~loc_int:itval_depth
               in
-              let var1_pos = Pos.get var1 in
               let var1_name = Pos.unmark var1 in
               (match StrMap.find_opt var1_name var_data with
               | Some v ->
@@ -865,23 +840,20 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
                   Errors.raise_spanned_error msg pos
               | _ -> ());
               let var1' =
-                Com.Var.new_temp ~name:(var1_name, var1_pos) ~is_table:None
+                Com.Var.new_temp ~name:var1 ~is_table:None
                   ~loc_int:(itval_depth + 1)
               in
               let var_data =
                 var_data |> StrMap.add var0_name var0'
                 |> StrMap.add var1_name var1'
               in
-              let m_var0 = Pos.same_pos_as var0' var0 in
-              let m_var1 = Pos.same_pos_as var1' var1 in
               let expr' = translate_expression p var_data expr in
-              (Some (m_var0, m_var1, expr'), itval_depth + 2)
+              (Some (var0', var1', expr'), itval_depth + 2)
           | None -> (None, itval_depth)
         in
         let filter', itval_depth' =
           match filter with
           | Some (var, expr) ->
-              let var_pos = Pos.get var in
               let var_name = Pos.unmark var in
               (match StrMap.find_opt var_name var_data with
               | Some v ->
@@ -892,13 +864,11 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t StrMap.t)
                   Errors.raise_spanned_error msg pos
               | _ -> ());
               let var' =
-                Com.Var.new_temp ~name:(var_name, var_pos) ~is_table:None
-                  ~loc_int:itval_depth
+                Com.Var.new_temp ~name:var ~is_table:None ~loc_int:itval_depth
               in
               let var_data = StrMap.add var_name var' var_data in
-              let m_var = Pos.same_pos_as var' var in
               let expr' = translate_expression p var_data expr in
-              (Some (m_var, expr'), max itval_depth' (itval_depth + 1))
+              (Some (var', expr'), max itval_depth' (itval_depth + 1))
           | None -> (None, itval_depth')
         in
         let add' = Option.map (translate_expression p var_data) add in
@@ -1099,11 +1069,28 @@ let complete_tables (p : Mir.program) : Mir.program =
       table_map = map;
     }
   in
-  { p with program_stats }
+  let program_targets =
+    let map_target t =
+      let map_var v =
+        if Com.Var.is_tgv v then StrMap.find (Com.Var.name_str v) p.program_vars
+        else v
+      in
+      let target_prog =
+        List.map (Com.m_instr_map_var map_var Fun.id) t.Com.target_prog
+      in
+      { t with target_prog }
+    in
+    StrMap.map map_target p.program_targets
+  in
+  { p with program_targets; program_stats }
 
 let translate (p : Validator.program) : Mir.program =
   let p, program_stats =
     p |> complete_vars_stack |> complete_vars |> complete_stats
+  in
+  let program_vars, program_alias =
+    let map id = IntMap.find id p.prog_dict in
+    (StrMap.map map p.prog_vars, StrMap.map map p.prog_alias)
   in
   let program_rules =
     let map_rule (rule : Validator.rule) =
@@ -1126,8 +1113,8 @@ let translate (p : Validator.program) : Mir.program =
     in
     StrMap.map map_chainings p.prog_chainings
   in
-  let program_functions = get_targets true p p.prog_vars p.prog_functions in
-  let program_targets = get_targets false p p.prog_vars p.prog_targets in
+  let program_functions = get_targets true p program_vars p.prog_functions in
+  let program_targets = get_targets false p program_vars p.prog_targets in
   let mir_program =
     Mir.
       {
@@ -1136,8 +1123,8 @@ let translate (p : Validator.program) : Mir.program =
         program_var_categories = p.prog_var_cats;
         program_rule_domains = p.prog_rdoms;
         program_verif_domains = p.prog_vdoms;
-        program_vars = p.prog_vars;
-        program_alias = p.prog_alias;
+        program_vars;
+        program_alias;
         program_event_fields = p.prog_event_fields;
         program_event_field_idxs = p.prog_event_field_idxs;
         program_rules;
@@ -1150,4 +1137,5 @@ let translate (p : Validator.program) : Mir.program =
         program_stats;
       }
   in
-  mir_program |> complete_tables
+  mir_program
+(*|> complete_tables*)

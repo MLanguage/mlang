@@ -27,8 +27,8 @@ let format_variable_name fmt (v : string) = Format.fprintf fmt "%s" v
 let format_variable_generic_name fmt (v : Com.var_name_generic) =
   Format.fprintf fmt "%s" v.base
 
-let format_variable fmt (v : Com.var_name) =
-  match v with
+let format_variable fmt (v : Com.m_var_name) =
+  match Pos.unmark v with
   | Com.Normal v -> format_variable_name fmt v
   | Com.Generic v -> format_variable_generic_name fmt v
 

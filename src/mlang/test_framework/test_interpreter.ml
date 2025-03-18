@@ -49,16 +49,15 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   in
   let eventsList rappels =
     let from_var vn =
-      let name =
-        match StrMap.find_opt vn program.program_alias with
-        | Some m_name -> Pos.unmark m_name
-        | None -> vn
-      in
-      match StrMap.find_opt name program.program_vars with
+      match StrMap.find_opt vn program.program_alias with
       | Some var -> Com.RefVar var
-      | None ->
-          Cli.error_print "Variable inconnue: %s" vn;
-          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+      | None -> (
+          match StrMap.find_opt vn program.program_vars with
+          | Some var -> Com.RefVar var
+          | None ->
+              Cli.error_print "Variable inconnue: %s" vn;
+              let msg = "Fichier de test incorrect" in
+              raise (Errors.StructuredError (msg, [], None)))
     in
     let fromDirection = function
       | "R" -> Com.Numeric (Com.Float 0.0)

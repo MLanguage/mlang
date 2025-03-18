@@ -87,9 +87,9 @@ let parse_literal sloc (s : string) : Com.literal =
   try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_atom sloc (s : string) : Com.var_name Com.atom =
+let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
-  with Failure _ -> Com.AtomVar (parse_variable sloc s)
+  with Failure _ -> Com.AtomVar (parse_variable sloc s, mk_position sloc)
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 

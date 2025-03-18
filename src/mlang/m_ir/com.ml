@@ -230,6 +230,8 @@ module Var = struct
     in
     { v with loc }
 
+  let is_tgv v = match v.scope with Tgv _ -> true | _ -> false
+
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
   let is_ref v = v.scope = Ref
@@ -297,7 +299,7 @@ module Var = struct
 
   let pp_var = pp
 
-  let compare_var v0 v1 = Int.compare v0.id v1.id
+  let compare_var v0 v1 = compare v0 v1
 
   module Set = struct
     include SetExt.Make (struct
@@ -418,7 +420,7 @@ type m_var_name = var_name Pos.marked
 
 type 'v access =
   | VarAccess of 'v
-  | TabAccess of 'v Pos.marked * 'v m_expression
+  | TabAccess of 'v * 'v m_expression
   | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
   | FieldAccess of 'v m_expression * string Pos.marked * int
 
@@ -534,8 +536,8 @@ type print_std = StdOut | StdErr
 
 type 'v print_arg =
   | PrintString of string
-  | PrintName of 'v Pos.marked
-  | PrintAlias of 'v Pos.marked
+  | PrintName of 'v
+  | PrintAlias of 'v
   | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
   | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
   | PrintEventName of 'v m_expression * string Pos.marked * int
@@ -547,7 +549,7 @@ type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
   | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
-  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v Pos.marked
+  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
 
 type 'v formula =
   | SingleFormula of 'v formula_decl
@@ -565,27 +567,27 @@ type ('v, 'e) instruction =
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
   | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked * 'v Pos.marked list
+  | ComputeTarget of string Pos.marked * 'v list
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
-      'v Pos.marked
-      * 'v Pos.marked list
+      'v
+      * 'v list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Iterate_values of
-      'v Pos.marked
+      'v
       * ('v m_expression * 'v m_expression * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
-      'v Pos.marked list
-      * ('v Pos.marked * Pos.t CatVar.Map.t * 'v m_expression) list
+      'v list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
-      * ('v Pos.marked * 'v m_expression) list
+      * ('v * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | ArrangeEvents of
-      ('v Pos.marked * 'v Pos.marked * 'v m_expression) option
-      * ('v Pos.marked * 'v m_expression) option
+      ('v * 'v * 'v m_expression) option
+      * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
@@ -610,10 +612,10 @@ type ('v, 'e) target = {
 
 let rec access_map_var f = function
   | VarAccess v -> VarAccess (f v)
-  | TabAccess (m_v, m_i) ->
-      let m_v' = Pos.map_under_mark f m_v in
+  | TabAccess (v, m_i) ->
+      let v' = f v in
       let m_i' = m_expr_map_var f m_i in
-      TabAccess (m_v', m_i')
+      TabAccess (v', m_i')
   | ConcAccess (vname, m_ifmt, m_i) ->
       let m_i' = m_expr_map_var f m_i in
       ConcAccess (vname, m_ifmt, m_i')
@@ -705,8 +707,8 @@ and m_expr_map_var f e = Pos.map_under_mark (expr_map_var f) e
 
 let rec print_arg_map_var f = function
   | PrintString s -> PrintString s
-  | PrintName m_v -> PrintName (Pos.map_under_mark f m_v)
-  | PrintAlias m_v -> PrintAlias (Pos.map_under_mark f m_v)
+  | PrintName v -> PrintName (f v)
+  | PrintAlias v -> PrintAlias (f v)
   | PrintConcName (m_vn, m_if, m_e0) ->
       let m_e0' = m_expr_map_var f m_e0 in
       PrintConcName (m_vn, m_if, m_e0')
@@ -731,10 +733,10 @@ and formula_decl_map_var f = function
       let m_e0_opt' = Option.map (m_expr_map_var f) m_e0_opt in
       let m_e1' = m_expr_map_var f m_e1 in
       VarDecl (m_access', m_e0_opt', m_e1')
-  | EventFieldRef (m_e0, m_if, id, m_v) ->
+  | EventFieldRef (m_e0, m_if, id, v) ->
       let m_e0' = m_expr_map_var f m_e0 in
-      let m_v' = Pos.map_under_mark f m_v in
-      EventFieldRef (m_e0', m_if, id, m_v')
+      let v' = f v in
+      EventFieldRef (m_e0', m_if, id, v')
 
 and formula_map_var f = function
   | SingleFormula fd -> SingleFormula (formula_decl_map_var f fd)
@@ -765,7 +767,7 @@ and instr_map_var f g = function
       let m_e0' = m_expr_map_var f m_e0 in
       ComputeVerifs (m_sl, m_e0')
   | ComputeTarget (tn, args) ->
-      let args' = List.map (Pos.map_under_mark f) args in
+      let args' = List.map f args in
       ComputeTarget (tn, args')
   | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
   | Print (pr_std, pr_args) ->
@@ -773,17 +775,17 @@ and instr_map_var f g = function
         List.map (Pos.map_under_mark (print_arg_map_var f)) pr_args
       in
       Print (pr_std, pr_args')
-  | Iterate (m_v, m_vl, cvml, m_il) ->
-      let m_v' = Pos.map_under_mark f m_v in
-      let m_vl' = List.map (Pos.map_under_mark f) m_vl in
+  | Iterate (v, vl, cvml, m_il) ->
+      let v' = f v in
+      let vl' = List.map f vl in
       let cvml' =
         let map (cvm, m_e) = (cvm, m_expr_map_var f m_e) in
         List.map map cvml
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
-      Iterate (m_v', m_vl', cvml', m_il')
-  | Iterate_values (m_v, e3l, m_il) ->
-      let m_v' = Pos.map_under_mark f m_v in
+      Iterate (v', vl', cvml', m_il')
+  | Iterate_values (v, e3l, m_il) ->
+      let v' = f v in
       let e3l' =
         let map (m_e0, m_e1, m_e2) =
           let m_e0' = m_expr_map_var f m_e0 in
@@ -794,43 +796,43 @@ and instr_map_var f g = function
         List.map map e3l
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
-      Iterate_values (m_v', e3l', m_il')
-  | Restore (m_vl, cvml, el, vel, m_il) ->
-      let m_vl' = List.map (Pos.map_under_mark f) m_vl in
+      Iterate_values (v', e3l', m_il')
+  | Restore (vl, cvml, el, vel, m_il) ->
+      let vl' = List.map f vl in
       let cvml' =
-        let map (m_v, cvm, m_e0) =
-          let m_v' = Pos.map_under_mark f m_v in
+        let map (v, cvm, m_e0) =
+          let v' = f v in
           let m_e0' = m_expr_map_var f m_e0 in
-          (m_v', cvm, m_e0')
+          (v', cvm, m_e0')
         in
         List.map map cvml
       in
       let el' = List.map (m_expr_map_var f) el in
       let vel' =
-        let map (m_v, m_e0) =
-          let m_v' = Pos.map_under_mark f m_v in
+        let map (v, m_e0) =
+          let v' = f v in
           let m_e0' = m_expr_map_var f m_e0 in
-          (m_v', m_e0')
+          (v', m_e0')
         in
         List.map map vel
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
-      Restore (m_vl', cvml', el', vel', m_il')
+      Restore (vl', cvml', el', vel', m_il')
   | ArrangeEvents (vve_opt, ve_opt, e_opt, m_il) ->
       let vve_opt' =
-        let map (m_v0, m_v1, m_e0) =
-          let m_v0' = Pos.map_under_mark f m_v0 in
-          let m_v1' = Pos.map_under_mark f m_v1 in
+        let map (v0, v1, m_e0) =
+          let v0' = f v0 in
+          let v1' = f v1 in
           let m_e0' = m_expr_map_var f m_e0 in
-          (m_v0', m_v1', m_e0')
+          (v0', v1', m_e0')
         in
         Option.map map vve_opt
       in
       let ve_opt' =
-        let map (m_v, m_e0) =
-          let m_v' = Pos.map_under_mark f m_v in
+        let map (v, m_e0) =
+          let v' = f v in
           let m_e0' = m_expr_map_var f m_e0 in
-          (m_v', m_e0')
+          (v', m_e0')
         in
         Option.map map ve_opt
       in
@@ -929,9 +931,8 @@ let format_comp_op fmt op =
 
 let format_access form_var form_expr fmt = function
   | VarAccess v -> form_var fmt v
-  | TabAccess (m_v, m_i) ->
-      Format.fprintf fmt "%a[%a]" form_var (Pos.unmark m_v) form_expr
-        (Pos.unmark m_i)
+  | TabAccess (v, m_i) ->
+      Format.fprintf fmt "%a[%a]" form_var v form_expr (Pos.unmark m_i)
   | ConcAccess (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "%s{%s, %a}"
         (get_var_name (Pos.unmark m_vn))
@@ -1026,8 +1027,8 @@ let format_print_arg form_var fmt =
   let form_expr = format_expression form_var in
   function
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
-  | PrintName v -> Format.fprintf fmt "nom(%a)" (Pp.unmark form_var) v
-  | PrintAlias v -> Format.fprintf fmt "alias(%a)" (Pp.unmark form_var) v
+  | PrintName v -> Format.fprintf fmt "nom(%a)" form_var v
+  | PrintAlias v -> Format.fprintf fmt "alias(%a)" form_var v
   | PrintConcName (m_vn, m_idxf, idx) ->
       Format.fprintf fmt "nom(%s{%s, %a})"
         (get_var_name (Pos.unmark m_vn))
@@ -1071,7 +1072,7 @@ let format_formula_decl form_var fmt = function
   | EventFieldRef (idx, f, _, v) ->
       Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
         (format_expression form_var)
-        (Pos.unmark idx) (Pos.unmark f) form_var (Pos.unmark v)
+        (Pos.unmark idx) (Pos.unmark f) form_var v
 
 let format_formula form_var fmt f =
   match f with
@@ -1129,8 +1130,7 @@ let rec format_instruction form_var form_err =
           (Pos.unmark l) (Pp.unmark form_expr) expr
     | ComputeTarget (tname, targs) ->
         Format.fprintf fmt "calculer cible %s : avec %a@," (Pos.unmark tname)
-          (Pp.list_comma (Pp.unmark form_var))
-          targs
+          (Pp.list_comma form_var) targs
     | Print (std, args) ->
         let print_cmd =
           match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
@@ -1144,9 +1144,7 @@ let rec format_instruction form_var form_err =
             (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
         in
         Format.fprintf fmt "iterate variable %a@;: %a@;: %a@;: dans (" form_var
-          (Pos.unmark var)
-          (Pp.list_comma (Pp.unmark form_var))
-          vars
+          var (Pp.list_comma form_var) vars
           (Pp.list_space format_var_param)
           var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
@@ -1156,8 +1154,7 @@ let rec format_instruction form_var form_err =
             (Pos.unmark e0) form_expr (Pos.unmark e1) form_expr
             (Pos.unmark step)
         in
-        Format.fprintf fmt "iterate variable %a@;: %a@;: dans (" form_var
-          (Pos.unmark var)
+        Format.fprintf fmt "iterate variable %a@;: %a@;: dans (" form_var var
           (Pp.list_space format_var_intervals)
           var_intervals;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
@@ -1165,14 +1162,12 @@ let rec format_instruction form_var form_err =
         let format_vars fmt = function
           | [] -> ()
           | vars ->
-              Format.fprintf fmt "@;: variables %a"
-                (Pp.list_comma (Pp.unmark form_var))
+              Format.fprintf fmt "@;: variables %a" (Pp.list_comma form_var)
                 vars
         in
         let format_var_param fmt (var, vcs, expr) =
-          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a"
-            (Pp.unmark form_var) var (CatVar.Map.pp_keys ()) vcs form_expr
-            (Pos.unmark expr)
+          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a" form_var
+            var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
         in
         let format_var_params fmt = function
           | [] -> ()
@@ -1190,8 +1185,8 @@ let rec format_instruction form_var form_err =
           | evtfs ->
               List.iter
                 (fun (v, e) ->
-                  Format.fprintf fmt "@;: evenement %a : avec %a"
-                    (Pp.unmark form_var) v (Pp.unmark form_expr) e)
+                  Format.fprintf fmt "@;: evenement %a : avec %a" form_var v
+                    (Pp.unmark form_expr) e)
                 evtfs
         in
         Format.fprintf fmt "restaure%a%a%a%a@;: apres (" format_vars vars
@@ -1201,13 +1196,13 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "arrange_evenements@;:";
         (match s with
         | Some (v0, v1, e) ->
-            Format.fprintf fmt "trier %a,%a : avec %a@;" form_var
-              (Pos.unmark v0) form_var (Pos.unmark v1) form_expr (Pos.unmark e)
+            Format.fprintf fmt "trier %a,%a : avec %a@;" form_var v0 form_var v1
+              form_expr (Pos.unmark e)
         | None -> ());
         (match f with
         | Some (v, e) ->
-            Format.fprintf fmt "filter %a : avec %a@;" form_var (Pos.unmark v)
-              form_expr (Pos.unmark e)
+            Format.fprintf fmt "filter %a : avec %a@;" form_var v form_expr
+              (Pos.unmark e)
         | None -> ());
         (match a with
         | Some e -> Format.fprintf fmt "ajouter %a@;" form_expr (Pos.unmark e)

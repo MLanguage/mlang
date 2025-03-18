@@ -951,13 +951,12 @@ let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
 
 let generate_event_field_ref (dgfip_flags : Dgfip_options.flags)
     (p : Mir.program) (idx_expr : Mir.expression Pos.marked) (field : string)
-    (m_var : Com.Var.t Pos.marked) (oc : Format.formatter) : unit =
+    (var : Com.Var.t) (oc : Format.formatter) : unit =
   if (StrMap.find field p.program_event_fields).is_var then (
     let pr form = Format.fprintf oc form in
     let idx = fresh_c_local "idx" in
     let idx_def = idx ^ "_def" in
     let idx_val = idx ^ "_val" in
-    let var = Pos.unmark m_var in
     let var_info_ptr = VID.gen_info_ptr var in
     pr "@;@[<v 2>{";
     pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -980,8 +979,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       | FieldAccess (i, f, _) ->
           let fn = Pos.unmark f in
           generate_event_field_def dgfip_flags program i fn vidx_opt vexpr oc)
-  | Affectation (SingleFormula (EventFieldRef (idx, f, _, m_var)), _) ->
-      generate_event_field_ref dgfip_flags program idx (Pos.unmark f) m_var oc
+  | Affectation (SingleFormula (EventFieldRef (idx, f, _, var)), _) ->
+      generate_event_field_ref dgfip_flags program idx (Pos.unmark f) var oc
   | Affectation (MultipleFormulaes _, _) -> assert false
   | IfThenElse (cond_expr, iftrue, iffalse) ->
       pr "@;@[<v 2>{";
@@ -1071,10 +1070,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           | PrintString s ->
               pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
                 (str_escape s)
-          | PrintName (var, _) ->
+          | PrintName var ->
               let ptr = VID.gen_info_ptr var in
               pr "@;print_string(%s, %s, %s->name);" print_std pr_ctx ptr
-          | PrintAlias (var, _) ->
+          | PrintAlias var ->
               let ptr = VID.gen_info_ptr var in
               pr "@;print_string(%s, %s, %s->alias);" print_std pr_ctx ptr
           | PrintConcName (m_vn, m_if, i) ->
@@ -1101,7 +1100,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
   | ComputeTarget ((tn, _), targs) ->
       ignore
         (List.fold_left
-           (fun n ((v : Com.Var.t), _) ->
+           (fun n (v : Com.Var.t) ->
              let ref_idx = Format.sprintf "irdata->ref_org + %d" n in
              let ref_name = Format.sprintf "irdata->ref_name[%s]" ref_idx in
              pr "@;%s = \"%s\";" ref_name (Com.Var.name_str v);
@@ -1117,16 +1116,15 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
              n + 1)
            0 targs);
       pr "@;%s(irdata);" tn
-  | Iterate (m_var, vars, var_params, stmts) ->
+  | Iterate (var, vars, var_params, stmts) ->
       let it_name = fresh_c_local "iterate" in
-      let var = Pos.unmark m_var in
       let ref_name = VID.gen_ref_name_ptr var in
       let ref_info = VID.gen_info_ptr var in
       let ref_def = VID.gen_def_ptr var in
       let ref_val = VID.gen_val_ptr var in
       pr "@;%s = \"%s\";" ref_name (Com.Var.name_str var);
       List.iter
-        (fun (v, _) ->
+        (fun v ->
           pr "@;@[<v 2>{";
           pr "@;%s = %s;" ref_info (VID.gen_info_ptr v);
           pr "@;%s = %s;" ref_def (VID.gen_def_ptr v);
@@ -1162,8 +1160,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}")
             vcs)
         var_params
-  | Iterate_values (m_var, var_intervals, stmts) ->
-      let var = Pos.unmark m_var in
+  | Iterate_values (var, var_intervals, stmts) ->
       let itval_def = VID.gen_def var "" in
       let itval_val = VID.gen_val var "" in
       let postfix = fresh_c_local "" in
@@ -1249,9 +1246,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
             nb_events_sav);
       (match filter with
-      | Some (m_var, expr) ->
+      | Some (var, expr) ->
           pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
-          let var = Pos.unmark m_var in
           let ref_def = VID.gen_def var "" in
           let ref_val = VID.gen_val var "" in
           let cond = fresh_c_local "cond" in
@@ -1277,7 +1273,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;irdata->events = %s;" events_tmp;
           pr "@;irdata->nb_events = %s;" cpt_i);
       (match sort with
-      | Some (m_var0, m_var1, expr) ->
+      | Some (var0, var1, expr) ->
           pr "@;/* merge sort */";
           pr "@;@[<v 2>{";
           pr "@;int aBeg = %s;" nb_add;
@@ -1309,10 +1305,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@;int cpt = 0;";
           pr "@;@[<v 2>{";
           (* Comparaison *)
-          let var0 = Pos.unmark m_var0 in
           let ref0_def = VID.gen_def var0 "" in
           let ref0_val = VID.gen_val var0 "" in
-          let var1 = Pos.unmark m_var1 in
           let ref1_def = VID.gen_def var1 "" in
           let ref1_val = VID.gen_val var1 "" in
           let cmp_def = fresh_c_local "cmp_def" in
@@ -1355,14 +1349,12 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       pr "@;T_env_sauvegarde *%s = NULL;" rest_name;
       pr "@;T_env_sauvegarde_evt *%s = NULL;" rest_evt_name;
       List.iter
-        (fun m_v ->
-          let v = Pos.unmark m_v in
+        (fun v ->
           pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name (VID.gen_def_ptr v)
             (VID.gen_val_ptr v) (VID.gen_size v))
         vars;
       List.iter
-        (fun (m_var, vcs, expr) ->
-          let var = Pos.unmark m_var in
+        (fun (var, vcs, expr) ->
           let it_name = fresh_c_local "iterate" in
           Com.CatVar.Map.iter
             (fun vc _ ->
@@ -1414,8 +1406,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}")
         evts;
       List.iter
-        (fun (m_var, expr) ->
-          let var = Pos.unmark m_var in
+        (fun (var, expr) ->
           let idx = fresh_c_local "idx" in
           let ref_def = VID.gen_def var "" in
           let ref_val = VID.gen_val var "" in
