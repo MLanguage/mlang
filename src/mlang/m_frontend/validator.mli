@@ -28,7 +28,7 @@ type rule = {
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
   rule_tmp_vars : Com.Var.t StrMap.t;
-  rule_instrs : Mast.instruction Pos.marked list;
+  rule_instrs : (string Pos.marked, Mast.error_name) Com.m_instruction list;
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
