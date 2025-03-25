@@ -27,8 +27,8 @@ type rule = {
   rule_apps : Pos.t StrMap.t;
   rule_domain : Com.rule_domain;
   rule_chains : Pos.t StrMap.t;
-  rule_tmp_vars : Com.Var.t StrMap.t;
-  rule_instrs : (string Pos.marked, Mast.error_name) Com.m_instruction list;
+  rule_tmp_vars : int Pos.marked StrMap.t;
+  rule_instrs : (int Pos.marked, Mast.error_name) Com.m_instruction list;
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
@@ -47,7 +47,7 @@ type verif = {
   verif_seq : int;
 }
 
-type target = (string Pos.marked, Mast.error_name) Com.target
+type target = (int Pos.marked, Mast.error_name) Com.target
 
 type program = {
   prog_prefix : string;

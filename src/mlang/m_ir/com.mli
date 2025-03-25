@@ -399,9 +399,9 @@ type ('v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
-  target_args : Var.t list;
-  target_result : Var.t option;
-  target_tmp_vars : Var.t StrMap.t;
+  target_args : 'v list;
+  target_result : 'v option;
+  target_tmp_vars : 'v StrMap.t;
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
