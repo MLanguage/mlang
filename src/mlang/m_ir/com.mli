@@ -279,7 +279,6 @@ and 'v expression =
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v m_access * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -346,7 +345,7 @@ type 'v print_arg =
 type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
-  | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
+  | VarDecl of 'v access Pos.marked * 'v m_expression
   | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
 
 type 'v formula =

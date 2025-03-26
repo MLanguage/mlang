@@ -954,21 +954,6 @@ restaurer
 afficher_erreur "2: ";
 calculer cible afficher_evenement : avec EVT;
 afficher_erreur "\n";
-afficher_erreur "\n";
-champ_evenement(EVT, code) reference TNAPCR;
-iterer : variable I : 0 .. taille(TNAPCR) - 1 increment 1 : dans (
-  TNAPCR[I] = I;
-  afficher_erreur nom(TNAPCR) "[" (I) "] = " (TNAPCR[I]) " -- ";
-  afficher_erreur nom(champ_evenement(EVT, code)) "[" (I) "] = " (champ_evenement(EVT, code)[I]) "\n";
-)
-afficher_erreur nom(TNAPCR) "[" (taille(TNAPCR)) "] = " (TNAPCR[taille(TNAPCR)]) " -- ";
-afficher_erreur nom(champ_evenement(EVT, code)) "[" (taille(TNAPCR)) "] = " (champ_evenement(EVT, code)[taille(TNAPCR)]) "\n";
-afficher_erreur "\n";
-iterer : variable I : 0 .. taille(TNAPCR) increment 1 : dans (
-  afficher_erreur "multimax(" (I) ", " nom(TNAPCR) ") = " (multimax(I, TNAPCR)) "\n";
-)
-afficher_erreur "\n";
-afficher_erreur "taille(" nom(TNAPCR) ") = " (taille(TNAPCR)) "\n";
 afficher_erreur "taille(" nom(champ_evenement(EVT, code)) ") = " (taille(champ_evenement(EVT, code))) "\n";
 afficher_erreur "taille(" nom(champ_evenement(1000, code)) ") = " (taille(champ_evenement(1000, code))) "\n";
 afficher_erreur "\n";
@@ -1060,15 +1045,13 @@ iterer : variable TRUC2 : TUTU : dans (
   TRUC{0, TOTO} = 15;
   afficher_erreur nom(TRUC{0, TOTO}) " = " (TRUC{0, TOTO}) "\n";
 )
-TMAJORSE{0, TOTO}[2] = 16;
-afficher_erreur nom(TMAJORSE{0, TOTO}) "[" (2) "] = " (TMAJORSE{0, TOTO}[2]) "\n";
 afficher_erreur indenter(-2) "test_varcons\n\n";
 
 cible test:
 application: iliad;
-#calculer cible test_evenements;
+calculer cible test_evenements;
 calculer cible test_tableaux;
-#calculer cible test_varcons;
+calculer cible test_varcons;
 
 cible enchainement_primitif:
 application: iliad;

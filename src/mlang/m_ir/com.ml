@@ -451,7 +451,6 @@ and 'v expression =
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
   | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Index of 'v m_access * 'v m_expression
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -548,7 +547,7 @@ type 'v print_arg =
 type 'v formula_loop = 'v loop_variables Pos.marked
 
 type 'v formula_decl =
-  | VarDecl of 'v access Pos.marked * 'v m_expression option * 'v m_expression
+  | VarDecl of 'v access Pos.marked * 'v m_expression
   | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
 
 type 'v formula =
@@ -671,10 +670,6 @@ and expr_map_var f = function
       let m_e0' = m_expr_map_var f m_e0 in
       let m_e1' = m_expr_map_var f m_e1 in
       Binop (op, m_e0', m_e1')
-  | Index (m_access, m_idx) ->
-      let m_access' = m_access_map_var f m_access in
-      let m_idx' = m_expr_map_var f m_idx in
-      Index (m_access', m_idx')
   | Conditional (m_e0, m_e1, m_e2_opt) ->
       let m_e0' = m_expr_map_var f m_e0 in
       let m_e1' = m_expr_map_var f m_e1 in
@@ -728,11 +723,10 @@ and formula_loop_map_var f m_lvs =
   Pos.map_under_mark (loop_variables_map_var f) m_lvs
 
 and formula_decl_map_var f = function
-  | VarDecl (m_access, m_e0_opt, m_e1) ->
+  | VarDecl (m_access, m_e1) ->
       let m_access' = m_access_map_var f m_access in
-      let m_e0_opt' = Option.map (m_expr_map_var f) m_e0_opt in
       let m_e1' = m_expr_map_var f m_e1 in
-      VarDecl (m_access', m_e0_opt', m_e1')
+      VarDecl (m_access', m_e1')
   | EventFieldRef (m_e0, m_if, id, v) ->
       let m_e0' = m_expr_map_var f m_e0 in
       let v' = f v in
@@ -984,10 +978,6 @@ let rec format_expression form_var fmt =
         (Pos.unmark op) form_expr (Pos.unmark e2)
   | Unop (op, e) ->
       Format.fprintf fmt "%a %a" format_unop op form_expr (Pos.unmark e)
-  | Index (m_acc, i) ->
-      Format.fprintf fmt "%a[%a]"
-        (format_access form_var form_expr)
-        (Pos.unmark m_acc) form_expr (Pos.unmark i)
   | Conditional (e1, e2, e3) ->
       let pp_sinon fmt e = Format.fprintf fmt " sinon %a" form_expr e in
       Format.fprintf fmt "(si %a alors %a%a finsi)" form_expr (Pos.unmark e1)
@@ -1060,14 +1050,10 @@ let format_print_arg form_var fmt =
           e min max
 
 let format_formula_decl form_var fmt = function
-  | VarDecl (m_access, idx, e) ->
+  | VarDecl (m_access, e) ->
       format_access form_var
         (format_expression form_var)
         fmt (Pos.unmark m_access);
-      (match idx with
-      | Some vi ->
-          Format.fprintf fmt "[%a]" (format_expression form_var) (Pos.unmark vi)
-      | None -> ());
       Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
   | EventFieldRef (idx, f, _, v) ->
       Format.fprintf fmt "champ_evenement(%a,%s) reference %a"

@@ -1077,22 +1077,6 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
       let acc = fold_aux acc e1 env in
       fold_aux acc e2 env
   | Unop (_op, e) -> fold_aux acc e env
-  | Index ((access, _pos), e) -> (
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
-      match access with
-      | VarAccess m_v ->
-          let acc = fold_aux acc e env in
-          fold_var m_v Table env acc
-      | TabAccess _ -> assert false
-      | ConcAccess (_, _, i) -> fold_aux acc i env
-      | FieldAccess (ie, f, _) ->
-          let f_name, f_pos = f in
-          (match StrMap.find_opt f_name env.prog.prog_event_fields with
-          | Some ef when ef.is_var -> ()
-          | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
-          | None -> Err.unknown_event_field f_name f_pos);
-          let acc = fold_aux acc ie env in
-          fold_aux acc e env)
   | Conditional (e1, e2, e3_opt) -> (
       let acc = fold_aux acc e1 env in
       let acc = fold_aux acc e2 env in
@@ -1253,7 +1237,10 @@ let check_variable (var : Com.m_var_name) (idx_mem : var_mem_type)
     (env : var_env) : unit =
   let decl_mem, decl_pos = get_var_mem_type var env in
   match (decl_mem, idx_mem) with
-  | Both, _ | _, Both | Num, Num | Table, Table -> ()
+  | _, Both | Num, Num | Table, Table -> ()
+  | Both, _ -> ()
+  (* | Both, Num -> Err.mixed_variable_used_as_num decl_pos (Pos.get var)
+     | Both, Table -> Err.mixed_variable_used_as_table decl_pos (Pos.get var)*)
   | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get var)
   | Table, Num -> Err.table_used_as_variable decl_pos (Pos.get var)
 
@@ -1354,13 +1341,12 @@ let rec check_instructions (is_rule : bool) (env : var_env)
         match instr with
         | Com.Affectation (f, fpos) -> (
             match f with
-            | Com.SingleFormula (VarDecl (m_a, idx, e)) ->
+            | Com.SingleFormula (VarDecl (m_a, e)) ->
                 let m_a' =
                   let access, apos = m_a in
                   match access with
                   | VarAccess m_v ->
-                      let idx_mem = match idx with None -> Num | _ -> Table in
-                      check_variable m_v idx_mem env;
+                      check_variable m_v Num env;
                       let m_v' = map_var env m_v in
                       Pos.mark (Com.VarAccess m_v') apos
                   | TabAccess (m_v, m_i) ->
@@ -1380,16 +1366,13 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                       (match
                          StrMap.find_opt f_name env.prog.prog_event_fields
                        with
-                      | Some ef when (not ef.is_var) && idx <> None ->
-                          Err.event_field_is_not_a_reference f_name f_pos
                       | Some _ -> ()
                       | None -> Err.unknown_event_field f_name f_pos);
                       let m_i' = map_expr env m_i in
                       Pos.mark (Com.FieldAccess (m_i', f, id)) apos
                 in
-                let idx' = Option.map (map_expr env) idx in
                 let e' = map_expr env e in
-                let f' = Com.SingleFormula (VarDecl (m_a', idx', e')) in
+                let f' = Com.SingleFormula (VarDecl (m_a', e')) in
                 let instr' = Com.Affectation (f', fpos) in
                 aux (env, Pos.mark instr' instr_pos :: res) il
             | Com.SingleFormula (EventFieldRef (m_i, f, iFmt, m_v)) ->
@@ -1400,7 +1383,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                 | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                 | None -> Err.unknown_event_field f_name f_pos);
                 let m_i' = map_expr env m_i in
-                check_variable m_v Both env;
+                check_variable m_v Num env;
                 let m_v' = map_var env m_v in
                 let f' =
                   Com.SingleFormula (EventFieldRef (m_i', f, iFmt, m_v'))
@@ -1487,7 +1470,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   Err.wrong_number_of_args nb_args tpos);
             let targs' =
               let map v =
-                check_variable v Both env;
+                check_variable v Num env;
                 map_var env v
               in
               List.map map targs
@@ -1782,15 +1765,9 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
         match instr with
         | Com.Affectation (f, _) -> (
             match f with
-            | Com.SingleFormula (VarDecl (m_access, idx, e)) -> (
+            | Com.SingleFormula (VarDecl (m_access, e)) -> (
                 let access, access_pos = m_access in
-                let in_vars_index =
-                  match idx with
-                  | Some ei -> inout_expression prog ei
-                  | None -> StrMap.empty
-                in
-                let in_vars_expr = inout_expression prog e in
-                let in_vars_aff = StrMap.union_fst in_vars_index in_vars_expr in
+                let in_vars_aff = inout_expression prog e in
                 match access with
                 | VarAccess m_id ->
                     let m_v =
@@ -2744,7 +2721,7 @@ let eval_expr_verif (prog : program) (verif : verif)
                 false values
             in
             Some (if res = positive then 1.0 else 0.0))
-    | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes | Index _
+    | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     | FuncCallLoop _ | Loop _ | Attribut _ | Size _ ->
         assert false
   in

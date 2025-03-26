@@ -106,7 +106,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
       let no_pos x = (x, Pos.no_pos) in
       let m_access = no_pos (Com.VarAccess (no_pos (Com.Normal name))) in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (VarDecl (m_access, None, no_pos litt)) in
+      let cmd = Com.SingleFormula (VarDecl (m_access, no_pos litt)) in
       no_pos cmd :: l
     else l
   in

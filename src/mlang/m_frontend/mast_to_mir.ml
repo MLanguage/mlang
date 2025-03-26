@@ -252,16 +252,8 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       match instr with
       | Com.Affectation mf -> (
           match Pos.unmark mf with
-          | SingleFormula (VarDecl (m_access, mei_opt, mev)) -> (
-              let nbI, szI, nbRefI, tdata =
-                match mei_opt with
-                | None -> (0, 0, 0, tdata)
-                | Some mei -> aux_expr tdata mei
-              in
-              let nbV, szV, nbRefV, tdata = aux_expr tdata mev in
-              let nb, sz, nbRef =
-                (max nbI nbV, max szI szV, max nbRefI nbRefV)
-              in
+          | SingleFormula (VarDecl (m_access, mev)) -> (
+              let nb, sz, nbRef, tdata = aux_expr tdata mev in
               match Pos.unmark m_access with
               | VarAccess _ -> (nb, sz, nbRef, tdata)
               | TabAccess (_, mi) ->
@@ -421,7 +413,6 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
           (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
-      | Com.Index ((VarAccess _, _), me)
       | Com.Var (TabAccess (_, me))
       | Com.Var (ConcAccess (_, _, me))
       | Com.Var (FieldAccess (me, _, _))
@@ -432,10 +423,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Attribut ((ConcAccess (_, _, me), _), _)
       | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
           aux_expr tdata me
-      | Com.Index ((ConcAccess (_, _, me0), _), me1)
-      | Com.Index ((FieldAccess (me0, _, _), _), me1)
-      | Com.Comparison (_, me0, me1)
-      | Com.Binop (_, me0, me1) ->
+      | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
           let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
           (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)
@@ -470,8 +458,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.NbAnomalies
       | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
           (0, 0, 0, tdata)
-      | Com.Index ((TabAccess _, _), _) | Com.FuncCallLoop _ | Com.Loop _ ->
-          assert false
+      | Com.FuncCallLoop _ | Com.Loop _ -> assert false
     in
     let nb, sz, nbRef, _ =
       let fold tn _ (nb, sz, nbRef, tdata) =
@@ -551,25 +538,6 @@ let rec translate_expression (p : Validator.program)
     | Unop (op, e) ->
         let new_e = translate_expression p var_data e in
         Unop (op, new_e)
-    | Index ((access, pos), idx) ->
-        let access', pos' =
-          match access with
-          | VarAccess m_v ->
-              let v' = get_var var_data m_v in
-              (VarAccess v', pos)
-          | TabAccess _ -> assert false
-          | ConcAccess (m_vn, m_if, i) ->
-              let i' = translate_expression p var_data i in
-              (ConcAccess (m_vn, m_if, i'), pos)
-          | FieldAccess (e, f, _) ->
-              let e' = translate_expression p var_data e in
-              let i_f =
-                (StrMap.find (Pos.unmark f) p.prog_event_fields).index
-              in
-              (FieldAccess (e', f, i_f), pos)
-        in
-        let idx' = translate_expression p var_data idx in
-        Index ((access', pos'), idx')
     | Conditional (e1, e2, e3) ->
         let new_e1 = translate_expression p var_data e1 in
         let new_e2 = translate_expression p var_data e2 in
@@ -653,7 +621,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
     | (Com.Affectation (SingleFormula decl, _), pos) :: il ->
         let decl' =
           match decl with
-          | VarDecl (m_access, idx, e) ->
+          | VarDecl (m_access, e) ->
               let m_access' =
                 let access, a_pos = m_access in
                 match access with
@@ -672,9 +640,8 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
                     let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
                     (Com.FieldAccess (i', f, ef.index), a_pos)
               in
-              let idx' = Option.map (translate_expression p var_data) idx in
               let e' = translate_expression p var_data e in
-              Com.VarDecl (m_access', idx', e')
+              Com.VarDecl (m_access', e')
           | EventFieldRef (idx, f, _, m_v) ->
               let idx' = translate_expression p var_data idx in
               let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in

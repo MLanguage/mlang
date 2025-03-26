@@ -956,30 +956,26 @@ for_formula:
 | FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
 var_access:
-| s = symbol_with_pos {
-    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark s)) s in
-    Pos.same_pos_as (Com.VarAccess m_v) s
+| s = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_v = Pos.map_under_mark (parse_variable $sloc) s in
+    match m_i_opt with
+    | None -> Com.VarAccess m_v
+    | Some m_i -> Com.TabAccess (m_v, m_i)
   }
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
   COMMA idx = with_pos(sum_expression) RBRACE {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
-    (Com.ConcAccess (m_v, idxFmt, idx), mk_position $sloc)
+    Com.ConcAccess (m_v, idxFmt, idx)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
-    (Com.FieldAccess (idx, f, -1), mk_position $sloc)
-  }
-
-lvalue:
-| access = var_access i = with_pos(brackets)? {
-    (access, i)
+    Com.FieldAccess (idx, f, -1)
   }
 
 formula:
-| lval = lvalue EQUALS e = with_pos(expression) {
-    let access, idx = lval in
-    VarDecl (access, idx, e)
+| access = with_pos(var_access) EQUALS e = with_pos(expression) {
+    VarDecl (access, e)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN REFERENCE v = symbol_with_pos {
@@ -1234,23 +1230,19 @@ factor:
 | MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
-| EVENT_FIELD LPAREN idx = with_pos(expression)
-  COMMA field = symbol_with_pos RPAREN i_opt = with_pos(brackets)? {
-    match i_opt with
-    | Some i -> Com.Index ((FieldAccess (idx, field, -1), mk_position $sloc), i)
-    | None -> Var (FieldAccess (idx, field, -1))
+| EVENT_FIELD LPAREN m_idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN {
+    Var (FieldAccess (m_idx, field, -1))
   }
 | v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
-  COMMA idx = with_pos(sum_expression) RBRACE i_opt = with_pos(brackets)? {
+  COMMA idx = with_pos(sum_expression) RBRACE {
     let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
-    match i_opt with
-    | Some i -> Com.Index ((ConcAccess (m_v, idxFmt, idx), mk_position $sloc), i)
-    | None -> Var (ConcAccess (m_v, idxFmt, idx))
+    Var (ConcAccess (m_v, idxFmt, idx))
   }
-| s = symbol_with_pos i = with_pos(brackets) {
+| s = symbol_with_pos m_i = with_pos(brackets) {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark s)) s in
-    Com.Index (Pos.same_pos_as (Com.VarAccess m_v) s, i)
+    Var (TabAccess (m_v, m_i))
   }
 | a = factor_atom {
     match a with
@@ -1290,10 +1282,11 @@ function_call:
 | NB_CATEGORY LPAREN cats = with_pos(var_category_id) RPAREN {
     NbCategory (Com.CatVar.Map.from_string_list cats)
   }
-| ATTRIBUT LPAREN access = var_access COMMA attr = symbol_with_pos RPAREN {
+| ATTRIBUT LPAREN access = with_pos(var_access)
+  COMMA attr = symbol_with_pos RPAREN {
     Attribut (access, attr)
   }
-| SIZE LPAREN access = var_access RPAREN { Size access }
+| SIZE LPAREN access = with_pos(var_access) RPAREN { Size access }
 | NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }

@@ -305,19 +305,6 @@ struct
     | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi)
     | Com.Var.Res -> List.hd ctx.ctx_res
 
-  let get_var_tab ctx var idx =
-    match idx with
-    | Undefined -> Undefined
-    | Number f ->
-        let var, _vi = get_var ctx var in
-        let idx_f = roundf f in
-        let sz = Com.Var.size var in
-        if N.(idx_f >=. N.of_int (Int64.of_int sz)) then Undefined
-        else if N.(idx_f <. N.zero ()) then Number (N.zero ())
-        else
-          let i = Int64.to_int (N.to_int idx_f) in
-          get_var_value ctx var i
-
   exception BlockingError
 
   let get_var_by_name ctx name =
@@ -335,9 +322,9 @@ struct
             in
             searchRef 0)
 
-  let rec get_access_value ctx access (i : int) =
+  let rec get_access_value ctx access =
     match access with
-    | Com.VarAccess v -> get_var_value ctx (fst (get_var ctx v)) i
+    | Com.VarAccess v -> get_var_value ctx (fst (get_var ctx v)) 0
     | Com.ConcAccess (m_vn, m_idxf, idx) -> (
         match evaluate_expr ctx idx with
         | Number z ->
@@ -349,10 +336,20 @@ struct
                   (Pos.unmark m_idxf) zi
               in
               match get_var_by_name ctx name with
-              | Some v -> get_var_value ctx (fst (get_var ctx v)) i
+              | Some v -> get_var_value ctx (fst (get_var ctx v)) 0
               | None -> Undefined
             else Undefined
         | _ -> Undefined)
+    | Com.TabAccess (m_v, m_idx) -> (
+        match evaluate_expr ctx m_idx with
+        | Number z ->
+            let v = fst (get_var ctx m_v) in
+            let zi = Int64.to_int (N.to_int (roundf z)) in
+            let sz = Com.Var.size v in
+            if sz <= zi then Undefined
+            else if zi < 0 then Number (N.zero ())
+            else get_var_value ctx v zi
+        | Undefined -> Undefined)
     | Com.FieldAccess (e, _, j) -> (
         let new_e = evaluate_expr ctx e in
         match new_e with
@@ -362,13 +359,27 @@ struct
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
               | Com.Numeric n -> n
-              | Com.RefVar v -> get_var_value ctx (fst (get_var ctx v)) i
+              | Com.RefVar v -> get_var_value ctx (fst (get_var ctx v)) 0
             else Undefined
         | _ -> Undefined)
 
   and get_access_var ctx access =
     match access with
     | Com.VarAccess v -> Some (fst (get_var ctx v))
+    | Com.TabAccess (m_v, m_i) -> (
+        match evaluate_expr ctx m_i with
+        | Number z ->
+            let v = fst (get_var ctx m_v) in
+            let zi = Int64.to_int (N.to_int (roundf z)) in
+            let sz = Com.Var.size v in
+            if zi < 0 || sz <= zi then None
+            else
+              let name =
+                let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
+                Strings.concat_int (Com.Var.name_str v) iFmt zi
+              in
+              get_var_by_name ctx name
+        | Undefined -> None)
     | Com.ConcAccess (m_vn, m_if, i) -> (
         match evaluate_expr ctx i with
         | Number z ->
@@ -453,7 +464,7 @@ struct
                   let equal_test =
                     match set_value with
                     | Com.VarValue (access, _) ->
-                        let new_v = get_access_value ctx access 0 in
+                        let new_v = get_access_value ctx access in
                         comparison Com.Eq new_e0 new_v
                     | Com.FloatValue i ->
                         let val_i = Number (N.of_float (Pos.unmark i)) in
@@ -495,13 +506,7 @@ struct
             | Undefined -> Undefined)
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
-        | Index (m_acc, e1) -> (
-            match get_access_var ctx (Pos.unmark m_acc) with
-            | None -> Undefined
-            | Some v ->
-                let idx = evaluate_expr ctx e1 in
-                get_var_tab ctx v idx)
-        | Var access -> get_access_value ctx access 0
+        | Var access -> get_access_value ctx access
         | FuncCall ((ArrFunc, _), [ arg ]) -> (
             let new_arg = evaluate_expr ctx arg in
             match new_arg with
@@ -558,12 +563,13 @@ struct
                       | Undefined -> None
                     in
                     let pos = Pos.get arg2 in
-                    let access = (Com.VarAccess var_arg2, pos) in
                     let access_index (i : int) : Int64.t option =
                       cast_to_int
                       @@ evaluate_expr ctx
-                           ( Index
-                               (access, (Literal (Float (float_of_int i)), pos)),
+                           ( Var
+                               (TabAccess
+                                  ( var_arg2,
+                                    (Literal (Float (float_of_int i)), pos) )),
                              pos )
                     in
                     let maxi = ref None in
@@ -681,14 +687,17 @@ struct
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =
     match Pos.unmark stmt with
-    | Com.Affectation (SingleFormula (VarDecl (m_acc, vidx_opt, vexpr)), _) -> (
-        match get_access_var ctx (Pos.unmark m_acc) with
-        | Some v -> (
-            let vi = get_var ctx v in
-            match vidx_opt with
-            | None -> set_var_value ctx vi vexpr
-            | Some ei -> set_var_value_tab ctx vi ei vexpr)
-        | None -> ())
+    | Com.Affectation (SingleFormula (VarDecl (m_acc, vexpr)), _) -> (
+        match Pos.unmark m_acc with
+        | TabAccess (m_v, m_i) ->
+            let vi = get_var ctx m_v in
+            set_var_value_tab ctx vi m_i vexpr
+        | _ -> (
+            match get_access_var ctx (Pos.unmark m_acc) with
+            | Some v ->
+                let vi = get_var ctx v in
+                set_var_value ctx vi vexpr
+            | None -> ()))
     | Com.Affectation (SingleFormula (EventFieldRef (idx, _, j, var)), _) -> (
         let new_idx = evaluate_expr ctx idx in
         match new_idx with

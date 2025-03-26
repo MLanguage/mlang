@@ -145,20 +145,17 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_e2 = expand_functions_expr e2 in
       let new_e3 = Option.map expand_functions_expr e3 in
       Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
-  | Index ((VarAccess v, pos), e1) ->
-      let new_e1 = expand_functions_expr e1 in
-      Pos.same_pos_as (Index ((VarAccess v, pos), new_e1)) e
-  | Index ((TabAccess _, _), _) -> assert false
-  | Index ((ConcAccess (m_v, m_if, i), pos), e1) ->
+  | Var (VarAccess _) -> e
+  | Var (TabAccess (m_v, m_i)) ->
+      let new_i = expand_functions_expr m_i in
+      Pos.same_pos_as (Var (TabAccess (m_v, new_i))) e
+  | Var (ConcAccess (m_v, m_if, i)) ->
       let new_i = expand_functions_expr i in
-      let new_e1 = expand_functions_expr e1 in
-      Pos.same_pos_as (Index ((ConcAccess (m_v, m_if, new_i), pos), new_e1)) e
-  | Index ((FieldAccess (ie, f, i_f), pos), e1) ->
+      Pos.same_pos_as (Var (ConcAccess (m_v, m_if, new_i))) e
+  | Var (FieldAccess (ie, f, i_f)) ->
       let new_ie = expand_functions_expr ie in
-      let new_e1 = expand_functions_expr e1 in
-      Pos.same_pos_as (Index ((FieldAccess (new_ie, f, i_f), pos), new_e1)) e
+      Pos.same_pos_as (Var (FieldAccess (new_ie, f, i_f))) e
   | Literal _ -> e
-  | Var _ -> e
   | FuncCall ((SumFunc, _), args) ->
       let expr_opt =
         List.fold_left
@@ -238,12 +235,7 @@ let expand_functions (p : program) : program =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
-      | Affectation (SingleFormula (VarDecl (v_acc, v_idx_opt, v_expr)), pos) ->
-          let m_idx_opt =
-            match v_idx_opt with
-            | Some v_idx -> Some (expand_functions_expr v_idx)
-            | None -> None
-          in
+      | Affectation (SingleFormula (VarDecl (v_acc, v_expr)), pos) ->
           let m_expr = expand_functions_expr v_expr in
           let m_acc =
             match Pos.unmark v_acc with
@@ -258,8 +250,7 @@ let expand_functions (p : program) : program =
                 let m_i = expand_functions_expr v_i in
                 Pos.same_pos_as (FieldAccess (m_i, f, i_f)) v_acc
           in
-          ( Affectation (SingleFormula (VarDecl (m_acc, m_idx_opt, m_expr)), pos),
-            instr_pos )
+          (Affectation (SingleFormula (VarDecl (m_acc, m_expr)), pos), instr_pos)
       | Affectation (SingleFormula (EventFieldRef (v_idx, f, i, v_id)), pos) ->
           let m_idx = expand_functions_expr v_idx in
           ( Affectation (SingleFormula (EventFieldRef (m_idx, f, i, v_id)), pos),
