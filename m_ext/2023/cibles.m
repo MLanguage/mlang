@@ -982,13 +982,6 @@ iterer : variable I : 0..NB increment 1 : dans (
   afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
 )
 afficher_erreur "\n";
-iterer : variable VAR : TOTO : dans (
-  iterer : variable I : 0..NB increment 1 : dans (
-    VAR[I] = VAR[I] * VAR[I];
-    afficher_erreur nom(VAR) "[" (I) "] = " (VAR[I]) "\n";
-  )
-)
-afficher_erreur "\n";
 restaurer : TOTO : apres (
   iterer : variable I : 0..NB increment 1 : dans (
     TOTO[I] = indefini;

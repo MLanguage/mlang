@@ -56,7 +56,7 @@ module Var : sig
   type id = int
 
   type tgv = {
-    is_table : t Array.t option;
+    table : t Array.t option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -81,9 +81,11 @@ module Var : sig
 
   val name_str : t -> string
 
-  val is_table : t -> t Array.t option
+  val get_table : t -> t Array.t option
 
-  val set_is_table : t -> t Array.t option -> t
+  val is_table : t -> bool
+
+  val set_table : t -> t Array.t option -> t
 
   val cat_var_loc : t -> CatVar.loc option
 
@@ -127,7 +129,7 @@ module Var : sig
 
   val new_tgv :
     name:string Pos.marked ->
-    is_table:t Array.t option ->
+    table:t Array.t option ->
     is_given_back:bool ->
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
@@ -137,7 +139,7 @@ module Var : sig
     t
 
   val new_temp :
-    name:string Pos.marked -> is_table:t Array.t option -> loc_int:int -> t
+    name:string Pos.marked -> table:t Array.t option -> loc_int:int -> t
 
   val new_ref : name:string Pos.marked -> loc_int:int -> t
 

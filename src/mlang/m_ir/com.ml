@@ -116,7 +116,7 @@ module Var = struct
     id
 
   type tgv = {
-    is_table : t Array.t option;
+    table : t Array.t option;
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
         (** Description taken from the variable declaration *)
@@ -146,16 +146,18 @@ module Var = struct
 
   let name_str v = Pos.unmark v.name
 
-  let is_table v =
+  let get_table v =
     match v.scope with
-    | Tgv tgv -> tgv.is_table
-    | Temp is_table -> is_table
+    | Tgv tgv -> tgv.table
+    | Temp table -> table
     | Ref | Arg | Res -> None
 
-  let set_is_table v is_table =
+  let is_table v = get_table v <> None
+
+  let set_table v table =
     match v.scope with
-    | Tgv tgv -> { v with scope = Tgv { tgv with is_table } }
-    | Temp _ -> { v with scope = Temp is_table }
+    | Tgv tgv -> { v with scope = Tgv { tgv with table } }
+    | Temp _ -> { v with scope = Temp table }
     | Ref | Arg | Res -> v
 
   let cat_var_loc v =
@@ -167,7 +169,7 @@ module Var = struct
         | Computed _ -> Some CatVar.LocComputed)
     | Temp _ | Ref | Arg | Res -> None
 
-  let size v = match is_table v with None -> 1 | Some tab -> Array.length tab
+  let size v = match get_table v with None -> 1 | Some tab -> Array.length tab
 
   let alias v = match v.scope with Tgv s -> s.alias | _ -> None
 
@@ -251,7 +253,7 @@ module Var = struct
       loc_int = 0;
     }
 
-  let new_tgv ~(name : string Pos.marked) ~(is_table : t Array.t option)
+  let new_tgv ~(name : string Pos.marked) ~(table : t Array.t option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
       ~(cat : CatVar.t) ~(typ : value_typ option) : t =
@@ -259,13 +261,13 @@ module Var = struct
       name;
       id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc cat);
-      scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
+      scope = Tgv { table; alias; descr; attrs; cat; is_given_back; typ };
     }
 
-  let new_temp ~(name : string Pos.marked) ~(is_table : t Array.t option)
+  let new_temp ~(name : string Pos.marked) ~(table : t Array.t option)
       ~(loc_int : int) : t =
     let loc = LocTmp (Pos.unmark name, loc_int) in
-    { name; id = new_id (); loc; scope = Temp is_table }
+    { name; id = new_id (); loc; scope = Temp table }
 
   let new_ref ~(name : string Pos.marked) ~(loc_int : int) : t =
     let loc = LocRef (Pos.unmark name, loc_int) in

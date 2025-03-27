@@ -67,7 +67,7 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
       let target_sz_tmps =
         let fold _ m_id sz =
           let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-          match Com.Var.is_table var with
+          match Com.Var.get_table var with
           | None -> sz + 1
           | Some tab -> sz + Array.length tab
         in
@@ -189,27 +189,28 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
 let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
   let prog_dict, table_map, nb_all_tables, sz_all_tables =
+    let map_add var map = IntMap.add (IntMap.cardinal map) var map in
     let fold_vars id v (prog_dict, map, nb_all, sz_all) =
-      match Com.Var.is_table v with
+      match Com.Var.get_table v with
       | None -> (prog_dict, map, nb_all, sz_all)
       | Some tab ->
           let nb_all = nb_all + 1 in
           let vsz = Com.Var.size v in
+          let v = Com.Var.set_loc_int v (IntMap.cardinal map) in
+          let map = map_add v map in
           let map, tab =
             let rec loop map tab i =
               if i = vsz then (map, tab)
               else
                 let iVar = IntMap.find tab.(i).Com.Var.id prog_dict in
-                let map = IntMap.add (sz_all + i) iVar map in
+                let map = map_add iVar map in
                 tab.(i) <- iVar;
                 loop map tab (i + 1)
             in
             loop map tab 0
           in
-          (*let v = Com.Var.set_loc_int v sz_all in*)
-          let v = Com.Var.set_is_table v (Some tab) in
+          let v = Com.Var.set_table v (Some tab) in
           let prog_dict = IntMap.add id v prog_dict in
-          (* !!! *)
           let sz_all = sz_all + vsz in
           (prog_dict, map, nb_all, sz_all)
     in
@@ -860,13 +861,13 @@ let get_targets (is_function : bool) (p : Validator.program)
         StrMap.fold
           (fun _name m_id prog_dict ->
             let var = IntMap.find (Pos.unmark m_id) prog_dict in
-            match Com.Var.is_table var with
+            match Com.Var.get_table var with
             | Some tab ->
-                let is_table =
+                let table =
                   let map (v : Com.Var.t) = IntMap.find v.id prog_dict in
                   Some (Array.map map tab)
                 in
-                let var = Com.Var.set_is_table var is_table in
+                let var = Com.Var.set_table var table in
                 IntMap.add var.id var prog_dict
             | None -> prog_dict)
           t.target_tmp_vars prog_dict

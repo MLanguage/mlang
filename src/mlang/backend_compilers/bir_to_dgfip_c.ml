@@ -1489,7 +1489,7 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
         pr "@;info->name = \"%s\";" vn;
         pr "@;info->alias = \"\";";
         pr "@;info->idx = %s;" loc_str;
-        (match Option.map Array.length (Com.Var.is_table var) with
+        (match Option.map Array.length (Com.Var.get_table var) with
         | None -> pr "@;info->size = 1;"
         | Some i -> pr "@;info->size = %d;" i);
         pr "@;info->cat = ID_TMP_VARS;";

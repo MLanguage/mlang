@@ -683,7 +683,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         Com.CatVar.Input input_set
       in
       let var =
-        Com.Var.new_tgv ~name:input_var.Mast.input_name ~is_table:None
+        Com.Var.new_tgv ~name:input_var.Mast.input_name ~table:None
           ~is_given_back:input_var.input_is_givenback
           ~alias:(Some input_var.Mast.input_alias)
           ~descr:input_var.Mast.input_description
@@ -709,17 +709,17 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       let cat = global_category in
       let typ = Option.map Pos.unmark comp_var.Mast.comp_typ in
       let var =
-        Com.Var.new_tgv ~name:m_name ~is_table:None ~is_given_back ~alias ~descr
+        Com.Var.new_tgv ~name:m_name ~table:None ~is_given_back ~alias ~descr
           ~attrs ~cat ~typ
       in
-      let is_table =
+      let table =
         match comp_var.Mast.comp_table with
         | Some (Mast.LiteralSize sz, _pos) ->
             let name, name_pos = m_name in
             let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
             let init i =
               let m_iName = (Strings.concat_int name iFmt i, name_pos) in
-              Com.Var.new_tgv ~name:m_iName ~is_table:None ~is_given_back ~alias
+              Com.Var.new_tgv ~name:m_iName ~table:None ~is_given_back ~alias
                 ~descr ~attrs ~cat ~typ
             in
             Some (Array.init sz init)
@@ -727,11 +727,11 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         | None -> None
       in
       let prog =
-        match is_table with
+        match table with
         | Some tab -> Array.fold_left (fun p v -> check_global_var v p) prog tab
         | None -> prog
       in
-      let var = Com.Var.set_is_table var is_table in
+      let var = Com.Var.set_table var table in
       check_global_var var prog
 
 let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
@@ -1228,7 +1228,7 @@ let get_var_mem_type (var : Com.m_var_name) (env : var_env) :
   | Some id ->
       let var = IntMap.find id env.prog.prog_dict in
       let mem =
-        if Com.Var.is_ref var then Both else to_mem (Com.Var.is_table var)
+        if Com.Var.is_ref var then Num else to_mem (Com.Var.get_table var)
       in
       Pos.same_pos_as mem (Com.Var.name var)
   | None -> Err.unknown_variable var_pos
@@ -1238,7 +1238,7 @@ let check_variable (var : Com.m_var_name) (idx_mem : var_mem_type)
   let decl_mem, decl_pos = get_var_mem_type var env in
   match (decl_mem, idx_mem) with
   | _, Both | Num, Num | Table, Table -> ()
-  | Both, _ -> ()
+  | Both, _ -> assert false
   (* | Both, Num -> Err.mixed_variable_used_as_num decl_pos (Pos.get var)
      | Both, Table -> Err.mixed_variable_used_as_table decl_pos (Pos.get var)*)
   | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get var)
@@ -1543,7 +1543,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               let fold (vars', seen) var =
                 let var_pos = Pos.get var in
                 let var_name = Com.get_normal_var (Pos.unmark var) in
-                check_variable var Both env;
+                check_variable var Num env;
                 match StrMap.find_opt var_name seen with
                 | None ->
                     let vars' = map_var env var :: vars' in
@@ -1568,7 +1568,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
         | Com.Iterate_values (var, var_intervals, instrs) ->
             let m_name = check_it_var env var in
             let env' =
-              let v = Com.Var.new_temp ~name:m_name ~is_table:None ~loc_int:0 in
+              let v = Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0 in
               add_var_env v env
             in
             let var' = map_var env' var in
@@ -1625,7 +1625,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                 let m_name = check_it_var env var in
                 let env' =
                   let v =
-                    Com.Var.new_temp ~name:m_name ~is_table:None ~loc_int:0
+                    Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0
                   in
                   add_var_env v env
                 in
@@ -1654,10 +1654,10 @@ let rec check_instructions (is_rule : bool) (env : var_env)
 
                   let env' =
                     let v0 =
-                      Com.Var.new_temp ~name:m_name0 ~is_table:None ~loc_int:0
+                      Com.Var.new_temp ~name:m_name0 ~table:None ~loc_int:0
                     in
                     let v1 =
-                      Com.Var.new_temp ~name:m_name1 ~is_table:None ~loc_int:0
+                      Com.Var.new_temp ~name:m_name1 ~table:None ~loc_int:0
                     in
                     env |> add_var_env v0 |> add_var_env v1
                   in
@@ -1674,7 +1674,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   let m_name = check_it_var env var in
                   let env' =
                     let v =
-                      Com.Var.new_temp ~name:m_name ~is_table:None ~loc_int:0
+                      Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0
                     in
                     add_var_env v env
                   in
@@ -1939,7 +1939,7 @@ let check_code (is_rule : bool) (is_function : bool)
           let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
           match size with
           | None ->
-              let var = Com.Var.new_temp ~name:m_v ~is_table:None ~loc_int:0 in
+              let var = Com.Var.new_temp ~name:m_v ~table:None ~loc_int:0 in
               (StrMap.add vn (var.id, vpos) vars, add_var_env var env)
           | Some sz_int ->
               let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
@@ -1950,7 +1950,7 @@ let check_code (is_rule : bool) (is_function : bool)
                   let m_iName = Pos.mark iName vpos in
                   check_tmp vars m_iName;
                   let var =
-                    Com.Var.new_temp ~name:m_iName ~is_table:None ~loc_int:0
+                    Com.Var.new_temp ~name:m_iName ~table:None ~loc_int:0
                   in
                   let vars = StrMap.add iName (var.id, vpos) vars in
                   let env = add_var_env var env in
@@ -1965,7 +1965,7 @@ let check_code (is_rule : bool) (is_function : bool)
         match size with
         | None -> (vars, env)
         | Some sz_int ->
-            let is_table =
+            let table =
               let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
               let init i =
                 let iName = Strings.concat_int vn iFmt i in
@@ -1974,7 +1974,7 @@ let check_code (is_rule : bool) (is_function : bool)
               in
               Some (Array.init sz_int init)
             in
-            let var = Com.Var.new_temp ~name:m_v ~is_table ~loc_int:0 in
+            let var = Com.Var.new_temp ~name:m_v ~table ~loc_int:0 in
             (StrMap.add vn (var.id, vpos) vars, add_var_env var env))
       (vars, env) tmp_vars
   in
