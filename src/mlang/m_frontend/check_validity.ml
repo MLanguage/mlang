@@ -830,6 +830,39 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let doms, syms = check_domain Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
 
+let warn_on_undef_computed_vars (rules : rule IntMap.t)
+    (vars : Com.Var.t StrMap.t) =
+  let def_vars =
+    IntMap.fold
+      (fun _ rule set ->
+        List.fold_left
+          (fun set m_instr ->
+            let instr = Pos.unmark m_instr in
+            match instr with
+            | Com.Affectation m_formula -> begin
+                let formula = Pos.unmark m_formula in
+                match formula with
+                | Com.SingleFormula (var, _, _) ->
+                    StrSet.add (Mast.get_variable_name (Pos.unmark var)) set
+                | Com.MultipleFormulaes _ -> assert false
+              end
+            | _ -> set)
+          set rule.rule_instrs)
+      rules StrSet.empty
+  in
+  StrMap.iter
+    (fun var_name var ->
+      match Com.Var.cat var with
+      | Computed _ ->
+          if not (StrSet.mem var_name def_vars) then
+            Errors.print_spanned_warning
+              (Format.asprintf
+                 "Variable %s is declared as computed but never defined"
+                 var_name)
+              (Pos.get_position var.Com.Var.name)
+      | Input _ -> ())
+    vars
+
 let complete_vars (prog : program) : program =
   let prog_vars = prog.prog_vars in
   let prog_vars =
@@ -1060,6 +1093,7 @@ let complete_vars (prog : program) : program =
         sz_all_tmps;
       }
   in
+  warn_on_undef_computed_vars prog.prog_rules prog_vars;
   { prog with prog_vars; prog_targets; prog_stats }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
