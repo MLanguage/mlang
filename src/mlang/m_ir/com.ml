@@ -411,6 +411,36 @@ type 'v expression =
 
 and 'v m_expression = 'v expression Pos.marked
 
+let get_used_variables (e : 'v expression) : 'v list =
+  let rec get_used_variables_ (e : 'v expression) (acc : 'v list) =
+    match e with
+    | TestInSet (_, (e, _), _) | Unop (_, (e, _)) ->
+        let acc = get_used_variables_ e acc in
+        acc
+    | Comparison (_, (e1, _), (e2, _)) | Binop (_, (e1, _), (e2, _)) ->
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        acc
+    | Index ((var, _), (e, _)) ->
+        let acc = var :: acc in
+        let acc = get_used_variables_ e acc in
+        acc
+    | Conditional ((e1, _), (e2, _), e3) -> (
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        match e3 with None -> acc | Some (e3, _) -> get_used_variables_ e3 acc)
+    | FuncCall (_, args) ->
+        List.fold_left
+          (fun acc (arg, _) -> get_used_variables_ arg acc)
+          acc args
+    | FuncCallLoop _ | Loop _ -> assert false
+    | Var var | Size (var, _) | Attribut ((var, _), _) -> var :: acc
+    | Literal _ | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives
+    | NbBloquantes ->
+        acc
+  in
+  get_used_variables_ e []
+
 module Error = struct
   type typ = Anomaly | Discordance | Information
 
