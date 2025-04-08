@@ -89,18 +89,18 @@ type value_typ =
   | Real
 
 type loc_tgv = {
-  loc_id : string;
   loc_cat : CatVar.loc;
   loc_idx : int;
   loc_cat_id : CatVar.t;
   loc_cat_str : string;
   loc_cat_idx : int;
-  loc_int : int;
 }
+
+type loc_tmp = { loc_idx : int; loc_cat_idx : int }
 
 type loc =
   | LocTgv of string * loc_tgv
-  | LocTmp of string * int
+  | LocTmp of string * loc_tmp
   | LocRef of string * int
   | LocArg of string * int
   | LocRes of string
@@ -164,10 +164,10 @@ module Var = struct
     match v.scope with
     | Tgv tgv -> (
         match tgv.cat with
-        | CatVar.Input _ -> Some CatVar.LocInput
-        | Computed { is_base } when is_base -> Some CatVar.LocBase
-        | Computed _ -> Some CatVar.LocComputed)
-    | Temp _ | Ref | Arg | Res -> None
+        | CatVar.Input _ -> CatVar.LocInput
+        | Computed { is_base } when is_base -> CatVar.LocBase
+        | Computed _ -> CatVar.LocComputed)
+    | Temp _ | Ref | Arg | Res -> failwith "not a TGV variable"
 
   let size v = match get_table v with None -> 1 | Some tab -> Array.length tab
 
@@ -195,7 +195,16 @@ module Var = struct
         let msg = Pp.spr "%s is not a TGV variable" (Pos.unmark v.name) in
         Errors.raise_error msg
 
-  let set_loc_tgv_cat v (cv : CatVar.data) i =
+  let loc_cat_idx v =
+    match v.loc with
+    | LocTgv (_, tgv) -> tgv.loc_cat_idx
+    | LocTmp (_, tmp) -> tmp.loc_cat_idx
+    | LocRef (_, li) | LocArg (_, li) -> li
+    | LocRes id ->
+        let msg = Pp.spr "variable %s doesn't have an index" id in
+        Errors.raise_error msg
+
+  let set_loc_tgv_idx v (cv : CatVar.data) i =
     match v.loc with
     | LocTgv (id, tgv) ->
         let loc_cat = cv.loc in
@@ -205,27 +214,30 @@ module Var = struct
     | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
-  let set_loc_tgv_idx v i =
+  let set_loc_tmp_idx v i =
     match v.loc with
-    | LocTgv (id, tgv) -> { v with loc = LocTgv (id, { tgv with loc_idx = i }) }
-    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+    | LocTmp (id, tmp) ->
+        let tmp = { tmp with loc_cat_idx = i } in
+        { v with loc = LocTmp (id, tmp) }
+    | LocTgv (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
-  let loc_int v =
+  let loc_idx v =
     match v.loc with
-    | LocTgv (_, tgv) -> tgv.loc_int
-    | LocTmp (_, li) | LocRef (_, li) | LocArg (_, li) -> li
+    | LocTgv (_, tgv) -> tgv.loc_idx
+    | LocTmp (_, tmp) -> tmp.loc_idx
+    | LocRef (_, li) | LocArg (_, li) -> li
     | LocRes id ->
         let msg = Pp.spr "variable %s doesn't have an index" id in
         Errors.raise_error msg
 
-  let set_loc_int v loc_int =
+  let set_loc_idx v loc_idx =
     let loc =
       match v.loc with
-      | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_int })
-      | LocTmp (id, _) -> LocTmp (id, loc_int)
-      | LocRef (id, _) -> LocRef (id, loc_int)
-      | LocArg (id, _) -> LocArg (id, loc_int)
+      | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
+      | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_idx })
+      | LocRef (id, _) -> LocRef (id, loc_idx)
+      | LocArg (id, _) -> LocArg (id, loc_idx)
       | LocRes id ->
           let msg = Pp.spr "variable %s doesn't have an index" id in
           Errors.raise_error msg
@@ -244,13 +256,11 @@ module Var = struct
 
   let init_loc loc_cat_id =
     {
-      loc_id = "";
       loc_cat = CatVar.LocInput;
       loc_idx = 0;
       loc_cat_id;
       loc_cat_str = "";
       loc_cat_idx = 0;
-      loc_int = 0;
     }
 
   let new_tgv ~(name : string Pos.marked) ~(table : t Array.t option)
@@ -264,17 +274,16 @@ module Var = struct
       scope = Tgv { table; alias; descr; attrs; cat; is_given_back; typ };
     }
 
-  let new_temp ~(name : string Pos.marked) ~(table : t Array.t option)
-      ~(loc_int : int) : t =
-    let loc = LocTmp (Pos.unmark name, loc_int) in
+  let new_temp ~(name : string Pos.marked) ~(table : t Array.t option) : t =
+    let loc = LocTmp (Pos.unmark name, { loc_idx = -1; loc_cat_idx = -1 }) in
     { name; id = new_id (); loc; scope = Temp table }
 
-  let new_ref ~(name : string Pos.marked) ~(loc_int : int) : t =
-    let loc = LocRef (Pos.unmark name, loc_int) in
+  let new_ref ~(name : string Pos.marked) : t =
+    let loc = LocRef (Pos.unmark name, -1) in
     { name; id = new_id (); loc; scope = Ref }
 
-  let new_arg ~(name : string Pos.marked) ~(loc_int : int) : t =
-    let loc = LocArg (Pos.unmark name, loc_int) in
+  let new_arg ~(name : string Pos.marked) : t =
+    let loc = LocArg (Pos.unmark name, -1) in
     { name; id = new_id (); loc; scope = Arg }
 
   let new_res ~(name : string Pos.marked) : t =

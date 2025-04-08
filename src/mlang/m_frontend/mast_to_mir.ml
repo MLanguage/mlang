@@ -100,7 +100,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
            let tgv = Com.Var.tgv var in
            let dcat = Com.CatVar.Map.find tgv.cat prog.prog_var_cats in
            let cpt, i = incr_cpt tgv.cat cpt in
-           let var = Com.Var.set_loc_tgv_cat var dcat i in
+           let var = Com.Var.set_loc_tgv_idx var dcat i in
            let res = Com.Var.Set.add var res in
            (res, cpt))
          tgv_dict
@@ -115,7 +115,6 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
   let loc_vars, sz_loc_vars, sz_vars =
     let fold (var : Com.Var.t) (loc_vars, sz_loc_vars, n) =
       if Com.Var.is_tgv var then
-        let var = Com.Var.set_loc_int var n in
         let loc_cat =
           (Com.CatVar.Map.find (Com.Var.cat var) prog.prog_var_cats).loc
         in
@@ -140,7 +139,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
     Com.Var.Set.fold fold tgv_dict (CatLocMap.empty, CatLocMap.empty, 0)
   in
   let update_loc (var : Com.Var.t) (vars, n) =
-    let var = Com.Var.set_loc_tgv_idx var n in
+    let var = Com.Var.set_loc_idx var n in
     let vars = Com.Var.Set.add var vars in
     (vars, n + Com.Var.size var)
   in
@@ -164,6 +163,16 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
     let fold (v : Com.Var.t) res = IntMap.add v.id v res in
     Com.Var.Set.fold fold tgv_dict prog.prog_dict
   in
+  let prog_dict =
+    let fold id v (prog_dict, n) =
+      if Com.Var.is_temp v then
+        let v = Com.Var.set_loc_tmp_idx v n in
+        let prog_dict = IntMap.add id v prog_dict in
+        (prog_dict, n + 1)
+      else (prog_dict, n)
+    in
+    fst @@ IntMap.fold fold prog_dict (prog_dict, 0)
+  in
   let prog = { prog with prog_dict } in
   let stats =
     Mir.
@@ -186,6 +195,51 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
   in
   (prog, stats)
 
+let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
+    Validator.program * Mir.stats =
+  let fold is_function _ (t : Validator.target) prog_dict =
+    let prog_dict, _ =
+      let idx_init = if is_function then 0 else -t.target_nb_refs in
+      List.fold_left
+        (fun (prog_dict, n) m_id ->
+          let var = IntMap.find (Pos.unmark m_id) prog_dict in
+          let var = Com.Var.set_loc_idx var n in
+          let prog_dict = IntMap.add var.id var prog_dict in
+          (prog_dict, n + 1))
+        (prog_dict, idx_init) t.target_args
+    in
+    let prog_dict, _ =
+      StrMap.fold
+        (fun _name m_id (prog_dict, n) ->
+          let var = IntMap.find (Pos.unmark m_id) prog_dict in
+          let var = Com.Var.set_loc_idx var n in
+          let prog_dict = IntMap.add var.id var prog_dict in
+          (prog_dict, n + Com.Var.size var))
+        t.target_tmp_vars
+        (prog_dict, -t.target_sz_tmps)
+    in
+    StrMap.fold
+      (fun _name m_id prog_dict ->
+        let var = IntMap.find (Pos.unmark m_id) prog_dict in
+        match Com.Var.get_table var with
+        | Some tab ->
+            let table =
+              let map (v : Com.Var.t) = IntMap.find v.id prog_dict in
+              Some (Array.map map tab)
+            in
+            let var = Com.Var.set_table var table in
+            IntMap.add var.id var prog_dict
+        | None -> prog_dict)
+      t.target_tmp_vars prog_dict
+  in
+  let prog_dict =
+    prog.prog_dict
+    |> StrMap.fold (fold false) prog.prog_targets
+    |> StrMap.fold (fold true) prog.prog_functions
+  in
+  let prog = { prog with prog_dict } in
+  (prog, stats)
+
 let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
   let prog_dict, table_map, nb_all_tables, sz_all_tables =
@@ -196,7 +250,7 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
       | Some tab ->
           let nb_all = nb_all + 1 in
           let vsz = Com.Var.size v in
-          let v = Com.Var.set_loc_int v (IntMap.cardinal map) in
+          let v = Com.Var.set_loc_idx v (IntMap.cardinal map) in
           let map = map_add v map in
           let map, tab =
             let rec loop map tab i =
@@ -210,7 +264,7 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
             loop map tab 0
           in
           let v = Com.Var.set_table v (Some tab) in
-          let prog_dict = IntMap.add id v prog_dict in
+          let _prog_dict = IntMap.add id v prog_dict in
           let sz_all = sz_all + vsz in
           (prog_dict, map, nb_all, sz_all)
     in
@@ -719,7 +773,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
         aux ((Com.Print (std, mir_args), pos) :: res) il
     | (Com.Iterate (m_id, vars, var_params, instrs), pos) :: il ->
         let var = get_var var_data m_id in
-        let var = Com.Var.set_loc_int var it_depth in
+        let var = Com.Var.set_loc_idx var it_depth in
         let var_data = IntMap.add var.id var var_data in
         let vars' = List.map (get_var var_data) vars in
         let var_params' =
@@ -736,7 +790,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
         aux ((Com.Iterate (var, vars', var_params', prog_it), pos) :: res) il
     | (Com.Iterate_values (m_id, var_intervals, instrs), pos) :: il ->
         let var = get_var var_data m_id in
-        let var = Com.Var.set_loc_int var itval_depth in
+        let var = Com.Var.set_loc_idx var itval_depth in
         let var_data = IntMap.add var.id var var_data in
         let var_intervals' =
           List.map
@@ -757,7 +811,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
           List.map
             (fun (m_id, vcats, expr) ->
               let var = get_var var_data m_id in
-              let var = Com.Var.set_loc_int var it_depth in
+              let var = Com.Var.set_loc_idx var it_depth in
               let var_data = IntMap.add var.id var var_data in
               let catSet = Validator.mast_to_catvars vcats p.prog_var_cats in
               let mir_expr = translate_expression p var_data expr in
@@ -769,7 +823,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
           List.map
             (fun (m_id, expr) ->
               let var = get_var var_data m_id in
-              let var = Com.Var.set_loc_int var itval_depth in
+              let var = Com.Var.set_loc_idx var itval_depth in
               let var_data = IntMap.add var.id var var_data in
               let mir_expr = translate_expression p var_data expr in
               (var, mir_expr))
@@ -785,9 +839,9 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
           match sort with
           | Some (m_id0, m_id1, expr) ->
               let var0 = get_var var_data m_id0 in
-              let var0' = Com.Var.set_loc_int var0 itval_depth in
+              let var0' = Com.Var.set_loc_idx var0 itval_depth in
               let var1 = get_var var_data m_id1 in
-              let var1' = Com.Var.set_loc_int var1 (itval_depth + 1) in
+              let var1' = Com.Var.set_loc_idx var1 (itval_depth + 1) in
               let var_data =
                 var_data |> IntMap.add var0.id var0' |> IntMap.add var1.id var1'
               in
@@ -799,7 +853,7 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
           match filter with
           | Some (m_id, expr) ->
               let var = get_var var_data m_id in
-              let var' = Com.Var.set_loc_int var itval_depth in
+              let var' = Com.Var.set_loc_idx var itval_depth in
               let var_data = IntMap.add var.id var' var_data in
               let expr' = translate_expression p var_data expr in
               (Some (var', expr'), max itval_depth' (itval_depth + 1))
@@ -823,66 +877,37 @@ let rec translate_prog (p : Validator.program) (var_data : Com.Var.t IntMap.t)
   in
   aux [] prog
 
-let get_targets (is_function : bool) (p : Validator.program)
-    (ts : Validator.target StrMap.t) : Mir.target StrMap.t =
+let get_targets (p : Validator.program) (ts : Validator.target StrMap.t) :
+    Mir.target StrMap.t =
   StrMap.fold
     (fun _ (t : Validator.target) targets ->
       let target_name = t.target_name in
       let target_file = t.target_file in
       let target_apps = t.target_apps in
+      let target_nb_tmps = t.target_nb_tmps in
       let target_nb_refs = t.target_nb_refs in
-      let prog_dict = p.prog_dict in
-      let prog_dict, _ =
-        let idx_init = if is_function then 0 else -target_nb_refs in
-        List.fold_left
-          (fun (prog_dict, n) m_id ->
-            let var = IntMap.find (Pos.unmark m_id) prog_dict in
-            let var = Com.Var.set_loc_int var n in
-            let prog_dict = IntMap.add var.id var prog_dict in
-            (prog_dict, n + 1))
-          (prog_dict, idx_init) t.target_args
-      in
       let target_args =
-        let map m_id = IntMap.find (Pos.unmark m_id) prog_dict in
+        let map m_id = IntMap.find (Pos.unmark m_id) p.prog_dict in
         List.map map t.target_args
       in
       let target_sz_tmps = t.target_sz_tmps in
-      let prog_dict, itval_depth =
+      let itval_depth =
         StrMap.fold
-          (fun _name m_id (prog_dict, n) ->
-            let var = IntMap.find (Pos.unmark m_id) prog_dict in
-            let var = Com.Var.set_loc_int var n in
-            let prog_dict = IntMap.add var.id var prog_dict in
-            (prog_dict, n + Com.Var.size var))
-          t.target_tmp_vars
-          (prog_dict, -target_sz_tmps)
-      in
-      let prog_dict =
-        StrMap.fold
-          (fun _name m_id prog_dict ->
-            let var = IntMap.find (Pos.unmark m_id) prog_dict in
-            match Com.Var.get_table var with
-            | Some tab ->
-                let table =
-                  let map (v : Com.Var.t) = IntMap.find v.id prog_dict in
-                  Some (Array.map map tab)
-                in
-                let var = Com.Var.set_table var table in
-                IntMap.add var.id var prog_dict
-            | None -> prog_dict)
-          t.target_tmp_vars prog_dict
+          (fun _name m_id n ->
+            let var = IntMap.find (Pos.unmark m_id) p.prog_dict in
+            n + Com.Var.size var)
+          t.target_tmp_vars (-target_sz_tmps)
       in
       let target_result =
-        let map m_id = IntMap.find (Pos.unmark m_id) prog_dict in
+        let map m_id = IntMap.find (Pos.unmark m_id) p.prog_dict in
         Option.map map t.target_result
       in
       let target_tmp_vars =
-        let map m_id = IntMap.find (Pos.unmark m_id) prog_dict in
+        let map m_id = IntMap.find (Pos.unmark m_id) p.prog_dict in
         StrMap.map map t.target_tmp_vars
       in
-      let p = { p with prog_dict } in
       let target_prog =
-        translate_prog p prog_dict
+        translate_prog p p.prog_dict
           (List.length target_args - target_nb_refs)
           itval_depth t.target_prog
       in
@@ -896,7 +921,7 @@ let get_targets (is_function : bool) (p : Validator.program)
             target_result;
             target_tmp_vars;
             target_prog;
-            target_nb_tmps = t.target_nb_tmps;
+            target_nb_tmps;
             target_sz_tmps;
             target_nb_refs;
           }
@@ -906,7 +931,8 @@ let get_targets (is_function : bool) (p : Validator.program)
 
 let translate (p : Validator.program) : Mir.program =
   let p, program_stats =
-    p |> complete_vars_stack |> complete_vars |> complete_tabs |> complete_stats
+    p |> complete_vars_stack |> complete_vars |> complete_target_vars
+    |> complete_tabs |> complete_stats
   in
   let program_vars, program_alias =
     let map id = IntMap.find id p.prog_dict in
@@ -933,8 +959,8 @@ let translate (p : Validator.program) : Mir.program =
     in
     StrMap.map map_chainings p.prog_chainings
   in
-  let program_functions = get_targets true p p.prog_functions in
-  let program_targets = get_targets false p p.prog_targets in
+  let program_functions = get_targets p p.prog_functions in
+  let program_targets = get_targets p p.prog_targets in
   Mir.
     {
       program_safe_prefix = p.prog_prefix;

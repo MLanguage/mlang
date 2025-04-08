@@ -1482,18 +1482,10 @@ let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
     pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
     StrMap.iter
       (fun vn var ->
-        let loc_str =
-          Format.sprintf "irdata->tmps_org + (%d)" (Com.Var.loc_int var)
-        in
-        pr "@;info = &(irdata->info_tmps[%s]);" loc_str;
-        pr "@;info->name = \"%s\";" vn;
-        pr "@;info->alias = \"\";";
-        pr "@;info->idx = %s;" loc_str;
-        (match Option.map Array.length (Com.Var.get_table var) with
-        | None -> pr "@;info->size = 1;"
-        | Some i -> pr "@;info->size = %d;" i);
-        pr "@;info->cat = ID_TMP_VARS;";
-        pr "@;info->loc_cat = EST_TEMPORAIRE;")
+        let loc_str = Pp.spr "irdata->tmps_org + (%d)" (Com.Var.loc_idx var) in
+        let loc_cat_idx = Com.Var.loc_cat_idx var in
+        pr "@;irdata->info_tmps[%s] = tmp_varinfo[%d]; /* %s */" loc_str
+          loc_cat_idx vn)
       tf.target_tmp_vars;
     pr "@]@;}");
   if tf.target_nb_refs > 0 then

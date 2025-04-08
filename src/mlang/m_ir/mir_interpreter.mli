@@ -81,6 +81,8 @@ module type S = sig
 
   val value_to_literal : value -> Com.literal
 
+  val tgv_origin : ctx -> Com.Var.t -> int
+
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   val update_ctx_with_events :

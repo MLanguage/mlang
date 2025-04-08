@@ -20,67 +20,86 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
-    (stats, var_map) =
+let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
+    =
   let oc, fmt = open_file (Pp.spr "varinfo_%d.c" id_int) in
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
 |};
-  Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
-    id_str;
-  let nb, var_map =
-    StrMap.fold
-      (fun _ var (nb, var_map) ->
-        if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
-          let loc_tgv = Com.Var.loc_tgv var in
-          let name = Com.Var.name_str var in
-          let alias = Com.Var.alias_str var in
-          let idx = loc_tgv.loc_idx in
-          let size = Com.Var.size var in
-          let loc_cat =
-            match loc_tgv.loc_cat with
-            | Com.CatVar.LocComputed -> "EST_CALCULEE"
-            | Com.CatVar.LocBase -> "EST_BASE"
-            | Com.CatVar.LocInput -> "EST_SAISIE"
-          in
-          let attrs = Com.Var.attrs var in
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s" name alias idx
-            size id_int loc_cat;
-          StrMap.iter
-            (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-            attrs;
-          Format.fprintf fmt " },\n";
-          let var_addr =
-            Format.sprintf "(T_varinfo *)&(varinfo_%s[%d])" id_str nb
-          in
-          let var_map = StrMap.add (Com.Var.name_str var) var_addr var_map in
-          let var_map =
-            match Com.Var.alias var with
-            | None -> var_map
-            | Some m_alias -> StrMap.add (Pos.unmark m_alias) var_addr var_map
-          in
-          (nb + 1, var_map))
-        else (nb, var_map))
-      vars (0, var_map)
-  in
-  Format.fprintf fmt "  NULL\n};\n\n";
+  Pp.fpr fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str id_str;
+  IntMap.iter
+    (fun _ var ->
+      let loc_tgv = Com.Var.loc_tgv var in
+      let name = Com.Var.name_str var in
+      let alias = Com.Var.alias_str var in
+      let idx = loc_tgv.loc_idx in
+      let size = Com.Var.size var in
+      let loc_cat =
+        match loc_tgv.loc_cat with
+        | Com.CatVar.LocComputed -> "EST_CALCULEE"
+        | Com.CatVar.LocBase -> "EST_BASE"
+        | Com.CatVar.LocInput -> "EST_SAISIE"
+      in
+      let attrs = Com.Var.attrs var in
+      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %s" name alias idx size id_int
+        loc_cat;
+      StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
+      Pp.fpr fmt " },\n")
+    vars;
+  Pp.fpr fmt "  NULL\n};\n\n";
   close_out oc;
+  let nb = IntMap.cardinal vars in
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  (Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats, var_map)
+  Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
+
+let gen_table_tmp_varinfo vars fmt =
+  Pp.fpr fmt "T_varinfo tmp_varinfo[%d] = {\n" (IntMap.cardinal vars + 1);
+  IntMap.iter
+    (fun _ var ->
+      let name = Com.Var.name_str var in
+      let idx = Com.Var.loc_idx var in
+      let size = Com.Var.size var in
+      Pp.fpr fmt "  { \"%s\", \"\", %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n"
+        name idx size)
+    vars;
+  Pp.fpr fmt "  NULL\n};\n\n"
+
+let gen_table_tab_varinfo table_map fmt =
+  Pp.fpr fmt "int tab_varinfo[%d] = {\n" (IntMap.cardinal table_map + 1);
+  IntMap.iter
+    (fun _ var ->
+      match Com.Var.get_table var with
+      | Some t ->
+          let name = Com.Var.name_str var in
+          let sz = Array.length t in
+          Pp.fpr fmt "  %d, /* %s */\n" sz name
+      | None ->
+          let idx = Com.Var.loc_idx var in
+          Pp.fpr fmt "  %d,\n" idx)
+    table_map;
+  Pp.fpr fmt "  0\n};\n\n"
 
 let gen_table_varinfos (cprog : Mir.program) flags =
-  let stats_varinfos, var_map =
-    Com.CatVar.Map.fold
-      (gen_table_varinfo cprog.program_vars)
-      cprog.program_var_categories
-      (Com.CatVar.Map.empty, StrMap.empty)
+  let stats_varinfos =
+    let fold cv data res =
+      let vars =
+        let foldVars _ var vars =
+          if Com.CatVar.compare (Com.Var.cat var) cv = 0 then
+            IntMap.add (Com.Var.loc_cat_idx var) var vars
+          else vars
+        in
+        StrMap.fold foldVars cprog.program_vars IntMap.empty
+      in
+      gen_table_varinfo vars cv data res
+    in
+    Com.CatVar.Map.fold fold cprog.program_var_categories Com.CatVar.Map.empty
   in
   let oc, fmt = open_file "varinfos.c" in
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
@@ -119,17 +138,47 @@ let gen_table_varinfos (cprog : Mir.program) flags =
       Pp.fpr fmt "}\n\n")
     attrs;
   if flags.Dgfip_options.flg_gcos then
-    Format.fprintf fmt "T_varinfo_map varinfo[1] = {NULL};\n\n"
+    Pp.fpr fmt "T_varinfo_map varinfo[1] = {NULL};\n\n"
   else (
-    Format.fprintf fmt
-      "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
-    StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
-    Format.fprintf fmt "  NULL\n};\n\n");
+    Pp.fpr fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+    let var_map =
+      let fold name var var_map =
+        let var_map = StrMap.add name var var_map in
+        match Com.Var.alias var with
+        | Some m_alias -> StrMap.add (Pos.unmark m_alias) var var_map
+        | None -> var_map
+      in
+      StrMap.fold fold cprog.program_vars StrMap.empty
+    in
+    let iter name var =
+      let id_str =
+        let cv = Com.Var.cat var in
+        Com.CatVar.((Map.find cv cprog.program_var_categories).id_str)
+      in
+      let idx = Com.Var.loc_cat_idx var in
+      let var_addr = Pp.spr "(T_varinfo *)&(varinfo_%s[%d])" id_str idx in
+      Pp.fpr fmt "  { \"%s\", %s },\n" name var_addr
+    in
+    StrMap.iter iter var_map;
+    Pp.fpr fmt "  NULL\n};\n\n");
+  let tmp_vars =
+    let fold _ (target : Mir.target) tmp_vars =
+      let foldVars _ var tmp_vars =
+        IntMap.add (Com.Var.loc_cat_idx var) var tmp_vars
+      in
+      StrMap.fold foldVars target.target_tmp_vars tmp_vars
+    in
+    IntMap.empty
+    |> StrMap.fold fold cprog.program_targets
+    |> StrMap.fold fold cprog.program_functions
+  in
+  gen_table_tmp_varinfo tmp_vars fmt;
+  gen_table_tab_varinfo cprog.program_stats.table_map fmt;
   close_out oc;
   stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|typedef struct S_varinfo {
   char *name;
   char *alias;
@@ -147,7 +196,7 @@ typedef struct S_varinfo_map {
 |};
   Com.CatVar.Map.iter
     (fun _ (id_str, _, _, attr_set) ->
-      Format.fprintf fmt
+      Pp.fpr fmt
         {|typedef struct S_varinfo_%s {
   char *name;
   char *alias;
@@ -157,19 +206,20 @@ typedef struct S_varinfo_map {
   int loc_cat;
 |}
         id_str;
-      StrSet.iter (fun an -> Format.fprintf fmt "  int attr_%s;\n" an) attr_set;
-      Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
+      StrSet.iter (fun an -> Pp.fpr fmt "  int attr_%s;\n" an) attr_set;
+      Pp.fpr fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "\n";
   Com.CatVar.Map.iter
     (fun _ (id_str, _, _, _) ->
-      Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
+      Pp.fpr fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
-  Format.fprintf fmt "extern T_varinfo_map varinfo[];\n";
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "extern T_varinfo_map varinfo[];\n";
+  Pp.fpr fmt "extern T_varinfo tmp_varinfo[];\n";
+  Pp.fpr fmt "extern int tab_varinfo[];\n";
+  Pp.fpr fmt "\n";
   Com.CatVar.Map.iter
-    (fun _ (id_str, _, nb, _) ->
-      Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
+    (fun _ (id_str, _, nb, _) -> Pp.fpr fmt "#define NB_%s %d\n" id_str nb)
     stats;
   let nb_saisie, nb_variable =
     Com.CatVar.Map.fold
@@ -180,17 +230,17 @@ typedef struct S_varinfo_map {
         | _ -> (nb_saisie, nb_variable))
       stats (0, 0)
   in
-  Format.fprintf fmt "#define NB_saisie %d\n" nb_saisie;
-  Format.fprintf fmt "#define NB_variable %d\n" nb_variable;
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "#define NB_saisie %d\n" nb_saisie;
+  Pp.fpr fmt "#define NB_variable %d\n" nb_variable;
+  Pp.fpr fmt "\n";
   let id_tmp =
     Com.CatVar.Map.fold
       (fun _ (id_str, id_int, _, _) id_tmp ->
-        Format.fprintf fmt "#define ID_%s %d\n" id_str id_int;
+        Pp.fpr fmt "#define ID_%s %d\n" id_str id_int;
         max (id_int + 1) id_tmp)
       stats (-1)
   in
-  Format.fprintf fmt "#define ID_TMP_VARS %d\n" id_tmp;
+  Pp.fpr fmt "#define ID_TMP_VARS %d\n" id_tmp;
 
   let attrs =
     Com.CatVar.Map.fold
@@ -200,15 +250,15 @@ typedef struct S_varinfo_map {
   in
   StrSet.iter
     (fun attr ->
-      Format.fprintf fmt "\nextern char attribut_%s_def(T_varinfo *vi);\n" attr;
-      Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
+      Pp.fpr fmt "\nextern char attribut_%s_def(T_varinfo *vi);\n" attr;
+      Pp.fpr fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
     attrs
 
 let is_valid_app apps =
   StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
 
 let gen_erreurs_c fmt flags (cprog : Mir.program) =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
@@ -223,7 +273,7 @@ let gen_erreurs_c fmt flags (cprog : Mir.program) =
         if String.equal (Pos.unmark e.sous_code) "00" then ""
         else "-" ^ Pos.unmark e.sous_code
       in
-      Format.fprintf fmt
+      Pp.fpr fmt
         "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
          \"%s\", %d };\n"
         (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
@@ -234,74 +284,72 @@ let gen_erreurs_c fmt flags (cprog : Mir.program) =
     cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
-    Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
+    Pp.fpr fmt "T_erreur *tabErreurs[] = {\n";
 
     StrMap.iter
       (fun _ (e : Com.Error.t) ->
-        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.name))
+        Pp.fpr fmt "    &erreur_%s,\n" (Pos.unmark e.name))
       cprog.program_errors;
 
-    Format.fprintf fmt "    NULL\n};\n"
+    Pp.fpr fmt "    NULL\n};\n"
   end
 
 (* Print #defines corresponding to generation options *)
 let gen_conf_h fmt (cprog : Mir.program) flags =
   let open Dgfip_options in
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|/****** LICENCE CECIL *****/
 
 #ifndef _CONF_H_
 #define _CONF_H_
 
 |};
-  if flags.flg_correctif then Format.fprintf fmt "#define FLG_CORRECTIF\n";
-  if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
-  if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
-  if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
-  if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
-  if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
+  if flags.flg_correctif then Pp.fpr fmt "#define FLG_CORRECTIF\n";
+  if flags.flg_iliad then Pp.fpr fmt "#define FLG_ILIAD\n";
+  if flags.flg_pro then Pp.fpr fmt "#define FLG_PRO\n";
+  if flags.flg_cfir then Pp.fpr fmt "#define FLG_CFIR\n";
+  if flags.flg_gcos then Pp.fpr fmt "#define FLG_GCOS\n";
+  if flags.flg_tri_ebcdic then Pp.fpr fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
-  if flags.flg_short then
-    Format.fprintf fmt "#define FLG_SHORT /* inutile ? */\n";
-  if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
+  if flags.flg_short then Pp.fpr fmt "#define FLG_SHORT /* inutile ? */\n";
+  if flags.flg_register then Pp.fpr fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
   if flags.flg_optim_min_max then
-    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
-  if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
+    Pp.fpr fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
+  if flags.flg_extraction then Pp.fpr fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
-    Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
-  if flags.flg_controle_separe then
-    Format.fprintf fmt "#define FLG_CONTROLE_SEPARE\n";
+    Pp.fpr fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
+  if flags.flg_controle_separe then Pp.fpr fmt "#define FLG_CONTROLE_SEPARE\n";
   if flags.flg_controle_immediat then
-    Format.fprintf fmt "#define FLG_CONTROLE_IMMEDIAT\n";
+    Pp.fpr fmt "#define FLG_CONTROLE_IMMEDIAT\n";
   (* does not need to be printed *)
-  (*if flags.flg_overlays then Format.fprintf fmt "#define FLG_OVERLAYS\n"; *)
-  if flags.flg_colors then Format.fprintf fmt "#define FLG_COLORS\n";
-  if flags.flg_ticket then Format.fprintf fmt "#define FLG_TICKET\n";
-  if flags.flg_trace then Format.fprintf fmt "#define FLG_TRACE\n";
+  (*if flags.flg_overlays then Pp.fpr fmt "#define FLG_OVERLAYS\n"; *)
+  if flags.flg_colors then Pp.fpr fmt "#define FLG_COLORS\n";
+  if flags.flg_ticket then Pp.fpr fmt "#define FLG_TICKET\n";
+  if flags.flg_trace then Pp.fpr fmt "#define FLG_TRACE\n";
   (* flag is not used *)
-  (*if flags.flg_trace_irdata then Format.fprintf fmt "#define
+  (*if flags.flg_trace_irdata then Pp.fpr fmt "#define
     FLG_TRACE_IRDATA\n"; *)
-  if flags.flg_debug then Format.fprintf fmt "#define FLG_DEBUG\n";
-  Format.fprintf fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
-  Format.fprintf fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
+  if flags.flg_debug then Pp.fpr fmt "#define FLG_DEBUG\n";
+  Pp.fpr fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
+  Pp.fpr fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
   let count loc =
     StrMap.fold
       (fun _ var nb ->
-        nb + if Com.Var.cat_var_loc var = Some loc then Com.Var.size var else 0)
+        nb + if Com.Var.cat_var_loc var = loc then Com.Var.size var else 0)
       cprog.program_vars 0
   in
   let nb_saisie = count Com.CatVar.LocInput in
   let nb_calculee = count Com.CatVar.LocComputed in
   let nb_base = count Com.CatVar.LocBase in
   let nb_vars = nb_saisie + nb_calculee + nb_base in
-  Format.fprintf fmt "#define NB_VARS  %d\n" nb_vars;
-  Format.fprintf fmt {|
+  Pp.fpr fmt "#define NB_VARS  %d\n" nb_vars;
+  Pp.fpr fmt {|
 #endif /* _CONF_H_ */
 |}
 
 let gen_dbg fmt =
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|int change_couleur(int couleur, int typographie);
 int get_couleur();
 int get_typo();
@@ -320,7 +368,7 @@ extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv
 |}
 
 let gen_const fmt (cprog : Mir.program) =
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|#define FALSE 0
 #define TRUE 1
 
@@ -364,13 +412,12 @@ struct S_event {
   IntMap.iter
     (fun _idx fname ->
       let field = StrMap.find fname cprog.program_event_fields in
-      if field.is_var then
-        Format.fprintf fmt "  T_varinfo *field_%s_var;\n" fname
+      if field.is_var then Pp.fpr fmt "  T_varinfo *field_%s_var;\n" fname
       else (
-        Format.fprintf fmt "  char field_%s_def;\n" fname;
-        Format.fprintf fmt "  double field_%s_val;\n" fname))
+        Pp.fpr fmt "  char field_%s_def;\n" fname;
+        Pp.fpr fmt "  double field_%s_val;\n" fname))
     cprog.program_event_field_idxs;
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|};
 
 typedef struct S_event T_event;
@@ -431,7 +478,7 @@ typedef struct S_irdata T_irdata;
          *res_val, char idx_def, double idx_val);\n"
         f)
     cprog.program_event_fields;
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|
 #define DS_ irdata->def_saisie
 #define S_ irdata->saisie
@@ -476,8 +523,8 @@ extern void free_erreur();
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
 |};
-  Format.fprintf fmt "#define EPSILON %f" !Cli.comparison_error_margin;
-  Format.fprintf fmt
+  Pp.fpr fmt "#define EPSILON %f" !Cli.comparison_error_margin;
+  Pp.fpr fmt
     {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)
 #define LT_E(a,b) ((a) + EPSILON < (b))
@@ -502,7 +549,7 @@ let gen_lib fmt (cprog : Mir.program) flags =
   let count loc =
     StrMap.fold
       (fun _ var nb ->
-        nb + if Com.Var.cat_var_loc var = Some loc then Com.Var.size var else 0)
+        nb + if Com.Var.cat_var_loc var = loc then Com.Var.size var else 0)
       cprog.program_vars 0
   in
   let taille_saisie = count Com.CatVar.LocInput in
@@ -514,7 +561,7 @@ let gen_lib fmt (cprog : Mir.program) flags =
   let nb_call = IntMap.cardinal cprog.program_rules in
   let nb_verif = IntMap.cardinal cprog.program_verifs in
 
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|#define TAILLE_SAISIE %d
 #define TAILLE_CALCULEE %d
 #define TAILLE_BASE %d
@@ -524,13 +571,13 @@ let gen_lib fmt (cprog : Mir.program) flags =
 |}
     taille_saisie taille_calculee taille_base taille_totale nb_ench;
 
-  Format.fprintf fmt {|#define TAILLE_TMP_VARS %d
+  Pp.fpr fmt {|#define TAILLE_TMP_VARS %d
 #define TAILLE_REFS %d
 
 |}
     cprog.program_stats.sz_all_tmps cprog.program_stats.nb_all_refs;
 
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|#define ANOMALIE     1
 #define DISCORDANCE  2
 #define INFORMATIVE  4
@@ -551,24 +598,24 @@ let gen_lib fmt (cprog : Mir.program) flags =
 
 |};
 
-  Format.fprintf fmt "#define NB_ERR %d\n" nb_err;
-  Format.fprintf fmt "#define NB_CALL %d\n" nb_call;
-  Format.fprintf fmt "#define NB_VERIF %d\n\n" nb_verif;
+  Pp.fpr fmt "#define NB_ERR %d\n" nb_err;
+  Pp.fpr fmt "#define NB_CALL %d\n" nb_call;
+  Pp.fpr fmt "#define NB_VERIF %d\n\n" nb_verif;
 
   (* TODO external declaration of individual control rules (seems to be no
      longer used) *)
   StrMap.iter
     (fun _ (e : Com.Error.t) ->
       let en = Pos.unmark e.name in
-      Format.fprintf fmt "extern T_erreur erreur_%s;\n" en)
+      Pp.fpr fmt "extern T_erreur erreur_%s;\n" en)
     cprog.program_errors;
 
   (* TODO function declarations (seems to be no longer used) *)
   if flags.Dgfip_options.flg_pro then
-    Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n\n"
-  else Format.fprintf fmt "\n";
+    Pp.fpr fmt "extern struct S_erreur *tabErreurs[];\n\n"
+  else Pp.fpr fmt "\n";
 
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|extern void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff);
 extern void print_indent(FILE *std, T_print_context *pr_ctx);
 extern void print_string(FILE *std, T_print_context *pr_ctx, char *str);
@@ -696,23 +743,22 @@ let gen_decl_functions fmt (cprog : Mir.program) =
       (fun i _ -> Pp.fpr fmt ", char arg_def%d, double arg_val%d" i i)
       args
   in
-  Format.fprintf fmt "@[<v 0>%a@]@,"
+  Pp.fpr fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (fn, (fd : Mir.target)) ->
-         Format.fprintf fmt
+         Pp.fpr fmt
            "extern int %s(T_irdata* irdata, char *res_def, double *res_val%a);"
            fn pp_args fd.target_args))
     functions
 
 let gen_decl_targets fmt (cprog : Mir.program) =
   let targets = StrMap.bindings cprog.program_targets in
-  Format.fprintf fmt "@[<v 0>%a@]@,"
+  Pp.fpr fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (name, _) ->
-         Format.fprintf fmt "extern struct S_discord *%s(T_irdata* irdata);"
-           name))
+         Pp.fpr fmt "extern struct S_discord *%s(T_irdata* irdata);" name))
     targets
 
 let gen_mlang_h fmt cprog flags stats_varinfos =
-  let pr form = Format.fprintf fmt form in
+  let pr form = Pp.fpr fmt form in
   pr "/****** LICENCE CECIL *****/\n\n";
   pr "#ifndef _MLANG_H_\n";
   pr "#define _MLANG_H_\n";
@@ -745,7 +791,7 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   pr "#endif /* _MLANG_H_ */\n\n"
 
 let gen_mlang_c fmt (cprog : Mir.program) flags =
-  Format.fprintf fmt "%s"
+  Pp.fpr fmt "%s"
     {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
@@ -906,12 +952,12 @@ void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
 |};
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then
-    Format.fprintf fmt "%s"
+    Pp.fpr fmt "%s"
       {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
 |}
-  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
+  else Pp.fpr fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
 |};
-  Format.fprintf fmt "%s"
+  Pp.fpr fmt "%s"
     {|irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
@@ -1155,12 +1201,12 @@ static void copy_evt(T_event *src, T_event *dst) {
   StrMap.iter
     (fun f (ef : Com.event_field) ->
       if ef.is_var then
-        Format.fprintf fmt "  dst->field_%s_var = src->field_%s_var;\n" f f
+        Pp.fpr fmt "  dst->field_%s_var = src->field_%s_var;\n" f f
       else (
-        Format.fprintf fmt "  dst->field_%s_def = src->field_%s_def;\n" f f;
-        Format.fprintf fmt "  dst->field_%s_val = src->field_%s_val;\n" f f))
+        Pp.fpr fmt "  dst->field_%s_def = src->field_%s_def;\n" f f;
+        Pp.fpr fmt "  dst->field_%s_val = src->field_%s_val;\n" f f))
     cprog.program_event_fields;
-  Format.fprintf fmt "%s"
+  Pp.fpr fmt "%s"
     {|
     }
 

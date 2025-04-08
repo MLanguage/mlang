@@ -59,6 +59,8 @@ module type S = sig
 
   val value_to_literal : value -> Com.literal
 
+  val tgv_origin : ctx -> Com.Var.t -> int
+
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
   val update_ctx_with_events :
@@ -138,14 +140,14 @@ struct
 
   let empty_ctx (p : Mir.program) : ctx =
     let dummy_ref =
-      let var = Com.Var.new_ref ~name:("", Pos.no_pos) ~loc_int:(-1) in
+      let var = Com.Var.new_ref ~name:("", Pos.no_pos) in
       (var, (var, -1))
     in
     let ctx_tab_map =
       let init i =
         let var = IntMap.find i p.program_stats.table_map in
-        let loc_int = Com.Var.loc_int var in
-        (var, loc_int)
+        let loc_idx = Com.Var.loc_idx var in
+        (var, loc_idx)
       in
       Array.init (IntMap.cardinal p.program_stats.table_map) init
     in
@@ -183,6 +185,14 @@ struct
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
 
+  let tgv_origin (ctx : ctx) (var : Com.Var.t) =
+    match Com.Var.cat_var_loc var with
+    | LocInput -> 0
+    | LocComputed -> ctx.ctx_prog.program_stats.nb_input
+    | LocBase ->
+        ctx.ctx_prog.program_stats.nb_input
+        + ctx.ctx_prog.program_stats.nb_calculated
+
   let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
       unit =
     let value_inputs =
@@ -195,7 +205,7 @@ struct
     in
     Com.Var.Map.iter
       (fun (var : Com.Var.t) value ->
-        ctx.ctx_tgv.(Com.Var.loc_int var) <- value)
+        ctx.ctx_tgv.(tgv_origin ctx var + Com.Var.loc_idx var) <- value)
       value_inputs
 
   let update_ctx_with_events (ctx : ctx)
@@ -291,8 +301,8 @@ struct
   let get_var (ctx : ctx) (var : Com.Var.t) : Com.Var.t * int =
     match var.loc with
     | LocRef (_, i) -> snd ctx.ctx_ref.(ctx.ctx_ref_org + i)
-    | LocTgv (_, { loc_int; _ }) -> (var, loc_int)
-    | LocTmp (_, i) -> (var, ctx.ctx_tmps_org + i)
+    | LocTgv (_, { loc_idx; _ }) -> (var, loc_idx)
+    | LocTmp (_, { loc_idx; _ }) -> (var, ctx.ctx_tmps_org + loc_idx)
     | LocArg (_, i) -> (var, i)
     | LocRes _ -> (var, -1)
 
@@ -305,7 +315,7 @@ struct
   let get_var_value (ctx : ctx) (var : Com.Var.t) : value =
     let var, vi = get_var ctx var in
     match var.scope with
-    | Com.Var.Tgv _ -> ctx.ctx_tgv.(vi)
+    | Com.Var.Tgv _ -> ctx.ctx_tgv.(tgv_origin ctx var + vi)
     | Com.Var.Temp _ -> ctx.ctx_tmps.(vi)
     | Com.Var.Ref -> assert false
     | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi)
@@ -315,7 +325,7 @@ struct
     let set v =
       let v, vi = get_var ctx v in
       match v.scope with
-      | Com.Var.Tgv _ -> ctx.ctx_tgv.(vi) <- value
+      | Com.Var.Tgv _ -> ctx.ctx_tgv.(tgv_origin ctx v + vi) <- value
       | Com.Var.Temp _ -> ctx.ctx_tmps.(vi) <- value
       | Com.Var.Ref -> assert false
       | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
@@ -1240,7 +1250,9 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   let varMap =
     let fold _ (var : Com.Var.t) res =
       if Com.Var.is_given_back var then
-        let litt = ctx.ctx_tgv.(Com.Var.loc_int var) in
+        let litt =
+          ctx.ctx_tgv.(Interp.tgv_origin ctx var + Com.Var.loc_idx var)
+        in
         let fVal = Interp.value_to_literal litt in
         Com.Var.Map.add var fVal res
       else res

@@ -1535,7 +1535,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let m_name = check_it_var env var in
             let env' =
-              let v = Com.Var.new_ref ~name:m_name ~loc_int:0 in
+              let v = Com.Var.new_ref ~name:m_name in
               add_var_env v env
             in
             let var' = map_var env' var in
@@ -1568,7 +1568,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
         | Com.Iterate_values (var, var_intervals, instrs) ->
             let m_name = check_it_var env var in
             let env' =
-              let v = Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0 in
+              let v = Com.Var.new_temp ~name:m_name ~table:None in
               add_var_env v env
             in
             let var' = map_var env' var in
@@ -1607,7 +1607,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                 let m_name = check_it_var env var in
                 ignore (mast_to_catvars vcats env.prog.prog_var_cats);
                 let env' =
-                  let v = Com.Var.new_ref ~name:m_name ~loc_int:0 in
+                  let v = Com.Var.new_ref ~name:m_name in
                   add_var_env v env
                 in
                 let var' = map_var env' var in
@@ -1624,9 +1624,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               let fold (env, evtfs') (var, expr) =
                 let m_name = check_it_var env var in
                 let env' =
-                  let v =
-                    Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0
-                  in
+                  let v = Com.Var.new_temp ~name:m_name ~table:None in
                   add_var_env v env
                 in
                 let var' = map_var env' var in
@@ -1653,12 +1651,8 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   let m_name1 = check_it_var env var1 in
 
                   let env' =
-                    let v0 =
-                      Com.Var.new_temp ~name:m_name0 ~table:None ~loc_int:0
-                    in
-                    let v1 =
-                      Com.Var.new_temp ~name:m_name1 ~table:None ~loc_int:0
-                    in
+                    let v0 = Com.Var.new_temp ~name:m_name0 ~table:None in
+                    let v1 = Com.Var.new_temp ~name:m_name1 ~table:None in
                     env |> add_var_env v0 |> add_var_env v1
                   in
                   let var0' = map_var env' var0 in
@@ -1673,9 +1667,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               | Some (var, expr) ->
                   let m_name = check_it_var env var in
                   let env' =
-                    let v =
-                      Com.Var.new_temp ~name:m_name ~table:None ~loc_int:0
-                    in
+                    let v = Com.Var.new_temp ~name:m_name ~table:None in
                     add_var_env v env
                   in
                   let var' = map_var env' var in
@@ -1939,7 +1931,7 @@ let check_code (is_rule : bool) (is_function : bool)
           let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
           match size with
           | None ->
-              let var = Com.Var.new_temp ~name:m_v ~table:None ~loc_int:0 in
+              let var = Com.Var.new_temp ~name:m_v ~table:None in
               (StrMap.add vn (var.id, vpos) vars, add_var_env var env)
           | Some sz_int ->
               let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz_int) in
@@ -1949,9 +1941,7 @@ let check_code (is_rule : bool) (is_function : bool)
                   let iName = Strings.concat_int vn iFmt i in
                   let m_iName = Pos.mark iName vpos in
                   check_tmp vars m_iName;
-                  let var =
-                    Com.Var.new_temp ~name:m_iName ~table:None ~loc_int:0
-                  in
+                  let var = Com.Var.new_temp ~name:m_iName ~table:None in
                   let vars = StrMap.add iName (var.id, vpos) vars in
                   let env = add_var_env var env in
                   loop (vars, env) (i + 1)
@@ -1974,7 +1964,7 @@ let check_code (is_rule : bool) (is_function : bool)
               in
               Some (Array.init sz_int init)
             in
-            let var = Com.Var.new_temp ~name:m_v ~table ~loc_int:0 in
+            let var = Com.Var.new_temp ~name:m_v ~table in
             (StrMap.add vn (var.id, vpos) vars, add_var_env var env))
       (vars, env) tmp_vars
   in
@@ -1985,8 +1975,8 @@ let check_code (is_rule : bool) (is_function : bool)
         check_name_in_tgv prog m_v;
         check_name_in_tmp tmp_vars' m_v;
         let var =
-          if is_function then Com.Var.new_arg ~name:m_v ~loc_int:0
-          else Com.Var.new_ref ~name:m_v ~loc_int:0
+          if is_function then Com.Var.new_arg ~name:m_v
+          else Com.Var.new_ref ~name:m_v
         in
         (Pos.same_pos_as var.id m_v :: args, add_var_env var env)
       in

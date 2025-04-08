@@ -36,18 +36,18 @@ type value_typ =
   | Real
 
 type loc_tgv = {
-  loc_id : string;
   loc_cat : CatVar.loc;
   loc_idx : int;
   loc_cat_id : CatVar.t;
   loc_cat_str : string;
   loc_cat_idx : int;
-  loc_int : int;
 }
+
+type loc_tmp = { loc_idx : int; loc_cat_idx : int }
 
 type loc =
   | LocTgv of string * loc_tgv
-  | LocTmp of string * int
+  | LocTmp of string * loc_tmp
   | LocRef of string * int
   | LocArg of string * int
   | LocRes of string
@@ -87,7 +87,7 @@ module Var : sig
 
   val set_table : t -> t Array.t option -> t
 
-  val cat_var_loc : t -> CatVar.loc option
+  val cat_var_loc : t -> CatVar.loc
 
   val size : t -> int
 
@@ -107,13 +107,15 @@ module Var : sig
 
   val loc_tgv : t -> loc_tgv
 
-  val set_loc_tgv_cat : t -> CatVar.data -> int -> t
+  val loc_cat_idx : t -> int
 
-  val set_loc_tgv_idx : t -> int -> t
+  val set_loc_tgv_idx : t -> CatVar.data -> int -> t
 
-  val loc_int : t -> int
+  val set_loc_tmp_idx : t -> int -> t
 
-  val set_loc_int : t -> int -> t
+  val loc_idx : t -> int
+
+  val set_loc_idx : t -> int -> t
 
   val is_tgv : t -> bool
 
@@ -138,12 +140,11 @@ module Var : sig
     typ:value_typ option ->
     t
 
-  val new_temp :
-    name:string Pos.marked -> table:t Array.t option -> loc_int:int -> t
+  val new_temp : name:string Pos.marked -> table:t Array.t option -> t
 
-  val new_ref : name:string Pos.marked -> loc_int:int -> t
+  val new_ref : name:string Pos.marked -> t
 
-  val new_arg : name:string Pos.marked -> loc_int:int -> t
+  val new_arg : name:string Pos.marked -> t
 
   val new_res : name:string Pos.marked -> t
 
