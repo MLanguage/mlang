@@ -302,7 +302,7 @@ struct
     match var.loc with
     | LocRef (_, i) -> snd ctx.ctx_ref.(ctx.ctx_ref_org + i)
     | LocTgv (_, { loc_idx; _ }) -> (var, loc_idx)
-    | LocTmp (_, { loc_idx; _ }) -> (var, ctx.ctx_tmps_org + loc_idx)
+    | LocTmp (_, { loc_idx; _ }) -> (var, loc_idx)
     | LocArg (_, i) -> (var, i)
     | LocRes _ -> (var, -1)
 
@@ -316,7 +316,7 @@ struct
     let var, vi = get_var ctx var in
     match var.scope with
     | Com.Var.Tgv _ -> ctx.ctx_tgv.(tgv_origin ctx var + vi)
-    | Com.Var.Temp _ -> ctx.ctx_tmps.(vi)
+    | Com.Var.Temp _ -> ctx.ctx_tmps.(ctx.ctx_tmps_org + vi)
     | Com.Var.Ref -> assert false
     | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi)
     | Com.Var.Res -> List.hd ctx.ctx_res
@@ -326,7 +326,7 @@ struct
       let v, vi = get_var ctx v in
       match v.scope with
       | Com.Var.Tgv _ -> ctx.ctx_tgv.(tgv_origin ctx v + vi) <- value
-      | Com.Var.Temp _ -> ctx.ctx_tmps.(vi) <- value
+      | Com.Var.Temp _ -> ctx.ctx_tmps.(ctx.ctx_tmps_org + vi) <- value
       | Com.Var.Ref -> assert false
       | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
       | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res

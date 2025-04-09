@@ -264,7 +264,7 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
             loop map tab 0
           in
           let v = Com.Var.set_table v (Some tab) in
-          let _prog_dict = IntMap.add id v prog_dict in
+          let prog_dict = IntMap.add id v prog_dict in
           let sz_all = sz_all + vsz in
           (prog_dict, map, nb_all, sz_all)
     in
@@ -932,7 +932,7 @@ let get_targets (p : Validator.program) (ts : Validator.target StrMap.t) :
 let translate (p : Validator.program) : Mir.program =
   let p, program_stats =
     p |> complete_vars_stack |> complete_vars |> complete_target_vars
-    |> complete_tabs |> complete_stats
+    |> complete_stats |> complete_tabs
   in
   let program_vars, program_alias =
     let map id = IntMap.find id p.prog_dict in

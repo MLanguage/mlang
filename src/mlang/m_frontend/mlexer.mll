@@ -38,8 +38,6 @@ rule token = parse
 | ',' { COMMA }
 | '[' { LBRACKET }
 | ']' { RBRACKET }
-| '{' { LBRACE }
-| '}' { RBRACE }
 | '(' { LPAREN }
 | ')' { RPAREN }
 | ".." { RANGE }

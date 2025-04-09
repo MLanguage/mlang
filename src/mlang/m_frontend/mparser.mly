@@ -42,7 +42,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
-%token LBRACE RBRACE
 %token RANGE
 
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
@@ -798,8 +797,8 @@ print_argument:
     | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
     | _ -> assert false
   }
-| f = with_pos(print_function) LPAREN v = symbol_with_pos LBRACE
-  idxFmt = symbol_with_pos COMMA idx = with_pos(sum_expression) RBRACE RPAREN {
+| f = with_pos(print_function) LPAREN v = symbol_with_pos LBRACKET
+  idxFmt = symbol_with_pos COLON idx = with_pos(sum_expression) RBRACKET RPAREN {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     match Pos.unmark f with
@@ -962,8 +961,8 @@ var_access:
     | None -> Com.VarAccess m_v
     | Some m_i -> Com.TabAccess (m_v, m_i)
   }
-| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
-  COMMA idx = with_pos(sum_expression) RBRACE {
+| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     Com.ConcAccess (m_v, idxFmt, idx)
@@ -1153,8 +1152,8 @@ enumeration_item:
     let pos = mk_position $sloc in
     Com.VarValue (FieldAccess (idx, field, -1), pos)
   }
-| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
-  COMMA idx = with_pos(sum_expression) RBRACE {
+| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     let pos = mk_position $sloc in
@@ -1234,8 +1233,8 @@ factor:
   COMMA field = symbol_with_pos RPAREN {
     Var (FieldAccess (m_idx, field, -1))
   }
-| v = symbol_with_pos LBRACE idxFmt = symbol_with_pos
-  COMMA idx = with_pos(sum_expression) RBRACE {
+| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     Var (ConcAccess (m_v, idxFmt, idx))
