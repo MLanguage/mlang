@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -ue
 
@@ -37,7 +37,7 @@ while IFS= read -r var; do
 
 # La ligne suivante suppose une modification des makefiles pour tester sur une version en cours de développement de Mlang
 	YEAR=2024 TEST_FILE=tests/dummy.irj make test
-	((counter++)) && echo $counter
+	counter=$((counter + 1)) && echo $counter
 	echo "delete from dico_24 where variable='$var';" >> "$sql_file"
 done < "$var_file"
 
