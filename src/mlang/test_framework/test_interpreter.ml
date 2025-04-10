@@ -33,8 +33,13 @@ type instance = {
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     instance list =
   let vars =
-    let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
-    let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
+    let map_init =
+      try
+        let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
+        let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
+        Com.Var.Map.one ancsded ancsded_val
+      with _ -> Com.Var.Map.empty
+    in
     List.fold_left
       (fun in_f ((var, var_pos), (value, _value_pos)) ->
         let var = find_var_of_name program (var, var_pos) in
@@ -44,8 +49,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           | F f -> Com.Float f
         in
         Com.Var.Map.add var lit in_f)
-      (Com.Var.Map.one ancsded ancsded_val)
-      t.prim.entrees
+      map_init t.prim.entrees
   in
   let eventsList rappels =
     let from_var vn =
@@ -99,16 +103,21 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     let fold res ano = StrSet.add ano res in
     List.fold_left fold StrSet.empty (List.map fst anos_init)
   in
-  let ind_trait = find_var_of_name program ("V_IND_TRAIT", Pos.no_pos) in
+  let set_trait f vars =
+    try
+      let ind_trait = find_var_of_name program ("V_IND_TRAIT", Pos.no_pos) in
+      Com.Var.Map.add ind_trait (Com.Float f) vars
+    with _ -> vars
+  in
   match t.rapp with
   | None ->
-      let vars = Com.Var.Map.add ind_trait (Com.Float 4.0) vars in
+      let vars = set_trait 4.0 vars in
       let expectedVars = expVars t.prim.resultats_attendus in
       let expectedAnos = expAnos t.prim.controles_attendus in
       [ { label = "primitif"; vars; events = []; expectedVars; expectedAnos } ]
   | Some rapp ->
       let corr =
-        let vars = Com.Var.Map.add ind_trait (Com.Float 5.0) vars in
+        let vars = set_trait 5.0 vars in
         let events = eventsList rapp.entrees_rappels in
         let expectedVars = expVars rapp.resultats_attendus in
         let expectedAnos = expAnos rapp.controles_attendus in
@@ -117,7 +126,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       let expectedVars = expVars t.prim.resultats_attendus in
       let expectedAnos = expAnos t.prim.controles_attendus in
       if not (StrMap.is_empty expectedVars && StrSet.is_empty expectedAnos) then
-        let vars = Com.Var.Map.add ind_trait (Com.Float 4.0) vars in
+        let vars = set_trait 4.0 vars in
         let prim =
           { label = "primitif"; vars; events = []; expectedVars; expectedAnos }
         in

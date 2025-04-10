@@ -24,6 +24,9 @@ ifeq ($(filter $(YEAR), 2023 2024), $(YEAR))
 else ifeq ($(filter $(YEAR), 2019 2020 2021 2022), $(YEAR))
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 0), $(YEAR))
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
     $(warning WARNING: there is no default configuration for year: $(YEAR))
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))

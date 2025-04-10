@@ -1099,7 +1099,7 @@ si V_IND_TRAIT = 4 alors # primitif
 sinon_si V_IND_TRAIT = 5 alors # correctif
   calculer cible enchainement_correctif;
 finsi
-calculer cible test;
+#calculer cible test;
 
 #{
 

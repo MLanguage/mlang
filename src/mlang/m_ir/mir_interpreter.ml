@@ -457,6 +457,10 @@ struct
 
   and set_access ctx access vexpr =
     match access with
+    | Com.VarAccess v ->
+        let v = fst @@ get_var ctx v in
+        let value = evaluate_expr ctx vexpr in
+        set_var_value ctx v value
     | Com.TabAccess (m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Undefined -> ()
@@ -471,13 +475,29 @@ struct
               in
               let value = evaluate_expr ctx vexpr in
               set_var_value ctx v' value)
-    | _ -> (
+    | Com.ConcAccess _ -> (
         match get_access_var ctx access with
         | Some v ->
             let v = fst @@ get_var ctx v in
             let value = evaluate_expr ctx vexpr in
             set_var_value ctx v value
         | None -> ())
+    | Com.FieldAccess (e, _, j) -> (
+        let new_e = evaluate_expr ctx e in
+        match new_e with
+        | Number z when N.(z >=. zero ()) -> (
+            let i = Int64.to_int N.(to_int z) in
+            let events = List.hd ctx.ctx_events in
+            if 0 <= i && i < Array.length events then
+              match events.(i).(j) with
+              | Com.Numeric _ ->
+                  let value = evaluate_expr ctx vexpr in
+                  events.(i).(j) <- Com.Numeric value
+              | Com.RefVar v ->
+                  let v = fst @@ get_var ctx v in
+                  let value = evaluate_expr ctx vexpr in
+                  set_var_value ctx v value)
+        | _ -> ())
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     let comparison op new_e1 new_e2 =
@@ -1118,6 +1138,9 @@ struct
     done;
     let sav_target = ctx.ctx_target in
     ctx.ctx_target <- target;
+    for i = 0 to target.target_sz_tmps - 1 do
+      ctx.ctx_tmps.(ctx.ctx_tmps_org + i) <- Undefined
+    done;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + target.target_sz_tmps;
     ctx.ctx_ref_org <- ctx.ctx_ref_org + target.target_nb_refs;
     evaluate_stmts canBlock ctx target.target_prog;
