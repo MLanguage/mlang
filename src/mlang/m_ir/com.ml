@@ -91,12 +91,13 @@ type value_typ =
 type loc_tgv = {
   loc_cat : CatVar.loc;
   loc_idx : int;
+  loc_tab_idx : int;
   loc_cat_id : CatVar.t;
   loc_cat_str : string;
   loc_cat_idx : int;
 }
 
-type loc_tmp = { loc_idx : int; loc_cat_idx : int }
+type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
 type loc =
   | LocTgv of string * loc_tgv
@@ -244,6 +245,25 @@ module Var = struct
     in
     { v with loc }
 
+  let loc_tab_idx v =
+    match v.loc with
+    | LocTgv (_, tgv) -> tgv.loc_tab_idx
+    | LocTmp (_, tmp) -> tmp.loc_tab_idx
+    | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+        let msg = Pp.spr "variable %s cannot be a table" id in
+        Errors.raise_error msg
+
+  let set_loc_tab_idx v loc_tab_idx =
+    let loc =
+      match v.loc with
+      | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_tab_idx })
+      | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_tab_idx })
+      | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+          let msg = Pp.spr "variable %s cannot be a table" id in
+          Errors.raise_error msg
+    in
+    { v with loc }
+
   let is_tgv v = match v.scope with Tgv _ -> true | _ -> false
 
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
@@ -258,6 +278,7 @@ module Var = struct
     {
       loc_cat = CatVar.LocInput;
       loc_idx = 0;
+      loc_tab_idx = -1;
       loc_cat_id;
       loc_cat_str = "";
       loc_cat_idx = 0;
@@ -275,7 +296,10 @@ module Var = struct
     }
 
   let new_temp ~(name : string Pos.marked) ~(table : t Array.t option) : t =
-    let loc = LocTmp (Pos.unmark name, { loc_idx = -1; loc_cat_idx = -1 }) in
+    let loc =
+      LocTmp
+        (Pos.unmark name, { loc_idx = -1; loc_tab_idx = -1; loc_cat_idx = -1 })
+    in
     { name; id = new_id (); loc; scope = Temp table }
 
   let new_ref ~(name : string Pos.marked) : t =

@@ -38,12 +38,13 @@ type value_typ =
 type loc_tgv = {
   loc_cat : CatVar.loc;
   loc_idx : int;
+  loc_tab_idx : int;
   loc_cat_id : CatVar.t;
   loc_cat_str : string;
   loc_cat_idx : int;
 }
 
-type loc_tmp = { loc_idx : int; loc_cat_idx : int }
+type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
 type loc =
   | LocTgv of string * loc_tgv
@@ -116,6 +117,10 @@ module Var : sig
   val loc_idx : t -> int
 
   val set_loc_idx : t -> int -> t
+
+  val loc_tab_idx : t -> int
+
+  val set_loc_tab_idx : t -> int -> t
 
   val is_tgv : t -> bool
 

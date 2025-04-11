@@ -250,7 +250,7 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
       | Some tab ->
           let nb_all = nb_all + 1 in
           let vsz = Com.Var.size v in
-          let v = Com.Var.set_loc_idx v (IntMap.cardinal map) in
+          let v = Com.Var.set_loc_tab_idx v (IntMap.cardinal map) in
           let map = map_add v map in
           let map, tab =
             let rec loop map tab i =

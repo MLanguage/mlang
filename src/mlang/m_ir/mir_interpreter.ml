@@ -307,9 +307,11 @@ struct
     | LocRes _ -> (var, -1)
 
   let get_var_tab (ctx : ctx) (var : Com.Var.t) (idx : int) : Com.Var.t * int =
-    let var, vari = get_var ctx var in
+    let var, _ = get_var ctx var in
     match Com.Var.get_table var with
-    | Some _ -> ctx.ctx_tab_map.(vari + 1 + idx)
+    | Some _ ->
+        let loc_tab = Com.Var.loc_tab_idx var in
+        ctx.ctx_tab_map.(loc_tab + 1 + idx)
     | None -> assert false
 
   let get_var_value (ctx : ctx) (var : Com.Var.t) : value =
@@ -331,11 +333,12 @@ struct
       | Com.Var.Arg -> (List.hd ctx.ctx_args).(vi) <- value
       | Com.Var.Res -> ctx.ctx_res <- value :: List.tl ctx.ctx_res
     in
-    let var, vari = get_var ctx var in
+    let var, _ = get_var ctx var in
     if Com.Var.is_table var then
       let sz = Com.Var.size var in
       for i = 0 to sz - 1 do
-        set @@ fst ctx.ctx_tab_map.(vari + 1 + i)
+        let loc_tab = Com.Var.loc_tab_idx var in
+        set @@ fst ctx.ctx_tab_map.(loc_tab + 1 + i)
       done
     else set var
 
@@ -372,14 +375,16 @@ struct
     | Com.TabAccess (m_v, m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
-            let v, vi = get_var ctx m_v in
+            let v, _ = get_var ctx m_v in
             let zi = Int64.to_int (N.to_int (roundf z)) in
             let sz = Com.Var.size v in
             if sz <= zi then Undefined
             else if zi < 0 then Number (N.zero ())
             else
               let v' =
-                if Com.Var.is_table v then fst ctx.ctx_tab_map.(vi + 1 + zi)
+                if Com.Var.is_table v then
+                  let loc_tab = Com.Var.loc_tab_idx v in
+                  fst ctx.ctx_tab_map.(loc_tab + 1 + zi)
                 else v
               in
               get_var_value ctx v'
@@ -418,13 +423,15 @@ struct
     | Com.TabAccess (m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
-            let v, vi = get_var ctx m_v in
+            let v, _ = get_var ctx m_v in
             let zi = Int64.to_int (N.to_int (roundf z)) in
             let sz = Com.Var.size v in
             if zi < 0 || sz <= zi then None
             else
               let v' =
-                if Com.Var.is_table v then fst ctx.ctx_tab_map.(vi + 1 + zi)
+                if Com.Var.is_table v then
+                  let loc_tab = Com.Var.loc_tab_idx v in
+                  fst ctx.ctx_tab_map.(loc_tab + 1 + zi)
                 else v
               in
               Some (fst @@ get_var ctx v')
@@ -466,11 +473,13 @@ struct
         | Undefined -> ()
         | Number f ->
             let i = int_of_float (N.to_float f) in
-            let v, vi = get_var ctx m_v in
+            let v, _ = get_var ctx m_v in
             let sz = Com.Var.size v in
             if 0 <= i && i < sz then
               let v' =
-                if Com.Var.is_table v then fst ctx.ctx_tab_map.(vi + 1 + i)
+                if Com.Var.is_table v then
+                  let loc_tab = Com.Var.loc_tab_idx v in
+                  fst ctx.ctx_tab_map.(loc_tab + 1 + i)
                 else v
               in
               let value = evaluate_expr ctx vexpr in

@@ -43,8 +43,9 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
         | Com.CatVar.LocInput -> "EST_SAISIE"
       in
       let attrs = Com.Var.attrs var in
-      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %s" name alias idx size id_int
-        loc_cat;
+      let est_table = if Com.Var.is_table var then 1 else 0 in
+      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s" name alias idx
+        est_table size id_int loc_cat;
       StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
       Pp.fpr fmt " },\n")
     vars;
@@ -62,26 +63,24 @@ let gen_table_tmp_varinfo vars fmt =
     (fun _ var ->
       let name = Com.Var.name_str var in
       let idx = Com.Var.loc_idx var in
+      let est_table = if Com.Var.is_table var then 1 else 0 in
       let size = Com.Var.size var in
-      Pp.fpr fmt "  { \"%s\", \"\", %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n"
-        name idx size)
+      Pp.fpr fmt
+        "  { \"%s\", \"\", %d, %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n" name
+        idx est_table size)
     vars;
   Pp.fpr fmt "  NULL\n};\n\n"
 
-let gen_table_tab_varinfo table_map fmt =
-  Pp.fpr fmt "int tab_varinfo[%d] = {\n" (IntMap.cardinal table_map + 1);
+let gen_table_tab_varinfo (cprog : Mir.program) fmt =
+  let table_map = cprog.program_stats.table_map in
+  Pp.fpr fmt "T_varinfo *tab_varinfo[TAILLE_TAB_VARINFO + 1] = {\n";
   IntMap.iter
     (fun _ var ->
-      match Com.Var.get_table var with
-      | Some t ->
-          let name = Com.Var.name_str var in
-          let sz = Array.length t in
-          Pp.fpr fmt "  %d, /* %s */\n" sz name
-      | None ->
-          let idx = Com.Var.loc_idx var in
-          Pp.fpr fmt "  %d,\n" idx)
+      let idx = Com.Var.loc_cat_idx var in
+      let name = Com.Var.name_str var in
+      Pp.fpr fmt "  &(tmp_varinfo[%d]), /* %s */\n" idx name)
     table_map;
-  Pp.fpr fmt "  0\n};\n\n"
+  Pp.fpr fmt "  NULL\n};\n\n"
 
 let gen_table_varinfos (cprog : Mir.program) flags =
   let stats_varinfos =
@@ -173,7 +172,7 @@ let gen_table_varinfos (cprog : Mir.program) flags =
     |> StrMap.fold fold cprog.program_functions
   in
   gen_table_tmp_varinfo tmp_vars fmt;
-  gen_table_tab_varinfo cprog.program_stats.table_map fmt;
+  gen_table_tab_varinfo cprog fmt;
   close_out oc;
   stats_varinfos
 
@@ -183,6 +182,7 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   char *name;
   char *alias;
   int idx;
+  char est_table;
   int size;
   int cat;
   int loc_cat;
@@ -201,6 +201,7 @@ typedef struct S_varinfo_map {
   char *name;
   char *alias;
   int idx;
+  char est_table;
   int size;
   int cat;
   int loc_cat;
@@ -216,7 +217,7 @@ typedef struct S_varinfo_map {
     stats;
   Pp.fpr fmt "extern T_varinfo_map varinfo[];\n";
   Pp.fpr fmt "extern T_varinfo tmp_varinfo[];\n";
-  Pp.fpr fmt "extern int tab_varinfo[];\n";
+  Pp.fpr fmt "extern T_varinfo *tab_varinfo[];\n";
   Pp.fpr fmt "\n";
   Com.CatVar.Map.iter
     (fun _ (id_str, _, nb, _) -> Pp.fpr fmt "#define NB_%s %d\n" id_str nb)
@@ -571,11 +572,10 @@ let gen_lib fmt (cprog : Mir.program) flags =
 |}
     taille_saisie taille_calculee taille_base taille_totale nb_ench;
 
-  Pp.fpr fmt {|#define TAILLE_TMP_VARS %d
-#define TAILLE_REFS %d
-
-|}
-    cprog.program_stats.sz_all_tmps cprog.program_stats.nb_all_refs;
+  Pp.fpr fmt "#define TAILLE_TMP_VARS %d\n" cprog.program_stats.sz_all_tmps;
+  Pp.fpr fmt "#define TAILLE_REFS %d\n" cprog.program_stats.nb_all_refs;
+  Pp.fpr fmt "#define TAILLE_TAB_VARINFO %d\n"
+    (IntMap.cardinal cprog.program_stats.table_map);
 
   Pp.fpr fmt
     {|#define ANOMALIE     1
@@ -704,6 +704,7 @@ extern char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info);
 extern double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info);
 extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
 extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
+
 extern char lis_concat_nom_index(
   T_irdata *irdata,
   char *nom, const char *fmt, char idx_def, double idx_val,
