@@ -197,7 +197,7 @@ let driver (files : string list) (application_names : string list)
     Cli.debug_print "Elaborating...";
     let m_program = Mast_to_mir.translate !m_program mpp_function in
     let m_program = Mir.expand_functions m_program in
-    Mir_collect.var_graph_act m_program.program_targets;
+    Mir_collect.warn_unused_variables m_program.program_targets;
     Cli.debug_print "Creating combined program suitable for execution...";
     if run_all_tests <> None then
       let tests : string =

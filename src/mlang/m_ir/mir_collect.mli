@@ -10,4 +10,4 @@
   You should have received a copy of the GNU General Public License along with
   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val var_graph_act : Mir.target_data Com.TargetMap.t -> unit
+val warn_unused_variables : Mir.target_data Com.TargetMap.t -> unit
