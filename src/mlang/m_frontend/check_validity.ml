@@ -855,11 +855,8 @@ let warn_on_undef_computed_vars (rules : rule IntMap.t)
       match Com.Var.cat var with
       | Computed _ ->
           if not (StrSet.mem var_name def_vars) then
-            Errors.print_spanned_warning
-              (Format.asprintf
-                 "Variable %s is declared as computed but never defined"
-                 var_name)
-              (Pos.get_position var.Com.Var.name)
+            Cli.warning_print
+              "Variable %s is declared as computed but never defined" var_name
       | Input _ -> ())
     vars
 
