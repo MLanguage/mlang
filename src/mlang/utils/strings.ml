@@ -83,3 +83,9 @@ let compare_ebcdic str1 str2 =
       if r <> 0 then r else ebcdic_compare_aux (i + 1)
   in
   ebcdic_compare_aux 0
+
+let starts_with ~prefix s =
+  let lp = String.length prefix in
+  let ls = String.length s in
+  let rec aux i = i = lp || (prefix.[i] = s.[i] && aux (i + 1)) in
+  lp <= ls && aux 0

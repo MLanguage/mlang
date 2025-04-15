@@ -46,12 +46,14 @@ type loc_tgv = {
 
 type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
+type loc_arg = { ord : int; loc_idx : int }
+
 type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * loc_tmp
   | LocRef of string * int
-  | LocArg of string * int
-  | LocRes of string
+  | LocArg of string * loc_arg
+  | LocRes of string * int
 
 module Var : sig
   type id = int
@@ -149,7 +151,7 @@ module Var : sig
 
   val new_ref : name:string Pos.marked -> t
 
-  val new_arg : name:string Pos.marked -> t
+  val new_arg : name:string Pos.marked -> ord:int -> t
 
   val new_res : name:string Pos.marked -> t
 
@@ -414,6 +416,8 @@ type ('v, 'e) target = {
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
 }
+
+val target_is_function : ('v, 'e) target -> bool
 
 val expr_map_var : ('v -> 'w) -> 'v expression -> 'w expression
 

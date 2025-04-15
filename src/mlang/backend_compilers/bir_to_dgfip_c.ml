@@ -1469,25 +1469,36 @@ and generate_stmts (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (stmts : Mir.m_instruction list) =
   List.iter (generate_stmt dgfip_flags program oc) stmts
 
-let generate_var_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
+let generate_function_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
   let pr fmt = Format.fprintf oc fmt in
+  let nb_args = List.length tf.target_args in
+  pr "@;@[<v 2>{";
+  pr "@;int i;";
+  pr "@;T_varinfo *info;";
+  pr "@;irdata->def_tmps[irdata->tmps_org] = 0;";
+  pr "@;irdata->tmps[irdata->tmps_org] = 0.0;";
+  pr "@;irdata->info_tmps[irdata->tmps_org] = NULL;";
+  for i = 1 to nb_args do
+    pr "@;irdata->def_tmps[irdata->tmps_org + %d] = arg_def%d;" i (i - 1);
+    pr "@;irdata->tmps[irdata->tmps_org + %d] = arg_val%d;" i (i - 1);
+    pr "@;irdata->info_tmps[irdata->tmps_org + %d] = NULL;" i
+  done;
   if tf.target_sz_tmps > 0 then (
-    pr "@;@[<v 2>{";
-    pr "@;int i;";
-    pr "@;T_varinfo *info;";
-    pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
+    pr "@;@[<v 2>@[<hov 2>for (i = %d;@ i < %d;@ i++) {@]" (1 + nb_args)
+      tf.target_sz_tmps;
     pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
     pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
+    pr "@;irdata->info_tmps[irdata->tmps_org + i] = NULL;";
     pr "@]@;}";
     pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
     StrMap.iter
       (fun vn var ->
         let loc_str = Pp.spr "irdata->tmps_org + (%d)" (Com.Var.loc_idx var) in
         let loc_cat_idx = Com.Var.loc_cat_idx var in
-        pr "@;irdata->info_tmps[%s] = tmp_varinfo[%d]; /* %s */" loc_str
+        pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s */" loc_str
           loc_cat_idx vn)
-      tf.target_tmp_vars;
-    pr "@]@;}");
+      tf.target_tmp_vars);
+  pr "@]@;}";
   if tf.target_nb_refs > 0 then
     pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs
 
@@ -1514,12 +1525,14 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
   let sav_nb_refs = Pp.spr "%s_nb_refs_target" sav in
   pr "@;int %s = irdata->nb_tmps_target;" sav_nb_tmps;
   pr "@;int %s = irdata->nb_refs_target;" sav_nb_refs;
-  pr "@;irdata->nb_tmps_target = %d;" (StrMap.cardinal fd.target_tmp_vars);
+  pr "%a" generate_function_tmp_decls fd;
+  pr "@;irdata->nb_tmps_target = %d;"
+    (StrMap.fold (fun _ v n -> n + Com.Var.size v) fd.target_tmp_vars 0);
   pr "@;irdata->nb_refs_target = %d;" fd.target_nb_refs;
-  pr "%a" generate_var_tmp_decls fd;
   pr "@;";
   if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" fn;
   pr "%a" (generate_stmts dgfip_flags program) fd.target_prog;
+
   if dgfip_flags.flg_trace then pr "@;aff1(\"fin %s\\n\");" fn;
   pr "@;";
   if fd.target_nb_refs > 0 then
@@ -1528,6 +1541,8 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
     pr "@;irdata->tmps_org = irdata->tmps_org - %d;" fd.target_sz_tmps;
   pr "@;irdata->nb_refs_target = %s;" sav_nb_refs;
   pr "@;irdata->nb_tmps_target = %s;" sav_nb_tmps;
+  pr "@;*res_def = irdata->def_tmps[irdata->tmps_org];";
+  pr "@;*res_val = irdata->tmps[irdata->tmps_org];";
   pr "@;return 1;";
   pr "@]@;}@."
 
@@ -1547,6 +1562,29 @@ let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
   Format.fprintf oc "struct S_discord * %s(T_irdata* irdata)%s" function_name
     (if add_semicolon then ";" else "")
 
+let generate_cible_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
+  let pr fmt = Format.fprintf oc fmt in
+  if tf.target_sz_tmps > 0 then (
+    pr "@;@[<v 2>{";
+    pr "@;int i;";
+    pr "@;T_varinfo *info;";
+    pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
+    pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
+    pr "@;irdata->info_tmps[irdata->tmps_org + i] = NULL;";
+    pr "@]@;}";
+    pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
+    StrMap.iter
+      (fun vn var ->
+        let loc_str = Pp.spr "irdata->tmps_org + (%d)" (Com.Var.loc_idx var) in
+        let loc_cat_idx = Com.Var.loc_cat_idx var in
+        pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s */" loc_str
+          loc_cat_idx vn)
+      tf.target_tmp_vars;
+    pr "@]@;}");
+  if tf.target_nb_refs > 0 then
+    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs
+
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
   let pr fmt = Format.fprintf oc fmt in
@@ -1557,9 +1595,10 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
   let sav_nb_refs = Pp.spr "%s_nb_refs_target" sav in
   pr "@;int %s = irdata->nb_tmps_target;" sav_nb_tmps;
   pr "@;int %s = irdata->nb_refs_target;" sav_nb_refs;
-  pr "@;irdata->nb_tmps_target = %d;" (StrMap.cardinal tf.target_tmp_vars);
+  pr "%a" generate_cible_tmp_decls tf;
+  pr "@;irdata->nb_tmps_target = %d;"
+    (StrMap.fold (fun _ v n -> n + Com.Var.size v) tf.target_tmp_vars 0);
   pr "@;irdata->nb_refs_target = %d;" tf.target_nb_refs;
-  pr "%a" generate_var_tmp_decls tf;
   pr "@;";
   if dgfip_flags.flg_trace then pr "@;aff1(\"debut %s\\n\");" f;
   pr "%a" (generate_stmts dgfip_flags program) tf.target_prog;

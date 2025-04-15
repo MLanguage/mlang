@@ -65,23 +65,23 @@ let gen_ref_val i vn off = Pp.spr "*(%s%s)" (gen_ref_val_ptr i vn) off
 
 (* arguments accessors *)
 
-let gen_arg_def i = Pp.spr "arg_def%d" i
+let gen_arg_def (l : Com.loc_arg) vn = Pp.spr "DT_((%d)/*%s*/)" l.loc_idx vn
 
-let gen_arg_val i = Pp.spr "arg_val%d" i
+let gen_arg_val (l : Com.loc_arg) vn = Pp.spr "T_((%d)/*%s*/)" l.loc_idx vn
 
-let gen_arg_def_ptr i = Pp.spr "(&arg_def%d)" i
+let gen_arg_def_ptr (l : Com.loc_arg) vn = Pp.spr "&(%s)" (gen_arg_def l vn)
 
-let gen_arg_val_ptr i = Pp.spr "(&arg_val%d)" i
+let gen_arg_val_ptr (l : Com.loc_arg) vn = Pp.spr "&(%s)" (gen_arg_val l vn)
 
 (* result accessors *)
 
-let gen_res_def () = Pp.spr "(*res_def)"
+let gen_res_def i vn = Pp.spr "DT_((%d)/*%s*/)" i vn
 
-let gen_res_val () = Pp.spr "(*res_val)"
+let gen_res_val i vn = Pp.spr "T_((%d)/*%s*/)" i vn
 
-let gen_res_def_ptr () = Pp.spr "res_def"
+let gen_res_def_ptr i vn = Pp.spr "&(%s)" (gen_res_def i vn)
 
-let gen_res_val_ptr () = Pp.spr "res_val"
+let gen_res_val_ptr i vn = Pp.spr "&(%s)" (gen_res_val i vn)
 
 (* generic accessors *)
 
@@ -91,8 +91,8 @@ let gen_def (v : Com.Var.t) offset =
   | LocTgv (_, l) -> gen_tgv_def l vn offset
   | LocTmp (_, l) -> gen_tmp_def l vn offset
   | LocRef (_, i) -> gen_ref_def i vn offset
-  | LocArg (_, i) -> gen_arg_def i
-  | LocRes _ -> gen_res_def ()
+  | LocArg (_, l) -> gen_arg_def l vn
+  | LocRes (_, i) -> gen_res_def i vn
 
 let gen_val (v : Com.Var.t) offset =
   let vn = Pos.unmark v.name in
@@ -100,8 +100,8 @@ let gen_val (v : Com.Var.t) offset =
   | LocTgv (_, l) -> gen_tgv_val l vn offset
   | LocTmp (_, l) -> gen_tmp_val l vn offset
   | LocRef (_, i) -> gen_ref_val i vn offset
-  | LocArg (_, i) -> gen_arg_val i
-  | LocRes _ -> gen_res_val ()
+  | LocArg (_, l) -> gen_arg_val l vn
+  | LocRes (_, i) -> gen_res_val i vn
 
 let gen_info_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -117,8 +117,8 @@ let gen_def_ptr (v : Com.Var.t) =
   | LocTgv (_, l) -> gen_tgv_def_ptr l vn
   | LocTmp (_, l) -> gen_tmp_def_ptr l vn
   | LocRef (_, i) -> gen_ref_def_ptr i vn
-  | LocArg (_, i) -> gen_arg_def_ptr i
-  | LocRes _ -> gen_res_def_ptr ()
+  | LocArg (_, l) -> gen_arg_def_ptr l vn
+  | LocRes (_, i) -> gen_res_def_ptr i vn
 
 let gen_val_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -126,8 +126,8 @@ let gen_val_ptr (v : Com.Var.t) =
   | LocTgv (_, l) -> gen_tgv_val_ptr l vn
   | LocTmp (_, l) -> gen_tmp_val_ptr l vn
   | LocRef (_, i) -> gen_ref_val_ptr i vn
-  | LocArg (_, i) -> gen_arg_val_ptr i
-  | LocRes _ -> gen_res_val_ptr ()
+  | LocArg (_, l) -> gen_arg_val_ptr l vn
+  | LocRes (_, i) -> gen_res_val_ptr i vn
 
 let gen_ref_name_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -150,8 +150,8 @@ let gen_pos_from_start (v : Com.Var.t) =
   | LocRef (_, i) ->
       let info = gen_ref_info_ptr i vn in
       Printf.sprintf "%s->loc_cat | %s->idx" info info
-  | LocArg (_, i) -> Pp.spr "EST_ARGUMENT | %d" i
-  | LocRes _ -> Pp.spr "EST_RESULTAT | 0"
+  | LocArg (_, l) -> Pp.spr "EST_ARGUMENT | %d" l.loc_idx
+  | LocRes (_, i) -> Pp.spr "EST_RESULTAT | %d" i
 
 let gen_size (v : Com.Var.t) =
   let vn = Pos.unmark v.name in

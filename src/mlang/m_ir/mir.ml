@@ -50,6 +50,7 @@ type stats = {
   sz_all_tmps : int;
   nb_all_tables : int;
   sz_all_tables : int;
+  max_nb_args : int;
   table_map : Com.Var.t IntMap.t;
 }
 
@@ -59,6 +60,7 @@ type program = {
   program_var_categories : Com.CatVar.data Com.CatVar.Map.t;
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
+  program_dict : Com.Var.t IntMap.t;
   program_vars : Com.Var.t StrMap.t;
   program_alias : Com.Var.t StrMap.t;
   program_event_fields : Com.event_field StrMap.t;

@@ -26,3 +26,5 @@ val sanitize_c_str : string -> string
 val compare_default : string -> string -> int
 
 val compare_ebcdic : string -> string -> int
+
+val starts_with : prefix:string -> string -> bool

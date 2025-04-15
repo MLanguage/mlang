@@ -99,12 +99,14 @@ type loc_tgv = {
 
 type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
+type loc_arg = { ord : int; loc_idx : int }
+
 type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * loc_tmp
   | LocRef of string * int
-  | LocArg of string * int
-  | LocRes of string
+  | LocArg of string * loc_arg
+  | LocRes of string * int
 
 module Var = struct
   type id = int
@@ -200,8 +202,9 @@ module Var = struct
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_cat_idx
     | LocTmp (_, tmp) -> tmp.loc_cat_idx
-    | LocRef (_, li) | LocArg (_, li) -> li
-    | LocRes id ->
+    | LocRef (_, li) -> li
+    | LocArg (_, arg) -> arg.ord
+    | LocRes (id, _) ->
         let msg = Pp.spr "variable %s doesn't have an index" id in
         Errors.raise_error msg
 
@@ -212,7 +215,7 @@ module Var = struct
         let loc_cat_str = cv.id_str in
         let tgv = { tgv with loc_cat; loc_cat_str; loc_cat_idx = i } in
         { v with loc = LocTgv (id, tgv) }
-    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
   let set_loc_tmp_idx v i =
@@ -220,17 +223,15 @@ module Var = struct
     | LocTmp (id, tmp) ->
         let tmp = { tmp with loc_cat_idx = i } in
         { v with loc = LocTmp (id, tmp) }
-    | LocTgv (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+    | LocTgv (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
   let loc_idx v =
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_idx
     | LocTmp (_, tmp) -> tmp.loc_idx
-    | LocRef (_, li) | LocArg (_, li) -> li
-    | LocRes id ->
-        let msg = Pp.spr "variable %s doesn't have an index" id in
-        Errors.raise_error msg
+    | LocArg (_, arg) -> arg.loc_idx
+    | LocRef (_, li) | LocRes (_, li) -> li
 
   let set_loc_idx v loc_idx =
     let loc =
@@ -238,10 +239,8 @@ module Var = struct
       | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
       | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_idx })
       | LocRef (id, _) -> LocRef (id, loc_idx)
-      | LocArg (id, _) -> LocArg (id, loc_idx)
-      | LocRes id ->
-          let msg = Pp.spr "variable %s doesn't have an index" id in
-          Errors.raise_error msg
+      | LocArg (id, arg) -> LocArg (id, { arg with loc_idx })
+      | LocRes (id, _) -> LocRes (id, loc_idx)
     in
     { v with loc }
 
@@ -249,7 +248,7 @@ module Var = struct
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_tab_idx
     | LocTmp (_, tmp) -> tmp.loc_tab_idx
-    | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+    | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
         let msg = Pp.spr "variable %s cannot be a table" id in
         Errors.raise_error msg
 
@@ -258,7 +257,7 @@ module Var = struct
       match v.loc with
       | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_tab_idx })
       | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_tab_idx })
-      | LocRef (id, _) | LocArg (id, _) | LocRes id ->
+      | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
           let msg = Pp.spr "variable %s cannot be a table" id in
           Errors.raise_error msg
     in
@@ -306,12 +305,12 @@ module Var = struct
     let loc = LocRef (Pos.unmark name, -1) in
     { name; id = new_id (); loc; scope = Ref }
 
-  let new_arg ~(name : string Pos.marked) : t =
-    let loc = LocArg (Pos.unmark name, -1) in
+  let new_arg ~(name : string Pos.marked) ~(ord : int) : t =
+    let loc = LocArg (Pos.unmark name, { ord; loc_idx = -1 }) in
     { name; id = new_id (); loc; scope = Arg }
 
   let new_res ~(name : string Pos.marked) : t =
-    let loc = LocRes (Pos.unmark name) in
+    let loc = LocRes (Pos.unmark name, -1) in
     { name; id = new_id (); loc; scope = Res }
 
   let int_of_scope = function
@@ -643,6 +642,8 @@ type ('v, 'e) target = {
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
 }
+
+let target_is_function t = t.target_result <> None
 
 let rec access_map_var f = function
   | VarAccess v -> VarAccess (f v)

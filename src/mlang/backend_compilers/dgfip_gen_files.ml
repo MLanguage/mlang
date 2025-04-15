@@ -57,7 +57,8 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
   in
   Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
 
-let gen_table_tmp_varinfo vars fmt =
+let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
+  let vars = IntMap.filter (fun _ v -> Com.Var.is_temp v) cprog.program_dict in
   Pp.fpr fmt "T_varinfo tmp_varinfo[%d] = {\n" (IntMap.cardinal vars + 1);
   IntMap.iter
     (fun _ var ->
@@ -160,18 +161,7 @@ let gen_table_varinfos (cprog : Mir.program) flags =
     in
     StrMap.iter iter var_map;
     Pp.fpr fmt "  NULL\n};\n\n");
-  let tmp_vars =
-    let fold _ (target : Mir.target) tmp_vars =
-      let foldVars _ var tmp_vars =
-        IntMap.add (Com.Var.loc_cat_idx var) var tmp_vars
-      in
-      StrMap.fold foldVars target.target_tmp_vars tmp_vars
-    in
-    IntMap.empty
-    |> StrMap.fold fold cprog.program_targets
-    |> StrMap.fold fold cprog.program_functions
-  in
-  gen_table_tmp_varinfo tmp_vars fmt;
+  gen_table_tmp_varinfo cprog fmt;
   gen_table_tab_varinfo cprog fmt;
   close_out oc;
   stats_varinfos
@@ -434,7 +424,7 @@ struct S_irdata {
   char *def_base;
   char *def_tmps;
   char **def_ref;
-  T_varinfo *info_tmps;
+  T_varinfo **info_tmps;
   char **ref_name;
   T_varinfo **info_ref;
   int tmps_org;
@@ -494,7 +484,7 @@ typedef struct S_irdata T_irdata;
 
 #define DT_(idx) (irdata->def_tmps[irdata->tmps_org + (idx)])
 #define T_(idx) (irdata->tmps[irdata->tmps_org + (idx)])
-#define IT_(idx) (&(irdata->info_tmps[irdata->tmps_org + (idx)]))
+#define IT_(idx) (irdata->info_tmps[irdata->tmps_org + (idx)])
 
 #define DR_(idx) (irdata->def_ref[irdata->ref_org + (idx)])
 #define R_(idx) (irdata->ref[irdata->ref_org + (idx)])
@@ -1423,7 +1413,7 @@ T_irdata *cree_irdata(void) {
     if (irdata->tmps == NULL) goto erreur_cree_irdata;
     irdata->def_tmps = (char *)malloc(TAILLE_TMP_VARS * sizeof (char));
     if (irdata->def_tmps == NULL) goto erreur_cree_irdata;
-    irdata->info_tmps = (T_varinfo *)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo));    
+    irdata->info_tmps = (T_varinfo **)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo *));    
     if (irdata->info_tmps == NULL) goto erreur_cree_irdata;
   }
   irdata->ref = NULL;
@@ -1717,8 +1707,8 @@ T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
     return map->info;
   }
   for (i = 1; i <= irdata->nb_tmps_target; i++) {
-    T_varinfo *info = &(irdata->info_tmps[irdata->tmps_org - i]);
-    if (strcmp(nom, info->name) == 0) {
+    T_varinfo *info = irdata->info_tmps[irdata->tmps_org - i];
+    if (info != NULL && strcmp(nom, info->name) == 0) {
       return info;
     }
   }
@@ -1741,7 +1731,7 @@ char lis_varinfo_def(T_irdata *irdata, T_varinfo *info) {
     case EST_BASE:
       return irdata->def_base[info->idx];
     case EST_TEMPORAIRE:
-      return irdata->def_tmps[info->idx];
+      return irdata->def_tmps[irdata->tmps_org + info->idx];
     default:
       return 0;
   }
@@ -1757,7 +1747,7 @@ double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
     case EST_BASE:
       return irdata->base[info->idx];
     case EST_TEMPORAIRE:
-      return irdata->tmps[info->idx];
+      return irdata->tmps[irdata->tmps_org + info->idx];
     default:
       return 0.0;
   }
@@ -1785,8 +1775,8 @@ char lis_varinfo(
       *res_val = irdata->base[info->idx];
       return *res_def;
     case EST_TEMPORAIRE:
-      *res_def = irdata->def_tmps[info->idx];
-      *res_val = irdata->tmps[info->idx];
+      *res_def = irdata->def_tmps[irdata->tmps_org + info->idx];
+      *res_val = irdata->tmps[irdata->tmps_org + info->idx];
       return *res_def;
     default:
       return *res_def;
@@ -1804,7 +1794,7 @@ char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
     case EST_BASE:
       return irdata->def_base[info->idx + idx];
     case EST_TEMPORAIRE:
-      return irdata->def_tmps[info->idx + idx];
+      return irdata->def_tmps[irdata->tmps_org + info->idx + idx];
     default:
       return 0;
   }
@@ -1820,7 +1810,7 @@ double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
     case EST_BASE:
       return irdata->base[info->idx + idx];
     case EST_TEMPORAIRE:
-      return irdata->tmps[info->idx + idx];
+      return irdata->tmps[irdata->tmps_org + info->idx + idx];
     default:
       return 0.0;
   }
@@ -1847,7 +1837,7 @@ char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info) {
     case EST_BASE:
       return &(irdata->def_base[info->idx]);
     case EST_TEMPORAIRE:
-      return &(irdata->def_tmps[info->idx]);
+      return &(irdata->def_tmps[irdata->tmps_org + info->idx]);
     default:
       return NULL;
   }
@@ -1863,7 +1853,7 @@ double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info) {
     case EST_BASE:
       return &(irdata->base[info->idx]);
     case EST_TEMPORAIRE:
-      return &(irdata->tmps[info->idx]);
+      return &(irdata->tmps[irdata->tmps_org + info->idx]);
     default:
       return NULL;
   }
@@ -1890,8 +1880,8 @@ void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
       irdata->base[info->idx] = val;
       return;
     case EST_TEMPORAIRE:
-      irdata->def_tmps[info->idx] = def;
-      irdata->tmps[info->idx] = val;
+      irdata->def_tmps[irdata->tmps_org + info->idx] = def;
+      irdata->tmps[irdata->tmps_org + info->idx] = val;
       return;
     default:
       return;
@@ -1922,8 +1912,8 @@ void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, dou
       irdata->base[var_idx] = val;
       return;
     case EST_TEMPORAIRE:
-      irdata->def_tmps[var_idx] = def;
-      irdata->tmps[var_idx] = val;
+      irdata->def_tmps[irdata->tmps_org + var_idx] = def;
+      irdata->tmps[irdata->tmps_org + var_idx] = val;
       return;
     default:
       return;

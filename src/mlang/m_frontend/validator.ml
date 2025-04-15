@@ -488,18 +488,12 @@ let safe_prefix (p : Mast.program) : string =
       target_names
   in
   let buf = Buffer.create 16 in
-  let starts_with p s =
-    let lp = String.length p in
-    let ls = String.length s in
-    let rec aux i = i = lp || (p.[i] = s.[i] && aux (i + 1)) in
-    lp <= ls && aux 0
-  in
   let rec make_prefix = function
     | name :: tl ->
         let i = Buffer.length buf in
         if i >= String.length name then make_prefix []
         else (
-          (if starts_with (Buffer.contents buf) name then
+          (if Strings.starts_with ~prefix:(Buffer.contents buf) name then
            let c = match name.[i] with 'a' -> 'b' | _ -> 'a' in
            Buffer.add_char buf c);
           make_prefix tl)
@@ -1975,7 +1969,7 @@ let check_code (is_rule : bool) (is_function : bool)
         check_name_in_tgv prog m_v;
         check_name_in_tmp tmp_vars' m_v;
         let var =
-          if is_function then Com.Var.new_arg ~name:m_v
+          if is_function then Com.Var.new_arg ~name:m_v ~ord:(List.length args)
           else Com.Var.new_ref ~name:m_v
         in
         (Pos.same_pos_as var.id m_v :: args, add_var_env var env)
