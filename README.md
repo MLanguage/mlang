@@ -56,7 +56,7 @@ Then, you can initialize your Mlang projet using
 This command creates a local Opam switch (analogous to a virtual environment), installs
 Mlang's OCaml dependencies and clones the M source code repository released by the DGFiP with
 
-    git submodule update --init
+    git submodule update --init ir-calcul
 
 You can then use
 
