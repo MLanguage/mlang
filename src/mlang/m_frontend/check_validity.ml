@@ -675,6 +675,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~attrs:(get_attributes input_var.Mast.input_attributes)
           ~cat:global_category
           ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
+          ~in_verif:false
       in
       check_global_var var prog
   | Mast.ComputedVar (comp_var, _decl_pos) ->
@@ -699,6 +700,7 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~attrs:(get_attributes comp_var.Mast.comp_attributes)
           ~cat:global_category
           ~typ:(Option.map Pos.unmark comp_var.Mast.comp_typ)
+          ~in_verif:false
       in
       check_global_var var prog
 
@@ -827,6 +829,36 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
   let doms, syms = check_domain Verif decl dom_data doms_syms in
   { prog with prog_vdoms = doms; prog_vdom_syms = syms }
+
+let warn_on_undef_computed_vars (rules : rule IntMap.t)
+    (vars : Com.Var.t StrMap.t) =
+  let def_vars =
+    IntMap.fold
+      (fun _ rule set ->
+        List.fold_left
+          (fun set m_instr ->
+            let instr = Pos.unmark m_instr in
+            match instr with
+            | Com.Affectation m_formula -> begin
+                let formula = Pos.unmark m_formula in
+                match formula with
+                | Com.SingleFormula (var, _, _) ->
+                    StrSet.add (Mast.get_variable_name (Pos.unmark var)) set
+                | Com.MultipleFormulaes _ -> assert false
+              end
+            | _ -> set)
+          set rule.rule_instrs)
+      rules StrSet.empty
+  in
+  StrMap.iter
+    (fun var_name var ->
+      match Com.Var.cat var with
+      | Computed _ ->
+          if not (StrSet.mem var_name def_vars) then
+            Cli.warning_print
+              "Variable %s is declared as computed but never defined" var_name
+      | Input _ -> ())
+    vars
 
 let complete_vars (prog : program) : program =
   let prog_vars = prog.prog_vars in
@@ -1058,6 +1090,7 @@ let complete_vars (prog : program) : program =
         sz_all_tmps;
       }
   in
+  warn_on_undef_computed_vars prog.prog_rules prog_vars;
   { prog with prog_vars; prog_targets; prog_stats }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
@@ -2363,6 +2396,32 @@ let convert_verifs (prog : program) : program =
   in
   { prog with prog_targets }
 
+let add_verif_info (v : verif) (prog : program) : program =
+  let used_vars = Com.get_used_variables (Pos.unmark v.verif_expr) in
+  let prog_vars =
+    List.fold_left
+      (fun vars var ->
+        let vn =
+          match var with
+          | Mast.Normal var_name -> var_name
+          | Mast.Generic _ -> assert false
+        in
+        let var = StrMap.find vn vars in
+        let var =
+          match var.Com.Var.scope with
+          | Tgv tgv -> { var with scope = Tgv { tgv with in_verif = true } }
+          | _ -> var
+        in
+        StrMap.add vn var vars)
+      prog.prog_vars used_vars
+  in
+  { prog with prog_vars }
+
+let add_verif_info_all_vars (prog : program) : program =
+  IntMap.fold
+    (fun _ verif prog -> add_verif_info verif prog)
+    prog.prog_verifs prog
+
 let eval_expr_verif (prog : program) (verif : verif)
     (expr : Mast.expression Pos.marked) : float option =
   let my_floor a = floor (a +. 0.000001) in
@@ -2671,4 +2730,4 @@ let proceed (p : Mast.program) (main_target : string) : program =
   in
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
-  |> complete_verif_calls |> complete_vars
+  |> add_verif_info_all_vars |> complete_verif_calls |> complete_vars

@@ -64,6 +64,7 @@ module Var : sig
     cat : CatVar.t;
     is_given_back : bool;
     typ : value_typ option;
+    in_verif : bool;
   }
 
   type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
@@ -101,6 +102,10 @@ module Var : sig
 
   val is_given_back : t -> bool
 
+  val is_base : t -> bool
+
+  val in_verif : t -> bool
+
   val loc_tgv : t -> loc_tgv
 
   val loc_int : t -> int
@@ -124,6 +129,7 @@ module Var : sig
     attrs:int Pos.marked StrMap.t ->
     cat:CatVar.t ->
     typ:value_typ option ->
+    in_verif:bool ->
     t
 
   val new_temp :
@@ -266,6 +272,8 @@ type 'v expression =
   | NbBloquantes
 
 and 'v m_expression = 'v expression Pos.marked
+
+val get_used_variables : 'v expression -> 'v list
 
 module Error : sig
   type typ = Anomaly | Discordance | Information
