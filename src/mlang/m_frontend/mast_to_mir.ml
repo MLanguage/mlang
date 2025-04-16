@@ -338,23 +338,21 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           match StrMap.find_opt name prog.prog_functions with
           | Some t -> eval_call t
           | None -> eval_call (StrMap.find name prog.prog_targets))
+    and aux_access tdata m_a =
+      match Pos.unmark m_a with
+      | Com.VarAccess _ -> (0, 0, 0, tdata)
+      | Com.TabAccess (_, mi)
+      | Com.ConcAccess (_, _, mi)
+      | Com.FieldAccess (mi, _, _) ->
+          aux_expr tdata mi
     and aux_instr tdata (instr, _pos) =
       match instr with
       | Com.Affectation mf -> (
           match Pos.unmark mf with
-          | SingleFormula (VarDecl (m_access, mev)) -> (
+          | SingleFormula (VarDecl (m_a, mev)) ->
               let nb, sz, nbRef, tdata = aux_expr tdata mev in
-              match Pos.unmark m_access with
-              | VarAccess _ -> (nb, sz, nbRef, tdata)
-              | TabAccess (_, mi) ->
-                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
-                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
-              | ConcAccess (_, _, mi) ->
-                  let nbI, szI, nbRefI, tdata = aux_expr tdata mi in
-                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata)
-              | FieldAccess (mei, _, _) ->
-                  let nbI, szI, nbRefI, tdata = aux_expr tdata mei in
-                  (max nbI nb, max szI sz, max nbRefI nbRef, tdata))
+              let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
+              (max nbA nb, max szA sz, max nbRefA nbRef, tdata)
           | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
           | MultipleFormulaes _ -> assert false)
       | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)
@@ -389,14 +387,11 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Print (_, pal) ->
           let fold (nb, sz, nbRef, tdata) (a, _pos) =
             match a with
-            | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
-                (nb, sz, nbRef, tdata)
-            | Com.PrintConcName (_, _, me)
-            | Com.PrintConcAlias (_, _, me)
-            | Com.PrintEventName (me, _, _)
-            | Com.PrintEventAlias (me, _, _)
-            | Com.PrintIndent me
-            | Com.PrintExpr (me, _, _) ->
+            | Com.PrintAccess (_, m_a) ->
+                let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
+                (max nbA nb, max szA sz, max nbRefA nbRef, tdata)
+            | Com.PrintString _ -> (nb, sz, nbRef, tdata)
+            | Com.PrintIndent me | Com.PrintExpr (me, _, _) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata me in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
           in
@@ -584,23 +579,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             (function
               | FloatValue f -> FloatValue f
               | VarValue (access, pos) ->
-                  let access' =
-                    match access with
-                    | VarAccess m_id ->
-                        let v' = get_var dict m_id in
-                        VarAccess v'
-                    | TabAccess (m_id, m_i) ->
-                        let v' = get_var dict m_id in
-                        let m_i' = translate_expression p dict m_i in
-                        TabAccess (v', m_i')
-                    | ConcAccess (m_vn, m_if, i) ->
-                        let i' = translate_expression p dict i in
-                        ConcAccess (m_vn, m_if, i')
-                    | FieldAccess (e, ((fn, _) as f), _) ->
-                        let e' = translate_expression p dict e in
-                        let i_f = (StrMap.find fn p.prog_event_fields).index in
-                        FieldAccess (e', f, i_f)
-                  in
+                  let access' = translate_access p dict access in
                   VarValue (access', pos)
               | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
             (values : int Pos.marked set_value list)
@@ -637,23 +616,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
         in
         FuncCall (f_name, new_args)
     | Literal l -> Literal l
-    | Var access ->
-        let access' =
-          match access with
-          | VarAccess m_v -> VarAccess (get_var dict m_v)
-          | TabAccess (m_v, m_i) ->
-              let v' = get_var dict m_v in
-              let m_i' = translate_expression p dict m_i in
-              TabAccess (v', m_i')
-          | ConcAccess (m_vn, m_if, i) ->
-              let i' = translate_expression p dict i in
-              ConcAccess (m_vn, m_if, i')
-          | FieldAccess (e, f, _) ->
-              let e' = translate_expression p dict e in
-              let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-              FieldAccess (e', f, i)
-        in
-        Var access'
+    | Var access -> Var (translate_access p dict access)
     | NbCategory cs -> NbCategory (Validator.mast_to_catvars cs p.prog_var_cats)
     | Attribut ((access, pos), a) -> (
         match access with
@@ -700,6 +663,24 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
   in
   Pos.same_pos_as expr f
 
+and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
+    (access : int Pos.marked Com.access) : Com.Var.t Com.access =
+  match access with
+  | VarAccess m_v ->
+      let v' = get_var dict m_v in
+      Com.VarAccess v'
+  | TabAccess (m_v, m_i) ->
+      let v' = get_var dict m_v in
+      let m_i' = translate_expression p dict m_i in
+      Com.TabAccess (v', m_i')
+  | ConcAccess (m_vn, m_if, i) ->
+      let i' = translate_expression p dict i in
+      Com.ConcAccess (m_vn, m_if, i')
+  | FieldAccess (i, f, _) ->
+      let i' = translate_expression p dict i in
+      let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
+      Com.FieldAccess (i', f, ef.index)
+
 (** {2 Translation of instructions} *)
 
 let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
@@ -711,24 +692,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let decl' =
           match decl with
           | VarDecl (m_access, e) ->
-              let m_access' =
-                let access, a_pos = m_access in
-                match access with
-                | VarAccess m_v ->
-                    let v' = get_var dict m_v in
-                    (Com.VarAccess v', a_pos)
-                | TabAccess (m_v, m_i) ->
-                    let v' = get_var dict m_v in
-                    let m_i' = translate_expression p dict m_i in
-                    (Com.TabAccess (v', m_i'), a_pos)
-                | ConcAccess (m_vn, m_if, i) ->
-                    let i' = translate_expression p dict i in
-                    (Com.ConcAccess (m_vn, m_if, i'), a_pos)
-                | FieldAccess (i, f, _) ->
-                    let i' = translate_expression p dict i in
-                    let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
-                    (Com.FieldAccess (i', f, ef.index), a_pos)
-              in
+              let access' = translate_access p dict (Pos.unmark m_access) in
+              let m_access' = Pos.same_pos_as access' m_access in
               let e' = translate_expression p dict e in
               Com.VarDecl (m_access', e')
           | EventFieldRef (idx, f, _, m_v) ->
@@ -773,34 +738,10 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
                  let mir_arg =
                    match Pos.unmark arg with
                    | Com.PrintString s -> Com.PrintString s
-                   | Com.PrintName m_id ->
-                       let var = get_var dict m_id in
-                       if Com.Var.is_ref var then Com.PrintName var
-                       else
-                         (*Com.PrintString (Pos.unmark var.name)*)
-                         Com.PrintName var
-                   | Com.PrintAlias m_id ->
-                       let var = get_var dict m_id in
-                       if Com.Var.is_ref var then Com.PrintAlias var
-                       else Com.PrintString (Com.Var.alias_str var)
-                   | Com.PrintConcName (m_vn, m_if, i) ->
-                       let i' = translate_expression p dict i in
-                       Com.PrintConcName (m_vn, m_if, i')
-                   | Com.PrintConcAlias (m_vn, m_if, i) ->
-                       let i' = translate_expression p dict i in
-                       Com.PrintConcAlias (m_vn, m_if, i')
-                   | Com.PrintEventName (e, f, _) ->
-                       let e' = translate_expression p dict e in
-                       let i =
-                         (StrMap.find (Pos.unmark f) p.prog_event_fields).index
-                       in
-                       Com.PrintEventName (e', f, i)
-                   | Com.PrintEventAlias (e, f, _) ->
-                       let e' = translate_expression p dict e in
-                       let i =
-                         (StrMap.find (Pos.unmark f) p.prog_event_fields).index
-                       in
-                       Com.PrintEventAlias (e', f, i)
+                   | Com.PrintAccess (info, m_a) ->
+                       let a' = translate_access p dict (Pos.unmark m_a) in
+                       let m_a' = Pos.same_pos_as a' m_a in
+                       Com.PrintAccess (info, m_a')
                    | Com.PrintIndent e ->
                        Com.PrintIndent (translate_expression p dict e)
                    | Com.PrintExpr (e, min, max) ->

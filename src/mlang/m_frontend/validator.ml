@@ -1479,40 +1479,35 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   let arg' =
                     match arg with
                     | Com.PrintString s -> Com.PrintString s
-                    | Com.PrintName v ->
-                        check_variable v Both env;
-                        Com.PrintName (map_var env v)
-                    | Com.PrintAlias v ->
-                        check_variable v Both env;
-                        Com.PrintAlias (map_var env v)
-                    | Com.PrintConcName (m_vn, m_if, m_i) ->
-                        let m_i' = map_expr env m_i in
-                        Com.PrintConcName (m_vn, m_if, m_i')
-                    | Com.PrintConcAlias (m_vn, m_if, m_i) ->
-                        let m_i' = map_expr env m_i in
-                        Com.PrintConcAlias (m_vn, m_if, m_i')
-                    | Com.PrintEventName (e, f, id) -> (
-                        let f_name, f_pos = f in
-                        match
-                          StrMap.find_opt f_name env.prog.prog_event_fields
-                        with
-                        | Some ef when ef.is_var ->
-                            let e' = map_expr env e in
-                            Com.PrintEventName (e', f, id)
-                        | Some _ ->
-                            Err.event_field_is_not_a_reference f_name f_pos
-                        | None -> Err.unknown_event_field f_name f_pos)
-                    | Com.PrintEventAlias (e, f, id) -> (
-                        let f_name, f_pos = f in
-                        match
-                          StrMap.find_opt f_name env.prog.prog_event_fields
-                        with
-                        | Some ef when ef.is_var ->
-                            let e' = map_expr env e in
-                            Com.PrintEventAlias (e', f, id)
-                        | Some _ ->
-                            Err.event_field_is_not_a_reference f_name f_pos
-                        | None -> Err.unknown_event_field f_name f_pos)
+                    | Com.PrintAccess (info, m_a) ->
+                        let a' =
+                          match Pos.unmark m_a with
+                          | Com.VarAccess v ->
+                              check_variable v Both env;
+                              Com.VarAccess (map_var env v)
+                          | Com.TabAccess (m_v, m_i) ->
+                              check_variable m_v Table env;
+                              let m_v' = map_var env m_v in
+                              let m_i' = map_expr env m_i in
+                              Com.TabAccess (m_v', m_i')
+                          | Com.ConcAccess (m_vn, m_if, m_i) ->
+                              let m_i' = map_expr env m_i in
+                              Com.ConcAccess (m_vn, m_if, m_i')
+                          | Com.FieldAccess (e, f, id) -> (
+                              let f_name, f_pos = f in
+                              match
+                                StrMap.find_opt f_name
+                                  env.prog.prog_event_fields
+                              with
+                              | Some ef when ef.is_var ->
+                                  let e' = map_expr env e in
+                                  Com.FieldAccess (e', f, id)
+                              | Some _ ->
+                                  Err.event_field_is_not_a_reference f_name
+                                    f_pos
+                              | None -> Err.unknown_event_field f_name f_pos)
+                        in
+                        Com.PrintAccess (info, Pos.same_pos_as a' m_a)
                     | Com.PrintIndent e ->
                         let e' = map_expr env e in
                         Com.PrintIndent e'

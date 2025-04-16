@@ -1057,50 +1057,56 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       let print_val = print ^ "_val" in
       pr "@;@[<v 2>{";
       pr "@;char %s;@;double %s;@;int %s;" print_def print_val print;
-      let print_evt_name_or_alias name_or_alias e f =
-        let ef = StrMap.find (Pos.unmark f) program.program_event_fields in
-        if ef.is_var then (
-          generate_expr_with_res_in dgfip_flags oc print_def print_val e;
-          pr "@;%s = (int)%s;" print print_val;
-          pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" print_def
-            print print;
-          pr "@;print_string(%s, %s, irdata->events[%s]->field_%s_var->%s);"
-            print_std pr_ctx print (Pos.unmark f) name_or_alias;
-          pr "@]@;}")
-      in
-      let print_conc_name_or_alias name_or_alias m_vn m_if i =
-        let name = Com.get_normal_var (Pos.unmark m_vn) in
-        generate_expr_with_res_in dgfip_flags oc print_def print_val i;
-        pr "@;%s = (int)%s;" print print_val;
-        pr "@;@[<v 2>{";
-        pr
-          "@;\
-           T_varinfo *info = lis_concat_nom_index_var(irdata, \"%s\", \"%s\", \
-           %s, %s);"
-          name (Pos.unmark m_if) print_def print_val;
-        pr "@;@[<v 2>if (info != NULL) {";
-        pr "@;print_string(%s, %s, info->%s);" print_std pr_ctx name_or_alias;
-        pr "@]@;}";
-        pr "@]@;}"
-      in
       List.iter
         (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
           match Pos.unmark arg with
           | PrintString s ->
               pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
                 (str_escape s)
-          | PrintName var ->
-              let ptr = VID.gen_info_ptr var in
-              pr "@;print_string(%s, %s, %s->name);" print_std pr_ctx ptr
-          | PrintAlias var ->
-              let ptr = VID.gen_info_ptr var in
-              pr "@;print_string(%s, %s, %s->alias);" print_std pr_ctx ptr
-          | PrintConcName (m_vn, m_if, i) ->
-              print_conc_name_or_alias "name" m_vn m_if i
-          | PrintConcAlias (m_vn, m_if, i) ->
-              print_conc_name_or_alias "alias" m_vn m_if i
-          | PrintEventName (e, f, _) -> print_evt_name_or_alias "name" e f
-          | PrintEventAlias (e, f, _) -> print_evt_name_or_alias "alias" e f
+          | PrintAccess (info, m_a) -> (
+              match Pos.unmark m_a with
+              | VarAccess var ->
+                  let ptr = VID.gen_info_ptr var in
+                  let fld =
+                    match info with Com.Name -> "name" | Com.Alias -> "alias"
+                  in
+                  pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr fld
+              | ConcAccess (m_vn, m_if, i) ->
+                  let fld =
+                    match info with Com.Name -> "name" | Com.Alias -> "alias"
+                  in
+                  let name = Com.get_normal_var (Pos.unmark m_vn) in
+                  generate_expr_with_res_in dgfip_flags oc print_def print_val i;
+                  pr "@;%s = (int)%s;" print print_val;
+                  pr "@;@[<v 2>{";
+                  pr
+                    "@;\
+                     T_varinfo *info = lis_concat_nom_index_var(irdata, \
+                     \"%s\", \"%s\", %s, %s);"
+                    name (Pos.unmark m_if) print_def print_val;
+                  pr "@;@[<v 2>if (info != NULL) {";
+                  pr "@;print_string(%s, %s, info->%s);" print_std pr_ctx fld;
+                  pr "@]@;}";
+                  pr "@]@;}"
+              | FieldAccess (e, f, _) ->
+                  let fld =
+                    match info with Com.Name -> "name" | Com.Alias -> "alias"
+                  in
+                  let ef =
+                    StrMap.find (Pos.unmark f) program.program_event_fields
+                  in
+                  if ef.is_var then (
+                    generate_expr_with_res_in dgfip_flags oc print_def print_val
+                      e;
+                    pr "@;%s = (int)%s;" print print_val;
+                    pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {"
+                      print_def print print;
+                    pr
+                      "@;\
+                       print_string(%s, %s, \
+                       irdata->events[%s]->field_%s_var->%s);"
+                      print_std pr_ctx print (Pos.unmark f) fld;
+                    pr "@]@;}"))
           | PrintIndent e ->
               generate_expr_with_res_in dgfip_flags oc print_def print_val e;
               pr "@;@[<v 2>if (%s) {" print_def;

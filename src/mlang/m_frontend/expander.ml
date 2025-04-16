@@ -745,69 +745,19 @@ let rec expand_instruction (const_map : const_context)
         List.map
           (fun arg ->
             match Pos.unmark arg with
-            | Com.PrintConcName (m_v, m_if, i) -> (
-                match expand_variable const_map ParamsMap.empty m_v with
-                | AtomLiteral _, var_pos ->
-                    Err.constant_forbidden_as_arg var_pos
-                | AtomVar m_v, v_pos -> (
-                    match expand_expression const_map ParamsMap.empty i with
-                    | Com.Literal Undefined, i_pos ->
-                        Err.constant_forbidden_as_arg i_pos
-                    | Com.Literal (Float f), i_pos ->
-                        let fi = int_of_float f in
-                        if fi < 0 then Err.constant_forbidden_as_arg i_pos
-                        else
-                          let v' =
-                            match Pos.unmark m_v with
-                            | Com.Normal n ->
-                                let n' =
-                                  Strings.concat_int n (Pos.unmark m_if) fi
-                                in
-                                Com.Normal n'
-                            | _ -> assert false
-                          in
-                          (Com.PrintName (v', v_pos), Pos.get arg)
-                    | i' ->
-                        ( Com.PrintConcName ((Pos.unmark m_v, v_pos), m_if, i'),
-                          Pos.get arg )))
-            | Com.PrintConcAlias (m_v, m_if, i) -> (
-                match expand_variable const_map ParamsMap.empty m_v with
-                | AtomLiteral _, var_pos ->
-                    Err.constant_forbidden_as_arg var_pos
-                | AtomVar m_v, v_pos -> (
-                    match expand_expression const_map ParamsMap.empty i with
-                    | Com.Literal Undefined, i_pos ->
-                        Err.constant_forbidden_as_arg i_pos
-                    | Com.Literal (Float f), i_pos ->
-                        let fi = int_of_float f in
-                        if fi < 0 then Err.constant_forbidden_as_arg i_pos
-                        else
-                          let v' =
-                            match Pos.unmark m_v with
-                            | Com.Normal n ->
-                                let n' =
-                                  Strings.concat_int n (Pos.unmark m_if) fi
-                                in
-                                Com.Normal n'
-                            | _ -> assert false
-                          in
-                          (Com.PrintAlias (v', v_pos), Pos.get arg)
-                    | i' ->
-                        ( Com.PrintConcAlias ((Pos.unmark m_v, v_pos), m_if, i'),
-                          Pos.get arg )))
-            | Com.PrintEventName (expr, f, i) ->
-                let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintEventName (expr', f, i), Pos.get arg)
-            | Com.PrintEventAlias (expr, f, i) ->
-                let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintEventAlias (expr', f, i), Pos.get arg)
+            | Com.PrintAccess (info, m_a) -> (
+                match expand_access const_map ParamsMap.empty m_a with
+                | ExpLiteral _ -> Err.constant_forbidden_as_arg (Pos.get m_a)
+                | ExpAccess (a', _) ->
+                    let arg' = Com.PrintAccess (info, Pos.same_pos_as a' m_a) in
+                    Pos.same_pos_as arg' arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintIndent expr', Pos.get arg)
             | Com.PrintExpr (expr, mi, ma) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintExpr (expr', mi, ma), Pos.get arg)
-            | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ -> arg)
+            | Com.PrintString _ -> arg)
           pr_args
       in
       (Com.Print (std, pr_args'), instr_pos) :: prev

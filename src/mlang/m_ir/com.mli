@@ -337,14 +337,11 @@ end
 
 type print_std = StdOut | StdErr
 
+type print_info = Name | Alias
+
 type 'v print_arg =
   | PrintString of string
-  | PrintName of 'v
-  | PrintAlias of 'v
-  | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
-  | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
-  | PrintEventName of 'v m_expression * string Pos.marked * int
-  | PrintEventAlias of 'v m_expression * string Pos.marked * int
+  | PrintAccess of print_info * 'v access Pos.marked
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 

@@ -316,7 +316,7 @@ struct
 
   let set_var_value (ctx : ctx) (var : Com.Var.t) (value : value) : unit =
     let set (v, vi) =
-      Pp.epr "set %s{%d} <- %a@." (Com.Var.name_str v) vi format_value value;
+      (*Pp.epr "set %s{%d} <- %a@." (Com.Var.name_str v) vi format_value value;*)
       match v.Com.Var.scope with
       | Com.Var.Tgv _ -> ctx.ctx_tgv.(vi) <- value
       | Com.Var.Temp _ -> ctx.ctx_tmps.(vi) <- value
@@ -802,66 +802,23 @@ struct
           in
           aux 0
         in
-        let pr_name ctx_pr var =
+        let pr_info info ctx_pr var =
           let var, vi = get_var ctx var in
-          pr_raw ctx_pr (Pp.spr "%s{%d}" (Com.Var.name_str var) vi)
+          let cmd =
+            match info with
+            | Com.Name -> Com.Var.name_str
+            | Com.Alias -> Com.Var.alias_str
+          in
+          pr_raw ctx_pr (Pp.spr "%s{%d}" (cmd var) vi)
         in
         List.iter
           (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
             | PrintString s -> pr_raw ctx_pr s
-            | PrintName var -> pr_name ctx_pr var
-            | PrintAlias var ->
-                let var = fst @@ get_var ctx var in
-                pr_raw ctx_pr (Com.Var.alias_str var)
-            | PrintConcName (m_vn, m_if, i) -> (
-                match evaluate_expr ctx i with
-                | Number z -> (
-                    let zi = Int64.to_int N.(to_int z) in
-                    if 0 <= zi then
-                      let name =
-                        Strings.concat_int
-                          (Com.get_normal_var (Pos.unmark m_vn))
-                          (Pos.unmark m_if) zi
-                      in
-                      match get_var_by_name ctx name with
-                      | Some v -> pr_name ctx_pr v
-                      | None -> ())
-                | _ -> ())
-            | PrintConcAlias (m_vn, m_if, i) -> (
-                match evaluate_expr ctx i with
-                | Number z -> (
-                    let zi = Int64.to_int N.(to_int z) in
-                    if 0 <= zi then
-                      let name =
-                        Strings.concat_int
-                          (Com.get_normal_var (Pos.unmark m_vn))
-                          (Pos.unmark m_if) zi
-                      in
-                      match get_var_by_name ctx name with
-                      | Some v -> pr_raw ctx_pr (Com.Var.alias_str v)
-                      | None -> ())
-                | _ -> ())
-            | PrintEventName (e, _, j) -> (
-                match evaluate_expr ctx e with
-                | Number x -> (
-                    let i = Int64.to_int (N.to_int x) in
-                    let events = List.hd ctx.ctx_events in
-                    if 0 <= i && i < Array.length events then
-                      match events.(i).(j) with
-                      | Com.RefVar var -> pr_name ctx_pr var
-                      | _ -> ())
-                | Undefined -> ())
-            | PrintEventAlias (e, _, j) -> (
-                match evaluate_expr ctx e with
-                | Number x -> (
-                    let i = Int64.to_int (N.to_int x) in
-                    let events = List.hd ctx.ctx_events in
-                    if 0 <= i && i < Array.length events then
-                      match events.(i).(j) with
-                      | Com.RefVar var -> pr_raw ctx_pr (Com.Var.alias_str var)
-                      | _ -> ())
-                | Undefined -> ())
+            | PrintAccess (info, m_a) -> (
+                match get_access_var ctx (Pos.unmark m_a) with
+                | Some var -> pr_info info ctx_pr var
+                | None -> ())
             | PrintIndent e ->
                 let diff =
                   match evaluate_expr ctx e with

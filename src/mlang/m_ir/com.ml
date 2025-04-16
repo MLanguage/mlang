@@ -567,14 +567,11 @@ end
 
 type print_std = StdOut | StdErr
 
+type print_info = Name | Alias
+
 type 'v print_arg =
   | PrintString of string
-  | PrintName of 'v
-  | PrintAlias of 'v
-  | PrintConcName of m_var_name * string Pos.marked * 'v m_expression
-  | PrintConcAlias of m_var_name * string Pos.marked * 'v m_expression
-  | PrintEventName of 'v m_expression * string Pos.marked * int
-  | PrintEventAlias of 'v m_expression * string Pos.marked * int
+  | PrintAccess of print_info * 'v access Pos.marked
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
@@ -738,20 +735,7 @@ and m_expr_map_var f e = Pos.map_under_mark (expr_map_var f) e
 
 let rec print_arg_map_var f = function
   | PrintString s -> PrintString s
-  | PrintName v -> PrintName (f v)
-  | PrintAlias v -> PrintAlias (f v)
-  | PrintConcName (m_vn, m_if, m_e0) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      PrintConcName (m_vn, m_if, m_e0')
-  | PrintConcAlias (m_vn, m_if, m_e0) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      PrintConcAlias (m_vn, m_if, m_e0')
-  | PrintEventName (m_idx, m_field, id) ->
-      let m_idx' = m_expr_map_var f m_idx in
-      PrintEventName (m_idx', m_field, id)
-  | PrintEventAlias (m_idx, m_field, id) ->
-      let m_idx' = m_expr_map_var f m_idx in
-      PrintEventAlias (m_idx', m_field, id)
+  | PrintAccess (info, m_a) -> PrintAccess (info, m_access_map_var f m_a)
   | PrintIndent m_e0 -> PrintIndent (m_expr_map_var f m_e0)
   | PrintExpr (m_e0, i0, i1) -> PrintExpr (m_expr_map_var f m_e0, i0, i1)
 
@@ -1053,22 +1037,11 @@ let format_print_arg form_var fmt =
   let form_expr = format_expression form_var in
   function
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
-  | PrintName v -> Format.fprintf fmt "nom(%a)" form_var v
-  | PrintAlias v -> Format.fprintf fmt "alias(%a)" form_var v
-  | PrintConcName (m_vn, m_idxf, idx) ->
-      Format.fprintf fmt "nom(%s{%s, %a})"
-        (get_var_name (Pos.unmark m_vn))
-        (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
-  | PrintConcAlias (m_vn, m_idxf, idx) ->
-      Format.fprintf fmt "alias(%s{%s, %a})"
-        (get_var_name (Pos.unmark m_vn))
-        (Pos.unmark m_idxf) (Pp.unmark form_expr) idx
-  | PrintEventName (e, f, _) ->
-      Format.fprintf fmt "nom(champ_evenement(%a, %s))" form_expr (Pos.unmark e)
-        (Pos.unmark f)
-  | PrintEventAlias (e, f, _) ->
-      Format.fprintf fmt "alias(champt_evenement(%a, %s))" form_expr
-        (Pos.unmark e) (Pos.unmark f)
+  | PrintAccess (info, m_a) ->
+      let infoStr = match info with Name -> "nom" | Alias -> "alias" in
+      Format.fprintf fmt "%s(%a)" infoStr
+        (format_access form_var form_expr)
+        (Pos.unmark m_a)
   | PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
         (Pp.unmark (format_expression form_var))

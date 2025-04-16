@@ -114,18 +114,9 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_e0 = expand_functions_expr e0 in
       let new_values =
         let map = function
-          | Com.VarValue (access, pos) -> (
-              match access with
-              | VarAccess v -> Com.VarValue (VarAccess v, pos)
-              | TabAccess (m_v, i) ->
-                  let new_i = expand_functions_expr i in
-                  Com.VarValue (TabAccess (m_v, new_i), pos)
-              | ConcAccess (m_vn, m_if, i) ->
-                  let new_i = expand_functions_expr i in
-                  Com.VarValue (ConcAccess (m_vn, m_if, new_i), pos)
-              | FieldAccess (mei, f, i_f) ->
-                  let new_mei = expand_functions_expr mei in
-                  Com.VarValue (FieldAccess (new_mei, f, i_f), pos))
+          | Com.VarValue m_a ->
+              let a' = expand_functions_access (Pos.unmark m_a) in
+              Com.VarValue (Pos.same_pos_as a' m_a)
           | value -> value
         in
         List.map map values
@@ -147,16 +138,9 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let new_e2 = expand_functions_expr e2 in
       let new_e3 = Option.map expand_functions_expr e3 in
       Pos.same_pos_as (Conditional (new_e1, new_e2, new_e3)) e
-  | Var (VarAccess _) -> e
-  | Var (TabAccess (m_v, m_i)) ->
-      let new_i = expand_functions_expr m_i in
-      Pos.same_pos_as (Var (TabAccess (m_v, new_i))) e
-  | Var (ConcAccess (m_v, m_if, i)) ->
-      let new_i = expand_functions_expr i in
-      Pos.same_pos_as (Var (ConcAccess (m_v, m_if, new_i))) e
-  | Var (FieldAccess (ie, f, i_f)) ->
-      let new_ie = expand_functions_expr ie in
-      Pos.same_pos_as (Var (FieldAccess (new_ie, f, i_f))) e
+  | Var access ->
+      let e' = Var (expand_functions_access access) in
+      Pos.same_pos_as e' e
   | Literal _ -> e
   | FuncCall ((SumFunc, _), args) ->
       let expr_opt =
@@ -207,29 +191,30 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
         e
   | FuncCall (fn, args) ->
       Pos.same_pos_as (FuncCall (fn, List.map expand_functions_expr args)) e
-  | Attribut ((VarAccess _, _), _) -> e
-  | Attribut ((TabAccess (m_v, i), pos), a) ->
-      let new_i = expand_functions_expr i in
-      Pos.same_pos_as (Attribut ((TabAccess (m_v, new_i), pos), a)) e
-  | Attribut ((ConcAccess (m_v, m_if, i), pos), a) ->
-      let new_i = expand_functions_expr i in
-      Pos.same_pos_as (Attribut ((ConcAccess (m_v, m_if, new_i), pos), a)) e
-  | Attribut ((FieldAccess (ie, f, i_f), pos), a) ->
-      let new_ie = expand_functions_expr ie in
-      Pos.same_pos_as (Attribut ((FieldAccess (new_ie, f, i_f), pos), a)) e
-  | Size (VarAccess _, _) -> e
-  | Size (TabAccess (m_v, i), pos) ->
-      let new_i = expand_functions_expr i in
-      Pos.same_pos_as (Size (TabAccess (m_v, new_i), pos)) e
-  | Size (ConcAccess (m_v, m_if, i), pos) ->
-      let new_i = expand_functions_expr i in
-      Pos.same_pos_as (Size (ConcAccess (m_v, m_if, new_i), pos)) e
-  | Size (FieldAccess (ie, f, i_f), pos) ->
-      let new_ie = expand_functions_expr ie in
-      Pos.same_pos_as (Size (FieldAccess (new_ie, f, i_f), pos)) e
+  | Attribut (m_a, attr) ->
+      let a' = expand_functions_access (Pos.unmark m_a) in
+      let e' = Attribut (Pos.same_pos_as a' m_a, attr) in
+      Pos.same_pos_as e' e
+  | Size m_a ->
+      let a' = expand_functions_access (Pos.unmark m_a) in
+      let e' = Size (Pos.same_pos_as a' m_a) in
+      Pos.same_pos_as e' e
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
   | FuncCallLoop _ | Loop _ | NbCategory _ ->
       e
+
+and expand_functions_access (access : 'var Com.access) : 'var Com.access =
+  match access with
+  | VarAccess _ -> access
+  | TabAccess (m_v, i) ->
+      let i' = expand_functions_expr i in
+      TabAccess (m_v, i')
+  | ConcAccess (m_v, m_if, i) ->
+      let i' = expand_functions_expr i in
+      ConcAccess (m_v, m_if, i')
+  | FieldAccess (v_i, f, i_f) ->
+      let m_i = expand_functions_expr v_i in
+      FieldAccess (m_i, f, i_f)
 
 let expand_functions (p : program) : program =
   let open Com in
@@ -237,22 +222,13 @@ let expand_functions (p : program) : program =
     let rec map_instr m_instr =
       let instr, instr_pos = m_instr in
       match instr with
-      | Affectation (SingleFormula (VarDecl (v_acc, v_expr)), pos) ->
+      | Affectation (SingleFormula (VarDecl (m_a, v_expr)), pos) ->
           let m_expr = expand_functions_expr v_expr in
-          let m_acc =
-            match Pos.unmark v_acc with
-            | VarAccess _ -> v_acc
-            | TabAccess (m_v, i) ->
-                let i' = expand_functions_expr i in
-                Pos.same_pos_as (TabAccess (m_v, i')) v_acc
-            | ConcAccess (m_v, m_if, i) ->
-                let i' = expand_functions_expr i in
-                Pos.same_pos_as (ConcAccess (m_v, m_if, i')) v_acc
-            | FieldAccess (v_i, f, i_f) ->
-                let m_i = expand_functions_expr v_i in
-                Pos.same_pos_as (FieldAccess (m_i, f, i_f)) v_acc
+          let m_a' =
+            let a' = expand_functions_access (Pos.unmark m_a) in
+            Pos.same_pos_as a' m_a
           in
-          (Affectation (SingleFormula (VarDecl (m_acc, m_expr)), pos), instr_pos)
+          (Affectation (SingleFormula (VarDecl (m_a', m_expr)), pos), instr_pos)
       | Affectation (SingleFormula (EventFieldRef (v_idx, f, i, v_id)), pos) ->
           let m_idx = expand_functions_expr v_idx in
           ( Affectation (SingleFormula (EventFieldRef (m_idx, f, i, v_id)), pos),
@@ -282,26 +258,17 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 let arg, arg_pos = m_arg in
                 match arg with
-                | Com.PrintConcName (m_v, m_if, i) ->
-                    let i' = expand_functions_expr i in
-                    (Com.PrintConcName (m_v, m_if, i'), arg_pos)
-                | Com.PrintConcAlias (m_v, m_if, i) ->
-                    let i' = expand_functions_expr i in
-                    (Com.PrintConcAlias (m_v, m_if, i'), arg_pos)
-                | Com.PrintEventName (e, f, i) ->
-                    let e' = expand_functions_expr e in
-                    (Com.PrintEventName (e', f, i), arg_pos)
-                | Com.PrintEventAlias (e, f, i) ->
-                    let e' = expand_functions_expr e in
-                    (Com.PrintEventAlias (e', f, i), arg_pos)
+                | Com.PrintAccess (info, m_a) ->
+                    let a' = expand_functions_access (Pos.unmark m_a) in
+                    let m_a' = Pos.same_pos_as a' m_a in
+                    Pos.same_pos_as (Com.PrintAccess (info, m_a')) m_arg
                 | Com.PrintIndent e ->
                     let e' = expand_functions_expr e in
                     (Com.PrintIndent e', arg_pos)
                 | Com.PrintExpr (e, mi, ma) ->
                     let e' = expand_functions_expr e in
                     (Com.PrintExpr (e', mi, ma), arg_pos)
-                | Com.PrintString _ | Com.PrintName _ | Com.PrintAlias _ ->
-                    m_arg)
+                | Com.PrintString _ -> m_arg)
               pr_args
           in
           (Print (out, pr_args'), instr_pos)

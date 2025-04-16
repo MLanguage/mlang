@@ -791,26 +791,10 @@ instruction_then_when_branch:
 
 print_argument:
 | s = STRING { Com.PrintString (parse_string s) }
-| f = with_pos(print_function) LPAREN v = symbol_with_pos RPAREN {
+| f = with_pos(print_function) LPAREN m_a = with_pos(var_access) RPAREN {
     match Pos.unmark f with
-    | "nom" -> Com.PrintName (parse_variable $sloc (fst v), snd v)
-    | "alias" -> Com.PrintAlias (parse_variable $sloc (fst v), snd v)
-    | _ -> assert false
-  }
-| f = with_pos(print_function) LPAREN v = symbol_with_pos LBRACKET
-  idxFmt = symbol_with_pos COLON idx = with_pos(sum_expression) RBRACKET RPAREN {
-    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
-    let idxFmt = parse_index_format idxFmt in
-    match Pos.unmark f with
-    | "nom" -> Com.PrintConcName (m_v, idxFmt, idx)
-    | "alias" -> Com.PrintConcAlias (m_v, idxFmt, idx)
-    | _ -> assert false
-  }
-| f = with_pos(print_function) LPAREN EVENT_FIELD LPAREN
-  expr = with_pos(sum_expression) COMMA field = symbol_with_pos RPAREN RPAREN {
-    match Pos.unmark f with
-    | "nom" -> Com.PrintEventName (expr, field, -1)
-    | "alias" -> Com.PrintEventAlias (expr, field, -1)
+    | "nom" -> Com.PrintAccess (Com.Name, m_a)
+    | "alias" -> Com.PrintAccess (Com.Alias, m_a)
     | _ -> assert false
   }
 | INDENT LPAREN e = with_pos(expression) RPAREN { Com.PrintIndent e }
