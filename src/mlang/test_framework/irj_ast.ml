@@ -14,8 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-let mk_position sloc : Pos.t =
-  Pos.make_position (fst sloc).Lexing.pos_fname sloc
+let mk_position sloc : Pos.t = Pos.make (fst sloc).Lexing.pos_fname sloc
 
 type literal = I of int | F of float
 

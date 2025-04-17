@@ -16,7 +16,7 @@
 
 module E = Errors
 
-let mk_position sloc = Pos.make_position (fst sloc).Lexing.pos_fname sloc
+let mk_position sloc = Pos.make (fst sloc).Lexing.pos_fname sloc
 
 (** {1 Frontend variable names}*)
 
@@ -119,7 +119,7 @@ let parse_function_name f_name =
     | "nb_evenements" -> NbEvents
     | fn -> Func fn
   in
-  Pos.map_under_mark map f_name
+  Pos.map map f_name
 
 (* # parse_string #
  * Takes a litteral string and produces a String.t of the corresponding chars
@@ -215,7 +215,7 @@ let parse_target_or_function_header name is_function header =
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
                 (Format.asprintf "application list already declared %a"
-                   Pos.format_position old_pos)
+                   Pos.format old_pos)
                 pos
         in
         aux apps_opt' args_opt vars_opt res_opt h
@@ -225,8 +225,8 @@ let parse_target_or_function_header name is_function header =
           | None -> Some (vars', pos)
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
-                (Format.asprintf "argument list already declared %a"
-                   Pos.format_position old_pos)
+                (Format.asprintf "argument list already declared %a" Pos.format
+                   old_pos)
                 pos
         in
         aux apps_opt args_opt vars_opt res_opt h
@@ -237,7 +237,7 @@ let parse_target_or_function_header name is_function header =
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
                 (Format.asprintf "temporary variable list already declared %a"
-                   Pos.format_position old_pos)
+                   Pos.format old_pos)
                 pos
         in
         aux apps_opt args_opt vars_opt' res_opt h
@@ -249,7 +249,7 @@ let parse_target_or_function_header name is_function header =
             | Some (_, old_pos) ->
                 Errors.raise_spanned_error
                   (Format.asprintf "result variable already declared %a"
-                     Pos.format_position old_pos)
+                     Pos.format old_pos)
                   pos
           in
           aux apps_opt args_opt vars_opt res_opt' h
@@ -264,7 +264,7 @@ let parse_target_or_function_header name is_function header =
                   | Some (_, old_pos) ->
                       let msg =
                         Format.asprintf "application %s already declared %a" app
-                          Pos.format_position old_pos
+                          Pos.format old_pos
                       in
                       Errors.raise_spanned_error msg pos
                   | None -> StrMap.add app (app, pos) res)

@@ -14,7 +14,7 @@
 module Err = struct
   let constant_already_defined old_pos pos =
     Errors.raise_spanned_error
-      (Format.asprintf "constant already defined %a" Pos.format_position old_pos)
+      (Format.asprintf "constant already defined %a" Pos.format old_pos)
       pos
 
   let unknown_constant pos = Errors.raise_spanned_error "unknown constant" pos
@@ -91,15 +91,13 @@ module Err = struct
 
   let application_already_defined app old_pos pos =
     let msg =
-      Format.asprintf "application %s already defined %a" app
-        Pos.format_position old_pos
+      Format.asprintf "application %s already defined %a" app Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
   let chaining_already_defined ch old_pos pos =
     let msg =
-      Format.asprintf "chaining %s already defined %a" ch Pos.format_position
-        old_pos
+      Format.asprintf "chaining %s already defined %a" ch Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -738,7 +736,7 @@ let rec expand_instruction (const_map : const_context)
         (expr', dl', pos)
       in
       let wdl' = List.map map wdl in
-      let ed' = Pos.map_under_mark (expand_instructions const_map) ed in
+      let ed' = Pos.map (expand_instructions const_map) ed in
       (Com.WhenDoElse (wdl', ed'), instr_pos) :: prev
   | Com.Print (std, pr_args) ->
       let pr_args' =
@@ -749,8 +747,8 @@ let rec expand_instruction (const_map : const_context)
                 match expand_access const_map ParamsMap.empty m_a with
                 | ExpLiteral _ -> Err.constant_forbidden_as_arg (Pos.get m_a)
                 | ExpAccess (a', _) ->
-                    let arg' = Com.PrintAccess (info, Pos.same_pos_as a' m_a) in
-                    Pos.same_pos_as arg' arg)
+                    let arg' = Com.PrintAccess (info, Pos.same a' m_a) in
+                    Pos.same arg' arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
                 (Com.PrintIndent expr', Pos.get arg)

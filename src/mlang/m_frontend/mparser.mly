@@ -119,7 +119,7 @@ var_typ:
 
 var_category_decl_etc:
 | c = with_pos(var_category_decl) l = with_pos(symbol_colon_etc)* {
-    Pos.same_pos_as (VarCatDecl c) c :: l
+    Pos.same (VarCatDecl c) c :: l
   }
 
 var_category_decl:
@@ -131,7 +131,7 @@ var_category_decl:
 
 event_decl_etc:
 | e = with_pos(event_decl) l = with_pos(symbol_colon_etc)* {
-    Pos.same_pos_as (EventDecl (Pos.unmark e)) e :: l
+    Pos.same (EventDecl (Pos.unmark e)) e :: l
   }
 
 event_field:
@@ -235,12 +235,12 @@ verif_domain_decl:
   }
 
 var_category_id:
-| INPUT TIMES { ["saisie", Pos.no_pos; "*", Pos.no_pos] }
-| INPUT l = symbol_with_pos+ { ("saisie", Pos.no_pos) :: l }
-| COMPUTED TIMES { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
-| COMPUTED BASE { ["calculee", Pos.no_pos; "*", Pos.no_pos] }
-| COMPUTED { ["calculee", Pos.no_pos] }
-| TIMES { ["*", Pos.no_pos] }
+| INPUT TIMES { [Pos.without "saisie"; Pos.without "*"] }
+| INPUT l = symbol_with_pos+ { (Pos.without "saisie") :: l }
+| COMPUTED TIMES { [Pos.without "calculee"; Pos.without "*"] }
+| COMPUTED BASE { [Pos.without "calculee"; Pos.without "*"] }
+| COMPUTED { [Pos.without "calculee"] }
+| TIMES { [Pos.without "*"] }
 
 vdom_param:
 | vdom_names = separated_nonempty_list(COMMA, symbol_list_with_pos)
@@ -410,7 +410,7 @@ rule_etc:
       in
       let rec aux tags endPos = function
       | [num] ->
-           let pos = Pos.make_position_between begPos endPos in
+           let pos = Pos.make_between begPos endPos in
            num, (tags, pos)
       | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
@@ -418,7 +418,7 @@ rule_etc:
       aux [] begPos uname
     in
     let rule_number =
-      try Pos.map_under_mark int_of_string num
+      try Pos.map int_of_string num
       with _ ->
         Errors.raise_spanned_error
           "this rule doesn't have an execution number"
@@ -434,7 +434,7 @@ rule_etc:
                 Errors.raise_spanned_error
                   (Format.asprintf
                     "application list already declared %a"
-                    Pos.format_position old_pos)
+                    Pos.format old_pos)
                   pos
           in
           aux apps_opt' chs_opt vars_opt h
@@ -446,7 +446,7 @@ rule_etc:
                 Errors.raise_spanned_error
                   (Format.asprintf
                     "chaining list already declared %a"
-                    Pos.format_position old_pos)
+                    Pos.format old_pos)
                   pos
           in
           aux apps_opt chs_opt' vars_opt h
@@ -458,7 +458,7 @@ rule_etc:
                 Errors.raise_spanned_error
                   (Format.asprintf
                     "temporary variables already declared %a"
-                    Pos.format_position old_pos)
+                    Pos.format old_pos)
                   pos
           in
           aux apps_opt chs_opt vars_opt' h
@@ -473,7 +473,7 @@ rule_etc:
                         let msg =
                           Format.asprintf "application %s already declared %a"
                             app
-                            Pos.format_position old_pos
+                            Pos.format old_pos
                         in
                         Errors.raise_spanned_error msg pos
                     | None -> StrMap.add app (app, pos) res)
@@ -494,7 +494,7 @@ rule_etc:
                         let msg =
                           Format.asprintf "chaining %s already declared %a"
                             ch
-                            Pos.format_position old_pos
+                            Pos.format old_pos
                         in
                         Errors.raise_spanned_error msg pos
                     | None -> StrMap.add ch (ch, pos) res)
@@ -516,7 +516,7 @@ rule_etc:
       rule_tmp_vars;
       rule_formulaes;
     } in
-    Pos.same_pos_as (Rule rule) name :: l
+    Pos.same (Rule rule) name :: l
   }
 
 rule_header_elt:
@@ -544,7 +544,7 @@ target_etc:
       target_tmp_vars;
       target_prog;
     } in
-    Pos.same_pos_as (Target target) name :: l
+    Pos.same (Target target) name :: l
   }
 
 target_header_elt:
@@ -576,7 +576,7 @@ function_etc:
       target_tmp_vars;
       target_prog;
     } in
-    Pos.same_pos_as (Function target) name :: l
+    Pos.same (Function target) name :: l
   }
 
 function_header_elt:
@@ -603,26 +603,26 @@ instruction_list_etc:
 | i_opt = with_pos(instruction) l = with_pos(symbol_colon_etc)* {
     match Pos.unmark i_opt with
     | None -> [], l
-    | Some i -> [Pos.same_pos_as i i_opt], l
+    | Some i -> [Pos.same i i_opt], l
   }
 | i_opt = with_pos(instruction) il_etc = instruction_list_etc {
     match Pos.unmark i_opt with
     | None -> il_etc
     | Some i ->
         let il, l = il_etc in
-        (Pos.same_pos_as i i_opt) :: il, l
+        (Pos.same i i_opt) :: il, l
   }
 
 instruction_list_rev:
 | i_opt = with_pos(instruction) {
     match Pos.unmark i_opt with
     | None -> []
-    | Some i -> [Pos.same_pos_as i i_opt]
+    | Some i -> [Pos.same i i_opt]
   }
 | il = instruction_list_rev i_opt = with_pos(instruction) {
     match Pos.unmark i_opt with
     | None -> il
-    | Some i -> (Pos.same_pos_as i i_opt) :: il  
+    | Some i -> (Pos.same i i_opt) :: il  
   }
 
 instruction:
@@ -647,7 +647,7 @@ instruction:
     Some (ComputeTarget (target, args_list))
   }
 | VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON {
-    let expr = Com.Literal (Com.Float 1.0), Pos.no_pos in
+    let expr = Pos.without (Com.Literal (Com.Float 1.0)) in
     Some (ComputeVerifs (dom, expr))
   }
 | VERIFY DOMAIN dom = symbol_list_with_pos COLON
@@ -664,7 +664,7 @@ instruction:
   VARIABLE vn = symbol_with_pos COLON
   it_params = nonempty_list(with_pos(it_param))
   IN LPAREN instrs = instruction_list_rev RPAREN {
-    let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
+    let var = Pos.same (Com.Normal (Pos.unmark vn)) vn in
     match it_params with
     | (`VarInterval _, _) :: _ ->
         let var_intervals =
@@ -724,26 +724,28 @@ instruction:
           let msg =
             Format.asprintf
               "event sorting already specified at %a"
-              Pos.format_position sort_pos
+              Pos.format sort_pos
           in
           Errors.raise_spanned_error msg pos
       | (`ArrangeEventsFilter _, pos) ->
           let msg =
             Format.asprintf
               "event filter already specified at %a"
-              Pos.format_position sort_pos
+              Pos.format sort_pos
           in
           Errors.raise_spanned_error msg pos
       | (`ArrangeEventsAdd _, pos) ->
           let msg =
             Format.asprintf
               "event creation already specified at %a"
-              Pos.format_position add_pos
+              Pos.format add_pos
           in
           Errors.raise_spanned_error msg pos
       in
       let sort, _, filter, _, add, _ =
-        List.fold_left fold (None, Pos.no_pos, None, Pos.no_pos, None, Pos.no_pos) arr_params
+        List.fold_left fold
+          (None, Pos.none, None, Pos.none, None, Pos.none)
+          arr_params
       in
       match sort, filter, add with
       | None, None, None ->
@@ -787,7 +789,7 @@ instruction_then_when_branch:
 | ELSE_DO il = instruction_list_rev ENDWHEN {
     ([], (List.rev il, mk_position $sloc))
   }
-| ENDWHEN { ([], ([], Pos.no_pos)) }
+| ENDWHEN { ([], (Pos.without [])) }
 
 print_argument:
 | s = STRING { Com.PrintString (parse_string s) }
@@ -846,7 +848,7 @@ print_precision:
 it_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
-      List.map (fun vn -> Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn) vars
+      List.map (fun vn -> Pos.same (Com.Normal (Pos.unmark vn)) vn) vars
     in
     `VarList vl
   }
@@ -862,7 +864,7 @@ it_param:
     let expr =
       match expr_opt with
       | Some expr -> expr
-      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
+      | None -> Pos.without (Com.Literal (Com.Float 1.0))
     in
     `VarCatsIt (vcats, expr)
   }
@@ -877,13 +879,13 @@ it_param_with_expr:
 rest_param:
 | vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
     let vl =
-      List.map (fun vn -> Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn) vars
+      List.map (fun vn -> Pos.same (Com.Normal (Pos.unmark vn)) vn) vars
     in
     `VarList vl
   }
 | VARIABLE vn = symbol_with_pos COLON
   vparams = nonempty_list(rest_param_category) {
-    let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
+    let var = Pos.same (Com.Normal (Pos.unmark vn)) vn in
     let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
     `VarCatsRest filters
   }
@@ -891,7 +893,7 @@ rest_param:
     `EventList expr_list
   }
 | EVENT vn = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
-     let var = Pos.same_pos_as (Com.Normal (Pos.unmark vn)) vn in
+     let var = Pos.same (Com.Normal (Pos.unmark vn)) vn in
     `EventFilter (var, expr)
   }
 
@@ -908,7 +910,7 @@ rest_param_category:
     let expr =
       match expr_opt with
       | Some expr -> expr
-      | None -> Com.Literal (Com.Float 1.0), Pos.no_pos
+      | None -> Pos.without (Com.Literal (Com.Float 1.0))
     in
     (vcats, expr)
   }
@@ -919,12 +921,12 @@ rest_param_with_expr:
 arrange_events_param:
 | SORT v0 = symbol_with_pos COMMA v1 = symbol_with_pos
   COLON WITH expr = with_pos(expression) COLON {
-    let var0 = Pos.same_pos_as (Com.Normal (Pos.unmark v0)) v0 in
-    let var1 = Pos.same_pos_as (Com.Normal (Pos.unmark v1)) v1 in  
+    let var0 = Pos.same (Com.Normal (Pos.unmark v0)) v0 in
+    let var1 = Pos.same (Com.Normal (Pos.unmark v1)) v1 in  
     `ArrangeEventsSort (var0, var1, expr)
   }
 | FILTER v = symbol_with_pos COLON WITH expr = with_pos(expression) COLON {
-    let var = Pos.same_pos_as (Com.Normal (Pos.unmark v)) v in
+    let var = Pos.same (Com.Normal (Pos.unmark v)) v in
     `ArrangeEventsFilter (var, expr)
   }
 | ADD expr = with_pos(expression) COLON {
@@ -940,14 +942,14 @@ for_formula:
 
 var_access:
 | s = symbol_with_pos m_i_opt = with_pos(brackets)? {
-    let m_v = Pos.map_under_mark (parse_variable $sloc) s in
+    let m_v = Pos.map (parse_variable $sloc) s in
     match m_i_opt with
     | None -> Com.VarAccess m_v
     | Some m_i -> Com.TabAccess (m_v, m_i)
   }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
-    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     Com.ConcAccess (m_v, idxFmt, idx)
   }
@@ -962,7 +964,7 @@ formula:
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN REFERENCE v = symbol_with_pos {
-    let var = Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let var = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     EventFieldRef (idx, f, -1, var)
   }
 
@@ -982,7 +984,7 @@ verification:
       in
       let rec aux tags endPos = function
       | [num] ->
-           let pos = Pos.make_position_between begPos endPos in
+           let pos = Pos.make_between begPos endPos in
            num, (tags, pos)
       | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
@@ -990,7 +992,7 @@ verification:
       aux [] begPos uname
     in
     let verif_number =
-      try Pos.map_under_mark int_of_string num
+      try Pos.map int_of_string num
       with _ ->
         Errors.raise_spanned_error
           "this verification doesn't have an execution number"
@@ -1010,7 +1012,7 @@ verification:
                 let msg =
                   Format.asprintf "application %s already declared %a"
                     app
-                    Pos.format_position old_pos
+                    Pos.format old_pos
                 in
                 Errors.raise_spanned_error msg pos
             | None -> StrMap.add app (app, pos) res)
@@ -1087,18 +1089,14 @@ loop_variable_value_name:
 | s = SYMBOL { parse_parameter $sloc s }
 
 loop_variables_value:
-| s = with_pos(loop_variable_value_name) EQUALS e = enumeration_loop {
-    let s, loc = s in ((s, loc), e)
-  }
+| s = with_pos(loop_variable_value_name) EQUALS e = enumeration_loop { s, e }
 
 loop_variables_ranges:
 | r = loop_variables_range { [r] }
 | r = loop_variables_range AND rs = loop_variables_ranges { r::rs }
 
 loop_variables_range:
-| ONE s = with_pos(loop_variable_value_name) IN e = enumeration_loop {
-   let (s, loc) = s in ((s, loc), e)
- }
+| ONE s = with_pos(loop_variable_value_name) IN e = enumeration_loop { s, e }
 
 enumeration_loop:
 | i = enumeration_loop_item { [i] }
@@ -1138,7 +1136,7 @@ enumeration_item:
   }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
-    let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     let pos = mk_position $sloc in
     Com.VarValue (ConcAccess (m_v, idxFmt, idx), pos)
@@ -1219,12 +1217,12 @@ factor:
   }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
-    let m_v =  Pos.same_pos_as (parse_variable $sloc (Pos.unmark v)) v in
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     Var (ConcAccess (m_v, idxFmt, idx))
   }
 | s = symbol_with_pos m_i = with_pos(brackets) {
-    let m_v = Pos.same_pos_as (parse_variable $sloc (Pos.unmark s)) s in
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark s)) s in
     Var (TabAccess (m_v, m_i))
   }
 | a = factor_atom {

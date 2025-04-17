@@ -35,7 +35,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   let vars =
     let map_init =
       try
-        let ancsded = find_var_of_name program ("V_ANCSDED", Pos.no_pos) in
+        let ancsded = find_var_of_name program (Pos.without "V_ANCSDED") in
         let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
         Com.Var.Map.one ancsded ancsded_val
       with _ -> Com.Var.Map.empty
@@ -105,7 +105,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   in
   let set_trait f vars =
     try
-      let ind_trait = find_var_of_name program ("V_IND_TRAIT", Pos.no_pos) in
+      let ind_trait = find_var_of_name program (Pos.without "V_IND_TRAIT") in
       Com.Var.Map.add ind_trait (Com.Float f) vars
     with _ -> vars
   in
@@ -252,7 +252,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
             (successes, failures)
         | Interp.NanOrInf (msg, (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
-              msg Pos.format_position pos;
+              msg Pos.format pos;
             (successes, failures))
     | e ->
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
@@ -313,7 +313,7 @@ let check_one_test (p : Mir.program) (name : string)
             Some 0
         | Interp.NanOrInf (msg, (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
-              msg Pos.format_position pos;
+              msg Pos.format pos;
             Some 0)
     | e ->
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);

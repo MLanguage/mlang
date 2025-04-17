@@ -127,7 +127,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     let value_comp = D.m_var v None Val in
                     D.{ set_vars = []; def_test; value_comp }
                   in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_v
+                  comparison (Pos.without Com.Eq) sle0 s_v
               | Com.VarValue (TabAccess (m_v, m_i), _) ->
                   let index = fresh_c_local "index" in
                   let index_def = Pp.spr "%s_def" index in
@@ -157,7 +157,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     D.build_transitive_composition
                       { set_vars; def_test; value_comp }
                   in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_v
+                  comparison (Pos.without Com.Eq) sle0 s_v
               | Com.VarValue (ConcAccess (m_vn, m_if, i), _) ->
                   let res = fresh_c_local "res" in
                   let res_def = Pp.spr "%s_def" res in
@@ -191,7 +191,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                   let def_test = D.dinstr res_def in
                   let value_comp = D.dinstr res_val in
                   let s_f = D.{ set_vars; def_test; value_comp } in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_f
+                  comparison (Pos.without Com.Eq) sle0 s_f
               | Com.VarValue (FieldAccess (me, f, _), _) ->
                   let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
                   let res = fresh_c_local "result" in
@@ -222,7 +222,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                   let def_test = D.dinstr res_def in
                   let value_comp = D.dinstr res_val in
                   let s_f = D.{ set_vars; def_test; value_comp } in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_f
+                  comparison (Pos.without Com.Eq) sle0 s_f
               | Com.FloatValue i ->
                   let s_i =
                     {
@@ -231,7 +231,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                       D.value_comp = D.lit (Pos.unmark i);
                     }
                   in
-                  comparison (Com.Eq, Pos.no_pos) sle0 s_i
+                  comparison (Pos.without Com.Eq) sle0 s_i
               | Com.IntervalValue (bn, en) ->
                   let s_bn =
                     let bn' = float_of_int (Pos.unmark bn) in
@@ -241,11 +241,11 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                     let en' = float_of_int (Pos.unmark en) in
                     D.{ set_vars = []; def_test = dtrue; value_comp = lit en' }
                   in
-                  binop (Com.And, Pos.no_pos)
-                    (comparison (Com.Gte, Pos.no_pos) sle0 s_bn)
-                    (comparison (Com.Lte, Pos.no_pos) sle0 s_en)
+                  binop (Pos.without Com.And)
+                    (comparison (Pos.without Com.Gte) sle0 s_bn)
+                    (comparison (Pos.without Com.Lte) sle0 s_en)
             in
-            binop (Com.Or, Pos.no_pos) or_chain equal_test)
+            binop (Pos.without Com.Or) or_chain equal_test)
           D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
           values
       in
@@ -1484,11 +1484,23 @@ let generate_function_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
   pr "@;irdata->def_tmps[irdata->tmps_org] = 0;";
   pr "@;irdata->tmps[irdata->tmps_org] = 0.0;";
   pr "@;irdata->info_tmps[irdata->tmps_org] = NULL;";
-  for i = 1 to nb_args do
-    pr "@;irdata->def_tmps[irdata->tmps_org + %d] = arg_def%d;" i (i - 1);
-    pr "@;irdata->tmps[irdata->tmps_org + %d] = arg_val%d;" i (i - 1);
-    pr "@;irdata->info_tmps[irdata->tmps_org + %d] = NULL;" i
-  done;
+  List.iteri
+    (fun i var ->
+      let idx = Pp.spr "irdata->tmps_org + %d" (i + 1) in
+      pr "@;irdata->def_tmps[%s] = arg_def%d;" idx i;
+      pr "@;irdata->tmps[%s] = arg_val%d;" idx i;
+      let loc_cat_idx = Com.Var.loc_cat_idx var in
+      let name = Com.Var.name_str var in
+      pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s  */" idx
+        loc_cat_idx name)
+    tf.target_args;
+  let vres = Option.get tf.target_result in
+  let loc_cat_idx_vres = Com.Var.loc_cat_idx vres in
+  let name_vres = Com.Var.name_str vres in
+  pr "@;irdata->def_tmps[irdata->tmps_org] = 0;";
+  pr "@;irdata->tmps[irdata->tmps_org] = 0.0;";
+  pr "@;irdata->info_tmps[irdata->tmps_org] = &(tmp_varinfo[%d]); /* %s */"
+    loc_cat_idx_vres name_vres;
   if tf.target_sz_tmps > 0 then (
     pr "@;@[<v 2>@[<hov 2>for (i = %d;@ i < %d;@ i++) {@]" (1 + nb_args)
       tf.target_sz_tmps;

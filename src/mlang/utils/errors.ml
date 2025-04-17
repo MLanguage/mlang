@@ -38,7 +38,7 @@ let format_structured_error_gnu_format fmt
     Format.pp_print_list
       ~pp_sep:(fun fmt () -> Format.pp_print_newline fmt ())
       (fun fmt (pos_msg, pos) ->
-        Format.fprintf fmt "%a: %s %a\n" Pos.format_position_gnu pos msg
+        Format.fprintf fmt "%a: %s %a\n" Pos.format_gnu pos msg
           (fun fmt pos_msg ->
             match pos_msg with
             | None -> ()

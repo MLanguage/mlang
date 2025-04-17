@@ -83,9 +83,11 @@ cible tmpref_cible:
 application: iliad;
 arguments: X, A;
 variables_temporaires: T;
+afficher_erreur indenter(2);
 afficher_erreur nom(X) " = " (X) " " nom(A) " = " (A) "\n";
 X = 444;
 A = 12300 + A;
+afficher_erreur indenter(-2);
 
 cible test_tmpref:
 application: iliad;
@@ -118,6 +120,24 @@ afficher_erreur nom(A6) " = " (A6) "\n";
 afficher_erreur nom(R) " = " (R) "\n";
 afficher_erreur indenter(-2) "sortie test_tmpref\n";
 
+fonction test_aff_fonction:
+application: iliad;
+arguments: ARG0, ARG1, ARG2, ARG3, ARG4, ARG5, ARG6;
+resultat: RES;
+variables_temporaires: PROUT0, PROUT1, PROUT2;
+afficher_erreur "entree test_aff_fonction\n" indenter(2);
+afficher_erreur "argument ARG3 <" nom(ARG3) "> <" alias(ARG3) ">\n";
+afficher_erreur "resultat RES <" nom(RES) "> <" alias(RES) ">\n";
+afficher_erreur indenter(-2) "sortie test_aff_fonction\n";
+
+cible test_aff_cible:
+application: iliad;
+arguments: ARG0, ARG1, ARG2, ARG3, ARG4, ARG5, ARG6;
+variables_temporaires: PROUT0, PROUT1, PROUT2;
+afficher_erreur "entree test_aff_cible\n" indenter(2);
+afficher_erreur "argument ARG3 <" nom(ARG3) "> <" alias(ARG3) ">\n";
+afficher_erreur indenter(-2) "sortie test_aff_cible\n";
+
 cible test_aff:
 application: iliad;
 variables_temporaires: A0, A1, A2, AA tableau [5], A3, A4, A5, A6, R;
@@ -125,6 +145,7 @@ afficher_erreur "entree test_aff\n" indenter(2);
 afficher_erreur "saisie V_IND_TRAIT <" nom(V_IND_TRAIT) "> <" alias(V_IND_TRAIT) ">\n";
 afficher_erreur "calculee TOTO01 <" nom(TOTO01) "> <" alias(TOTO01) ">\n";
 afficher_erreur "calculee tableau TUTU <" nom(TUTU) "> <" alias(TUTU) ">\n";
+afficher_erreur "temporaire A0 <" nom(A0) "> <" alias(A0) ">\n";
 afficher_erreur "temporaire A2 <" nom(A2) "> <" alias(A2) ">\n";
 afficher_erreur "temporaire tableau AA <" nom(AA) "> <" alias(AA) ">\n";
 #afficher_erreur "temporaire AA[2] <" nom(AA[2]) "> <" alias(AA[2]) ">\n";
@@ -133,14 +154,16 @@ iterer : variable VAR : V_IND_TRAIT, TOTO01, A2 : dans (
   afficher_erreur "reference VAR <" nom(VAR) "> <" alias(VAR) ">\n";
 )
 afficher_erreur "champ_evenement(2, code) <" nom(champ_evenement(2, code)) "> <" alias(champ_evenement(2, code)) ">\n";
+R = test_aff_fonction(A0, A1, A2, A3, A4, A5, A6);
+calculer cible test_aff_cible : avec A0, A1, A2, A3, A4, A5, A6;
 afficher_erreur indenter(-2) "sortie test_aff\n";
 
 cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
 #calculer cible test_varcons;
-#calculer cible test_args;
-#calculer cible test_tmpref;
+calculer cible test_args;
+calculer cible test_tmpref;
 calculer cible test_aff;
 
 cible enchainement_primitif:

@@ -55,6 +55,7 @@ module type S = sig
     mutable ctx_target : Mir.target;
     ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
+    ctx_tmps_var : Com.Var.t Array.t;
     mutable ctx_tmps_org : int;
     ctx_ref : (Com.Var.t * (Com.Var.t * int)) Array.t;
     mutable ctx_ref_org : int;

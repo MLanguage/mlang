@@ -623,7 +623,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
         | VarAccess m_id -> (
             let var = get_var dict m_id in
             if Com.Var.is_ref var then
-              Attribut (Pos.same_pos_as (VarAccess var) m_id, a)
+              Attribut (Pos.same (VarAccess var) m_id, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
@@ -644,8 +644,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
         match access with
         | VarAccess m_id ->
             let var = get_var dict m_id in
-            if Com.Var.is_ref var then
-              Size (Pos.same_pos_as (VarAccess var) m_id)
+            if Com.Var.is_ref var then Size (Pos.same (VarAccess var) m_id)
             else Literal (Float (float @@ Com.Var.size var))
         | TabAccess _ -> Literal (Float 1.0)
         | ConcAccess (m_vn, m_if, i) ->
@@ -661,7 +660,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
     | NbBloquantes -> NbBloquantes
     | FuncCallLoop _ | Loop _ -> assert false
   in
-  Pos.same_pos_as expr f
+  Pos.same expr f
 
 and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
     (access : int Pos.marked Com.access) : Com.Var.t Com.access =
@@ -693,7 +692,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
           match decl with
           | VarDecl (m_access, e) ->
               let access' = translate_access p dict (Pos.unmark m_access) in
-              let m_access' = Pos.same_pos_as access' m_access in
+              let m_access' = Pos.same access' m_access in
               let e' = translate_expression p dict e in
               Com.VarDecl (m_access', e')
           | EventFieldRef (idx, f, _, m_v) ->
@@ -721,7 +720,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
                ([], dict) wdl
         in
         let ed', dict = aux ([], dict) (Pos.unmark ed) in
-        let ed' = Pos.same_pos_as ed' ed in
+        let ed' = Pos.same ed' ed in
         aux ((Com.WhenDoElse (wdl', ed'), pos) :: res, dict) il
     | (Com.ComputeTarget (tn, targs), pos) :: il ->
         let map v = get_var dict v in
@@ -740,14 +739,14 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
                    | Com.PrintString s -> Com.PrintString s
                    | Com.PrintAccess (info, m_a) ->
                        let a' = translate_access p dict (Pos.unmark m_a) in
-                       let m_a' = Pos.same_pos_as a' m_a in
+                       let m_a' = Pos.same a' m_a in
                        Com.PrintAccess (info, m_a')
                    | Com.PrintIndent e ->
                        Com.PrintIndent (translate_expression p dict e)
                    | Com.PrintExpr (e, min, max) ->
                        Com.PrintExpr (translate_expression p dict e, min, max)
                  in
-                 Pos.same_pos_as mir_arg arg :: res)
+                 Pos.same mir_arg arg :: res)
                [] args)
         in
         aux ((Com.Print (std, mir_args), pos) :: res, dict) il
@@ -855,7 +854,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         aux ((instr, pos) :: res, dict) il
     | (Com.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) p.prog_errors in
-        let m_err_decl = Pos.same_pos_as err_decl err_name in
+        let m_err_decl = Pos.same err_decl err_name in
         aux ((Com.RaiseError (m_err_decl, var_opt), pos) :: res, dict) il
     | (Com.CleanErrors, pos) :: il ->
         aux ((Com.CleanErrors, pos) :: res, dict) il

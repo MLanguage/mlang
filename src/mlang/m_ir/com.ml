@@ -99,14 +99,10 @@ type loc_tgv = {
 
 type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
-type loc_arg = { ord : int; loc_idx : int }
-
 type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * loc_tmp
   | LocRef of string * int
-  | LocArg of string * loc_arg
-  | LocRes of string * int
 
 module Var = struct
   type id = int
@@ -129,7 +125,7 @@ module Var = struct
     typ : value_typ option;
   }
 
-  and scope = Tgv of tgv | Temp of t Array.t option | Ref | Arg | Res
+  and scope = Tgv of tgv | Temp of t Array.t option | Ref
 
   and t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
@@ -153,7 +149,7 @@ module Var = struct
     match v.scope with
     | Tgv tgv -> tgv.table
     | Temp table -> table
-    | Ref | Arg | Res -> None
+    | Ref -> None
 
   let is_table v = get_table v <> None
 
@@ -161,7 +157,7 @@ module Var = struct
     match v.scope with
     | Tgv tgv -> { v with scope = Tgv { tgv with table } }
     | Temp _ -> { v with scope = Temp table }
-    | Ref | Arg | Res -> v
+    | Ref -> v
 
   let cat_var_loc v =
     match v.scope with
@@ -170,7 +166,7 @@ module Var = struct
         | CatVar.Input _ -> CatVar.LocInput
         | Computed { is_base } when is_base -> CatVar.LocBase
         | Computed _ -> CatVar.LocComputed)
-    | Temp _ | Ref | Arg | Res -> failwith "not a TGV variable"
+    | Temp _ | Ref -> failwith "not a TGV variable"
 
   let size v = match get_table v with None -> 1 | Some tab -> Array.length tab
 
@@ -203,10 +199,6 @@ module Var = struct
     | LocTgv (_, tgv) -> tgv.loc_cat_idx
     | LocTmp (_, tmp) -> tmp.loc_cat_idx
     | LocRef (_, li) -> li
-    | LocArg (_, arg) -> arg.ord
-    | LocRes (id, _) ->
-        let msg = Pp.spr "variable %s doesn't have an index" id in
-        Errors.raise_error msg
 
   let set_loc_tgv_idx v (cv : CatVar.data) i =
     match v.loc with
@@ -215,7 +207,7 @@ module Var = struct
         let loc_cat_str = cv.id_str in
         let tgv = { tgv with loc_cat; loc_cat_str; loc_cat_idx = i } in
         { v with loc = LocTgv (id, tgv) }
-    | LocTmp (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
+    | LocTmp (id, _) | LocRef (id, _) ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
   let set_loc_tmp_idx v i =
@@ -223,15 +215,14 @@ module Var = struct
     | LocTmp (id, tmp) ->
         let tmp = { tmp with loc_cat_idx = i } in
         { v with loc = LocTmp (id, tmp) }
-    | LocTgv (id, _) | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
+    | LocTgv (id, _) | LocRef (id, _) ->
         Errors.raise_error (Pp.spr "%s has not a TGV location" id)
 
   let loc_idx v =
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_idx
     | LocTmp (_, tmp) -> tmp.loc_idx
-    | LocArg (_, arg) -> arg.loc_idx
-    | LocRef (_, li) | LocRes (_, li) -> li
+    | LocRef (_, li) -> li
 
   let set_loc_idx v loc_idx =
     let loc =
@@ -239,8 +230,6 @@ module Var = struct
       | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_idx })
       | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_idx })
       | LocRef (id, _) -> LocRef (id, loc_idx)
-      | LocArg (id, arg) -> LocArg (id, { arg with loc_idx })
-      | LocRes (id, _) -> LocRes (id, loc_idx)
     in
     { v with loc }
 
@@ -248,7 +237,7 @@ module Var = struct
     match v.loc with
     | LocTgv (_, tgv) -> tgv.loc_tab_idx
     | LocTmp (_, tmp) -> tmp.loc_tab_idx
-    | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
+    | LocRef (id, _) ->
         let msg = Pp.spr "variable %s cannot be a table" id in
         Errors.raise_error msg
 
@@ -257,7 +246,7 @@ module Var = struct
       match v.loc with
       | LocTgv (id, tgv) -> LocTgv (id, { tgv with loc_tab_idx })
       | LocTmp (id, tmp) -> LocTmp (id, { tmp with loc_tab_idx })
-      | LocRef (id, _) | LocArg (id, _) | LocRes (id, _) ->
+      | LocRef (id, _) ->
           let msg = Pp.spr "variable %s cannot be a table" id in
           Errors.raise_error msg
     in
@@ -268,10 +257,6 @@ module Var = struct
   let is_temp v = match v.scope with Temp _ -> true | _ -> false
 
   let is_ref v = v.scope = Ref
-
-  let is_arg v = v.scope = Arg
-
-  let is_res v = v.scope = Res
 
   let init_loc loc_cat_id =
     {
@@ -305,20 +290,11 @@ module Var = struct
     let loc = LocRef (Pos.unmark name, -1) in
     { name; id = new_id (); loc; scope = Ref }
 
-  let new_arg ~(name : string Pos.marked) ~(ord : int) : t =
-    let loc = LocArg (Pos.unmark name, { ord; loc_idx = -1 }) in
-    { name; id = new_id (); loc; scope = Arg }
+  let new_arg ~(name : string Pos.marked) : t = new_temp ~name ~table:None
 
-  let new_res ~(name : string Pos.marked) : t =
-    let loc = LocRes (Pos.unmark name, -1) in
-    { name; id = new_id (); loc; scope = Res }
+  let new_res ~(name : string Pos.marked) : t = new_temp ~name ~table:None
 
-  let int_of_scope = function
-    | Tgv _ -> 0
-    | Temp _ -> 1
-    | Ref -> 2
-    | Arg -> 3
-    | Res -> 4
+  let int_of_scope = function Tgv _ -> 0 | Temp _ -> 1 | Ref -> 2
 
   let compare (var1 : t) (var2 : t) =
     let c = compare (int_of_scope var1.scope) (int_of_scope var2.scope) in
@@ -655,7 +631,7 @@ let rec access_map_var f = function
       let m_i' = m_expr_map_var f m_i in
       FieldAccess (m_i', field, id)
 
-and m_access_map_var f m_access = Pos.map_under_mark (access_map_var f) m_access
+and m_access_map_var f m_access = Pos.map (access_map_var f) m_access
 
 and set_value_map_var f = function
   | FloatValue value -> FloatValue value
@@ -668,7 +644,7 @@ and atom_map_var f = function
   | AtomVar v -> AtomVar (f v)
   | AtomLiteral l -> AtomLiteral l
 
-and m_atom_map_var f m_a = Pos.map_under_mark (atom_map_var f) m_a
+and m_atom_map_var f m_a = Pos.map (atom_map_var f) m_a
 
 and set_value_loop_map_var f = function
   | Single m_a0 -> Single (m_atom_map_var f m_a0)
@@ -712,26 +688,26 @@ and expr_map_var f = function
       let m_el' = List.map (m_expr_map_var f) m_el in
       FuncCall (fn, m_el')
   | FuncCallLoop (fn, m_loop, m_e0) ->
-      let m_loop' = Pos.map_under_mark (loop_variables_map_var f) m_loop in
+      let m_loop' = Pos.map (loop_variables_map_var f) m_loop in
       let m_e0' = m_expr_map_var f m_e0 in
       FuncCallLoop (fn, m_loop', m_e0')
   | Literal l -> Literal l
   | Var access -> Var (access_map_var f access)
   | Loop (m_loop, m_e0) ->
-      let m_loop' = Pos.map_under_mark (loop_variables_map_var f) m_loop in
+      let m_loop' = Pos.map (loop_variables_map_var f) m_loop in
       let m_e0' = m_expr_map_var f m_e0 in
       Loop (m_loop', m_e0')
   | NbCategory cvm -> NbCategory cvm
   | Attribut (m_access, attr) ->
-      let m_access' = Pos.map_under_mark (access_map_var f) m_access in
+      let m_access' = Pos.map (access_map_var f) m_access in
       Attribut (m_access', attr)
-  | Size m_access -> Size (Pos.map_under_mark (access_map_var f) m_access)
+  | Size m_access -> Size (Pos.map (access_map_var f) m_access)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
   | NbBloquantes -> NbBloquantes
 
-and m_expr_map_var f e = Pos.map_under_mark (expr_map_var f) e
+and m_expr_map_var f e = Pos.map (expr_map_var f) e
 
 let rec print_arg_map_var f = function
   | PrintString s -> PrintString s
@@ -739,8 +715,7 @@ let rec print_arg_map_var f = function
   | PrintIndent m_e0 -> PrintIndent (m_expr_map_var f m_e0)
   | PrintExpr (m_e0, i0, i1) -> PrintExpr (m_expr_map_var f m_e0, i0, i1)
 
-and formula_loop_map_var f m_lvs =
-  Pos.map_under_mark (loop_variables_map_var f) m_lvs
+and formula_loop_map_var f m_lvs = Pos.map (loop_variables_map_var f) m_lvs
 
 and formula_decl_map_var f = function
   | VarDecl (m_access, m_e1) ->
@@ -760,7 +735,7 @@ and formula_map_var f = function
       MultipleFormulaes (fl', fd')
 
 and instr_map_var f g = function
-  | Affectation m_f -> Affectation (Pos.map_under_mark (formula_map_var f) m_f)
+  | Affectation m_f -> Affectation (Pos.map (formula_map_var f) m_f)
   | IfThenElse (m_e0, m_il0, m_il1) ->
       let m_e0' = m_expr_map_var f m_e0 in
       let m_il0' = List.map (m_instr_map_var f g) m_il0 in
@@ -773,7 +748,7 @@ and instr_map_var f g = function
         (m_e0', m_il0', pos)
       in
       let m_eil' = List.map map m_eil in
-      let m_il' = Pos.map_under_mark (List.map (m_instr_map_var f g)) m_il in
+      let m_il' = Pos.map (List.map (m_instr_map_var f g)) m_il in
       WhenDoElse (m_eil', m_il')
   | ComputeDomain dom -> ComputeDomain dom
   | ComputeChaining ch -> ComputeChaining ch
@@ -785,9 +760,7 @@ and instr_map_var f g = function
       ComputeTarget (tn, args')
   | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
   | Print (pr_std, pr_args) ->
-      let pr_args' =
-        List.map (Pos.map_under_mark (print_arg_map_var f)) pr_args
-      in
+      let pr_args' = List.map (Pos.map (print_arg_map_var f)) pr_args in
       Print (pr_std, pr_args')
   | Iterate (v, vl, cvml, m_il) ->
       let v' = f v in
@@ -854,13 +827,13 @@ and instr_map_var f g = function
       let m_il' = List.map (m_instr_map_var f g) m_il in
       ArrangeEvents (vve_opt', ve_opt', e_opt', m_il')
   | RaiseError (m_err, m_s_opt) ->
-      let m_err' = Pos.map_under_mark g m_err in
+      let m_err' = Pos.map g m_err in
       RaiseError (m_err', m_s_opt)
   | CleanErrors -> CleanErrors
   | ExportErrors -> ExportErrors
   | FinalizeErrors -> FinalizeErrors
 
-and m_instr_map_var f g m_i = Pos.map_under_mark (instr_map_var f g) m_i
+and m_instr_map_var f g m_i = Pos.map (instr_map_var f g) m_i
 
 let get_var_name v = match v with Normal s -> s | Generic s -> s.base
 

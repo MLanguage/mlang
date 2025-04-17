@@ -498,8 +498,6 @@ extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 #define EST_CALCULEE   0x04000
 #define EST_BASE       0x08000
 #define EST_TEMPORAIRE 0x10000
-#define EST_ARGUMENT   0x20000
-#define EST_RESULTAT   0x40000
 #define EST_MASQUE     0x3c000
 #define INDICE_VAL     0x03fff
 

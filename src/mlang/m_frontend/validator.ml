@@ -21,7 +21,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "attribute \"%s\" declared more than once: already declared %a" attr
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -29,7 +29,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "Category \"%a\" defined more than once: already defined %a"
-        Com.CatVar.pp cat Pos.format_position old_pos
+        Com.CatVar.pp cat Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -37,7 +37,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "attribute \"%s\" defined more than once: already defined %a" attr
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -57,7 +57,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "alias \"%s\" declared more than once: already declared %a" alias
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -65,7 +65,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "variable \"%s\" declared more than once: already declared %a" name
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -73,7 +73,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "temporary variable \"%s\" declared more than once: already declared %a"
-        name Pos.format_position old_pos
+        name Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -81,14 +81,14 @@ module Err = struct
     let msg =
       Format.asprintf
         "error \"%s\" declared more than once: already declared %a" name
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
   let domain_already_declared rov old_pos pos =
     let msg =
       Format.asprintf "%s domain declared more than once: already declared %a"
-        (rov_to_str rov) Pos.format_position old_pos
+        (rov_to_str rov) Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -96,7 +96,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "default %s domain declared more than once: already declared %a"
-        (rov_to_str rov) Pos.format_position old_pos
+        (rov_to_str rov) Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -132,7 +132,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "target \"%s\" declared more than once: already declared %a" name
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -140,15 +140,15 @@ module Err = struct
 
   let variable_used_as_table decl_pos pos =
     let msg =
-      Format.asprintf "variable used as a table, declared %a"
-        Pos.format_position decl_pos
+      Format.asprintf "variable used as a table, declared %a" Pos.format
+        decl_pos
     in
     Errors.raise_spanned_error msg pos
 
   let table_used_as_variable decl_pos pos =
     let msg =
-      Format.asprintf "table used as a variable, declared %a"
-        Pos.format_position decl_pos
+      Format.asprintf "table used as a variable, declared %a" Pos.format
+        decl_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -163,14 +163,9 @@ module Err = struct
     let msg = Format.sprintf "unknown attribute \"%s\"" attr in
     Errors.raise_spanned_error msg pos
 
-  let tmp_vars_have_no_attrs pos =
-    Errors.raise_spanned_error "temporary variables have no attributes" pos
-
-  let args_have_no_attrs pos =
-    Errors.raise_spanned_error "arguments have no attributes" pos
-
-  let res_have_no_attrs pos =
-    Errors.raise_spanned_error "results have no attributes" pos
+  let var_have_no_attrs var pos =
+    let msg = Pp.spr "variable %s have no attributes" var in
+    Errors.raise_spanned_error msg pos
 
   let unknown_variable_category pos =
     Errors.raise_spanned_error "unknown_variable_category" pos
@@ -193,7 +188,7 @@ module Err = struct
   let rov_already_defined rov rov_id old_pos pos =
     let msg =
       Format.asprintf "%s %d defined more than once: already defined %a"
-        (rov_to_str rov) rov_id Pos.format_position old_pos
+        (rov_to_str rov) rov_id Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -240,7 +235,7 @@ module Err = struct
   let domain_already_used rov dom_pos pos =
     let msg =
       Format.asprintf "domain of this %s already used %a" (rov_to_str rov)
-        Pos.format_position dom_pos
+        Pos.format dom_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -274,7 +269,7 @@ module Err = struct
     let msg =
       Format.asprintf
         "variable \"%s\" specified more than once: already specified %a" name
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -322,15 +317,15 @@ module Err = struct
 
   let event_already_declared old_pos pos =
     let msg =
-      Format.asprintf "event fields are already declared at %a"
-        Pos.format_position old_pos
+      Format.asprintf "event fields are already declared at %a" Pos.format
+        old_pos
     in
     Errors.raise_spanned_error msg pos
 
   let event_field_already_declared name old_pos pos =
     let msg =
       Format.asprintf "event field \"%s\" is already declared at %a" name
-        Pos.format_position old_pos
+        Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -503,7 +498,7 @@ let safe_prefix (p : Mast.program) : string =
 
 let empty_program (p : Mast.program) main_target =
   let prog_app =
-    let fold s a = StrMap.add a Pos.no_pos s in
+    let fold s a = StrMap.add a Pos.none s in
     List.fold_left fold StrMap.empty !Cli.application_names
   in
   {
@@ -517,7 +512,7 @@ let empty_program (p : Mast.program) main_target =
     prog_vars = StrMap.empty;
     prog_event_fields = StrMap.empty;
     prog_event_field_idxs = IntMap.empty;
-    prog_event_pos = Pos.no_pos;
+    prog_event_pos = Pos.none;
     prog_alias = StrMap.empty;
     prog_errors = StrMap.empty;
     prog_rdoms = Com.DomainIdMap.empty;
@@ -762,7 +757,7 @@ let check_error (error : Mast.error_) (prog : program) : program =
   let is_isf =
     match List.nth_opt error.error_descr 4 with
     | Some s -> s
-    | None -> ("", Pos.no_pos)
+    | None -> Pos.without ""
   in
   let err =
     Com.Error.
@@ -825,7 +820,7 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
       | Some (_, old_pos) ->
           Err.default_domain_already_declared rov old_pos dom_id_pos
       | None ->
-          let value = (dom_id_name, Pos.no_pos) in
+          let value = Pos.without dom_id_name in
           Com.DomainIdMap.add Com.DomainId.empty value syms
     else syms
   in
@@ -1151,9 +1146,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
                 if not (StrMap.mem (Pos.unmark a) (Com.Var.attrs var)) then
                   Err.unknown_attribut_for_var cat (Pos.get a))
               else if Com.Var.is_temp var then
-                Err.tmp_vars_have_no_attrs var_pos
-              else if Com.Var.is_arg var then Err.args_have_no_attrs var_pos
-              else if Com.Var.is_res var then Err.res_have_no_attrs var_pos
+                Err.var_have_no_attrs (Com.Var.name_str var) var_pos
           | None -> Err.unknown_variable var_pos);
           fold_var m_v Both env acc
       | TabAccess (m_v, m_i) ->
@@ -1166,11 +1159,9 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
                 if not (StrMap.mem (Pos.unmark a) (Com.Var.attrs var)) then
                   Err.unknown_attribut_for_var cat (Pos.get a))
               else if Com.Var.is_temp var then
-                Err.tmp_vars_have_no_attrs var_pos
+                Err.var_have_no_attrs (Com.Var.name_str var) var_pos
               else if Com.Var.is_ref var then
                 Err.variable_used_as_table (Pos.get @@ Com.Var.name var) var_pos
-              else if Com.Var.is_arg var then Err.args_have_no_attrs var_pos
-              else if Com.Var.is_res var then Err.res_have_no_attrs var_pos
           | None -> Err.unknown_variable var_pos);
           let acc = fold_aux acc m_i env in
           fold_var m_v Table env acc
@@ -1224,7 +1215,7 @@ let get_var_mem_type (var : Com.m_var_name) (env : var_env) :
       let mem =
         if Com.Var.is_ref var then Num else to_mem (Com.Var.get_table var)
       in
-      Pos.same_pos_as mem (Com.Var.name var)
+      Pos.same mem (Com.Var.name var)
   | None -> Err.unknown_variable var_pos
 
 let check_variable (var : Com.m_var_name) (idx_mem : var_mem_type)
@@ -1240,9 +1231,7 @@ let check_variable (var : Com.m_var_name) (idx_mem : var_mem_type)
 
 let check_expression (is_filter : bool) (env : var_env)
     (m_expr : Mast.m_expression) : unit =
-  let get_var m_v =
-    Pos.same_pos_as (Com.get_normal_var @@ Pos.unmark m_v) m_v
-  in
+  let get_var m_v = Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v in
   let fold_var var idx_mem env _acc = check_variable var idx_mem env in
   fold_var_expr get_var fold_var is_filter () m_expr env
 
@@ -1311,14 +1300,14 @@ let rec check_instructions (is_rule : bool) (env : var_env)
   let map_var env m_v =
     let name = Com.get_normal_var (Pos.unmark m_v) in
     let id = StrMap.find name env.vars in
-    Pos.same_pos_as id m_v
+    Pos.same id m_v
   in
   let map_expr env m_expr =
     check_expression false env m_expr;
     Com.m_expr_map_var (map_var env) m_expr
   in
   let check_it_var env var =
-    let m_name = Pos.same_pos_as (Com.get_normal_var (Pos.unmark var)) var in
+    let m_name = Pos.same (Com.get_normal_var (Pos.unmark var)) var in
     check_name_in_env env m_name;
     m_name
   in
@@ -1404,7 +1393,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               | [] ->
                   let prog, res_ed = check_aux env (Pos.unmark ed) in
                   let env = { env with prog } in
-                  let ed' = Pos.same_pos_as res_ed ed in
+                  let ed' = Pos.same res_ed ed in
                   let res = Com.WhenDoElse (List.rev res, ed') in
                   (env, res)
             in
@@ -1424,12 +1413,12 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             in
             let prog = { prog with prog_rdom_calls } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
+            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, (res_instr, instr_pos) :: res) il
         | Com.ComputeChaining _ ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
-            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
+            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, (res_instr, instr_pos) :: res) il
         | Com.ComputeVerifs ((vdom_list, vdom_pos), expr) ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -1446,7 +1435,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             in
             let prog = { prog with prog_vdom_calls } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget ((tname, Pos.no_pos), []) in
+            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, (res_instr, instr_pos) :: res) il
         | Com.VerifBlock instrs ->
             if is_rule then Err.insruction_forbidden_in_rules instr_pos;
@@ -1507,7 +1496,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                                     f_pos
                               | None -> Err.unknown_event_field f_name f_pos)
                         in
-                        Com.PrintAccess (info, Pos.same_pos_as a' m_a)
+                        Com.PrintAccess (info, Pos.same a' m_a)
                     | Com.PrintIndent e ->
                         let e' = map_expr env e in
                         Com.PrintIndent e'
@@ -1705,7 +1694,7 @@ let inout_expression (prog : program) (m_expr : int Pos.marked Com.m_expression)
     : Pos.t StrMap.t =
   let get_var m_id =
     let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-    Pos.same_pos_as (Com.Var.name_str var) m_id
+    Pos.same (Com.Var.name_str var) m_id
   in
   let fold_var m_id _idx_mem _env acc =
     let name, pos = get_var m_id in
@@ -1753,7 +1742,7 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
                 | VarAccess m_id ->
                     let m_v =
                       let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-                      Pos.same_pos_as (Com.Var.name_str var) m_id
+                      Pos.same (Com.Var.name_str var) m_id
                     in
                     let out_vars_lvalue =
                       StrMap.one (Pos.unmark m_v) (Pos.get m_v)
@@ -1775,7 +1764,7 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
                 | TabAccess (m_id, m_i) ->
                     let m_v =
                       let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-                      Pos.same_pos_as (Com.Var.name_str var) m_id
+                      Pos.same (Com.Var.name_str var) m_id
                     in
                     let out_vars_lvalue =
                       StrMap.one (Pos.unmark m_v) (Pos.get m_v)
@@ -1964,10 +1953,10 @@ let check_code (is_rule : bool) (is_function : bool)
         check_name_in_tgv prog m_v;
         check_name_in_tmp tmp_vars' m_v;
         let var =
-          if is_function then Com.Var.new_arg ~name:m_v ~ord:(List.length args)
+          if is_function then Com.Var.new_arg ~name:m_v
           else Com.Var.new_ref ~name:m_v
         in
-        (Pos.same_pos_as var.id m_v :: args, add_var_env var env)
+        (Pos.same var.id m_v :: args, add_var_env var env)
       in
       let args', env = List.fold_left fold ([], env) args in
       (List.rev args', env)
@@ -1982,7 +1971,7 @@ let check_code (is_rule : bool) (is_function : bool)
           check_name_in_tmp tmp_vars' m_name;
           check_name_in_args env.prog.prog_dict args' m_name;
           let var = Com.Var.new_res ~name:m_name in
-          (Some (Pos.same_pos_as var.id m_name), add_var_env var env)
+          (Some (Pos.same var.id m_name), add_var_env var env)
       | None ->
           if is_function then Err.function_result_missing tname tpos;
           (None, env)
@@ -2082,7 +2071,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
   let env, _, _, rule_tmp_vars, rule_instrs =
-    check_code true false ("", Pos.no_pos) prog r.rule_tmp_vars [] None
+    check_code true false (Pos.without "") prog r.rule_tmp_vars [] None
       r.rule_formulaes
   in
   let prog = env.prog in
@@ -2123,7 +2112,7 @@ let convert_rules (prog : program) : program =
         let target =
           Com.
             {
-              target_name = (tname, Pos.no_pos);
+              target_name = Pos.without tname;
               target_file;
               target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
@@ -2225,7 +2214,7 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   List.map
     (fun id ->
       let name = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
-      (Com.ComputeTarget ((name, Pos.no_pos), []), Pos.no_pos))
+      Pos.without (Com.ComputeTarget (Pos.without name, [])))
     sorted_rules
 
 let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
@@ -2294,14 +2283,14 @@ let complete_rule_domains (prog : program) : program =
           in
           let tname =
             let spl =
-              Com.DomainId.fold (fun s l -> (s, Pos.no_pos) :: l) rdom_id []
+              Com.DomainId.fold (fun s l -> Pos.without s :: l) rdom_id []
             in
-            get_compute_id_str (Com.ComputeDomain (spl, Pos.no_pos)) prog
+            get_compute_id_str (Com.ComputeDomain (Pos.without spl)) prog
           in
           let target =
             Com.
               {
-                target_name = (tname, Pos.no_pos);
+                target_name = Pos.without tname;
                 target_file = None;
                 target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                 target_args = [];
@@ -2395,12 +2384,12 @@ let complete_chainings (prog : program) : program =
           rule_graph_to_instrs (Chaining ch_name) prog rule_graph
         in
         let tname =
-          get_compute_id_str (Com.ComputeChaining (ch_name, Pos.no_pos)) prog
+          get_compute_id_str (Com.ComputeChaining (Pos.without ch_name)) prog
         in
         let target =
           Com.
             {
-              target_name = (tname, Pos.no_pos);
+              target_name = Pos.without tname;
               target_file = None;
               target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
@@ -2456,7 +2445,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
         | None -> ());
         let verif_cat_var_stats, verif_var_stats =
           let get_var m_v =
-            Pos.same_pos_as (Com.get_normal_var @@ Pos.unmark m_v) m_v
+            Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v
           in
           let fold_var m_v idx_mem env (vdom_sts, var_sts) =
             check_variable m_v idx_mem env;
@@ -2512,25 +2501,25 @@ let convert_verifs (prog : program) : program =
           let map_var m_v =
             let name = Com.get_normal_var (Pos.unmark m_v) in
             let id = StrMap.find name prog.prog_vars in
-            Pos.same_pos_as id m_v
+            Pos.same id m_v
           in
           List.map
             (Com.m_instr_map_var map_var Fun.id)
             [
-              ( Com.IfThenElse
-                  ( verif.verif_expr,
-                    [
-                      ( Com.RaiseError (verif.verif_error, verif.verif_var),
-                        Pos.no_pos );
-                    ],
-                    [] ),
-                Pos.no_pos );
+              Pos.without
+                (Com.IfThenElse
+                   ( verif.verif_expr,
+                     [
+                       Pos.without
+                         (Com.RaiseError (verif.verif_error, verif.verif_var));
+                     ],
+                     [] ));
             ]
         in
         let target =
           Com.
             {
-              target_name = (tname, Pos.no_pos);
+              target_name = Pos.without tname;
               target_file;
               target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
               target_args = [];
@@ -2769,12 +2758,12 @@ let complete_verif_calls (prog : program) : program =
         match OrdVerifSetMap.find_opt verif_set verif_calls with
         | Some tn ->
             let target_prog =
-              [ (Com.ComputeTarget ((tn, Pos.no_pos), []), Pos.no_pos) ]
+              [ Pos.without (Com.ComputeTarget (Pos.without tn, [])) ]
             in
             let target =
               Com.
                 {
-                  target_name = (tname, Pos.no_pos);
+                  target_name = Pos.without tname;
                   target_file = None;
                   target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];
@@ -2797,17 +2786,17 @@ let complete_verif_calls (prog : program) : program =
                     let verif_tn =
                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
                     in
-                    (Com.ComputeTarget ((verif_tn, Pos.no_pos), []), Pos.no_pos)
+                    Pos.without (Com.ComputeTarget (Pos.without verif_tn, []))
                     :: target_prog)
                   verif_set []
               in
               List.rev instrs
             in
-            let target_prog = [ (Com.VerifBlock instrs, Pos.no_pos) ] in
+            let target_prog = [ Pos.without (Com.VerifBlock instrs) ] in
             let target =
               Com.
                 {
-                  target_name = (tname, Pos.no_pos);
+                  target_name = Pos.without tname;
                   target_file = None;
                   target_apps = StrMap.mapi (fun a p -> (a, p)) prog.prog_app;
                   target_args = [];

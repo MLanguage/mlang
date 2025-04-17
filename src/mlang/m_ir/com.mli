@@ -46,14 +46,10 @@ type loc_tgv = {
 
 type loc_tmp = { loc_idx : int; loc_tab_idx : int; loc_cat_idx : int }
 
-type loc_arg = { ord : int; loc_idx : int }
-
 type loc =
   | LocTgv of string * loc_tgv
   | LocTmp of string * loc_tmp
   | LocRef of string * int
-  | LocArg of string * loc_arg
-  | LocRes of string * int
 
 module Var : sig
   type id = int
@@ -69,7 +65,7 @@ module Var : sig
     typ : value_typ option;
   }
 
-  and scope = Tgv of tgv | Temp of t Array.t option | Ref | Arg | Res
+  and scope = Tgv of tgv | Temp of t Array.t option | Ref
 
   and t = {
     name : string Pos.marked;  (** The position is the variable declaration *)
@@ -130,10 +126,6 @@ module Var : sig
 
   val is_ref : t -> bool
 
-  val is_arg : t -> bool
-
-  val is_res : t -> bool
-
   val init_loc : CatVar.t -> loc_tgv
 
   val new_tgv :
@@ -151,7 +143,7 @@ module Var : sig
 
   val new_ref : name:string Pos.marked -> t
 
-  val new_arg : name:string Pos.marked -> ord:int -> t
+  val new_arg : name:string Pos.marked -> t
 
   val new_res : name:string Pos.marked -> t
 

@@ -93,21 +93,23 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let open Mast in
   let var_exists name =
     List.exists
-      (List.exists (fun (item, _) ->
-           match item with
-           | VariableDecl (ComputedVar (cv, _)) ->
-               Pos.unmark cv.comp_name = name
-           | VariableDecl (InputVar (iv, _)) -> Pos.unmark iv.input_name = name
+      (List.exists (fun m_item ->
+           match Pos.unmark m_item with
+           | VariableDecl (ComputedVar m_cv) ->
+               Pos.unmark (Pos.unmark m_cv).comp_name = name
+           | VariableDecl (InputVar m_iv) ->
+               Pos.unmark (Pos.unmark m_iv).input_name = name
            | _ -> false))
       program
   in
   let mk_assign name value l =
     if var_exists name then
-      let no_pos x = (x, Pos.no_pos) in
-      let m_access = no_pos (Com.VarAccess (no_pos (Com.Normal name))) in
+      let m_access =
+        Pos.without (Com.VarAccess (Pos.without (Com.Normal name)))
+      in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (VarDecl (m_access, no_pos litt)) in
-      no_pos cmd :: l
+      let cmd = Com.SingleFormula (VarDecl (m_access, Pos.without litt)) in
+      Pos.without cmd :: l
     else l
   in
   let oceans, batch, iliad =
@@ -117,20 +119,20 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
     | _ -> (false, false, true)
   in
   List.map
-    (List.map (fun item ->
-         match Pos.unmark item with
+    (List.map (fun m_item ->
+         match Pos.unmark m_item with
          | Rule r when Pos.unmark r.rule_number = 1 ->
              let fl =
                List.map
-                 (fun f -> Pos.same_pos_as (Com.Affectation f) f)
+                 (fun f -> Pos.same (Com.Affectation f) f)
                  ([]
                  |> mk_assign "APPLI_OCEANS" oceans
                  |> mk_assign "APPLI_BATCH" batch
                  |> mk_assign "APPLI_ILIAD" iliad)
              in
-             ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
-               Pos.get item )
-         | _ -> item))
+             let r' = { r with rule_formulaes = r.rule_formulaes @ fl } in
+             Pos.same (Rule r') m_item
+         | _ -> m_item))
     program
 
 (** Entry function for the executable. Returns a negative number in case of
