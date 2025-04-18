@@ -31,8 +31,9 @@ val format_gnu : Format.formatter -> t -> unit
 
 val format : Format.formatter -> t -> unit
 
-type 'a marked = 'a * t
-(** Everything related to the source code should keep its t stored, to improve
+type 'a marked =
+  | Mark of 'a * t
+      (** Everything related to the source code should keep its t stored, to improve
     error messages *)
 
 val none : t
@@ -46,7 +47,7 @@ val unmark : 'a marked -> 'a
 
 val get : 'a marked -> t
 
-val couple : 'a marked -> 'a * t
+val to_couple : 'a marked -> 'a * t
 
 val map : ('a -> 'b) -> 'a marked -> 'b marked
 

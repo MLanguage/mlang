@@ -27,7 +27,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
  let parse_to_atom (v: parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
    match v with
-   | ParseVar v -> AtomVar (v, pos)
+   | ParseVar v -> AtomVar (Pos.mark v pos)
    | ParseInt v -> AtomLiteral (Float (float_of_int v))
 
  (** Module generated automaticcaly by Menhir, the parser generator *)
@@ -75,7 +75,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %%
 
 %inline with_pos(X):
-| x = X { (x, mk_position $sloc) }
+| x = X { Pos.mark x (mk_position $sloc) }
 
 symbol_with_pos:
 | s = with_pos(SYMBOL) { s }
@@ -149,19 +149,19 @@ rule_domain_decl:
   SEMICOLON {
     let err msg pos = Errors.raise_spanned_error msg pos in
     let fold (dno, dso, dco, dpdo) = function
-    | (Some dn, _, _, _), pos ->
+    | Pos.Mark ((Some dn, _, _, _), pos) ->
         if dno = None then Some dn, dso, dco, dpdo
         else err "rule domain names are already defined" pos
-    | (_, Some ds, _, _), pos ->
+    | Pos.Mark ((_, Some ds, _, _), pos) ->
         if dso = None then dno, Some ds, dco, dpdo
         else err "rule domain specialization is already specified" pos
-    | (_, _, Some dc, _), pos ->
+    | Pos.Mark ((_, _, Some dc, _), pos) ->
         if dco = None then dno, dso, Some dc, dpdo
         else err "rule domain is already calculated" pos
-    | (_, _, _, Some dpd), pos ->
+    | Pos.Mark ((_, _, _, Some dpd), pos) ->
         if dpdo = None then dno, dso, dco, Some dpd
         else err "rule domain is already defined by defaut" pos
-    | (_, _, _, _), _ -> assert false
+    | Pos.Mark ((_, _, _, _), _) -> assert false
     in
     let init = None, None, None, None in
     let dno, dso, dco, dpdo = List.fold_left fold init rdom_params in
@@ -197,22 +197,22 @@ verif_domain_decl:
   SEMICOLON {
     let err msg pos = Errors.raise_spanned_error msg pos in
     let fold (dno, dso, dvo, dpdo, dco) = function
-    | (Some dn, _, _, _, _), pos ->
+    | Pos.Mark ((Some dn, _, _, _, _), pos) ->
         if dno = None then Some dn, dso, dvo, dpdo, dco
         else err "verif domain names are already defined" pos
-    | (_, Some ds, _, _, _), pos ->
+    | Pos.Mark ((_, Some ds, _, _, _), pos) ->
         if dso = None then dno, Some ds, dvo, dpdo, dco
         else err "verif domain specialization is already specified" pos
-    | (_, _, Some dv, _, _), pos ->
+    | Pos.Mark ((_, _, Some dv, _, _), pos) ->
         if dvo = None then dno, dso, Some dv, dpdo, dco
         else err "verif domain authorization is already specified" pos
-    | (_, _, _, Some dpd, _), pos ->
+    | Pos.Mark ((_, _, _, Some dpd, _), pos) ->
         if dpdo = None then dno, dso, dvo, Some dpd, dco
         else err "verif domain is already defined by defaut" pos
-    | (_, _, _, _, Some dcd), pos ->
+    | Pos.Mark ((_, _, _, _, Some dcd), pos) ->
         if dco = None then dno, dso, dvo, dpdo, Some dcd
         else err "verif domain is already verifiable" pos
-    | (_, _, _, _, _), _ -> assert false
+    | Pos.Mark ((_, _, _, _, _), _) -> assert false
     in
     let init = None, None, None, None, None in
     let dno, dso, dvo, dpdo, dco = List.fold_left fold init vdom_params in
@@ -318,12 +318,12 @@ comp_variable:
     in
     let comp_category =
       subtyp
-      |> List.filter (function CompSubTyp ("base", _) -> true | _ -> false) 
+      |> List.filter (function CompSubTyp (Pos.Mark ("base", _)) -> true | _ -> false) 
       |> List.map (function CompSubTyp x -> x | _ -> assert false)
     in
     let comp_is_givenback =
       subtyp
-      |> List.exists (function CompSubTyp ("restituee", _) -> true | _ -> false)
+      |> List.exists (function CompSubTyp (Pos.Mark ("restituee", _)) -> true | _ -> false)
     in
     {
       comp_name;
@@ -411,7 +411,7 @@ rule_etc:
       let rec aux tags endPos = function
       | [num] ->
            let pos = Pos.make_between begPos endPos in
-           num, (tags, pos)
+           num, (Pos.mark tags pos)
       | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
       in
@@ -426,7 +426,7 @@ rule_etc:
     in
     let rule_apps, rule_chainings, rule_tmp_vars =
       let rec aux apps_opt chs_opt vars_opt = function
-      | (`Applications apps', pos) :: h ->
+      | Pos.Mark (`Applications apps', pos) :: h ->
           let apps_opt' =
             match apps_opt with
             | None -> Some (apps', pos)
@@ -438,7 +438,7 @@ rule_etc:
                   pos
           in
           aux apps_opt' chs_opt vars_opt h
-      | (`Chainings chs', pos) :: h ->
+      | Pos.Mark (`Chainings chs', pos) :: h ->
           let chs_opt' =
             match chs_opt with
             | None -> Some (chs', pos)
@@ -450,7 +450,7 @@ rule_etc:
                   pos
           in
           aux apps_opt chs_opt' vars_opt h
-      | (`TmpVars vars', pos) :: h ->
+      | Pos.Mark (`TmpVars vars', pos) :: h ->
           let vars_opt' =
             match vars_opt with
             | None -> Some (vars', pos)
@@ -467,16 +467,16 @@ rule_etc:
             match apps_opt with
             | Some (apps, _) ->
                 List.fold_left
-                  (fun res (app, pos) ->
+                  (fun res (Pos.Mark (app, pos)) ->
                     match StrMap.find_opt app res with
-                    | Some (_, old_pos) ->
+                    | Some (Pos.Mark (_, old_pos)) ->
                         let msg =
                           Format.asprintf "application %s already declared %a"
                             app
                             Pos.format old_pos
                         in
                         Errors.raise_spanned_error msg pos
-                    | None -> StrMap.add app (app, pos) res)
+                    | None -> StrMap.add app (Pos.mark app pos) res)
                   StrMap.empty
                   apps
             | None ->
@@ -488,16 +488,16 @@ rule_etc:
             match chs_opt with
             | Some (chs, _) ->
                 List.fold_left
-                  (fun res (ch, pos) ->
+                  (fun res (Pos.Mark (ch, pos)) ->
                     match StrMap.find_opt ch res with
-                    | Some (_, old_pos) ->
+                    | Some (Pos.Mark (_, old_pos)) ->
                         let msg =
                           Format.asprintf "chaining %s already declared %a"
                             ch
                             Pos.format old_pos
                         in
                         Errors.raise_spanned_error msg pos
-                    | None -> StrMap.add ch (ch, pos) res)
+                    | None -> StrMap.add ch (Pos.mark ch pos) res)
                   StrMap.empty
                   chs
             | None -> StrMap.empty
@@ -595,8 +595,8 @@ function_header_elt:
 
 temporary_variable_name:
 | name = symbol_with_pos size = with_pos(comp_variable_table)? {
-    let name_str, name_pos = name in
-    (parse_variable_name $sloc name_str, name_pos), size
+    let name_str, name_pos = Pos.to_couple name in
+    (Pos.mark (parse_variable_name $sloc name_str) name_pos), size
   }
 
 instruction_list_etc:
@@ -666,11 +666,11 @@ instruction:
   IN LPAREN instrs = instruction_list_rev RPAREN {
     let var = Pos.same (Com.Normal (Pos.unmark vn)) vn in
     match it_params with
-    | (`VarInterval _, _) :: _ ->
+    | Pos.Mark (`VarInterval _, _) :: _ ->
         let var_intervals =
           let fold var_intervals = function
-          | (`VarInterval (e0, e1, step), _) -> (e0, e1, step) :: var_intervals
-          | (`VarList _, pos) | (`VarCatsIt _, pos) ->
+          | Pos.Mark (`VarInterval (e0, e1, step), _) -> (e0, e1, step) :: var_intervals
+          | Pos.Mark (`VarList _, pos) | Pos.Mark (`VarCatsIt _, pos) ->
               Errors.raise_spanned_error "variable descriptors forbidden in values iteration" pos
           in
           List.fold_left fold [] it_params
@@ -679,9 +679,9 @@ instruction:
     | _ ->
         let var_list, var_cats =
           let fold (var_list, var_cats) = function
-          | (`VarList vl, _) -> (List.rev vl) @ var_list, var_cats
-          | (`VarCatsIt vc, _) -> var_list, vc :: var_cats
-          | (`VarInterval _, pos) ->
+          | Pos.Mark (`VarList vl, _) -> (List.rev vl) @ var_list, var_cats
+          | Pos.Mark (`VarCatsIt vc, _) -> var_list, vc :: var_cats
+          | Pos.Mark (`VarInterval _, pos) ->
               Errors.raise_spanned_error "interval forbidden in variable iteration" pos
           in
           List.fold_left fold ([], []) it_params
@@ -714,27 +714,27 @@ instruction:
   IN LPAREN instrs = instruction_list_rev RPAREN {
     let sort, filter, add =
       let fold (sort, sort_pos, filter, filter_pos, add, add_pos) = function
-      | (`ArrangeEventsSort (v0, v1, e), pos) when sort = None ->
+      | Pos.Mark (`ArrangeEventsSort (v0, v1, e), pos) when sort = None ->
           (Some (v0, v1, e), pos, filter, filter_pos, add, add_pos)
-      | (`ArrangeEventsFilter (v, e), pos) when filter = None ->
+      | Pos.Mark (`ArrangeEventsFilter (v, e), pos) when filter = None ->
           (sort, sort_pos, Some (v, e), pos, add, add_pos)
-      | (`ArrangeEventsAdd e, pos) when add = None ->
+      | Pos.Mark (`ArrangeEventsAdd e, pos) when add = None ->
           (sort, sort_pos, filter, filter_pos, Some e, pos)
-      | (`ArrangeEventsSort _, pos) ->
+      | Pos.Mark (`ArrangeEventsSort _, pos) ->
           let msg =
             Format.asprintf
               "event sorting already specified at %a"
               Pos.format sort_pos
           in
           Errors.raise_spanned_error msg pos
-      | (`ArrangeEventsFilter _, pos) ->
+      | Pos.Mark (`ArrangeEventsFilter _, pos) ->
           let msg =
             Format.asprintf
               "event filter already specified at %a"
               Pos.format sort_pos
           in
           Errors.raise_spanned_error msg pos
-      | (`ArrangeEventsAdd _, pos) ->
+      | Pos.Mark (`ArrangeEventsAdd _, pos) ->
           let msg =
             Format.asprintf
               "event creation already specified at %a"
@@ -766,7 +766,7 @@ target_args:
 | COLON WITH args = separated_nonempty_list(COMMA, arg_variable) { args }
 
 arg_variable:
-| s = with_pos(SYMBOL) { parse_variable $sloc (fst s), snd s }
+| s = with_pos(SYMBOL) { Pos.same (parse_variable $sloc (Pos.unmark s)) s }
 
 instruction_else_branch:
 | ELSEIF e = with_pos(expression)
@@ -787,7 +787,7 @@ instruction_then_when_branch:
     ((e, List.rev ild, mk_position $sloc) :: iltwl, ed)
   }
 | ELSE_DO il = instruction_list_rev ENDWHEN {
-    ([], (List.rev il, mk_position $sloc))
+    ([], (Pos.mark (List.rev il) (mk_position $sloc)))
   }
 | ENDWHEN { ([], (Pos.without [])) }
 
@@ -813,7 +813,7 @@ print_function:
 print_precision:
 | COLON min = symbol_with_pos
     {
-      let min_str, min_pos = min in
+      let min_str, min_pos = Pos.to_couple min in
       let min_val =
         try int_of_string min_str with
         | Failure _ -> Errors.raise_spanned_error "should be an integer" min_pos
@@ -824,14 +824,14 @@ print_precision:
     }
 | COLON min = symbol_with_pos RANGE max = symbol_with_pos
     {
-      let min_str, min_pos = min in
+      let min_str, min_pos = Pos.to_couple min in
       let min_val =
         try int_of_string min_str with
         | Failure _ -> Errors.raise_spanned_error "should be an integer" min_pos
       in
       (if min_val < 0 then
         Errors.raise_spanned_error "precision must be positive" min_pos);
-      let max_str, max_pos = max in
+      let max_str, max_pos = Pos.to_couple max in
       let max_val =
         try int_of_string max_str with
         | Failure _ -> Errors.raise_spanned_error "should be an integer" max_pos
@@ -985,7 +985,7 @@ verification:
       let rec aux tags endPos = function
       | [num] ->
            let pos = Pos.make_between begPos endPos in
-           num, (tags, pos)
+           num, (Pos.mark tags pos)
       | h :: t -> aux (h :: tags) (Pos.get h) t
       | [] -> assert false
       in
@@ -1006,16 +1006,16 @@ verification:
             (Pos.get verif_number)
       | _ ->
         List.fold_left
-          (fun res (app, pos) ->
+          (fun res (Pos.Mark (app, pos)) ->
             match StrMap.find_opt app res with
-            | Some (_, old_pos) ->
+            | Some (Pos.Mark (_, old_pos)) ->
                 let msg =
                   Format.asprintf "application %s already declared %a"
                     app
                     Pos.format old_pos
                 in
                 Errors.raise_spanned_error msg pos
-            | None -> StrMap.add app (app, pos) res)
+            | None -> StrMap.add app (Pos.mark app pos) res)
           StrMap.empty
           apps
     in
@@ -1106,7 +1106,7 @@ enumeration_loop_item:
 | bounds = interval_loop { bounds  }
 | s = SYMBOL {
     let pos = mk_position $sloc in
-    Com.Single (parse_to_atom (parse_variable_or_int $sloc s) pos, pos)
+    Com.Single (Pos.mark (parse_to_atom (parse_variable_or_int $sloc s) pos) pos)
   }
 
 range_or_minus:
@@ -1116,8 +1116,8 @@ range_or_minus:
 interval_loop:
 | i1 = SYMBOL rm = range_or_minus i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let l1 = parse_to_atom (parse_variable_or_int $sloc i1) pos, pos in
-    let l2 = parse_to_atom (parse_variable_or_int $sloc i2) pos, pos in
+    let l1 = Pos.mark (parse_to_atom (parse_variable_or_int $sloc i1) pos) pos in
+    let l2 = Pos.mark (parse_to_atom (parse_variable_or_int $sloc i2) pos) pos in
     match rm with
     | `Range -> Com.Range (l1, l2)
     | `Minus -> Com.Interval (l1, l2)
@@ -1132,27 +1132,27 @@ enumeration_item:
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
     let pos = mk_position $sloc in
-    Com.VarValue (FieldAccess (idx, field, -1), pos)
+    Com.VarValue (Pos.mark (Com.FieldAccess (idx, field, -1)) pos)
   }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     let pos = mk_position $sloc in
-    Com.VarValue (ConcAccess (m_v, idxFmt, idx), pos)
+    Com.VarValue (Pos.mark (Com.ConcAccess (m_v, idxFmt, idx)) pos)
   }
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (VarAccess (v, pos), pos)
-    | ParseInt i -> Com.FloatValue (float_of_int i, pos)
+    | ParseVar v -> Com.VarValue (Pos.mark (Com.VarAccess (Pos.mark v pos)) pos)
+    | ParseInt i -> Com.FloatValue (Pos.mark (float_of_int i) pos)
   }
 
 interval:
 | i1 = SYMBOL RANGE i2 = SYMBOL {
     let pos = mk_position $sloc in
-    let ir1 = parse_int $sloc i1, pos in
-    let ir2 = parse_int $sloc i2, pos in
+    let ir1 = Pos.mark (parse_int $sloc i1) pos in
+    let ir2 = Pos.mark (parse_int $sloc i2) pos in
     Com.IntervalValue (ir1, ir2) : set_value
   }
  (* Some intervals are "03..06" so we must keep the prefix "0" *)

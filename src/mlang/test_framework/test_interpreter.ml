@@ -41,8 +41,8 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       with _ -> Com.Var.Map.empty
     in
     List.fold_left
-      (fun in_f ((var, var_pos), (value, _value_pos)) ->
-        let var = find_var_of_name program (var, var_pos) in
+      (fun in_f (Pos.Mark (var, var_pos), Pos.Mark (value, _value_pos)) ->
+        let var = find_var_of_name program (Pos.mark var var_pos) in
         let lit =
           match value with
           | Irj_ast.I i -> Com.Float (float i)
@@ -93,7 +93,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     List.map toEvent rappels
   in
   let expVars vars_init =
-    let fold res ((var, _), (value, _)) =
+    let fold res (Pos.Mark (var, _), Pos.Mark (value, _)) =
       let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
       StrMap.add var fVal res
     in
@@ -101,7 +101,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   in
   let expAnos anos_init =
     let fold res ano = StrSet.add ano res in
-    List.fold_left fold StrSet.empty (List.map fst anos_init)
+    List.fold_left fold StrSet.empty (List.map Pos.unmark anos_init)
   in
   let set_trait f vars =
     try
@@ -250,7 +250,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
-        | Interp.NanOrInf (msg, (_, pos)) ->
+        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             (successes, failures))
@@ -311,7 +311,7 @@ let check_one_test (p : Mir.program) (name : string)
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
             Some 0
-        | Interp.NanOrInf (msg, (_, pos)) ->
+        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             Some 0)

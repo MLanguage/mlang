@@ -24,7 +24,7 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
         (max nbRef nbRef', max nbIt nbIt')
       in
       List.fold_left fold (0, 0) mil
-    and aux_instr (instr, _pos) =
+    and aux_instr (Pos.Mark (instr, _pos)) =
       match instr with
       | Com.IfThenElse (_, ilThen, ilElse) ->
           let nbRefThen, nbItThen = aux_instrs ilThen in
@@ -345,7 +345,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.ConcAccess (_, _, mi)
       | Com.FieldAccess (mi, _, _) ->
           aux_expr tdata mi
-    and aux_instr tdata (instr, _pos) =
+    and aux_instr tdata (Pos.Mark (instr, _pos)) =
       match instr with
       | Com.Affectation mf -> (
           match Pos.unmark mf with
@@ -385,7 +385,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           wde (0, 0, 0, tdata) wdl
       | Com.VerifBlock instrs -> aux_instrs tdata instrs
       | Com.Print (_, pal) ->
-          let fold (nb, sz, nbRef, tdata) (a, _pos) =
+          let fold (nb, sz, nbRef, tdata) (Pos.Mark (a, _pos)) =
             match a with
             | Com.PrintAccess (_, m_a) ->
                 let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
@@ -481,13 +481,13 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           (0, 0, 0, tdata)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
-    and aux_expr tdata (expr, _pos) =
+    and aux_expr tdata (Pos.Mark (expr, _pos)) =
       match expr with
       | Com.TestInSet (_, me, values) ->
           let fold (nb, sz, nbRef, tdata) = function
-            | Com.VarValue (TabAccess (_, mei), _)
-            | Com.VarValue (ConcAccess (_, _, mei), _)
-            | Com.VarValue (FieldAccess (mei, _, _), _) ->
+            | Com.VarValue (Pos.Mark (TabAccess (_, mei), _))
+            | Com.VarValue (Pos.Mark (ConcAccess (_, _, mei), _))
+            | Com.VarValue (Pos.Mark (FieldAccess (mei, _, _), _)) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata mei in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
             | _ -> (nb, sz, nbRef, tdata)
@@ -501,12 +501,12 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Var (TabAccess (_, me))
       | Com.Var (ConcAccess (_, _, me))
       | Com.Var (FieldAccess (me, _, _))
-      | Com.Size (TabAccess (_, me), _)
-      | Com.Size (ConcAccess (_, _, me), _)
-      | Com.Size (FieldAccess (me, _, _), _)
-      | Com.Attribut ((TabAccess (_, me), _), _)
-      | Com.Attribut ((ConcAccess (_, _, me), _), _)
-      | Com.Attribut ((FieldAccess (me, _, _), _), _) ->
+      | Com.Size (Pos.Mark (TabAccess (_, me), _))
+      | Com.Size (Pos.Mark (ConcAccess (_, _, me), _))
+      | Com.Size (Pos.Mark (FieldAccess (me, _, _), _))
+      | Com.Attribut (Pos.Mark (TabAccess (_, me), _), _)
+      | Com.Attribut (Pos.Mark (ConcAccess (_, _, me), _), _)
+      | Com.Attribut (Pos.Mark (FieldAccess (me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
@@ -578,9 +578,9 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
           List.map
             (function
               | FloatValue f -> FloatValue f
-              | VarValue (access, pos) ->
+              | VarValue (Pos.Mark (access, pos)) ->
                   let access' = translate_access p dict access in
-                  VarValue (access', pos)
+                  VarValue (Pos.mark access' pos)
               | IntervalValue (bv, ev) -> IntervalValue (bv, ev))
             (values : int Pos.marked set_value list)
         in
@@ -618,7 +618,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
     | Literal l -> Literal l
     | Var access -> Var (translate_access p dict access)
     | NbCategory cs -> NbCategory (Validator.mast_to_catvars cs p.prog_var_cats)
-    | Attribut ((access, pos), a) -> (
+    | Attribut (Pos.Mark (access, pos), a) -> (
         match access with
         | VarAccess m_id -> (
             let var = get_var dict m_id in
@@ -635,12 +635,12 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             | None -> Literal Undefined)
         | ConcAccess (m_vn, m_if, i) ->
             let i' = translate_expression p dict i in
-            Attribut ((ConcAccess (m_vn, m_if, i'), pos), a)
+            Attribut (Pos.mark (ConcAccess (m_vn, m_if, i')) pos, a)
         | FieldAccess (e, f, _) ->
             let e' = translate_expression p dict e in
             let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-            Attribut ((FieldAccess (e', f, i), pos), a))
-    | Size (access, pos) -> (
+            Attribut (Pos.mark (FieldAccess (e', f, i)) pos, a))
+    | Size (Pos.Mark (access, pos)) -> (
         match access with
         | VarAccess m_id ->
             let var = get_var dict m_id in
@@ -649,11 +649,11 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
         | TabAccess _ -> Literal (Float 1.0)
         | ConcAccess (m_vn, m_if, i) ->
             let i' = translate_expression p dict i in
-            Size (ConcAccess (m_vn, m_if, i'), pos)
+            Size (Pos.mark (ConcAccess (m_vn, m_if, i')) pos)
         | FieldAccess (e, f, _) ->
             let e' = translate_expression p dict e in
             let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-            Size (FieldAccess (e', f, i), pos))
+            Size (Pos.mark (FieldAccess (e', f, i)) pos))
     | NbAnomalies -> NbAnomalies
     | NbDiscordances -> NbDiscordances
     | NbInformatives -> NbInformatives
@@ -687,7 +687,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
   let rev_fst (l, d) = (List.rev l, d) in
   let rec aux (res, dict) = function
     | [] -> (List.rev res, dict)
-    | (Com.Affectation (SingleFormula decl, _), pos) :: il ->
+    | Pos.Mark (Com.Affectation (Pos.Mark (SingleFormula decl, _)), pos) :: il
+      ->
         let decl' =
           match decl with
           | VarDecl (m_access, e) ->
@@ -701,15 +702,17 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
               let v' = get_var dict m_v in
               Com.EventFieldRef (idx', f, i, v')
         in
-        let m_form = (Com.SingleFormula decl', pos) in
-        aux ((Com.Affectation m_form, pos) :: res, dict) il
-    | (Com.Affectation (MultipleFormulaes _, _), _) :: _ -> assert false
-    | (Com.IfThenElse (e, ilt, ile), pos) :: il ->
+        let m_form = Pos.mark (Com.SingleFormula decl') pos in
+        aux (Pos.mark (Com.Affectation m_form) pos :: res, dict) il
+    | Pos.Mark (Com.Affectation (Pos.Mark (MultipleFormulaes _, _)), _) :: _ ->
+        assert false
+    | Pos.Mark (Com.IfThenElse (e, ilt, ile), pos) :: il ->
         let expr = translate_expression p dict e in
         let prog_then, dict = aux ([], dict) ilt in
         let prog_else, dict = aux ([], dict) ile in
-        aux ((Com.IfThenElse (expr, prog_then, prog_else), pos) :: res, dict) il
-    | (Com.WhenDoElse (wdl, ed), pos) :: il ->
+        let instr' = Com.IfThenElse (expr, prog_then, prog_else) in
+        aux (Pos.mark instr' pos :: res, dict) il
+    | Pos.Mark (Com.WhenDoElse (wdl, ed), pos) :: il ->
         let wdl', dict =
           rev_fst
           @@ List.fold_left
@@ -721,15 +724,15 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         in
         let ed', dict = aux ([], dict) (Pos.unmark ed) in
         let ed' = Pos.same ed' ed in
-        aux ((Com.WhenDoElse (wdl', ed'), pos) :: res, dict) il
-    | (Com.ComputeTarget (tn, targs), pos) :: il ->
+        aux (Pos.mark (Com.WhenDoElse (wdl', ed')) pos :: res, dict) il
+    | Pos.Mark (Com.ComputeTarget (tn, targs), pos) :: il ->
         let map v = get_var dict v in
         let targs' = List.map map targs in
-        aux ((Com.ComputeTarget (tn, targs'), pos) :: res, dict) il
-    | (Com.VerifBlock instrs, pos) :: il ->
+        aux (Pos.mark (Com.ComputeTarget (tn, targs')) pos :: res, dict) il
+    | Pos.Mark (Com.VerifBlock instrs, pos) :: il ->
         let instrs', dict = aux ([], dict) instrs in
-        aux ((Com.VerifBlock instrs', pos) :: res, dict) il
-    | (Com.Print (std, args), pos) :: il ->
+        aux (Pos.mark (Com.VerifBlock instrs') pos :: res, dict) il
+    | Pos.Mark (Com.Print (std, args), pos) :: il ->
         let mir_args =
           List.rev
             (List.fold_left
@@ -749,8 +752,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
                  Pos.same mir_arg arg :: res)
                [] args)
         in
-        aux ((Com.Print (std, mir_args), pos) :: res, dict) il
-    | (Com.Iterate (m_id, vars, var_params, instrs), pos) :: il ->
+        aux (Pos.mark (Com.Print (std, mir_args)) pos :: res, dict) il
+    | Pos.Mark (Com.Iterate (m_id, vars, var_params, instrs), pos) :: il ->
         let var = get_var dict m_id in
         let var = Com.Var.set_loc_idx var it_depth in
         let dict = IntMap.add var.id var dict in
@@ -767,8 +770,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
           translate_prog p dict (it_depth + 1) itval_depth instrs
         in
         let instr = Com.Iterate (var, vars', var_params', prog_it) in
-        aux ((instr, pos) :: res, dict) il
-    | (Com.Iterate_values (m_id, var_intervals, instrs), pos) :: il ->
+        aux (Pos.mark instr pos :: res, dict) il
+    | Pos.Mark (Com.Iterate_values (m_id, var_intervals, instrs), pos) :: il ->
         let var = get_var dict m_id in
         let var = Com.Var.set_loc_idx var itval_depth in
         let dict = IntMap.add var.id var dict in
@@ -785,8 +788,9 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
           translate_prog p dict it_depth (itval_depth + 1) instrs
         in
         let instr = Com.Iterate_values (var, var_intervals', prog_it) in
-        aux ((instr, pos) :: res, dict) il
-    | (Com.Restore (vars, var_params, evts, evtfs, instrs), pos) :: il ->
+        aux (Pos.mark instr pos :: res, dict) il
+    | Pos.Mark (Com.Restore (vars, var_params, evts, evtfs, instrs), pos) :: il
+      ->
         let vars' = List.map (get_var dict) vars in
         let var_params', dict =
           let var_params', dict =
@@ -820,8 +824,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let instr =
           Com.Restore (vars', var_params', evts', evtfs', prog_rest)
         in
-        aux ((instr, pos) :: res, dict) il
-    | (Com.ArrangeEvents (sort, filter, add, instrs), pos) :: il ->
+        aux (Pos.mark instr pos :: res, dict) il
+    | Pos.Mark (Com.ArrangeEvents (sort, filter, add, instrs), pos) :: il ->
         let sort', itval_depth', dict =
           match sort with
           | Some (m_id0, m_id1, expr) ->
@@ -851,20 +855,21 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
           translate_prog p dict it_depth itval_depth' instrs
         in
         let instr = Com.ArrangeEvents (sort', filter', add', instrs') in
-        aux ((instr, pos) :: res, dict) il
-    | (Com.RaiseError (err_name, var_opt), pos) :: il ->
+        aux (Pos.mark instr pos :: res, dict) il
+    | Pos.Mark (Com.RaiseError (err_name, var_opt), pos) :: il ->
         let err_decl = StrMap.find (Pos.unmark err_name) p.prog_errors in
         let m_err_decl = Pos.same err_decl err_name in
-        aux ((Com.RaiseError (m_err_decl, var_opt), pos) :: res, dict) il
-    | (Com.CleanErrors, pos) :: il ->
-        aux ((Com.CleanErrors, pos) :: res, dict) il
-    | (Com.ExportErrors, pos) :: il ->
-        aux ((Com.ExportErrors, pos) :: res, dict) il
-    | (Com.FinalizeErrors, pos) :: il ->
-        aux ((Com.FinalizeErrors, pos) :: res, dict) il
-    | (Com.ComputeDomain _, _) :: _
-    | (Com.ComputeChaining _, _) :: _
-    | (Com.ComputeVerifs (_, _), _) :: _ ->
+        let instr' = Com.RaiseError (m_err_decl, var_opt) in
+        aux (Pos.mark instr' pos :: res, dict) il
+    | Pos.Mark (Com.CleanErrors, pos) :: il ->
+        aux (Pos.mark Com.CleanErrors pos :: res, dict) il
+    | Pos.Mark (Com.ExportErrors, pos) :: il ->
+        aux (Pos.mark Com.ExportErrors pos :: res, dict) il
+    | Pos.Mark (Com.FinalizeErrors, pos) :: il ->
+        aux (Pos.mark Com.FinalizeErrors pos :: res, dict) il
+    | Pos.Mark (Com.ComputeDomain _, _) :: _
+    | Pos.Mark (Com.ComputeChaining _, _) :: _
+    | Pos.Mark (Com.ComputeVerifs (_, _), _) :: _ ->
         assert false
   in
   aux ([], dict) prog

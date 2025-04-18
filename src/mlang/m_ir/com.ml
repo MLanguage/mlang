@@ -46,23 +46,23 @@ module CatVar = struct
       pp ~sep ~pp_key ~assoc pp_val fmt map
 
     let from_string_list = function
-      | [ ("*", _) ], id_pos ->
+      | Pos.Mark ([ Pos.Mark ("*", _) ], id_pos) ->
           one (Input (StrSet.one "*")) id_pos
           |> add (Computed { is_base = false }) id_pos
           |> add (Computed { is_base = true }) id_pos
-      | [ ("saisie", _); ("*", _) ], id_pos ->
+      | Pos.Mark ([ Pos.Mark ("saisie", _); Pos.Mark ("*", _) ], id_pos) ->
           one (Input (StrSet.one "*")) id_pos
-      | ("saisie", _) :: id, id_pos ->
+      | Pos.Mark (Pos.Mark ("saisie", _) :: id, id_pos) ->
           one (Input (StrSet.from_marked_list id)) id_pos
-      | ("calculee", _) :: id, id_pos -> (
+      | Pos.Mark (Pos.Mark ("calculee", _) :: id, id_pos) -> (
           match id with
           | [] -> one (Computed { is_base = false }) id_pos
-          | [ ("base", _) ] -> one (Computed { is_base = true }) id_pos
-          | [ ("*", _) ] ->
+          | [ Pos.Mark ("base", _) ] -> one (Computed { is_base = true }) id_pos
+          | [ Pos.Mark ("*", _) ] ->
               one (Computed { is_base = false }) id_pos
               |> add (Computed { is_base = true }) id_pos
           | _ -> Errors.raise_spanned_error "invalid variable category" id_pos)
-      | _, id_pos ->
+      | Pos.Mark (_, id_pos) ->
           Errors.raise_spanned_error "invalid variable category" id_pos
   end
 
@@ -1078,7 +1078,7 @@ let rec format_instruction form_var form_err =
           in
           aux "" wdl
         in
-        let pp_ed fmt (dl, _) =
+        let pp_ed fmt (Pos.Mark (dl, _)) =
           Format.fprintf fmt "@[<v 2>else_do@\n%a@;@]endwhen@;" form_instrs dl
         in
         Format.fprintf fmt "%a%a@\n" pp_wdl wdl pp_ed ed

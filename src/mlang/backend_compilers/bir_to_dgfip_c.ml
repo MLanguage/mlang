@@ -121,14 +121,14 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           (fun or_chain set_value ->
             let equal_test =
               match set_value with
-              | Com.VarValue (VarAccess v, _) ->
+              | Com.VarValue (Pos.Mark (VarAccess v, _)) ->
                   let s_v =
                     let def_test = D.m_var v None Def in
                     let value_comp = D.m_var v None Val in
                     D.{ set_vars = []; def_test; value_comp }
                   in
                   comparison (Pos.without Com.Eq) sle0 s_v
-              | Com.VarValue (TabAccess (m_v, m_i), _) ->
+              | Com.VarValue (Pos.Mark (TabAccess (m_v, m_i), _)) ->
                   let index = fresh_c_local "index" in
                   let index_def = Pp.spr "%s_def" index in
                   let index_val = Pp.spr "%s_val" index in
@@ -158,7 +158,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                       { set_vars; def_test; value_comp }
                   in
                   comparison (Pos.without Com.Eq) sle0 s_v
-              | Com.VarValue (ConcAccess (m_vn, m_if, i), _) ->
+              | Com.VarValue (Pos.Mark (ConcAccess (m_vn, m_if, i), _)) ->
                   let res = fresh_c_local "res" in
                   let res_def = Pp.spr "%s_def" res in
                   let res_val = Pp.spr "%s_val" res in
@@ -192,7 +192,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
                   let value_comp = D.dinstr res_val in
                   let s_f = D.{ set_vars; def_test; value_comp } in
                   comparison (Pos.without Com.Eq) sle0 s_f
-              | Com.VarValue (FieldAccess (me, f, _), _) ->
+              | Com.VarValue (Pos.Mark (FieldAccess (me, f, _), _)) ->
                   let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
                   let res = fresh_c_local "result" in
                   let res_def = Pp.spr "%s_def" res in
@@ -394,21 +394,21 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
         D.ite cond.value_comp thenval.value_comp elseval.value_comp
       in
       D.build_transitive_composition { set_vars; def_test; value_comp }
-  | FuncCall ((Supzero, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (Supzero, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
       let def_test = D.ite cond D.dfalse se.def_test in
       let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
       D.build_transitive_composition { set_vars; def_test; value_comp }
-  | FuncCall ((PresentFunc, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let def_test = D.dtrue in
       let value_comp = se.def_test in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((NullFunc, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (NullFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let def_test = se.def_test in
@@ -417,7 +417,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((ArrFunc, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let def_test = se.def_test in
@@ -427,7 +427,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
          `safe_def` to false *)
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((InfFunc, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let def_test = se.def_test in
@@ -435,14 +435,14 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       (* same as above *)
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((AbsFunc, _), [ arg ]) ->
+  | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) ->
       let se = generate_c_expr arg in
       let set_vars = se.D.set_vars in
       let def_test = se.def_test in
       let value_comp = D.dfun "fabs" [ se.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((MaxFunc, _), [ e1; e2 ]) ->
+  | FuncCall (Pos.Mark (MaxFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 in
       let se2 = generate_c_expr e2 in
       let set_vars = se1.D.set_vars @ se2.D.set_vars in
@@ -450,7 +450,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((MinFunc, _), [ e1; e2 ]) ->
+  | FuncCall (Pos.Mark (MinFunc, _), [ e1; e2 ]) ->
       let se1 = generate_c_expr e1 in
       let se2 = generate_c_expr e2 in
       let set_vars = se1.D.set_vars @ se2.D.set_vars in
@@ -458,7 +458,7 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
       let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
       D.build_transitive_composition ~safe_def:true
         { set_vars; def_test; value_comp }
-  | FuncCall ((Multimax, _), [ e1; (Var m_acc, _) ]) -> (
+  | FuncCall (Pos.Mark (Multimax, _), [ e1; Pos.Mark (Var m_acc, _) ]) -> (
       match m_acc with
       | VarAccess v ->
           let bound = generate_c_expr e1 in
@@ -540,11 +540,11 @@ let rec generate_c_expr (e : Mir.expression Pos.marked) :
           let value_comp = D.dinstr res_val in
           D.build_transitive_composition { set_vars; def_test; value_comp }
       | TabAccess _ | FieldAccess _ -> assert false)
-  | FuncCall ((NbEvents, _), _) ->
+  | FuncCall (Pos.Mark (NbEvents, _), _) ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_evenements(irdata)" in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | FuncCall ((Func fn, _), args) ->
+  | FuncCall (Pos.Mark (Func fn, _), args) ->
       let res = fresh_c_local "result" in
       let res_def = Pp.spr "%s_def" res in
       let res_val = Pp.spr "%s_val" res in
@@ -988,7 +988,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
     (program : Mir.program) (oc : Format.formatter) (stmt : Mir.m_instruction) =
   let pr fmt = Format.fprintf oc fmt in
   match Pos.unmark stmt with
-  | Affectation (SingleFormula (VarDecl (m_acc, vexpr)), _) -> (
+  | Affectation (Pos.Mark (SingleFormula (VarDecl (m_acc, vexpr)), _)) -> (
       match Pos.unmark m_acc with
       | VarAccess var -> generate_var_def dgfip_flags var None vexpr oc
       | TabAccess (m_v, m_i) ->
@@ -998,9 +998,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       | FieldAccess (i, f, _) ->
           let fn = Pos.unmark f in
           generate_event_field_def dgfip_flags program i fn None vexpr oc)
-  | Affectation (SingleFormula (EventFieldRef (idx, f, _, var)), _) ->
+  | Affectation (Pos.Mark (SingleFormula (EventFieldRef (idx, f, _, var)), _))
+    ->
       generate_event_field_ref dgfip_flags program idx (Pos.unmark f) var oc
-  | Affectation (MultipleFormulaes _, _) -> assert false
+  | Affectation (Pos.Mark (MultipleFormulaes _, _)) -> assert false
   | IfThenElse (cond_expr, iftrue, iffalse) ->
       pr "@;@[<v 2>{";
       let cond = fresh_c_local "cond" in
@@ -1122,7 +1123,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}")
         args;
       pr "@]@;}"
-  | ComputeTarget ((tn, _), targs) ->
+  | ComputeTarget (Pos.Mark (tn, _), targs) ->
       ignore
         (List.fold_left
            (fun n (v : Com.Var.t) ->

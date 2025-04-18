@@ -108,10 +108,10 @@ rappels:
   { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
 
 variable_and_value:
-| var = SYMBOL SLASH value = value NL { ((var, mk_position $loc(var)), (value, mk_position $loc(value))) }
+| var = SYMBOL SLASH value = value NL { (Pos.mark var (mk_position $loc(var)), Pos.mark value (mk_position $loc(value))) }
 
 calc_error:
-| error = SYMBOL NL { (error, mk_position $sloc) }
+| error = SYMBOL NL { Pos.mark error (mk_position $sloc) }
 
 rappel:
 | event_nb = integer SLASH

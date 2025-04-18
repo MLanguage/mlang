@@ -124,9 +124,9 @@ let empty_apps_env (cli_apps : string list) : apps_env =
 let get_selected_apps (apps_env : apps_env)
     (apps : Mast.application Pos.marked StrMap.t) :
     Mast.application Pos.marked StrMap.t =
-  let sel_app _ (a, apos) apps =
+  let sel_app _ (Pos.Mark (a, apos)) apps =
     match StrMap.find_opt a apps_env.apps with
-    | Some (b, _) -> if b then StrMap.add a (a, apos) apps else apps
+    | Some (b, _) -> if b then StrMap.add a (Pos.mark a apos) apps else apps
     | None -> Err.unknown_application a apos
   in
   StrMap.fold sel_app apps StrMap.empty
@@ -134,9 +134,9 @@ let get_selected_apps (apps_env : apps_env)
 let get_selected_apps_list (apps_env : apps_env)
     (apps : Mast.application Pos.marked list) : Mast.application Pos.marked list
     =
-  let sel_app apps (a, apos) =
+  let sel_app apps (Pos.Mark (a, apos)) =
     match StrMap.find_opt a apps_env.apps with
-    | Some (b, _) -> if b then (a, apos) :: apps else apps
+    | Some (b, _) -> if b then Pos.mark a apos :: apps else apps
     | None -> Err.unknown_application a apos
   in
   List.rev (List.fold_left sel_app [] apps)
@@ -144,9 +144,10 @@ let get_selected_apps_list (apps_env : apps_env)
 let get_selected_chains (apps_env : apps_env)
     (chains : Mast.chaining Pos.marked StrMap.t) :
     Mast.chaining Pos.marked StrMap.t =
-  let sel_chain _ (ch, chpos) chains =
+  let sel_chain _ (Pos.Mark (ch, chpos)) chains =
     match StrMap.find_opt ch apps_env.chains with
-    | Some (b, _) -> if b then StrMap.add ch (ch, chpos) chains else chains
+    | Some (b, _) ->
+        if b then StrMap.add ch (Pos.mark ch chpos) chains else chains
     | None -> Err.unknown_chaining ch chpos
   in
   StrMap.fold sel_chain chains StrMap.empty
@@ -166,10 +167,9 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
       (fun (apps_env, prog) source_file ->
         let apps_env, prog_file =
           List.fold_left
-            (fun (apps_env, prog_file) source_item ->
-              let item, pos_item = source_item in
-              match item with
-              | Mast.Application (app, pos) -> (
+            (fun (apps_env, prog_file) m_item ->
+              match Pos.unmark m_item with
+              | Mast.Application (Pos.Mark (app, pos)) -> (
                   match StrMap.find_opt app apps_env.apps with
                   | Some (_, old_pos) ->
                       Err.application_already_defined app old_pos pos
@@ -178,11 +178,11 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                       let apps = StrMap.add app (is_sel, pos) apps_env.apps in
                       let apps_env = { apps_env with apps } in
                       let prog_file =
-                        if is_sel then source_item :: prog_file else prog_file
+                        if is_sel then m_item :: prog_file else prog_file
                       in
                       (apps_env, prog_file))
-              | Mast.Chaining (mch, mal) -> (
-                  let ch, pos = mch in
+              | Mast.Chaining (m_ch, mal) -> (
+                  let ch, pos = Pos.to_couple m_ch in
                   match StrMap.find_opt ch apps_env.chains with
                   | Some (_, old_pos) ->
                       Err.chaining_already_defined ch old_pos pos
@@ -196,7 +196,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                       let prog_file =
                         if is_sel then
                           let new_item =
-                            (Mast.Chaining (mch, sel_apps), pos_item)
+                            Pos.same (Mast.Chaining (m_ch, sel_apps)) m_item
                           in
                           new_item :: prog_file
                         else prog_file
@@ -212,7 +212,9 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                     let rule =
                       { rule with Mast.rule_apps; Mast.rule_chainings }
                     in
-                    let prog_file = (Mast.Rule rule, pos_item) :: prog_file in
+                    let prog_file =
+                      Pos.same (Mast.Rule rule) m_item :: prog_file
+                    in
                     (apps_env, prog_file)
               | Mast.Verification verif ->
                   let verif_apps =
@@ -222,7 +224,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   else
                     let verif = Mast.{ verif with verif_apps } in
                     let prog_file =
-                      (Mast.Verification verif, pos_item) :: prog_file
+                      Pos.same (Mast.Verification verif) m_item :: prog_file
                     in
                     (apps_env, prog_file)
               | Mast.Target target ->
@@ -233,7 +235,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   else
                     let target = Mast.{ target with target_apps } in
                     let prog_file =
-                      (Mast.Target target, pos_item) :: prog_file
+                      Pos.same (Mast.Target target) m_item :: prog_file
                     in
                     (apps_env, prog_file)
               | Mast.Function target ->
@@ -244,12 +246,12 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                   else
                     let target = Mast.{ target with target_apps } in
                     let prog_file =
-                      (Mast.Function target, pos_item) :: prog_file
+                      Pos.same (Mast.Function target) m_item :: prog_file
                     in
                     (apps_env, prog_file)
               | VariableDecl _ | EventDecl _ | Error _ | Output _ | Func
               | VarCatDecl _ | RuleDomDecl _ | VerifDomDecl _ ->
-                  (apps_env, source_item :: prog_file))
+                  (apps_env, m_item :: prog_file))
             (apps_env, []) source_file
         in
         (apps_env, List.rev prog_file :: prog))
@@ -289,45 +291,48 @@ let format_loop_context fmt (ld : loop_context) =
 let format_loop_domain fmt (ld : loop_domain) =
   ParamsMap.pp (Pp.list_comma format_loop_param_value) fmt ld
 
-let add_const (name, name_pos) (cval, cval_pos) const_map =
+let add_const (Pos.Mark (name, name_pos)) (Pos.Mark (cval, cval_pos)) const_map
+    =
   match ConstMap.find_opt name const_map with
-  | Some (_, old_pos) -> Err.constant_already_defined old_pos name_pos
+  | Some (Pos.Mark (_, old_pos)) ->
+      Err.constant_already_defined old_pos name_pos
   | None -> (
       match cval with
       | Com.AtomLiteral (Com.Float f) ->
-          ConstMap.add name (f, name_pos) const_map
-      | Com.AtomVar (Com.Normal const, _) -> (
+          ConstMap.add name (Pos.mark f name_pos) const_map
+      | Com.AtomVar (Pos.Mark (Com.Normal const, _)) -> (
           match ConstMap.find_opt const const_map with
-          | Some (value, _) -> ConstMap.add name (value, name_pos) const_map
+          | Some (Pos.Mark (value, _)) ->
+              ConstMap.add name (Pos.mark value name_pos) const_map
           | None -> Err.unknown_constant cval_pos)
       | _ -> assert false)
 
 let expand_table_size (const_map : const_context) table_size =
   match table_size with
-  | Some (Mast.SymbolSize c, size_pos) -> (
+  | Some (Pos.Mark (Mast.SymbolSize c, size_pos)) -> (
       match ConstMap.find_opt c const_map with
-      | Some (f, _) ->
+      | Some (Pos.Mark (f, _)) ->
           let i = int_of_float f in
           if f <> float i then Err.table_size_must_be_int size_pos
           else if i < 0 then Err.table_size_must_be_positive size_pos
           else if i = 0 then Err.table_cannot_be_empty size_pos
-          else Some (Mast.LiteralSize i, size_pos)
+          else Some (Pos.mark (Mast.LiteralSize i) size_pos)
       | None -> Err.unknown_constant size_pos)
   | _ -> table_size
 
 let rec expand_variable (const_map : const_context) (loop_map : loop_context)
     (m_var : Com.m_var_name) : Com.m_var_name Com.atom Pos.marked =
-  let var, var_pos = m_var in
-  match var with
+  match Pos.unmark m_var with
   | Com.Normal name -> (
       match ConstMap.find_opt name const_map with
-      | Some (f, _) -> (Com.AtomLiteral (Float f), var_pos)
-      | None -> (Com.AtomVar (var, var_pos), var_pos))
+      | Some (Pos.Mark (f, _)) -> Pos.same (Com.AtomLiteral (Float f)) m_var
+      | None -> Pos.same (Com.AtomVar m_var) m_var)
   | Com.Generic gen_name ->
       if List.length gen_name.Com.parameters == 0 then
         expand_variable const_map loop_map
-          (Com.Normal gen_name.Com.base, var_pos)
-      else instantiate_params const_map loop_map gen_name.Com.base var_pos
+          (Pos.same (Com.Normal gen_name.Com.base) m_var)
+      else
+        instantiate_params const_map loop_map gen_name.Com.base (Pos.get m_var)
 
 and check_var_name (var_name : string) (var_pos : Pos.t) : unit =
   for i = String.length var_name - 1 downto 0 do
@@ -344,7 +349,7 @@ and instantiate_params (const_map : const_context) (loop_map : loop_context)
   match ParamsMap.choose_opt loop_map with
   | None ->
       check_var_name var_name pos;
-      expand_variable const_map loop_map (Com.Normal var_name, pos)
+      expand_variable const_map loop_map (Pos.mark (Com.Normal var_name) pos)
   | Some (param, (value, size)) ->
       let new_var_name =
         match value with
@@ -405,17 +410,16 @@ let var_or_int_value (const_map : const_context)
   | Com.AtomVar m_v -> (
       let name = Com.get_var_name (Pos.unmark m_v) in
       match ConstMap.find_opt name const_map with
-      | Some (fvalue, _) -> IntIndex (int_of_float fvalue)
+      | Some (Pos.Mark (fvalue, _)) -> IntIndex (int_of_float fvalue)
       | None -> VarIndex (Pos.unmark m_v))
   | Com.AtomLiteral (Com.Float f) -> IntIndex (int_of_float f)
   | Com.AtomLiteral Com.Undefined -> assert false
 
 let var_or_int (m_atom : Com.m_var_name Com.atom Pos.marked) =
-  let atom, atom_pos = m_atom in
-  match atom with
-  | Com.AtomVar (Normal v, _) -> VarName v
-  | Com.AtomVar (Generic _, _) ->
-      Err.generic_variable_not_allowed_in_left_part_of_loop atom_pos
+  match Pos.unmark m_atom with
+  | Com.AtomVar (Pos.Mark (Normal v, _)) -> VarName v
+  | Com.AtomVar (Pos.Mark (Generic _, _)) ->
+      Err.generic_variable_not_allowed_in_left_part_of_loop (Pos.get m_atom)
   | Com.AtomLiteral (Com.Float f) -> RangeInt (int_of_float f)
   | Com.AtomLiteral Com.Undefined -> assert false
 
@@ -543,74 +547,77 @@ type 'v access_or_literal =
   | ExpLiteral of Com.literal
 
 let rec expand_access (const_map : const_context) (loop_map : loop_context)
-    ((a, a_pos) : Com.m_var_name Com.m_access) :
+    (Pos.Mark (a, a_pos) : Com.m_var_name Com.m_access) :
     Com.m_var_name access_or_literal =
   match a with
   | VarAccess m_v -> (
       match expand_variable const_map loop_map m_v with
-      | AtomLiteral lit, _ -> ExpLiteral lit
-      | AtomVar m_v, var_pos -> ExpAccess (VarAccess m_v, var_pos))
+      | Pos.Mark (AtomLiteral lit, _) -> ExpLiteral lit
+      | Pos.Mark (AtomVar m_v, var_pos) ->
+          ExpAccess (Pos.mark (Com.VarAccess m_v) var_pos))
   | TabAccess (m_v, m_i) -> (
       match expand_variable const_map loop_map m_v with
-      | AtomLiteral _, var_pos -> Err.constant_forbidden_as_table var_pos
-      | AtomVar m_v, v_pos ->
+      | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_table v_pos
+      | Pos.Mark (AtomVar m_v, v_pos) ->
           let m_i' = expand_expression const_map loop_map m_i in
-          ExpAccess (TabAccess (m_v, m_i'), v_pos))
+          ExpAccess (Pos.mark (Com.TabAccess (m_v, m_i')) v_pos))
   | ConcAccess (m_v, m_if, i) -> (
       match expand_variable const_map loop_map m_v with
-      | AtomLiteral _, var_pos -> Err.constant_forbidden_as_arg var_pos
-      | AtomVar m_v, v_pos -> (
+      | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_arg v_pos
+      | Pos.Mark (AtomVar m_v, v_pos) -> (
           match expand_expression const_map loop_map i with
-          | Com.Literal Undefined, i_pos -> Err.constant_forbidden_as_arg i_pos
-          | Com.Literal (Float f), i_pos ->
+          | Pos.Mark (Com.Literal Undefined, i_pos) ->
+              Err.constant_forbidden_as_arg i_pos
+          | Pos.Mark (Com.Literal (Float f), i_pos) ->
               let fi = int_of_float f in
               if fi < 0 then Err.constant_forbidden_as_arg i_pos;
               let m_v' =
                 match Pos.unmark m_v with
                 | Com.Normal n ->
                     let n' = Strings.concat_int n (Pos.unmark m_if) fi in
-                    (Com.Normal n', v_pos)
+                    Pos.mark (Com.Normal n') v_pos
                 | _ -> assert false
               in
-              ExpAccess (VarAccess m_v', a_pos)
+              ExpAccess (Pos.mark (Com.VarAccess m_v') a_pos)
           | i' ->
-              ExpAccess (ConcAccess ((Pos.unmark m_v, v_pos), m_if, i'), a_pos))
-      )
+              ExpAccess
+                (Pos.mark
+                   (Com.ConcAccess (Pos.mark (Pos.unmark m_v) v_pos, m_if, i'))
+                   a_pos)))
   | FieldAccess (e, f, i_f) ->
       let e' = expand_expression const_map loop_map e in
-      ExpAccess (FieldAccess (e', f, i_f), a_pos)
+      ExpAccess (Pos.mark (Com.FieldAccess (e', f, i_f)) a_pos)
 
 and expand_expression (const_map : const_context) (loop_map : loop_context)
     (m_expr : Mast.expression Pos.marked) : Mast.expression Pos.marked =
   let open Com in
-  let expr, expr_pos = m_expr in
-  match expr with
+  match Pos.unmark m_expr with
   | TestInSet (positive, e, values) ->
       let e' = expand_expression const_map loop_map e in
       let values' =
         List.map
           (fun set_value ->
             match set_value with
-            | VarValue (a, a_pos) -> (
-                match expand_access const_map loop_map (a, a_pos) with
-                | ExpLiteral (Float f) -> FloatValue (f, a_pos)
+            | VarValue (Pos.Mark (a, a_pos)) -> (
+                match expand_access const_map loop_map (Pos.mark a a_pos) with
+                | ExpLiteral (Float f) -> FloatValue (Pos.mark f a_pos)
                 | ExpAccess m_a -> VarValue m_a
                 | _ -> assert false)
             | FloatValue _ | IntervalValue _ -> set_value)
           values
       in
-      (TestInSet (positive, e', values'), expr_pos)
+      Pos.same (TestInSet (positive, e', values')) m_expr
   | Comparison (op, e1, e2) ->
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
-      (Comparison (op, e1', e2'), expr_pos)
+      Pos.same (Comparison (op, e1', e2')) m_expr
   | Binop (op, e1, e2) ->
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
-      (Binop (op, e1', e2'), expr_pos)
+      Pos.same (Binop (op, e1', e2')) m_expr
   | Unop (op, e) ->
       let e' = expand_expression const_map loop_map e in
-      (Unop (op, e'), expr_pos)
+      Pos.same (Unop (op, e')) m_expr
   | Conditional (e1, e2, e3_opt) ->
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
@@ -619,12 +626,12 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
         | Some e3 -> Some (expand_expression const_map loop_map e3)
         | None -> None
       in
-      (Conditional (e1', e2', e3_opt'), expr_pos)
+      Pos.same (Conditional (e1', e2', e3_opt')) m_expr
   | FuncCall (f_name, args) ->
       let args' =
         List.map (fun arg -> expand_expression const_map loop_map arg) args
       in
-      (FuncCall (f_name, args'), expr_pos)
+      Pos.same (FuncCall (f_name, args')) m_expr
   | FuncCallLoop (f_name, lvs, e) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator lmap =
@@ -632,12 +639,12 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
         expand_expression const_map loop_map e
       in
       let args' = loop_context_provider translator in
-      (FuncCall (f_name, args'), expr_pos)
+      Pos.same (FuncCall (f_name, args')) m_expr
   | Literal _ -> m_expr
   | Var a -> (
-      match expand_access const_map loop_map (a, expr_pos) with
-      | ExpLiteral l -> (Literal l, expr_pos)
-      | ExpAccess (a', _) -> (Var a', expr_pos))
+      match expand_access const_map loop_map (Pos.same a m_expr) with
+      | ExpLiteral l -> Pos.same (Literal l) m_expr
+      | ExpAccess (Pos.Mark (a', _)) -> Pos.same (Var a') m_expr)
   | Loop (lvs, e) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator lmap =
@@ -647,17 +654,17 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       let loop_exprs = loop_context_provider translator in
       List.fold_left
         (fun res loop_expr ->
-          (Binop ((Or, expr_pos), res, loop_expr), expr_pos))
-        (Literal (Float 0.0), expr_pos)
+          Pos.same (Binop (Pos.same Or m_expr, res, loop_expr)) m_expr)
+        (Pos.same (Literal (Float 0.0)) m_expr)
         loop_exprs
-  | Attribut ((a, a_pos), attr) -> (
-      match expand_access const_map loop_map (a, expr_pos) with
+  | Attribut (Pos.Mark (a, a_pos), attr) -> (
+      match expand_access const_map loop_map (Pos.same a m_expr) with
       | ExpLiteral _ -> Err.constant_cannot_have_an_attribut a_pos
-      | ExpAccess m_a -> (Attribut (m_a, attr), expr_pos))
-  | Size (a, a_pos) -> (
-      match expand_access const_map loop_map (a, expr_pos) with
+      | ExpAccess m_a -> Pos.same (Attribut (m_a, attr)) m_expr)
+  | Size (Pos.Mark (a, a_pos)) -> (
+      match expand_access const_map loop_map (Pos.same a m_expr) with
       | ExpLiteral _ -> Err.constant_cannot_have_a_size a_pos
-      | ExpAccess m_a -> (Size m_a, expr_pos))
+      | ExpAccess m_a -> Pos.same (Size m_a) m_expr)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
       m_expr
@@ -666,8 +673,7 @@ let expand_formula (const_map : const_context)
     (prev : Com.m_var_name Com.formula Pos.marked list)
     (m_form : Com.m_var_name Com.formula Pos.marked) :
     Com.m_var_name Com.formula Pos.marked list =
-  let form, form_pos = m_form in
-  match form with
+  match Pos.unmark m_form with
   | Com.SingleFormula (VarDecl (m_access, e)) ->
       let m_access' =
         match expand_access const_map ParamsMap.empty m_access with
@@ -675,16 +681,18 @@ let expand_formula (const_map : const_context)
         | ExpAccess m_a -> m_a
       in
       let e' = expand_expression const_map ParamsMap.empty e in
-      (Com.SingleFormula (VarDecl (m_access', e')), form_pos) :: prev
+      Pos.same (Com.SingleFormula (VarDecl (m_access', e'))) m_form :: prev
   | Com.SingleFormula (EventFieldRef (idx, f, i, v)) ->
       let idx' = expand_expression const_map ParamsMap.empty idx in
       let v' =
         match expand_variable const_map ParamsMap.empty v with
-        | AtomVar m_v, v_pos -> (Pos.unmark m_v, v_pos)
-        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_lvalue v_pos
+        | Pos.Mark (AtomVar m_v, v_pos) -> Pos.mark (Pos.unmark m_v) v_pos
+        | Pos.Mark (AtomLiteral (Float _), v_pos) ->
+            Err.constant_forbidden_as_lvalue v_pos
         | _ -> assert false
       in
-      (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos) :: prev
+      let form = Com.SingleFormula (EventFieldRef (idx', f, i, v')) in
+      Pos.same form m_form :: prev
   | Com.MultipleFormulaes (lvs, VarDecl (m_access, e)) ->
       let loop_context_provider = expand_loop_variables lvs const_map in
       let translator loop_map =
@@ -694,7 +702,7 @@ let expand_formula (const_map : const_context)
           | ExpAccess m_a -> m_a
         in
         let e' = expand_expression const_map loop_map e in
-        (Com.SingleFormula (VarDecl (m_access', e')), form_pos)
+        Pos.same (Com.SingleFormula (VarDecl (m_access', e'))) m_form
       in
       let res = loop_context_provider translator in
       List.rev res @ prev
@@ -704,12 +712,12 @@ let expand_formula (const_map : const_context)
         let idx' = expand_expression const_map loop_map idx in
         let v' =
           match expand_variable const_map loop_map v with
-          | AtomVar m_v, v_pos -> (Pos.unmark m_v, v_pos)
-          | AtomLiteral (Float _), v_pos ->
+          | Pos.Mark (AtomVar m_v, v_pos) -> Pos.mark (Pos.unmark m_v) v_pos
+          | Pos.Mark (AtomLiteral (Float _), v_pos) ->
               Err.constant_forbidden_as_lvalue v_pos
           | _ -> assert false
         in
-        (Com.SingleFormula (EventFieldRef (idx', f, i, v')), form_pos)
+        Pos.same (Com.SingleFormula (EventFieldRef (idx', f, i, v'))) m_form
       in
       let res = loop_context_provider translator in
       List.rev res @ prev
@@ -717,18 +725,17 @@ let expand_formula (const_map : const_context)
 let rec expand_instruction (const_map : const_context)
     (prev : Mast.instruction Pos.marked list)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
-  let instr, instr_pos = m_instr in
-  match instr with
+  match Pos.unmark m_instr with
   | Com.Affectation m_form ->
       let m_forms = expand_formula const_map [] m_form in
       List.fold_left
-        (fun res f -> (Com.Affectation f, instr_pos) :: res)
+        (fun res f -> Pos.same (Com.Affectation f) m_instr :: res)
         prev m_forms
   | Com.IfThenElse (expr, ithen, ielse) ->
       let expr' = expand_expression const_map ParamsMap.empty expr in
       let ithen' = expand_instructions const_map ithen in
       let ielse' = expand_instructions const_map ielse in
-      (Com.IfThenElse (expr', ithen', ielse'), instr_pos) :: prev
+      Pos.same (Com.IfThenElse (expr', ithen', ielse')) m_instr :: prev
   | Com.WhenDoElse (wdl, ed) ->
       let map (expr, dl, pos) =
         let expr' = expand_expression const_map ParamsMap.empty expr in
@@ -737,7 +744,7 @@ let rec expand_instruction (const_map : const_context)
       in
       let wdl' = List.map map wdl in
       let ed' = Pos.map (expand_instructions const_map) ed in
-      (Com.WhenDoElse (wdl', ed'), instr_pos) :: prev
+      Pos.same (Com.WhenDoElse (wdl', ed')) m_instr :: prev
   | Com.Print (std, pr_args) ->
       let pr_args' =
         List.map
@@ -746,19 +753,19 @@ let rec expand_instruction (const_map : const_context)
             | Com.PrintAccess (info, m_a) -> (
                 match expand_access const_map ParamsMap.empty m_a with
                 | ExpLiteral _ -> Err.constant_forbidden_as_arg (Pos.get m_a)
-                | ExpAccess (a', _) ->
+                | ExpAccess (Pos.Mark (a', _)) ->
                     let arg' = Com.PrintAccess (info, Pos.same a' m_a) in
                     Pos.same arg' arg)
             | Com.PrintIndent expr ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintIndent expr', Pos.get arg)
+                Pos.same (Com.PrintIndent expr') arg
             | Com.PrintExpr (expr, mi, ma) ->
                 let expr' = expand_expression const_map ParamsMap.empty expr in
-                (Com.PrintExpr (expr', mi, ma), Pos.get arg)
+                Pos.same (Com.PrintExpr (expr', mi, ma)) arg
             | Com.PrintString _ -> arg)
           pr_args
       in
-      (Com.Print (std, pr_args'), instr_pos) :: prev
+      Pos.same (Com.Print (std, pr_args')) m_instr :: prev
   | Com.Iterate (name, vars, var_params, instrs) ->
       let var_params' =
         List.map
@@ -768,7 +775,7 @@ let rec expand_instruction (const_map : const_context)
           var_params
       in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Iterate (name, vars, var_params', instrs'), instr_pos) :: prev
+      Pos.same (Com.Iterate (name, vars, var_params', instrs')) m_instr :: prev
   | Com.Iterate_values (name, var_intervals, instrs) ->
       let var_intervals' =
         List.map
@@ -780,7 +787,8 @@ let rec expand_instruction (const_map : const_context)
           var_intervals
       in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Iterate_values (name, var_intervals', instrs'), instr_pos) :: prev
+      let instr' = Com.Iterate_values (name, var_intervals', instrs') in
+      Pos.same instr' m_instr :: prev
   | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
       let var_params' =
         List.map
@@ -798,8 +806,8 @@ let rec expand_instruction (const_map : const_context)
           evtfs
       in
       let instrs' = expand_instructions const_map instrs in
-      (Com.Restore (vars, var_params', evts', evtfs', instrs'), instr_pos)
-      :: prev
+      let instr' = Com.Restore (vars, var_params', evts', evtfs', instrs') in
+      Pos.same instr' m_instr :: prev
   | Com.ArrangeEvents (sort, filter, add, instrs) ->
       let sort' =
         match sort with
@@ -823,23 +831,25 @@ let rec expand_instruction (const_map : const_context)
         | None -> None
       in
       let instrs' = expand_instructions const_map instrs in
-      (Com.ArrangeEvents (sort', filter', add', instrs'), instr_pos) :: prev
+      let instr' = Com.ArrangeEvents (sort', filter', add', instrs') in
+      Pos.same instr' m_instr :: prev
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
-      (Com.VerifBlock instrs', instr_pos) :: prev
+      Pos.same (Com.VerifBlock instrs') m_instr :: prev
   | Com.ComputeTarget (tn, targs) ->
       let map var =
         match expand_variable const_map ParamsMap.empty var with
-        | AtomVar m_v, v_pos -> (Pos.unmark m_v, v_pos)
-        | AtomLiteral (Float _), v_pos -> Err.constant_forbidden_as_arg v_pos
+        | Pos.Mark (AtomVar m_v, v_pos) -> Pos.mark (Pos.unmark m_v) v_pos
+        | Pos.Mark (AtomLiteral (Float _), v_pos) ->
+            Err.constant_forbidden_as_arg v_pos
         | _ -> assert false
       in
       let targs' = List.map map targs in
-      (Com.ComputeTarget (tn, targs'), instr_pos) :: prev
+      Pos.same (Com.ComputeTarget (tn, targs')) m_instr :: prev
   | Com.ComputeVerifs _ | Com.ComputeDomain _ | Com.ComputeChaining _
   | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors
     ->
-      (instr, instr_pos) :: prev
+      m_instr :: prev
 
 and expand_instructions (const_map : const_context)
     (instrs : Mast.instruction Pos.marked list) :
@@ -852,27 +862,27 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
       (fun (const_map, prog) source_file ->
         let const_map, prog_file =
           List.fold_left
-            (fun (const_map, prog_file) source_item ->
-              let item, pos_item = source_item in
-              match item with
+            (fun (const_map, prog_file) m_item ->
+              match Pos.unmark m_item with
               | Mast.VariableDecl var_decl -> (
                   match var_decl with
                   | Mast.ConstVar (m_name, m_cval) ->
                       let const_map = add_const m_name m_cval const_map in
                       (const_map, prog_file)
-                  | Mast.ComputedVar (cvar, pos_cvar) ->
+                  | Mast.ComputedVar (Pos.Mark (cvar, pos_cvar)) ->
                       let comp_table =
                         expand_table_size const_map cvar.Mast.comp_table
                       in
                       let var_decl' =
                         Mast.ComputedVar
-                          ({ cvar with Mast.comp_table }, pos_cvar)
+                          (Pos.mark { cvar with Mast.comp_table } pos_cvar)
                       in
                       let prog_file =
-                        (Mast.VariableDecl var_decl', pos_item) :: prog_file
+                        Pos.same (Mast.VariableDecl var_decl') m_item
+                        :: prog_file
                       in
                       (const_map, prog_file)
-                  | _ -> (const_map, source_item :: prog_file))
+                  | _ -> (const_map, m_item :: prog_file))
               | Mast.Rule rule ->
                   let rule_tmp_vars =
                     List.map
@@ -886,22 +896,24 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                   let rule' =
                     { rule with Mast.rule_tmp_vars; Mast.rule_formulaes }
                   in
-                  let prog_file = (Mast.Rule rule', pos_item) :: prog_file in
+                  let prog_file =
+                    Pos.same (Mast.Rule rule') m_item :: prog_file
+                  in
                   (const_map, prog_file)
               | Mast.Verification verif ->
                   let verif_conditions =
                     List.map
-                      (fun (cond, cond_pos) ->
+                      (fun (Pos.Mark (cond, cond_pos)) ->
                         let verif_cond_expr =
                           expand_expression const_map ParamsMap.empty
                             cond.Mast.verif_cond_expr
                         in
-                        ({ cond with Mast.verif_cond_expr }, cond_pos))
+                        Pos.mark { cond with Mast.verif_cond_expr } cond_pos)
                       verif.Mast.verif_conditions
                   in
                   let verif' = { verif with Mast.verif_conditions } in
                   let prog_file =
-                    (Mast.Verification verif', pos_item) :: prog_file
+                    Pos.same (Mast.Verification verif') m_item :: prog_file
                   in
                   (const_map, prog_file)
               | Mast.Target target ->
@@ -918,7 +930,7 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                     Mast.{ target with target_tmp_vars; target_prog }
                   in
                   let prog_file =
-                    (Mast.Target target', pos_item) :: prog_file
+                    Pos.same (Mast.Target target') m_item :: prog_file
                   in
                   (const_map, prog_file)
               | Mast.Function target ->
@@ -935,10 +947,10 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
                     Mast.{ target with target_tmp_vars; target_prog }
                   in
                   let prog_file =
-                    (Mast.Function target', pos_item) :: prog_file
+                    Pos.same (Mast.Function target') m_item :: prog_file
                   in
                   (const_map, prog_file)
-              | _ -> (const_map, source_item :: prog_file))
+              | _ -> (const_map, m_item :: prog_file))
             (const_map, []) source_file
         in
         (const_map, List.rev prog_file :: prog))

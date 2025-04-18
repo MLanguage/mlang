@@ -496,7 +496,7 @@ struct
                 (fun or_chain set_value ->
                   let equal_test =
                     match set_value with
-                    | Com.VarValue (access, _) ->
+                    | Com.VarValue (Pos.Mark (access, _)) ->
                         let value = get_access_value ctx access in
                         comparison Com.Eq value0 value
                     | Com.FloatValue i ->
@@ -537,40 +537,40 @@ struct
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
-        | FuncCall ((ArrFunc, _), [ arg ]) -> (
+        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Number x -> Number (roundf x)
             | Undefined -> Undefined (*nope:Float 0.*))
-        | FuncCall ((InfFunc, _), [ arg ]) -> (
+        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Number x -> Number (truncatef x)
             | Undefined -> Undefined (*Float 0.*))
-        | FuncCall ((PresentFunc, _), [ arg ]) -> (
+        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Undefined -> false_value ()
             | _ -> true_value ())
-        | FuncCall ((Supzero, _), [ arg ]) -> (
+        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Undefined -> Undefined
             | Number f as n ->
                 if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
-        | FuncCall ((AbsFunc, _), [ arg ]) -> (
+        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Undefined -> Undefined
             | Number f -> Number (N.abs f))
-        | FuncCall ((MinFunc, _), [ arg1; arg2 ]) -> (
+        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.min (N.zero ()) f)
             | Number fl, Number fr -> Number (N.min fl fr))
-        | FuncCall ((MaxFunc, _), [ arg1; arg2 ]) -> (
+        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) -> (
             match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
             | Undefined, Undefined -> Undefined
             | Undefined, Number f | Number f, Undefined ->
                 Number (N.max (N.zero ()) f)
             | Number fl, Number fr -> Number (N.max fl fr))
-        | FuncCall ((Multimax, _), [ arg1; arg2 ]) -> (
+        | FuncCall (Pos.Mark (Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx arg1 with
             | Undefined -> Undefined
             | Number f -> (
@@ -610,10 +610,10 @@ struct
                     match !maxi with
                     | None -> Undefined
                     | Some f -> Number (N.of_int f))))
-        | FuncCall ((NbEvents, _), _) ->
+        | FuncCall (Pos.Mark (NbEvents, _), _) ->
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
-        | FuncCall ((Func fn, _), args) ->
+        | FuncCall (Pos.Mark (Func fn, _), args) ->
             let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             evaluate_function ctx fd args
         | FuncCall (_, _) -> assert false
@@ -665,9 +665,10 @@ struct
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =
     match Pos.unmark stmt with
-    | Com.Affectation (SingleFormula (VarDecl (m_acc, vexpr)), _) ->
+    | Com.Affectation (Pos.Mark (SingleFormula (VarDecl (m_acc, vexpr)), _)) ->
         set_access ctx (Pos.unmark m_acc) vexpr
-    | Com.Affectation (SingleFormula (EventFieldRef (idx, _, j, var)), _) -> (
+    | Com.Affectation
+        (Pos.Mark (SingleFormula (EventFieldRef (idx, _, j, var)), _)) -> (
         match evaluate_expr ctx idx with
         | Number z when N.(z >=. zero ()) -> (
             let i = Int64.to_int @@ N.to_int z in
@@ -677,7 +678,7 @@ struct
               | Com.RefVar _ -> events.(i).(j) <- Com.RefVar var
               | Com.Numeric _ -> ())
         | _ -> ())
-    | Com.Affectation (Com.MultipleFormulaes _, _) -> assert false
+    | Com.Affectation (Pos.Mark (Com.MultipleFormulaes _, _)) -> assert false
     | Com.IfThenElse (b, t, f) -> (
         match evaluate_expr ctx b with
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx f
@@ -697,7 +698,7 @@ struct
         in
         aux wdl
     | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
-    | Com.ComputeTarget ((tn, _), args) ->
+    | Com.ComputeTarget (Pos.Mark (tn, _), args) ->
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
         evaluate_target canBlock ctx tf args
     | Com.Print (std, args) -> begin

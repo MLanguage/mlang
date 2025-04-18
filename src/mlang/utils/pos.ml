@@ -76,8 +76,9 @@ let format fmt (pos : t) =
     e.Lexing.pos_lnum
     (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
-type 'a marked = 'a * t
-(** Everything related to the source code should keep its t stored, to improve
+type 'a marked =
+  | Mark of 'a * t
+      (** Everything related to the source code should keep its t stored, to improve
     error messages *)
 
 (** Placeholder t *)
@@ -92,19 +93,19 @@ let none : t =
   in
   { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
-let without (x : 'a) : 'a marked = (x, none)
+let without (x : 'a) : 'a marked = Mark (x, none)
 
-let mark value pos = (value, pos)
+let mark value pos = Mark (value, pos)
 
-let unmark ((x, _) : 'a marked) : 'a = x
+let unmark (Mark (x, _) : 'a marked) : 'a = x
 
-let get ((_, x) : 'a marked) : t = x
+let get (Mark (_, x) : 'a marked) : t = x
 
-let couple (x : 'a marked) : 'a * t = x
+let to_couple (Mark (x, p) : 'a marked) : 'a * t = (x, p)
 
-let map (f : 'a -> 'b) ((x, y) : 'a marked) : 'b marked = (f x, y)
+let map (f : 'a -> 'b) (Mark (x, y) : 'a marked) : 'b marked = Mark (f x, y)
 
-let same (x : 'a) ((_, y) : 'b marked) : 'a marked = (x, y)
+let same (x : 'a) (Mark (_, y) : 'b marked) : 'a marked = Mark (x, y)
 
 let unmark_option (x : 'a marked option) : 'a option =
   match x with Some x -> Some (unmark x) | None -> None

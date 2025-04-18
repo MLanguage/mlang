@@ -49,9 +49,9 @@ let get_table_size = function
   | SymbolSize _ -> assert false
 
 let get_table_size_opt = function
-  | Some (LiteralSize i, pos) -> Some (i, pos)
+  | Some (Pos.Mark (LiteralSize i, pos)) -> Some (Pos.mark i pos)
   | None -> None
-  | Some (SymbolSize _, _) -> assert false
+  | Some (Pos.Mark (SymbolSize _, _)) -> assert false
 
 (**{2 Expressions}*)
 

@@ -38,11 +38,11 @@ let format_expression = Com.format_expression format_variable
 
 let format_var_category_id fmt (vd : var_category_id) =
   match Pos.unmark vd with
-  | ("saisie", _) :: l ->
+  | Pos.Mark ("saisie", _) :: l ->
       Format.fprintf fmt "saisie %a" (Pp.list_space (Pp.unmark Pp.string)) l
-  | ("calculee", _) :: l ->
+  | Pos.Mark ("calculee", _) :: l ->
       Format.fprintf fmt "calculee %a" (Pp.list_space (Pp.unmark Pp.string)) l
-  | [ ("*", _) ] -> Format.fprintf fmt "*"
+  | [ Pos.Mark ("*", _) ] -> Format.fprintf fmt "*"
   | _ -> assert false
 
 let format_event_decl fmt el =
@@ -65,8 +65,8 @@ let format_rule fmt (r : rule) =
     r.rule_apps format_instruction_list r.rule_formulaes
 
 let format_table_size fmt = function
-  | Some (Mast.LiteralSize i, _) -> Format.fprintf fmt "[%d]" i
-  | Some (Mast.SymbolSize s, _) -> Format.fprintf fmt "[%s]" s
+  | Some (Pos.Mark (Mast.LiteralSize i, _)) -> Format.fprintf fmt "[%d]" i
+  | Some (Pos.Mark (Mast.SymbolSize s, _)) -> Format.fprintf fmt "[%s]" s
   | None -> ()
 
 let format_target fmt (t : target) =

@@ -89,7 +89,8 @@ let parse_literal sloc (s : string) : Com.literal =
 
 let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
-  with Failure _ -> Com.AtomVar (parse_variable sloc s, mk_position sloc)
+  with Failure _ ->
+    Com.AtomVar (Pos.mark (parse_variable sloc s) (mk_position sloc))
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
@@ -190,12 +191,13 @@ let parse_index_format (m_s : string Pos.marked) : string Pos.marked =
 
 let parse_if_then_etc l =
   let rec aux = function
-    | [ (Some e, ilt, pos) ] -> [ (Com.IfThenElse (e, ilt, []), pos) ]
+    | [ (Some e, ilt, pos) ] -> [ Pos.mark (Com.IfThenElse (e, ilt, [])) pos ]
     | [ (None, ile, _pos) ] -> ile
-    | (Some e, ilt, pos) :: le -> [ (Com.IfThenElse (e, ilt, aux le), pos) ]
+    | (Some e, ilt, pos) :: le ->
+        [ Pos.mark (Com.IfThenElse (e, ilt, aux le)) pos ]
     | _ -> assert false
   in
-  match aux l with [ (i, _pos) ] -> i | _ -> assert false
+  match aux l with [ Pos.Mark (i, _pos) ] -> i | _ -> assert false
 
 let parse_when_do_etc (twl, ed) = Com.WhenDoElse (twl, ed)
 
@@ -208,7 +210,7 @@ type target_header =
 
 let parse_target_or_function_header name is_function header =
   let rec aux apps_opt args_opt vars_opt res_opt = function
-    | (Target_apps apps', pos) :: h ->
+    | Pos.Mark (Target_apps apps', pos) :: h ->
         let apps_opt' =
           match apps_opt with
           | None -> Some (apps', pos)
@@ -219,7 +221,7 @@ let parse_target_or_function_header name is_function header =
                 pos
         in
         aux apps_opt' args_opt vars_opt res_opt h
-    | (Target_input_arg vars', pos) :: h ->
+    | Pos.Mark (Target_input_arg vars', pos) :: h ->
         let args_opt =
           match args_opt with
           | None -> Some (vars', pos)
@@ -230,7 +232,7 @@ let parse_target_or_function_header name is_function header =
                 pos
         in
         aux apps_opt args_opt vars_opt res_opt h
-    | (Target_tmp_vars vars', pos) :: h ->
+    | Pos.Mark (Target_tmp_vars vars', pos) :: h ->
         let vars_opt' =
           match vars_opt with
           | None -> Some (vars', pos)
@@ -241,7 +243,7 @@ let parse_target_or_function_header name is_function header =
                 pos
         in
         aux apps_opt args_opt vars_opt' res_opt h
-    | (Function_result res', pos) :: h ->
+    | Pos.Mark (Function_result res', pos) :: h ->
         if is_function then
           let res_opt' =
             match res_opt with
@@ -259,15 +261,15 @@ let parse_target_or_function_header name is_function header =
           match apps_opt with
           | Some (apps, _) ->
               List.fold_left
-                (fun res (app, pos) ->
+                (fun res (Pos.Mark (app, pos)) ->
                   match StrMap.find_opt app res with
-                  | Some (_, old_pos) ->
+                  | Some (Pos.Mark (_, old_pos)) ->
                       let msg =
                         Format.asprintf "application %s already declared %a" app
                           Pos.format old_pos
                       in
                       Errors.raise_spanned_error msg pos
-                  | None -> StrMap.add app (app, pos) res)
+                  | None -> StrMap.add app (Pos.mark app pos) res)
                 StrMap.empty apps
           | None ->
               let ty = if is_function then "function" else "target" in
