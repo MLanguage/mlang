@@ -43,9 +43,11 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
         | Com.CatVar.LocInput -> "EST_SAISIE"
       in
       let attrs = Com.Var.attrs var in
-      let est_table = if Com.Var.is_table var then 1 else 0 in
-      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s" name alias idx
-        est_table size id_int loc_cat;
+      let tab_idx =
+        if Com.Var.is_table var then Com.Var.loc_tab_idx var else -1
+      in
+      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s" name alias idx tab_idx
+        size id_int loc_cat;
       StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
       Pp.fpr fmt " },\n")
     vars;
@@ -64,11 +66,13 @@ let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
     (fun _ var ->
       let name = Com.Var.name_str var in
       let idx = Com.Var.loc_idx var in
-      let est_table = if Com.Var.is_table var then 1 else 0 in
+      let tab_idx =
+        if Com.Var.is_table var then Com.Var.loc_tab_idx var else -1
+      in
       let size = Com.Var.size var in
       Pp.fpr fmt
         "  { \"%s\", \"\", %d, %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n" name
-        idx est_table size)
+        idx tab_idx size)
     vars;
   Pp.fpr fmt "  NULL\n};\n\n"
 
@@ -79,7 +83,11 @@ let gen_table_tab_varinfo (cprog : Mir.program) fmt =
     (fun _ var ->
       let idx = Com.Var.loc_cat_idx var in
       let name = Com.Var.name_str var in
-      Pp.fpr fmt "  &(tmp_varinfo[%d]), /* %s */\n" idx name)
+      if Com.Var.is_tgv var then
+        let loc = Com.Var.loc_tgv var in
+        Pp.fpr fmt "  (T_varinfo *)&(varinfo_%s[%d]), /* %s */\n"
+          loc.loc_cat_str idx name
+      else Pp.fpr fmt "  &(tmp_varinfo[%d]), /* %s */\n" idx name)
     table_map;
   Pp.fpr fmt "  NULL\n};\n\n"
 
@@ -172,7 +180,7 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   char *name;
   char *alias;
   int idx;
-  char est_table;
+  int tab_idx;
   int size;
   int cat;
   int loc_cat;
@@ -191,7 +199,7 @@ typedef struct S_varinfo_map {
   char *name;
   char *alias;
   int idx;
-  char est_table;
+  int tab_idx;
   int size;
   int cat;
   int loc_cat;
@@ -528,8 +536,13 @@ extern void free_erreur();
 
 extern double floor_g(double);
 extern double ceil_g(double);
-extern int multimax(char *var_def, double *var_val, int size, char nb_def, double nb_val, char *res_def, double *res_val);
-extern int multimax_varinfo(T_irdata *irdata, T_varinfo *info, char nb_def, double nb_val, char *res_def, double *res_val);
+
+extern int multimax_varinfo(
+  T_irdata *irdata, T_varinfo *info,
+  char nb_def, double nb_val,
+  char *res_def, double *res_val
+);
+
 extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
@@ -680,43 +693,41 @@ extern char lis_varinfo(
   T_varinfo *info,
   char *res_def, double *res_val
 );
-extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
-extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
-extern int lis_varinfo_tab(
-  T_irdata *irdata,
-  T_varinfo *info,
-  char idx_def, double idx_val,
-  char *res_def, double *res_val
-);
 extern char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info);
 extern double *lis_varinfo_ptr_val(T_irdata *irdata, T_varinfo *info);
 extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
-extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
+
+extern T_varinfo *lis_tabaccess_varinfo(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val
+);
+
+extern char lis_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *res_def, double *res_val
+);
+
+extern void ecris_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char def, double val
+);
 
 extern char lis_concat_nom_index(
   T_irdata *irdata,
   char *nom, const char *fmt, char idx_def, double idx_val,
   char *res_def, double *res_val
 );
-extern char lis_concat_nom_index_tab(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char eidx_def, double eidx_val,
-  char *res_def, double *res_val
-);
+
 extern T_varinfo *lis_concat_nom_index_var(
   T_irdata *irdata,
   char *nom, const char *fmt, char idx_def, double idx_val
 );
+
 extern void ecris_concat_nom_index(
   T_irdata *irdata,
   char *nom, const char *fmt, char idx_def, double idx_val,
-  char def, double val
-);
-extern void ecris_concat_nom_index_tab(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  int idx,
   char def, double val
 );
 
@@ -970,137 +981,6 @@ int nb_bloquantes(T_irdata *irdata) {
   return irdata->nb_bloqs;
 }
 
-#ifdef FLG_TRACE
-
-/* int niv_trace = 3; */
-
-#ifdef FLG_API
-#define TRACE_FILE fd_trace_dialog
-#else
-#define TRACE_FILE stderr
-#endif /* FLG_API */
-
-void aff1(nom)
-char *nom ;
-{
-#ifdef FLG_COLORS
-if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
-#else
-if (niv_trace >= 1) fprintf(stderr, "%s \n", nom) ;
-#endif
-}
-
-void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi) {
-  double valeur;
-  int def;
-  if (expr < 0) {
-    if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
-              color, typo, nom, expr, chaine);
-#else
-      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
-#endif /* FLG_COLORS */
-    }
-    return;
-  } else if (expr >= maxi) {
-#ifdef FLG_COLORS
-    fprintf(TRACE_FILE,
-            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
-            color, typo, expr, maxi);
-#else
-    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
-            expr, maxi);
-#endif /* FLG_COLORS */
-    expr = 0;
-  }
-  switch (indice & EST_MASQUE) {
-    case EST_SAISIE:
-      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
-      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_CALCULEE:
-      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
-      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_BASE:
-      valeur = irdata->base[(indice & INDICE_VAL) + expr];
-      def = irdata->def_base[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_TEMPORAIRE:
-      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
-      def = irdata->def_tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
-      break;
-  }
-  if (is_tab) {
-    if (def == 0) {
-      if (valeur != 0) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
-                color, typo, nom, expr, valeur);
-#else
-        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
-#endif /* FLG_COLORS */
-      } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
-                color, typo, nom, expr, chaine);
-#else
-        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
-#endif /* FLG_COLORS */
-      }
-    } else if (def != 1) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
-              color, typo, nom, expr, def);
-#else
-      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
-#endif /* FLG_COLORS */
-    } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
-              color, typo, nom, expr, chaine, valeur);
-#else
-      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
-#endif /* FLG_COLORS */
-    }
-  } else {
-    if (def == 0) {
-      if (valeur != 0) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
-                color, typo, nom, valeur);
-#else
-        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
-#endif /* FLG_COLORS */
-      } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
-                color, typo, nom, chaine);
-#else
-        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
-#endif /* FLG_COLORS */
-      }
-    } else if (def != 1) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
-              color, typo, nom, def);
-#else
-      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
-#endif /* FLG_COLORS */
-    } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
-              color, typo, nom, chaine, valeur);
-#else
-      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
-#endif /* FLG_COLORS */
-    }
-  }
-}
-
-#endif /* FLG_TRACE */
-
 T_event *event(T_irdata *irdata, char idx_def, double idx_val) {
   int idx;
   if (idx_def == 0) return NULL;
@@ -1124,28 +1004,24 @@ T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
-int multimax(char *var_def, double *var_val, int size, char nb_def, double nb_val, char *res_def, double *res_val) {
+int multimax_varinfo(
+  T_irdata *irdata, T_varinfo *info,
+  char nb_def, double nb_val,
+  char *res_def, double *res_val
+) {
   int i;
-  int nb;
+  int nb = (int)nb_val;
+  char def;
+  double val;
   *res_def = 0;
   *res_val = 0.0;
-  if (var_def == NULL || var_val == NULL) return *res_def;
-  if (nb_def == 0) return *res_def;
-  nb = (int)nb_val;
-  for (i = 0; i < nb && i < size; i++) {
-    if (var_def[i] == 1) *res_def = 1;
-    if (var_val[i] >= *res_val) *res_val = var_val[i];
+  if (irdata == NULL || info == NULL || info->tab_idx < 0 || nb_def == 0) return *res_def;
+  for (i = 0; i < nb && i < info->size; i++) {
+    lis_tabaccess(irdata, info->tab_idx, 1, (double)i, &def, &val);
+    if (def == 1) *res_def = 1;
+    if (val >= *res_val) *res_val = val;
   }
   return *res_def;
-}
-
-int multimax_varinfo(T_irdata *irdata, T_varinfo *info, char nb_def, double nb_val, char *res_def, double *res_val) {
-  char *var_def = lis_varinfo_ptr_def(irdata, info);
-  double *var_val = lis_varinfo_ptr_val(irdata, info);
-  *res_def = 0;
-  *res_val = 0.0;
-  if (irdata == NULL || info == NULL) return *res_def;
-  return multimax(var_def, var_val, info->size, nb_def, nb_val, res_def, res_val);
 }
 
 int modulo_def(int a, int b) {
@@ -1758,7 +1634,7 @@ char lis_varinfo(
 ) {
   *res_def = 0;
   *res_val = 0.0;
-  if (irdata == NULL || info == NULL) return 0.0;
+  if (irdata == NULL || info == NULL) return *res_def;
   switch (info->loc_cat) {
     case EST_SAISIE:
       *res_def = irdata->def_saisie[info->idx];
@@ -1796,33 +1672,6 @@ char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
     default:
       return 0;
   }
-}
-
-double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
-  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return 0.0;
-  switch (info->loc_cat) {
-    case EST_SAISIE:
-      return irdata->saisie[info->idx + idx];
-    case EST_CALCULEE:
-      return irdata->calculee[info->idx + idx];
-    case EST_BASE:
-      return irdata->base[info->idx + idx];
-    case EST_TEMPORAIRE:
-      return irdata->tmps[irdata->tmps_org + info->idx + idx];
-    default:
-      return 0.0;
-  }
-}
-
-int lis_varinfo_tab(T_irdata *irdata, T_varinfo *info, char idx_def, double idx_val, char *res_def, double *res_val) {
-  int idx;
-  *res_def = 0;
-  *res_val = 0.0;
-  if (irdata == NULL || info == NULL || idx_def == 0) return *res_def;
-  idx = (int)idx_val;
-  *res_def = lis_varinfo_tab_def(irdata, info, idx);
-  *res_val = lis_varinfo_tab_val(irdata, info, idx);
-  return *res_def;
 }
 
 char *lis_varinfo_ptr_def(T_irdata *irdata, T_varinfo *info) {
@@ -1886,36 +1735,47 @@ void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
   }
 }
 
-void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val) {
-  int var_idx = 0;
+T_varinfo *lis_tabaccess_varinfo(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val
+) {
+  T_varinfo *info = NULL;
+  int idx = (int)idx_val;
+  if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return NULL;
+  info = tab_varinfo[idx_tab];
+  if (idx_def == 0 || idx < 0 || info->size <= idx) return NULL;
+  return tab_varinfo[idx_tab + idx + 1];
+}
 
-  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return;
-  var_idx = info->idx + idx;
-  if (def == 0) {
-    val = 0.0;
-  } else {
-    def = 1;
+char lis_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *res_def, double *res_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  int idx = 0;
+  if (info == NULL) {
+    *res_val = 0.0;
+    if (
+      irdata != NULL && 0 <= idx_tab && idx_tab < TAILLE_TAB_VARINFO
+      && idx_def == 1 && ((int)idx_val) < 0
+    ) {
+      *res_def = 1;
+    } else {
+      *res_def = 0;
+    }
+    return *res_def;
   }
-  switch (info->loc_cat) {
-    case EST_SAISIE:
-      irdata->def_saisie[var_idx] = def;
-      irdata->saisie[var_idx] = val;
-      return;
-    case EST_CALCULEE:
-      irdata->def_calculee[var_idx] = def;
-      irdata->calculee[var_idx] = val;
-      return;
-    case EST_BASE:
-      irdata->def_base[var_idx] = def;
-      irdata->base[var_idx] = val;
-      return;
-    case EST_TEMPORAIRE:
-      irdata->def_tmps[irdata->tmps_org + var_idx] = def;
-      irdata->tmps[irdata->tmps_org + var_idx] = val;
-      return;
-    default:
-      return;
-  }
+  return lis_varinfo(irdata, info, res_def, res_val);
+}
+
+void ecris_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char def, double val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  ecris_varinfo(irdata, info, def, val);
 }
 
 char lis_concat_nom_index(
@@ -1926,19 +1786,6 @@ char lis_concat_nom_index(
   char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
   T_varinfo *info = cherche_varinfo(irdata, vn);
   *res_def = lis_varinfo(irdata, info, res_def, res_val);
-  free(vn);
-  return *res_def;
-}
-
-char lis_concat_nom_index_tab(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char eidx_def, double eidx_val,
-  char *res_def, double *res_val
-) {
-  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
-  T_varinfo *info = cherche_varinfo(irdata, vn);
-  *res_def = lis_varinfo_tab(irdata, info, eidx_def, eidx_val, res_def, res_val);
   free(vn);
   return *res_def;
 }
@@ -1962,18 +1809,6 @@ void ecris_concat_nom_index(
   T_varinfo *info = cherche_varinfo(irdata, vn);
   free(vn);
   ecris_varinfo(irdata, info, def, val);
-}
-
-void ecris_concat_nom_index_tab(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  int idx,
-  char def, double val
-) {
-  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
-  T_varinfo *info = cherche_varinfo(irdata, vn);
-  free(vn);
-  ecris_varinfo_tab(irdata, info, idx, def, val);
 }
 
 /* !!! */
@@ -2002,6 +1837,140 @@ void pr_err_var(T_irdata *irdata, char *nom) {
   if (irdata == NULL) return;
   pr_var(&(irdata->ctx_pr_err), irdata, nom);
 }
+
+#ifdef FLG_TRACE
+
+/* int niv_trace = 3; */
+
+#ifdef FLG_API
+#define TRACE_FILE fd_trace_dialog
+#else
+#define TRACE_FILE stderr
+#endif /* FLG_API */
+
+void aff1(nom)
+char *nom ;
+{
+#ifdef FLG_COLORS
+if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
+#else
+if (niv_trace >= 1) fprintf(stderr, "%s \n", nom) ;
+#endif
+}
+
+void aff_val(
+  const char *nom, const T_irdata *irdata, int indice, int niv,
+  const char *chaine, int is_tab, int expr, int maxi
+) {
+  double valeur;
+  int def;
+  if (expr < 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
+              color, typo, nom, expr, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
+#endif /* FLG_COLORS */
+    }
+    return;
+  } else if (expr >= maxi) {
+#ifdef FLG_COLORS
+    fprintf(TRACE_FILE,
+            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
+            color, typo, expr, maxi);
+#else
+    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
+            expr, maxi);
+#endif /* FLG_COLORS */
+    expr = 0;
+  }
+  switch (indice & EST_MASQUE) {
+    case EST_SAISIE:
+      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
+      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_CALCULEE:
+      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
+      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_BASE:
+      valeur = irdata->base[(indice & INDICE_VAL) + expr];
+      def = irdata->def_base[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_TEMPORAIRE:
+      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
+      def = irdata->def_tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
+      break;
+  }
+  if (is_tab) {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
+                color, typo, nom, expr, valeur);
+#else
+        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
+#endif /* FLG_COLORS */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
+                color, typo, nom, expr, chaine);
+#else
+        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
+#endif /* FLG_COLORS */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
+              color, typo, nom, expr, def);
+#else
+      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
+#endif /* FLG_COLORS */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
+              color, typo, nom, expr, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
+#endif /* FLG_COLORS */
+    }
+  } else {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
+                color, typo, nom, valeur);
+#else
+        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
+#endif /* FLG_COLORS */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
+                color, typo, nom, chaine);
+#else
+        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
+#endif /* FLG_COLORS */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
+              color, typo, nom, def);
+#else
+      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
+#endif /* FLG_COLORS */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
+              color, typo, nom, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
+#endif /* FLG_COLORS */
+    }
+  }
+}
+
+#endif /* FLG_TRACE */
 
 |};
   StrMap.iter

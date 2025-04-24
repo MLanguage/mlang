@@ -116,58 +116,6 @@ let var_addr () =
   in
   Lazy.force vars
 
-let compare_dump out outexp =
-  let out = open_in_bin out in
-  let outexp = open_in_bin outexp in
-  let read64 ic =
-    let buf = Bytes.create 8 in
-    really_input ic buf 0 8;
-    buf
-  in
-  let rec read_val_diffs vars diffs =
-    match vars with
-    | [] -> diffs
-    | (addr, var)::vars ->
-      assert (pos_in out = addr);
-      let res_val = read64 out in
-      let expe_val = read64 outexp in
-      if Bytes.equal res_val expe_val then
-        read_val_diffs vars diffs
-      else
-        read_val_diffs vars ((var, res_val, expe_val)::diffs)
-  in
-  let rec read_strings ic strs =
-    try
-      let str = read64 ic in
-      let strs = StrSet.add (Bytes.to_string str) strs in
-      read_strings ic strs
-    with
-    | End_of_file -> strs
-  in
-  let diffs = read_val_diffs (var_addr ()) [] in
-  let raised_disco = read_strings out StrSet.empty in
-  let expected_disco = read_strings outexp StrSet.empty in
-  StrSet.iter (fun ano ->
-      Printf.eprintf "Raised unexpected discordance %s\n" ano
-    ) (StrSet.diff raised_disco expected_disco);
-  StrSet.iter (fun ano ->
-      Printf.eprintf "Expected discordance %s not raised\n" ano
-    ) (StrSet.diff expected_disco raised_disco);
-  let undef = Int64.of_string "0xefbeaddeefbeadde" in
-  let hex2floatstr bytes =
-    let i64 = Bytes.get_int64_le bytes 0 in
-    if Int64.equal i64 undef then "undef"
-    else string_of_float(Int64.float_of_bits i64)
-  in
-  List.iter (fun (var, res, exp) ->
-      Printf.eprintf "%s: %s found, expected %s\n"
-        var (hex2floatstr res) (hex2floatstr exp)
-    )
-    diffs;
-  flush stderr;
-  close_in out;
-  close_in outexp
-
 let run_test test_file annee_exec =
   Printf.printf "Testing %s...\n%!" test_file;
   let annee_calc = M.annee_calc () in

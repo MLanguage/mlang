@@ -148,7 +148,7 @@ afficher_erreur "calculee tableau TUTU <" nom(TUTU) "> <" alias(TUTU) ">\n";
 afficher_erreur "temporaire A0 <" nom(A0) "> <" alias(A0) ">\n";
 afficher_erreur "temporaire A2 <" nom(A2) "> <" alias(A2) ">\n";
 afficher_erreur "temporaire tableau AA <" nom(AA) "> <" alias(AA) ">\n";
-#afficher_erreur "temporaire AA[2] <" nom(AA[2]) "> <" alias(AA[2]) ">\n";
+afficher_erreur "temporaire AA[2] <" nom(AA[2]) "> <" alias(AA[2]) ">\n";
 afficher_erreur "temporaire A[0: 2] <" nom(A[0: 2]) "> <" alias(A[0: 2]) ">\n";
 iterer : variable VAR : V_IND_TRAIT, TOTO01, A2 : dans (
   afficher_erreur "reference VAR <" nom(VAR) "> <" alias(VAR) ">\n";
@@ -158,13 +158,36 @@ R = test_aff_fonction(A0, A1, A2, A3, A4, A5, A6);
 calculer cible test_aff_cible : avec A0, A1, A2, A3, A4, A5, A6;
 afficher_erreur indenter(-2) "sortie test_aff\n";
 
+cible test_tab:
+application: iliad;
+variables_temporaires: A0, A1, A2, AA tableau [5], A3, A4, A5, A6, R;
+afficher_erreur "entree test_tab\n" indenter(2);
+iterer : variable I : 0..4 increment 1 : dans (
+  AA[I] = 1000 + I;
+)
+afficher_erreur nom(AA) "[-2] = " (AA[-2]) "\n";
+iterer : variable I : 0..4 increment 1 : dans (
+  afficher_erreur nom(AA) "[" (I) "] = " (AA[I]) "\n";
+)
+afficher_erreur nom(AA) "[7] = " (AA[7]) "\n";
+iterer : variable I : 0..4 increment 1 : dans (
+  TUTU[I] = 1000 + I;
+)
+afficher_erreur nom(TUTU) "[-2] = " (TUTU[-2]) "\n";
+iterer : variable I : 0..4 increment 1 : dans (
+  afficher_erreur nom(TUTU) "[" (I) "] = " (TUTU[I]) "\n";
+)
+afficher_erreur nom(TUTU) "[7] = " (TUTU[7]) "\n";
+afficher_erreur indenter(-2) "sortie test_tab\n";
+
 cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
 #calculer cible test_varcons;
-calculer cible test_args;
-calculer cible test_tmpref;
+#calculer cible test_args;
+#calculer cible test_tmpref;
 calculer cible test_aff;
+calculer cible test_tab;
 
 cible enchainement_primitif:
 application: iliad;

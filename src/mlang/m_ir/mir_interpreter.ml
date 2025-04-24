@@ -772,7 +772,10 @@ struct
             let eval vc _ =
               StrMap.iter
                 (fun _ v ->
-                  if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
+                  if
+                    Com.CatVar.compare (Com.Var.cat v) vc = 0
+                    && not (Com.Var.is_table v)
+                  then (
                     set_var_ref ctx var (get_var ctx v);
                     match evaluate_expr ctx expr with
                     | Number z when N.(z =. one ()) ->

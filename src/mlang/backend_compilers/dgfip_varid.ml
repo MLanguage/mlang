@@ -21,11 +21,11 @@ let gen_tab = function
   | Com.CatVar.LocBase -> "B_"
   | Com.CatVar.LocInput -> "S_"
 
-let gen_tgv_def (l : Com.loc_tgv) vn off =
-  Pp.spr "D%s[%d/*%s*/%s]" (gen_tab l.loc_cat) l.loc_idx vn off
+let gen_tgv_def (l : Com.loc_tgv) vn =
+  Pp.spr "D%s[%d/*%s*/]" (gen_tab l.loc_cat) l.loc_idx vn
 
-let gen_tgv_val (l : Com.loc_tgv) vn off =
-  Pp.spr "%s[%d/*%s*/%s]" (gen_tab l.loc_cat) l.loc_idx vn off
+let gen_tgv_val (l : Com.loc_tgv) vn =
+  Pp.spr "%s[%d/*%s*/]" (gen_tab l.loc_cat) l.loc_idx vn
 
 let gen_tgv_def_ptr (l : Com.loc_tgv) vn =
   Pp.spr "(D%s + (%d)/*%s*/)" (gen_tab l.loc_cat) l.loc_idx vn
@@ -38,15 +38,13 @@ let gen_tgv_info_ptr (l : Com.loc_tgv) vn =
 
 (* temporary variables accessors *)
 
-let gen_tmp_def (l : Com.loc_tmp) vn off =
-  Pp.spr "DT_((%d)/*%s*/%s)" l.loc_idx vn off
+let gen_tmp_def (l : Com.loc_tmp) vn = Pp.spr "DT_((%d)/*%s*/)" l.loc_idx vn
 
-let gen_tmp_val (l : Com.loc_tmp) vn off =
-  Pp.spr "T_((%d)/*%s*/%s)" l.loc_idx vn off
+let gen_tmp_val (l : Com.loc_tmp) vn = Pp.spr "T_((%d)/*%s*/)" l.loc_idx vn
 
-let gen_tmp_def_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_def l vn "")
+let gen_tmp_def_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_def l vn)
 
-let gen_tmp_val_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_val l vn "")
+let gen_tmp_val_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_val l vn)
 
 let gen_tmp_info_ptr (l : Com.loc_tmp) vn =
   Pp.spr "IT_((%d)/*%s*/)" l.loc_idx vn
@@ -59,25 +57,25 @@ let gen_ref_val_ptr i vn = Printf.sprintf "R_((%d)/*%s*/)" i vn
 
 let gen_ref_info_ptr i vn = Printf.sprintf "IR_((%d)/*%s*/)" i vn
 
-let gen_ref_def i vn off = Pp.spr "*(%s%s)" (gen_ref_def_ptr i vn) off
+let gen_ref_def i vn = Pp.spr "*(%s)" (gen_ref_def_ptr i vn)
 
-let gen_ref_val i vn off = Pp.spr "*(%s%s)" (gen_ref_val_ptr i vn) off
+let gen_ref_val i vn = Pp.spr "*(%s)" (gen_ref_val_ptr i vn)
 
 (* generic accessors *)
 
-let gen_def (v : Com.Var.t) offset =
+let gen_def (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv_def l vn offset
-  | LocTmp (_, l) -> gen_tmp_def l vn offset
-  | LocRef (_, i) -> gen_ref_def i vn offset
+  | LocTgv (_, l) -> gen_tgv_def l vn
+  | LocTmp (_, l) -> gen_tmp_def l vn
+  | LocRef (_, i) -> gen_ref_def i vn
 
-let gen_val (v : Com.Var.t) offset =
+let gen_val (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv_val l vn offset
-  | LocTmp (_, l) -> gen_tmp_val l vn offset
-  | LocRef (_, i) -> gen_ref_val i vn offset
+  | LocTgv (_, l) -> gen_tgv_val l vn
+  | LocTmp (_, l) -> gen_tmp_val l vn
+  | LocRef (_, i) -> gen_ref_val i vn
 
 let gen_info_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in

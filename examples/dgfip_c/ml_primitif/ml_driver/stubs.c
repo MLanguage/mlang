@@ -159,11 +159,17 @@ CAMLprim value ml_tgv_get_array(value mlTgv, value mlCode, value mlIdx) {
   const char *code = String_val(mlCode);
   int idx = Int_val(mlIdx);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  if (lis_varinfo_tab_def(tgv, varinfo, idx)) {
-    double val = lis_varinfo_tab_val(tgv, varinfo, idx);
-    optOut = caml_alloc_some(caml_copy_double(val));
+  char res_def;
+  double res_val;
+  if (varinfo != NULL && varinfo->tab_idx >= 0) {
+    lis_tabaccess(tgv, varinfo->tab_idx, 1, (double)idx, &res_def, &res_val);
+    if (res_def > 0) {
+      optOut = caml_alloc_some(caml_copy_double(res_val));
+    } else {
+      optOut = Val_none;
+    }
   } else {
-    optOut = Val_none;
+      optOut = Val_none;
   }
   CAMLreturn(optOut);
 }

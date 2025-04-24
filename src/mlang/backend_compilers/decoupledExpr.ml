@@ -1,38 +1,18 @@
 module VID = Dgfip_varid
 
-type offset =
-  | GetValueConst of int
-  | GetValueExpr of string
-  | GetValueVar of Com.Var.t
-  | PassPointer
-  | None
-
-let rec generate_variable (offset : offset) ?(def_flag = false)
-    ?(trace_flag = false) (var : Com.Var.t) : string =
+let generate_variable ?(def_flag = false) ?(trace_flag = false)
+    (var : Com.Var.t) : string =
   try
-    match offset with
-    | PassPointer ->
-        if def_flag then VID.gen_def_ptr var else VID.gen_val_ptr var
-    | _ ->
-        let offset =
-          match offset with
-          | None -> ""
-          | GetValueVar offset -> " + (int)" ^ generate_variable None offset
-          | GetValueConst offset -> " + " ^ string_of_int offset
-          | GetValueExpr offset -> Format.sprintf " + (int)(%s)" offset
-          | PassPointer -> assert false
-        in
-        if def_flag then VID.gen_def var offset
-        else
-          let access_val = VID.gen_val var offset in
-          (* When the trace flag is present, we print the value of the
-             non-temporary variable being used *)
-          if trace_flag && not (Com.Var.is_temp var) then
-            let vn = Pos.unmark var.Com.Var.name in
-            let pos_tgv = VID.gen_pos_from_start var in
-            Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
-              access_val
-          else access_val
+    if def_flag then VID.gen_def var
+    else
+      let access_val = VID.gen_val var in
+      (* When the trace flag is present, we print the value of the
+         non-temporary variable being used *)
+      if trace_flag && not (Com.Var.is_temp var) then
+        let vn = Pos.unmark var.Com.Var.name in
+        let pos_tgv = VID.gen_pos_from_start var in
+        Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv access_val
+      else access_val
   with Not_found ->
     Errors.raise_error
       (Format.asprintf "Variable %s not found in TGV"
@@ -68,12 +48,11 @@ and expr =
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
-  | Daccess of Com.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
   | Ddirect of expr
 
-and expr_var = Local of stack_slot | M of Com.Var.t * offset * dflag
+and expr_var = Local of stack_slot | M of Com.Var.t * dflag
 
 and t = expr * dflag * local_vars
 
@@ -212,8 +191,8 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (v : Com.Var.t) (offset : offset) (df : dflag) _stacks _lv : t =
-  (Dvar (M (v, offset, df)), df, [])
+let m_var (v : Com.Var.t) (df : dflag) _stacks _lv : t =
+  (Dvar (M (v, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
     =
@@ -374,11 +353,6 @@ let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let expr, flags, ctx = c stacks ctx in
   (Ddirect expr, flags, ctx)
 
-let access (var : Com.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
-    (ctx : local_vars) : t =
-  let _, lv, e = push_with_kind stacks ctx Val e in
-  (Daccess (var, df, e), df, lv)
-
 let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
@@ -464,11 +438,10 @@ let format_slot fmt ({ kind; depth } : stack_slot) =
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
   match ev with
   | Local slot -> format_slot fmt slot
-  | M (var, offset, df) ->
+  | M (var, df) ->
       let def_flag = df = Def in
       Format.fprintf fmt "%s"
-        (generate_variable ~trace_flag:dgfip_flags.flg_trace offset ~def_flag
-           var)
+        (generate_variable ~trace_flag:dgfip_flags.flg_trace ~def_flag var)
 
 let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   let format_dexpr = format_dexpr dgfip_flags in
@@ -523,11 +496,6 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
         des
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
-  | Daccess (var, dflag, de) ->
-      let de_str = Format.asprintf "%a" format_dexpr de in
-      Format.fprintf fmt "(%s)"
-        (generate_variable ~def_flag:(dflag = Def)
-           ~trace_flag:dgfip_flags.flg_trace (GetValueExpr de_str) var)
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
