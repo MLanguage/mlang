@@ -157,9 +157,12 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Cli.display_time := true;
   Cli.result_print "Test results: %d successes" (List.length s);
 
-  if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
+  let failing = StrMap.cardinal f in
+  if failing = 0 then Cli.result_print "No failures!"
   else (
-    Cli.warning_print "Failures:";
     StrMap.iter
-      (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
-      f)
+      (fun name nbErr -> Cli.error_print "\t%d errors in file %s" nbErr name)
+      f;
+    Errors.raise_error
+      (Format.asprintf "%d failing out of %d files" failing
+         (Array.length arr)))
