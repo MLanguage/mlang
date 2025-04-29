@@ -89,3 +89,9 @@ let starts_with ~prefix s =
   let ls = String.length s in
   let rec aux i = i = lp || (prefix.[i] = s.[i] && aux (i + 1)) in
   lp <= ls && aux 0
+
+let ends_with ~suffix s =
+  let fp = String.length suffix - 1 in
+  let fs = String.length s - 1 in
+  let rec aux i = i = fp + 1 || (suffix.[fs - i] = s.[fp - i] && aux (i + 1)) in
+  fp <= fs && aux 0

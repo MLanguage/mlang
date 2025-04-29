@@ -28,3 +28,5 @@ val compare_default : string -> string -> int
 val compare_ebcdic : string -> string -> int
 
 val starts_with : prefix:string -> string -> bool
+
+val ends_with : suffix:string -> string -> bool
