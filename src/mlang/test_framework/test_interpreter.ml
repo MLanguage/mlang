@@ -65,16 +65,21 @@ let check_test (program : Mir.program) (test_name : string)
   in
   let check_vars exp vars =
     let test_error_margin = 0.01 in
-    let fold var f nb =
-      match StrMap.find_opt var vars with
+    let fold e f nb =
+      match StrMap.find_opt e vars with
       | None ->
-          Cli.error_print "KO | %s is not given back" var;
+          Cli.error_print "KO | %s is not given back, expected %f" e f;
           nb + 1
+      | Some Com.Undefined when f = 0. ->
+          (* Fuzzer tests of 2020 and before generates a lot of variables equal
+             to 0.000000 as a default result value, hence if a value is interpreted
+             as undefined, we accept strict equality with 0. *)
+          nb
       | Some Com.Undefined ->
-          Cli.error_print "KO | %s is undefined" var;
+          Cli.error_print "KO | %s is undefined, expected: %f" e f;
           nb + 1
       | Some (Com.Float f') when abs_float (f -. f') > test_error_margin ->
-          Cli.error_print "KO | %s expected: %f - evaluated: %f" var f f';
+          Cli.error_print "KO | %s expected: %f - evaluated: %f" e f f';
           nb + 1
       | Some (Com.Float _) -> nb
     in
