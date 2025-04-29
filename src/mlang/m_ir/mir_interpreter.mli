@@ -158,7 +158,7 @@ val evaluate_program :
   Com.literal Com.Var.Map.t ->
   Cli.value_sort ->
   Cli.round_ops ->
-  float option StrMap.t * StrSet.t
+  Com.literal StrMap.t * StrSet.t
 (** Main interpreter function *)
 
 val evaluate_expr :

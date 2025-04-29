@@ -67,14 +67,16 @@ let check_test (program : Mir.program) (test_name : string)
     let test_error_margin = 0.01 in
     let fold var f nb =
       match StrMap.find_opt var vars with
-      | Some (Some f') ->
-          if abs_float (f -. f') > test_error_margin then (
-            Cli.error_print "KO | %s expected: %f - evaluated: %f" var f f';
-            nb + 1)
-          else nb
-      | _ ->
-          Cli.error_print "KO | %s is either undefined or not given back" var;
+      | None ->
+          Cli.error_print "KO | %s is not given back" var;
           nb + 1
+      | Some Com.Undefined ->
+          Cli.error_print "KO | %s is undefined" var;
+          nb + 1
+      | Some (Com.Float f') when abs_float (f -. f') > test_error_margin ->
+          Cli.error_print "KO | %s expected: %f - evaluated: %f" var f f';
+          nb + 1
+      | Some (Com.Float _) -> nb
     in
     StrMap.fold fold exp 0
   in
