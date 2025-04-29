@@ -172,7 +172,7 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
                     (ei.set_vars, ei.def_test, ei.value_comp)
                   in
                   let d_fun =
-                    D.dfun "lis_concat_nom_index"
+                    D.dfun "lis_concaccess"
                       [
                         D.ddirect (D.dinstr "irdata");
                         D.ddirect (D.dinstr (Pp.spr "\"%s\"" name));
@@ -393,7 +393,7 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
           in
           let set_vars, conc_d_fun =
             let ei = generate_c_expr i in
-            let conc_fn = Pp.spr "lis_concat_nom_index_var" in
+            let conc_fn = Pp.spr "lis_concaccess_varinfo" in
             let conc_d_fun =
               D.dfun conc_fn
                 [
@@ -496,7 +496,7 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
       let res_val_ptr = Pp.spr "&%s" res_val in
       let name = Com.get_normal_var (Pos.unmark m_vn) in
       let d_fun =
-        D.dfun "lis_concat_nom_index"
+        D.dfun "lis_concaccess"
           [
             d_irdata;
             D.ddirect (D.dinstr (Pp.spr "\"%s\"" name));
@@ -564,7 +564,7 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
           let name = Com.get_normal_var (Pos.unmark m_vn) in
           let set_vars, conc_d_fun =
             let ei = generate_c_expr i in
-            let conc_fn = Pp.spr "lis_concat_nom_index_var" in
+            let conc_fn = Pp.spr "lis_concaccess_varinfo" in
             let conc_d_fun =
               D.dfun conc_fn
                 [
@@ -614,7 +614,7 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
           let name = Com.get_normal_var (Pos.unmark m_vn) in
           let set_vars, conc_d_fun =
             let ei = generate_c_expr i in
-            let conc_fn = Pp.spr "lis_concat_nom_index_var" in
+            let conc_fn = Pp.spr "lis_concaccess_varinfo" in
             let conc_d_fun =
               D.dfun conc_fn
                 [
@@ -760,8 +760,8 @@ let generate_var_def_tab (dgfip_flags : Dgfip_options.flags) (var : Com.Var.t)
 
 let generate_conc_def (dgfip_flags : Dgfip_options.flags)
     (m_vn : Com.m_var_name) (m_if : string Pos.marked)
-    (idx_expr : Mir.m_expression) (vidx_opt : Mir.m_expression option)
-    (expr : Mir.m_expression) (oc : Format.formatter) : unit =
+    (idx_expr : Mir.m_expression) (expr : Mir.m_expression)
+    (oc : Format.formatter) : unit =
   let pr form = Format.fprintf oc form in
   pr "@;@[<v 2>{";
   let idx = fresh_c_local "idx" in
@@ -775,24 +775,8 @@ let generate_conc_def (dgfip_flags : Dgfip_options.flags)
   generate_expr_with_res_in dgfip_flags oc idx_def idx_val idx_expr;
   generate_expr_with_res_in dgfip_flags oc res_def res_val expr;
   let name = Com.get_normal_var (Pos.unmark m_vn) in
-  (match vidx_opt with
-  | None ->
-      pr "@;ecris_concat_nom_index(irdata, \"%s\", \"%s\", %s, %s, %s, %s);"
-        name (Pos.unmark m_if) idx_def idx_val res_def res_val
-  | Some ei ->
-      pr "@;@[<v 2>{";
-      let i = fresh_c_local "i" in
-      let i_def = i ^ "_def" in
-      let i_val = i ^ "_val" in
-      pr "@;char %s;@;double %s;@;int %s;" i_def i_val i;
-      generate_expr_with_res_in dgfip_flags oc i_def i_val ei;
-      pr "@;%s = (int)%s;" i i_val;
-      pr
-        "@;\
-         ecris_concat_nom_index_tab(irdata, \"%s\", \"%s\", %s, %s, %s, %s, \
-         %s);"
-        name (Pos.unmark m_if) idx_def idx_val i res_def res_val;
-      pr "@]@;}");
+  pr "@;ecris_concaccess(irdata, \"%s\", \"%s\", %s, %s, %s, %s);" name
+    (Pos.unmark m_if) idx_def idx_val res_def res_val;
   pr "@]@;}"
 
 let generate_event_field_def (dgfip_flags : Dgfip_options.flags)
@@ -863,7 +847,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       | VarAccess v -> generate_var_def dgfip_flags v expr oc
       | TabAccess (v, m_idx) -> generate_var_def_tab dgfip_flags v m_idx expr oc
       | ConcAccess (m_vn, m_if, i) ->
-          generate_conc_def dgfip_flags m_vn m_if i None expr oc
+          generate_conc_def dgfip_flags m_vn m_if i expr oc
       | FieldAccess (i, f, _) ->
           let fn = Pos.unmark f in
           generate_event_field_def dgfip_flags program i fn None expr oc)
@@ -965,8 +949,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                   pr "@;@[<v 2>{";
                   pr
                     "@;\
-                     T_varinfo *info = lis_concat_nom_index_var(irdata, \
-                     \"%s\", \"%s\", %s, %s);"
+                     T_varinfo *info = lis_concaccess_varinfo(irdata, \"%s\", \
+                     \"%s\", %s, %s);"
                     name (Pos.unmark m_if) print_def print_val;
                   pr "@;@[<v 2>if (info != NULL) {";
                   pr "@;print_string(%s, %s, info->%s);" print_std pr_ctx fld;

@@ -121,8 +121,11 @@ CAMLprim value ml_tgv_defined(value mlTgv, value mlCode) {
   T_irdata *tgv = Tgv_val(mlTgv);
   const char *code = String_val(mlCode);
   int def = 0;
+  char res_def = 0;
+  double res_val = 0.0;
   T_varinfo *varinfo = cherche_var(tgv, code);
-  def = lis_varinfo_def(tgv, varinfo);
+  lis_varinfo(tgv, varinfo, &res_def, &res_val);
+  def = (int)res_def;
   CAMLreturn(Val_int(def != 0));
 }
 
@@ -143,8 +146,11 @@ CAMLprim value ml_tgv_get(value mlTgv, value mlCode) {
   T_irdata *tgv = Tgv_val(mlTgv);
   const char *code = String_val(mlCode);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  if (lis_varinfo_def(tgv, varinfo)) {
-    optOut = caml_alloc_some(caml_copy_double(lis_varinfo_val(tgv, varinfo)));
+  char res_def = 0;
+  double res_val = 0.0;
+  lis_varinfo(tgv, varinfo, &res_def, &res_val);
+  if (res_def) {
+    optOut = caml_alloc_some(caml_copy_double(res_val));
   } else {
     optOut = Val_none;
   }
