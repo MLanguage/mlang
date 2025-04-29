@@ -124,6 +124,7 @@ module Var = struct
     cat : CatVar.t;
     is_given_back : bool;
     typ : value_typ option;
+    in_verif : bool;
   }
 
   type scope = Tgv of tgv | Temp of int option | Ref | Arg | Res
@@ -141,6 +142,8 @@ module Var = struct
     | _ ->
         Errors.raise_error
           (Format.sprintf "%s is not a TGV variable" (Pos.unmark v.name))
+
+  let tgv_opt v = match v.scope with Tgv s -> Some s | _ -> None
 
   let name v = v.name
 
@@ -175,7 +178,15 @@ module Var = struct
 
   let cat v = (tgv v).cat
 
-  let is_given_back v = (tgv v).is_given_back
+  let is_given_back v =
+    match tgv_opt v with Some s -> s.is_given_back | None -> false
+
+  let is_base v =
+    match tgv_opt v with
+    | Some s when s.cat = Computed { is_base = true } -> true
+    | _ -> false
+
+  let in_verif v = (tgv v).in_verif
 
   let loc_tgv v =
     match v.loc with
@@ -214,12 +225,23 @@ module Var = struct
   let new_tgv ~(name : string Pos.marked) ~(is_table : int option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
-      ~(cat : CatVar.t) ~(typ : value_typ option) : t =
+      ~(cat : CatVar.t) ~(typ : value_typ option) ~(in_verif : bool) : t =
     {
       name;
       id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc cat);
-      scope = Tgv { is_table; alias; descr; attrs; cat; is_given_back; typ };
+      scope =
+        Tgv
+          {
+            is_table;
+            alias;
+            descr;
+            attrs;
+            cat;
+            is_given_back;
+            typ;
+            in_verif : bool;
+          };
     }
 
   let new_temp ~(name : string Pos.marked) ~(is_table : int option)
@@ -410,6 +432,36 @@ type 'v expression =
   | NbBloquantes
 
 and 'v m_expression = 'v expression Pos.marked
+
+let get_used_variables (e : 'v expression) : 'v list =
+  let rec get_used_variables_ (e : 'v expression) (acc : 'v list) =
+    match e with
+    | TestInSet (_, (e, _), _) | Unop (_, (e, _)) ->
+        let acc = get_used_variables_ e acc in
+        acc
+    | Comparison (_, (e1, _), (e2, _)) | Binop (_, (e1, _), (e2, _)) ->
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        acc
+    | Index ((var, _), (e, _)) ->
+        let acc = var :: acc in
+        let acc = get_used_variables_ e acc in
+        acc
+    | Conditional ((e1, _), (e2, _), e3) -> (
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        match e3 with None -> acc | Some (e3, _) -> get_used_variables_ e3 acc)
+    | FuncCall (_, args) ->
+        List.fold_left
+          (fun acc (arg, _) -> get_used_variables_ arg acc)
+          acc args
+    | FuncCallLoop _ | Loop _ -> assert false
+    | Var var | Size (var, _) | Attribut ((var, _), _) -> var :: acc
+    | Literal _ | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives
+    | NbBloquantes ->
+        acc
+  in
+  get_used_variables_ e []
 
 module Error = struct
   type typ = Anomaly | Discordance | Information
