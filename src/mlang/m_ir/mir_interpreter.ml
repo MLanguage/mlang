@@ -862,7 +862,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) :
-    float option StrMap.t * StrSet.t =
+    Com.literal StrMap.t * StrSet.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.empty_ctx p in
@@ -873,9 +873,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
       if Com.Var.is_given_back var then
         let fVal =
           let litt = ctx.ctx_tgv.(Com.Var.loc_int var) in
-          match Interp.value_to_literal litt with
-          | Com.Float f -> Some f
-          | Com.Undefined -> None
+          Interp.value_to_literal litt
         in
         StrMap.add name fVal res
       else res
