@@ -312,6 +312,11 @@ struct
 
   let get_var_value (ctx : ctx) (var : Com.Var.t) : value =
     let var, vorg = get_var ctx var in
+    let var =
+      if Com.Var.is_table var then
+        ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 2)
+      else var
+    in
     get_var_value_org ctx var vorg
 
   let set_var_ref (ctx : ctx) (var : Com.Var.t) (ref_val : Com.Var.t * int) :
