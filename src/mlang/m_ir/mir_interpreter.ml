@@ -162,11 +162,11 @@ struct
   let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
       unit =
     let value_inputs =
-      Com.Var.Map.mapi
-        (fun v l ->
+      Com.Var.Map.map
+        (fun l ->
           match l with
           | Com.Undefined -> Undefined
-          | Com.Float f -> Number (N.of_float_input v f))
+          | Com.Float f -> Number (N.of_float_input f))
         inputs
     in
     Com.Var.Map.iter

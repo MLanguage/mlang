@@ -34,7 +34,7 @@ module type NumberInterface = sig
 
   val of_float : float -> t
 
-  val of_float_input : Com.Var.t -> float -> t
+  val of_float_input : float -> t
 
   val to_float : t -> float
   (** Warning: lossy *)
@@ -101,7 +101,7 @@ module RegularFloatNumber : NumberInterface = struct
 
   let of_float f = f
 
-  let of_float_input _ f = f
+  let of_float_input f = f
 
   let to_float f = f
 
@@ -172,7 +172,7 @@ module MPFRNumber : NumberInterface = struct
 
   let of_float f = Mpfrf.of_float f rounding
 
-  let of_float_input _ f = Mpfrf.of_float f rounding
+  let of_float_input f = Mpfrf.of_float f rounding
 
   let to_float f = Mpfrf.to_float ~round:rounding f
 
@@ -237,7 +237,7 @@ module IntervalNumber : NumberInterface = struct
 
   let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
-  let of_float_input (_v : Com.Var.t) (f : float) =
+  let of_float_input (f : float) =
     v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
   let to_float (f : t) : float =
@@ -348,7 +348,7 @@ module RationalNumber : NumberInterface = struct
 
   let of_float f = Mpqf.of_float f
 
-  let of_float_input _ f = Mpqf.of_float f
+  let of_float_input f = Mpqf.of_float f
 
   let to_float f = Mpqf.to_float f
 
@@ -438,7 +438,7 @@ end) : NumberInterface = struct
       (Mpzf.of_float frac_part_scaled)
       (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
 
-  let of_float_input _ (f : float) : t = of_float f
+  let of_float_input (f : float) : t = of_float f
 
   let to_float f =
     let frac_part, int_part = modf f in
