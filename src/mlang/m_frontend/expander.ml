@@ -75,6 +75,9 @@ module Err = struct
   let constant_cannot_have_a_size pos =
     Errors.raise_spanned_error "constant cannot have a size" pos
 
+  let constant_cannot_have_a_name pos =
+    Errors.raise_spanned_error "constant cannot have a name" pos
+
   let constant_forbidden_as_lvalue pos =
     Errors.raise_spanned_error "constant forbidden as lvalue" pos
 
@@ -665,6 +668,10 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       match expand_access const_map loop_map (Pos.same a m_expr) with
       | ExpLiteral _ -> Err.constant_cannot_have_a_size a_pos
       | ExpAccess m_a -> Pos.same (Size m_a) m_expr)
+  | IsVariable (Pos.Mark (a, a_pos), name) -> (
+      match expand_access const_map loop_map (Pos.same a m_expr) with
+      | ExpLiteral _ -> Err.constant_cannot_have_a_name a_pos
+      | ExpAccess m_a -> Pos.same (IsVariable (m_a, name)) m_expr)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
       m_expr

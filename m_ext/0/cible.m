@@ -180,6 +180,52 @@ iterer : variable I : 0..4 increment 1 : dans (
 afficher_erreur nom(TUTU) "[7] = " (TUTU[7]) "\n";
 afficher_erreur indenter(-2) "sortie test_tab\n";
 
+cible test_est_variable:
+application: iliad;
+variables_temporaires: A0, AA tableau[25], AKK3, X;
+afficher_erreur "entree test_est_variable\n" indenter(2);
+X = 3;
+afficher_erreur
+  nom(V_ANREV) ": V_ANREV " (est_variable(V_ANREV, V_ANREV))
+  ", ANREV " (est_variable(V_ANREV, ANREV))
+  ", PROUT " (est_variable(V_ANREV, PROUT)) "\n";
+afficher_erreur
+  nom(TUTU) ": TUTU " (est_variable(TUTU, TUTU))
+  ", PROUT " (est_variable(TUTU, PROUT)) "\n";
+afficher_erreur
+  nom(TUTU) "[" (X) "]: TUTU3 " (est_variable(TUTU[X], TUTU3))
+  ", PROUT " (est_variable(TUTU[X], PROUT)) "\n";
+afficher_erreur
+  nom(A0) ": A0 " (est_variable(A0, A0))
+  ", PROUT " (est_variable(A0, PROUT)) "\n";
+afficher_erreur
+  nom(AA) ": AA " (est_variable(AA, AA))
+  ", PROUT " (est_variable(AA, PROUT)) "\n";
+afficher_erreur
+  nom(AA) "[" (X) "]: AA03 " (est_variable(AA[X], AA03))
+  ", PROUT " (est_variable(AA[X], PROUT)) "\n";
+afficher_erreur
+  nom(A[KKK: X]) ": AKK3 " (est_variable(A[KKK: X], AKK3))
+  ", PROUT " (est_variable(A[KKK: X], PROUT)) "\n";
+iterer
+: variable VAR
+: V_ANREV, A0, AA03, AKK3
+: dans (
+  afficher_erreur nom(VAR) ": "
+  "V_ANREV " (est_variable(VAR, V_ANREV))
+  ", ANREV " (est_variable(VAR, ANREV))
+  ", TUTU " (est_variable(VAR, TUTU))
+  ", A0 " (est_variable(VAR, A0))
+  ", AA03 " (est_variable(VAR, AA03))
+  ", AKK3 " (est_variable(VAR, AKK3))
+  ", PROUT " (est_variable(VAR, PROUT)) "\n";
+)
+afficher_erreur
+  nom(champ_evenement(0, code)) ": "
+  "RESULTAT " (est_variable(champ_evenement(0, code), RESULTAT))
+  ", PROUT " (est_variable(champ_evenement(0, code), PROUT)) "\n";
+afficher_erreur indenter(-2) "sortie test_est_variable\n";
+
 cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
@@ -188,6 +234,7 @@ variables_temporaires: U0, UUU tableau[5], U1;
 #calculer cible test_tmpref;
 calculer cible test_aff;
 calculer cible test_tab;
+calculer cible test_est_variable;
 
 cible enchainement_primitif:
 application: iliad;

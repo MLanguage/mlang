@@ -472,6 +472,7 @@ and 'v expression =
   | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v m_access * string Pos.marked
   | Size of 'v m_access
+  | IsVariable of 'v m_access * string Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -702,6 +703,9 @@ and expr_map_var f = function
       let m_access' = Pos.map (access_map_var f) m_access in
       Attribut (m_access', attr)
   | Size m_access -> Size (Pos.map (access_map_var f) m_access)
+  | IsVariable (m_access, name) ->
+      let m_access' = Pos.map (access_map_var f) m_access in
+      IsVariable (m_access', name)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
@@ -1001,6 +1005,10 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "taille(%a)"
         (format_access form_var form_expr)
         (Pos.unmark m_acc)
+  | IsVariable (m_acc, name) ->
+      Format.fprintf fmt "est_variable(%a, %s)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc) (Pos.unmark name)
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"

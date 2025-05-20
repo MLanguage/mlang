@@ -313,8 +313,7 @@ struct
   let get_var_value (ctx : ctx) (var : Com.Var.t) : value =
     let var, vorg = get_var ctx var in
     let var =
-      if Com.Var.is_table var then
-        ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 2)
+      if Com.Var.is_table var then ctx.ctx_tab_map.(Com.Var.loc_tab_idx var + 2)
       else var
     in
     get_var_value_org ctx var vorg
@@ -636,6 +635,17 @@ struct
                 let v' = fst @@ get_var ctx v in
                 Number (N.of_float @@ float @@ Com.Var.size v')
             | None -> Undefined)
+        | IsVariable (m_acc, m_name) -> (
+            match get_access_var ctx (Pos.unmark m_acc) with
+            | Some v -> (
+                let v' = fst @@ get_var ctx v in
+                let name = Pos.unmark m_name in
+                if Com.Var.name_str v' = name then Number (N.one ())
+                else
+                  match Com.Var.alias v' with
+                  | Some m_a when Pos.unmark m_a = name -> Number (N.one ())
+                  | _ -> Number (N.zero ()))
+            | None -> Number (N.zero ()))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))

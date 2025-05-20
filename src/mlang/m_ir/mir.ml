@@ -197,6 +197,10 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       let a' = expand_functions_access (Pos.unmark m_a) in
       let e' = Size (Pos.same a' m_a) in
       Pos.same e' e
+  | IsVariable (m_a, name) ->
+      let a' = expand_functions_access (Pos.unmark m_a) in
+      let e' = IsVariable (Pos.same a' m_a, name) in
+      Pos.same e' e
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
   | FuncCallLoop _ | Loop _ | NbCategory _ ->
       e

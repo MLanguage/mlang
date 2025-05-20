@@ -59,6 +59,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
+%token IS_VARIABLE
 
 %token EOF
 
@@ -1272,6 +1273,10 @@ function_call:
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
+| IS_VARIABLE LPAREN access = with_pos(var_access)
+  COMMA name = symbol_with_pos RPAREN {
+    IsVariable (access, name)
+  } 
 | s = with_pos(function_name) LPAREN RPAREN {
     FuncCall (parse_function_name s, [])
   }

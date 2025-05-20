@@ -744,6 +744,23 @@ extern void ecris_concaccess(
 extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
 extern void pr_out_var(T_irdata *irdata, char *nom);
 extern void pr_err_var(T_irdata *irdata, char *nom);
+
+extern char est_variable(
+  T_varinfo *info, char *nomCmp, char *res_def, double *res_val
+);
+
+extern char est_variable_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+);
+
+extern char est_variable_concaccess(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+);
+
 |}
 
 let gen_decl_functions fmt (cprog : Mir.program) =
@@ -1874,6 +1891,41 @@ void pr_out_var(T_irdata *irdata, char *nom) {
 void pr_err_var(T_irdata *irdata, char *nom) {
   if (irdata == NULL) return;
   pr_var(&(irdata->ctx_pr_err), irdata, nom);
+}
+
+char est_variable(T_varinfo *info, char *nomCmp, char *res_def, double *res_val) {
+  *res_def = 1;
+  if (info == NULL || nomCmp == NULL) {
+    *res_val = 0.0;
+    return *res_def;
+  }
+  if (
+    strcmp(info->name, nomCmp) == 0
+    || (info->alias != NULL && strcmp(info->alias, nomCmp) == 0)
+  ) {
+    *res_val = 1.0;
+    return *res_def;
+  }
+  *res_val = 0.0;
+  return *res_def;
+}
+
+char est_variable_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  return est_variable(info, nomCmp, res_def, res_val);
+}
+
+char est_variable_concaccess(
+  T_irdata *irdata,
+  char *nom, const char *fmt, char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+) {
+  T_varinfo *info = lis_concaccess_varinfo(irdata, nom, fmt, idx_def, idx_val);
+  return est_variable(info, nomCmp, res_def, res_val);
 }
 
 #ifdef FLG_TRACE

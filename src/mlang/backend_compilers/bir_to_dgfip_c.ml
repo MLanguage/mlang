@@ -680,6 +680,136 @@ and generate_c_expr (e : Mir.expression Pos.marked) : D.expression_composition =
           let def_test = D.dinstr res_def in
           let value_comp = D.dinstr res_val in
           D.build_transitive_composition { set_vars; def_test; value_comp })
+  | IsVariable (m_acc, m_name) -> (
+      match Pos.unmark m_acc with
+      | VarAccess v ->
+          let ptr = VID.gen_info_ptr v in
+          let nameCmp = Pos.unmark m_name in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let d_fun =
+            D.dfun "est_variable"
+              [
+                D.ddirect @@ D.dinstr ptr;
+                D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                D.ddirect @@ D.dinstr res_def_ptr;
+                D.ddirect @@ D.dinstr res_val_ptr;
+              ]
+          in
+          let set_vars =
+            [
+              (D.Def, res_def, d_fun);
+              (D.Val, res_val, D.ddirect (D.dinstr res_val));
+            ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | TabAccess (v, m_i) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let nameCmp = Pos.unmark m_name in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let set_vars, d_fun =
+            let ei = generate_c_expr m_i in
+            let d_fun =
+              D.dfun "est_variable_tabaccess"
+                [
+                  d_irdata;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
+                  ei.def_test;
+                  ei.value_comp;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                  D.ddirect @@ D.dinstr res_def_ptr;
+                  D.ddirect @@ D.dinstr res_val_ptr;
+                ]
+            in
+            (ei.set_vars, d_fun)
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | ConcAccess (m_vn, m_if, m_i) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let name = Com.get_normal_var (Pos.unmark m_vn) in
+          let nameCmp = Pos.unmark m_name in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let set_vars, d_fun =
+            let ei = generate_c_expr m_i in
+            let d_fun =
+              D.dfun "est_variable_concaccess"
+                [
+                  d_irdata;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" name;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" (Pos.unmark m_if);
+                  ei.def_test;
+                  ei.value_comp;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                  D.ddirect @@ D.dinstr res_def_ptr;
+                  D.ddirect @@ D.dinstr res_val_ptr;
+                ]
+            in
+            (ei.set_vars, d_fun)
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp }
+      | FieldAccess (ie, f, _) ->
+          let d_irdata = D.ddirect (D.dinstr "irdata") in
+          let set_vars, evt_d_fun =
+            let e = generate_c_expr ie in
+            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+          in
+          let nameCmp = Pos.unmark m_name in
+          let res = fresh_c_local "res" in
+          let res_def = Pp.spr "%s_def" res in
+          let res_val = Pp.spr "%s_val" res in
+          let res_def_ptr = Pp.spr "&%s" res_def in
+          let res_val_ptr = Pp.spr "&%s" res_val in
+          let d_fun =
+            D.dfun "est_variable"
+              [
+                D.ddirect evt_d_fun;
+                D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                D.ddirect @@ D.dinstr res_def_ptr;
+                D.ddirect @@ D.dinstr res_val_ptr;
+              ]
+          in
+          let set_vars =
+            set_vars
+            @ [
+                (D.Def, res_def, d_fun);
+                (D.Val, res_val, D.ddirect (D.dinstr res_val));
+              ]
+          in
+          let def_test = D.dinstr res_def in
+          let value_comp = D.dinstr res_val in
+          D.build_transitive_composition { set_vars; def_test; value_comp })
   | NbAnomalies ->
       let def_test = D.dinstr "1.0" in
       let value_comp = D.dinstr "nb_anomalies(irdata)" in

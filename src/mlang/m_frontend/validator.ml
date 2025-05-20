@@ -1190,7 +1190,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
           | None -> Err.unknown_event_field f_name f_pos);
           fold_aux acc e env)
-  | Size (Pos.Mark (access, _pos)) -> (
+  | Size (Pos.Mark (access, _)) | IsVariable (Pos.Mark (access, _), _) -> (
       match access with
       | VarAccess m_v -> fold_var m_v Both env acc
       | TabAccess (m_v, m_i) ->
@@ -2574,6 +2574,15 @@ let eval_expr_verif (prog : program) (verif : verif)
         let id = StrMap.find var_name prog.prog_vars in
         let var = IntMap.find id prog.prog_dict in
         Some (float @@ Com.Var.size @@ var)
+    | IsVariable (Pos.Mark (VarAccess m_v, _), m_name) -> (
+        let var_name = Com.get_normal_var @@ Pos.unmark m_v in
+        let id = StrMap.find var_name prog.prog_vars in
+        let var = IntMap.find id prog.prog_dict in
+        if Pos.unmark m_name = Com.Var.name_str var then Some 1.0
+        else
+          match Com.Var.alias var with
+          | Some m_alias when Pos.unmark m_alias = Pos.unmark m_name -> Some 1.0
+          | _ -> Some 0.0)
     | NbCategory cs ->
         let cats = mast_to_catvars cs prog.prog_var_cats in
         let sum =
@@ -2700,7 +2709,7 @@ let eval_expr_verif (prog : program) (verif : verif)
             in
             Some (if res = positive then 1.0 else 0.0))
     | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
-    | FuncCallLoop _ | Loop _ | Attribut _ | Size _ ->
+    | FuncCallLoop _ | Loop _ | Attribut _ | Size _ | IsVariable _ ->
         assert false
   in
   aux expr

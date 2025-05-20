@@ -506,7 +506,10 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Size (Pos.Mark (FieldAccess (me, _, _), _))
       | Com.Attribut (Pos.Mark (TabAccess (_, me), _), _)
       | Com.Attribut (Pos.Mark (ConcAccess (_, _, me), _), _)
-      | Com.Attribut (Pos.Mark (FieldAccess (me, _, _), _), _) ->
+      | Com.Attribut (Pos.Mark (FieldAccess (me, _, _), _), _)
+      | Com.IsVariable (Pos.Mark (TabAccess (_, me), _), _)
+      | Com.IsVariable (Pos.Mark (ConcAccess (_, _, me), _), _)
+      | Com.IsVariable (Pos.Mark (FieldAccess (me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
@@ -540,8 +543,9 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           (max nb nb', max sz sz', max nbRef nbRef', tdata)
       | Com.Literal _
       | Com.Var (VarAccess _)
-      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.NbAnomalies
-      | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
+      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.IsVariable _
+      | Com.NbAnomalies | Com.NbDiscordances | Com.NbInformatives
+      | Com.NbBloquantes ->
           (0, 0, 0, tdata)
       | Com.FuncCallLoop _ | Com.Loop _ -> assert false
     in
@@ -654,6 +658,22 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             let e' = translate_expression p dict e in
             let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
             Size (Pos.mark (FieldAccess (e', f, i)) pos))
+    | IsVariable (Pos.Mark (access, pos), m_name) -> (
+        match access with
+        | VarAccess m_id -> (
+            let var = get_var dict m_id in
+            if Com.Var.is_ref var then
+              IsVariable (Pos.same (VarAccess var) m_id, m_name)
+            else
+              let name = Pos.unmark m_name in
+              if Com.Var.name_str var = name then Literal (Float 1.0)
+              else
+                match Com.Var.alias var with
+                | Some m_a when Pos.unmark m_a = name -> Literal (Float 1.0)
+                | _ -> Literal (Float 0.0))
+        | _ ->
+            let access' = translate_access p dict access in
+            IsVariable (Pos.mark access' pos, m_name))
     | NbAnomalies -> NbAnomalies
     | NbDiscordances -> NbDiscordances
     | NbInformatives -> NbInformatives

@@ -182,11 +182,8 @@ let parse_string (s : string) : string =
 
 let parse_index_format (m_s : string Pos.marked) : string Pos.marked =
   let s = Pos.unmark m_s in
-  let len = String.length s in
-  for i = 0 to len - 1 do
-    if s.[i] <> '0' then
-      Errors.raise_spanned_error "bad index format, must be 0..." (Pos.get m_s)
-  done;
+  if not (String.equal (String.uppercase_ascii s) s) then
+    Errors.raise_spanned_error "bad index format" (Pos.get m_s);
   m_s
 
 let parse_if_then_etc l =

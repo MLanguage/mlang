@@ -292,6 +292,7 @@ and 'v expression =
   | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v m_access * string Pos.marked
   | Size of 'v m_access
+  | IsVariable of 'v m_access * string Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
