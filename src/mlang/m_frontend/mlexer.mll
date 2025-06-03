@@ -33,6 +33,7 @@ rule token = parse
       "unexpected end of comment"
       (mk_lexbuf_pos lexbuf)
   }
+| '.' { DOT }
 | ';' { SEMICOLON }
 | ':' { COLON }
 | ',' { COMMA }
@@ -87,6 +88,7 @@ rule token = parse
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
     | "erreur" -> ERROR
+    | "espace_variables" -> VARIABLE_SPACE
     | "est_variable" -> IS_VARIABLE
     | "et" -> AND
     | "evenement" -> EVENT

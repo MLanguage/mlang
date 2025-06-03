@@ -188,6 +188,12 @@ let format_verif_domain fmt (vd : verif_domain_decl) =
   in
   format_domain pp_data fmt vd
 
+let format_variable_space fmt (vsd : Com.variable_space) =
+  Format.fprintf fmt "%s : categorie %a%s;\n" (Pos.unmark vsd.vs_name)
+    (Com.CatVar.LocMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Com.CatVar.pp_loc))
+    vsd.vs_cats
+    (if vsd.vs_by_default then " : par_defaut" else "")
+
 let format_source_file_item fmt (i : source_file_item) =
   match i with
   | Application app ->
@@ -212,6 +218,8 @@ let format_source_file_item fmt (i : source_file_item) =
   | RuleDomDecl rd -> Format.fprintf fmt "rule domain %a;" format_rule_domain rd
   | VerifDomDecl vd ->
       Format.fprintf fmt "verif domain %a;" format_verif_domain vd
+  | VariableSpaceDecl vsd ->
+      Format.fprintf fmt "espace_variables %a;" format_variable_space vsd
 
 let format_source_file fmt (f : source_file) =
   Pp.list_endline (Pp.unmark format_source_file_item) fmt f

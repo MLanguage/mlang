@@ -1,5 +1,7 @@
 application iliad;
 
+espace_variables PROUT : categorie saisie, calculee, base;
+
 V_ANCSDED : saisie contexte
   classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 0
   restituee

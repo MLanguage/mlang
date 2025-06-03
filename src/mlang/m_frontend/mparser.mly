@@ -42,7 +42,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
-%token RANGE
+%token RANGE DOT
 
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
@@ -59,7 +59,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token IS_VARIABLE
+%token IS_VARIABLE VARIABLE_SPACE
 
 %token EOF
 
@@ -108,6 +108,7 @@ source_file_item:
 | el = event_decl_etc { el }
 | crl = rule_domain_decl_etc { crl }
 | cvl = verif_domain_decl_etc { cvl }
+| vsl = variable_space_decl_etc { vsl }
 | ol = output_etc { ol }
 | rl = rule_etc { rl }
 | vl = verification_etc { vl }
@@ -143,7 +144,7 @@ event_decl:
 | EVENT COLON el = separated_nonempty_list(COLON, event_field) SEMICOLON { el }
 
 rule_domain_decl_etc:
-| cr =with_pos(rule_domain_decl) l = with_pos(symbol_colon_etc)* { cr :: l }
+| cr = with_pos(rule_domain_decl) l = with_pos(symbol_colon_etc)* { cr :: l }
 
 rule_domain_decl:
 | DOMAIN RULE rdom_params = separated_nonempty_list(COLON, with_pos(rdom_param))
@@ -396,6 +397,62 @@ input_variable:
       input_description = descr;
     }
   }
+
+variable_space_decl_etc:
+| vs = with_pos(variable_space_decl) l = with_pos(symbol_colon_etc)* { vs :: l }
+
+variable_space_decl:
+| VARIABLE_SPACE m_name = symbol_with_pos COLON
+  vs_params = separated_nonempty_list(COLON, with_pos(vs_param)) SEMICOLON {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (co, pdo) = function
+    | Pos.Mark ((Some cats, _), pos) ->
+        if co = None then Some cats, pdo
+        else err "variable space categories are already specified" pos
+    | Pos.Mark ((_, Some ()), pos) ->
+        if pdo = None then co, Some ()
+        else err "by_default is already calculated" pos
+    | Pos.Mark ((_, _), _) -> assert false
+    in
+    let init = None, None in
+    let co, pdo = List.fold_left fold init vs_params in
+    let decl = Com.{
+      vs_id = -1;
+      vs_name = m_name;
+      vs_cats = (
+        match co with
+        | None ->
+            let msg = Pp.spr "a category must be specified" in
+            Errors.raise_spanned_error msg (Pos.get m_name)
+        | Some cats -> cats
+      );
+      vs_by_default = (match pdo with None -> false | _ -> true);
+    } in
+    VariableSpaceDecl decl
+  }
+
+vs_cat:
+| INPUT { Com.CatVar.LocInput }
+| COMPUTED { Com.CatVar.LocComputed }
+| BASE { Com.CatVar.LocBase }
+
+vs_param:
+| CATEGORY vs_cats = separated_nonempty_list(COMMA, with_pos(vs_cat)) {
+    let rec check map = function
+    | (Pos.Mark (lct, pos) as m_lct) :: l ->
+        if Com.CatVar.LocMap.mem lct map then (
+          let msg =
+            Pp.spr "category \"%a\" already specified" Com.CatVar.pp_loc lct
+          in
+          Errors.raise_spanned_error msg pos
+        );
+        check (Com.CatVar.LocMap.add lct m_lct map) l
+    | [] -> map
+    in
+    let cats = check Com.CatVar.LocMap.empty vs_cats in
+    Some cats, None
+  }
+| BY_DEFAULT { None, Some () }
 
 rule_etc:
 | RULE name = symbol_list_with_pos COLON
@@ -942,17 +999,29 @@ for_formula:
 | FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
 var_access:
-| s = symbol_with_pos m_i_opt = with_pos(brackets)? {
-    let m_v = Pos.map (parse_variable $sloc) s in
+| m_sp = symbol_with_pos DOT v = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_v = Pos.map (parse_variable $sloc) v in
     match m_i_opt with
-    | None -> Com.VarAccess m_v
-    | Some m_i -> Com.TabAccess (m_v, m_i)
+    | None -> Com.VarAccess (m_sp, -1, m_v)
+    | Some m_i -> Com.TabAccess (m_sp, -1, m_v, m_i)
+  }
+| v = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_v = Pos.map (parse_variable $sloc) v in
+    match m_i_opt with
+    | None -> Com.VarAccess (Pos.without "", -1, m_v)
+    | Some m_i -> Com.TabAccess (Pos.without "", -1, m_v, m_i)
+  }
+| m_sp = symbol_with_pos DOT v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
+    Com.ConcAccess (m_sp, -1, m_v, idxFmt, idx)
   }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
-    Com.ConcAccess (m_v, idxFmt, idx)
+    Com.ConcAccess (Pos.without "", -1, m_v, idxFmt, idx)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
@@ -1135,17 +1204,52 @@ enumeration_item:
     let pos = mk_position $sloc in
     Com.VarValue (Pos.mark (Com.FieldAccess (idx, field, -1)) pos)
   }
+| m_sp = symbol_with_pos DOT v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
+    let pos = mk_position $sloc in
+    let access = Com.ConcAccess (m_sp, -1, m_v, idxFmt, idx) in
+    Com.VarValue (Pos.mark access pos)
+  }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
     let pos = mk_position $sloc in
-    Com.VarValue (Pos.mark (Com.ConcAccess (m_v, idxFmt, idx)) pos)
+    let access = Com.ConcAccess (Pos.without "", -1, m_v, idxFmt, idx) in
+    Com.VarValue (Pos.mark access pos)
+  }
+| m_sp = symbol_with_pos DOT v = symbol_with_pos
+  LBRACKET idx = with_pos(sum_expression) RBRACKET {
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let pos = mk_position $sloc in
+    let access = Com.TabAccess (m_sp, -1, m_v, idx) in
+    Com.VarValue (Pos.mark access pos)
+  }
+| v = symbol_with_pos LBRACKET idx = with_pos(sum_expression) RBRACKET {
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let pos = mk_position $sloc in
+    let access = Com.TabAccess (Pos.without "", -1, m_v, idx) in
+    Com.VarValue (Pos.mark access pos)
+  }
+| m_sp = symbol_with_pos DOT m_s = symbol_with_pos {
+    let pos = mk_position $sloc in
+    let s, s_pos = Pos.to_couple m_s in
+    match parse_variable_or_int $sloc s with
+    | ParseVar v ->
+        let access = Com.VarAccess (m_sp, -1, Pos.mark v pos) in
+        Com.VarValue (Pos.mark access pos)
+    | ParseInt _ ->
+        let msg = "numeric value used as a variable" in
+        Errors.raise_spanned_error msg s_pos
   }
 | s = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (Pos.mark (Com.VarAccess (Pos.mark v pos)) pos)
+    | ParseVar v ->
+        let access = Com.VarAccess (Pos.without "", -1, Pos.mark v pos) in
+        Com.VarValue (Pos.mark access pos)
     | ParseInt i -> Com.FloatValue (Pos.mark (float_of_int i) pos)
   }
 
@@ -1216,19 +1320,36 @@ factor:
   COMMA field = symbol_with_pos RPAREN {
     Var (FieldAccess (m_idx, field, -1))
   }
+| m_sp = symbol_with_pos DOT v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
+  COLON idx = with_pos(sum_expression) RBRACKET {
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let idxFmt = parse_index_format idxFmt in
+    Var (ConcAccess (m_sp, -1, m_v, idxFmt, idx))
+  }
 | v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
   COLON idx = with_pos(sum_expression) RBRACKET {
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let idxFmt = parse_index_format idxFmt in
-    Var (ConcAccess (m_v, idxFmt, idx))
+    Var (ConcAccess (Pos.without "", -1, m_v, idxFmt, idx))
+  }
+| m_sp = symbol_with_pos DOT s = symbol_with_pos m_i = with_pos(brackets) {
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark s)) s in
+    Var (TabAccess (m_sp, -1, m_v, m_i))
   }
 | s = symbol_with_pos m_i = with_pos(brackets) {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark s)) s in
-    Var (TabAccess (m_v, m_i))
+    Var (TabAccess (Pos.without "", -1, m_v, m_i))
+  }
+| m_sp = symbol_with_pos DOT m_a = with_pos(factor_atom) {
+    match Pos.unmark m_a with
+    | Com.AtomVar v -> Com.Var (VarAccess (m_sp, -1, v))
+    | Com.AtomLiteral _ ->
+        let msg = "numeric value used as a variable" in
+        Errors.raise_spanned_error msg (Pos.get m_a)
   }
 | a = factor_atom {
     match a with
-    | Com.AtomVar v -> Com.Var (VarAccess v)
+    | Com.AtomVar v -> Com.Var (VarAccess (Pos.without "", -1, v))
     | Com.AtomLiteral l -> Com.Literal l
   }
 | LPAREN e = expression RPAREN { e }

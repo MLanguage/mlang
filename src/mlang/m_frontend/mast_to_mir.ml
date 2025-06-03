@@ -188,7 +188,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
         nb_input = nb_loc Com.CatVar.LocInput;
         nb_base = nb_loc Com.CatVar.LocBase;
         nb_vars = StrMap.cardinal prog.prog_vars;
-        sz_calculated = sz_loc Com.CatVar.LocComputed;
+        sz_computed = sz_loc Com.CatVar.LocComputed;
         sz_input = sz_loc Com.CatVar.LocInput;
         sz_base = sz_loc Com.CatVar.LocBase;
         sz_vars;
@@ -986,6 +986,8 @@ let translate (p : Validator.program) : Mir.program =
       program_dict;
       program_vars;
       program_alias;
+      program_var_spaces = p.prog_var_spaces;
+      program_var_spaces_idx = p.prog_var_spaces_idx;
       program_event_fields = p.prog_event_fields;
       program_event_field_idxs = p.prog_event_field_idxs;
       program_rules;

@@ -66,7 +66,37 @@ module CatVar = struct
           Errors.raise_spanned_error "invalid variable category" id_pos
   end
 
-  type loc = LocComputed | LocBase | LocInput
+  type loc = LocInput | LocComputed | LocBase
+
+  let pp_loc oc = function
+    | LocInput -> Pp.fpr oc "input"
+    | LocComputed -> Pp.fpr oc "computed"
+    | LocBase -> Pp.fpr oc "base"
+
+  module LocSet = struct
+    include SetExt.Make (struct
+      type t = loc
+
+      let compare = Stdlib.compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = pp_loc) (_ : unit) (fmt : Format.formatter)
+        (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module LocMap = struct
+    include MapExt.Make (struct
+      type t = loc
+
+      let compare = Stdlib.compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = pp_loc) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
 
   type data = {
     id : t;
@@ -391,6 +421,13 @@ type verif_domain_data = {
 
 type verif_domain = verif_domain_data domain
 
+type variable_space = {
+  vs_id : int;
+  vs_name : string Pos.marked;
+  vs_cats : CatVar.loc Pos.marked CatVar.LocMap.t;
+  vs_by_default : bool;
+}
+
 type literal = Float of float | Undefined
 
 (** Unary operators *)
@@ -428,13 +465,13 @@ type var_name = Normal of string | Generic of var_name_generic
 
 type m_var_name = var_name Pos.marked
 
-type 'v access =
-  | VarAccess of 'v
-  | TabAccess of 'v * 'v m_expression
-  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
-  | FieldAccess of 'v m_expression * string Pos.marked * int
+type ('s, 'v) access =
+  | VarAccess of 's * 'v
+  | TabAccess of 's * 'v * ('s, 'v) m_expression
+  | ConcAccess of 's * m_var_name * string Pos.marked * ('s, 'v) m_expression
+  | FieldAccess of ('s, 'v) m_expression * string Pos.marked * int
 
-and 'v m_access = 'v access Pos.marked
+and ('s, 'v) m_access = ('s, 'v) access Pos.marked
 
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
 
@@ -449,36 +486,40 @@ and 'v loop_variables =
   | ValueSets of 'v loop_variable list
   | Ranges of 'v loop_variable list
 
-and 'v set_value =
+and ('s, 'v) set_value =
   | FloatValue of float Pos.marked
-  | VarValue of 'v m_access
+  | VarValue of ('s, 'v) m_access
   | IntervalValue of int Pos.marked * int Pos.marked
 
-and 'v expression =
-  | TestInSet of bool * 'v m_expression * 'v set_value list
+and ('s, 'v) expression =
+  | TestInSet of bool * ('s, 'v) m_expression * ('s, 'v) set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Unop of unop * 'v m_expression
-  | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
-  | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
-  | FuncCall of func Pos.marked * 'v m_expression list
+  | Unop of unop * ('s, 'v) m_expression
+  | Comparison of
+      comp_op Pos.marked * ('s, 'v) m_expression * ('s, 'v) m_expression
+  | Binop of binop Pos.marked * ('s, 'v) m_expression * ('s, 'v) m_expression
+  | Conditional of
+      ('s, 'v) m_expression
+      * ('s, 'v) m_expression
+      * ('s, 'v) m_expression option
+  | FuncCall of func Pos.marked * ('s, 'v) m_expression list
   | FuncCallLoop of
-      func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
+      func Pos.marked * 'v loop_variables Pos.marked * ('s, 'v) m_expression
   | Literal of literal
-  | Var of 'v access
-  | Loop of 'v loop_variables Pos.marked * 'v m_expression
+  | Var of ('s, 'v) access
+  | Loop of 'v loop_variables Pos.marked * ('s, 'v) m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v m_access * string Pos.marked
-  | Size of 'v m_access
-  | IsVariable of 'v m_access * string Pos.marked
+  | Attribut of ('s, 'v) m_access * string Pos.marked
+  | Size of ('s, 'v) m_access
+  | IsVariable of ('s, 'v) m_access * string Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
 
-and 'v m_expression = 'v expression Pos.marked
+and ('s, 'v) m_expression = ('s, 'v) expression Pos.marked
 
 module Error = struct
   type typ = Anomaly | Discordance | Information
@@ -546,65 +587,66 @@ type print_std = StdOut | StdErr
 
 type print_info = Name | Alias
 
-type 'v print_arg =
+type ('s, 'v) print_arg =
   | PrintString of string
-  | PrintAccess of print_info * 'v access Pos.marked
-  | PrintIndent of 'v m_expression
-  | PrintExpr of 'v m_expression * int * int
+  | PrintAccess of print_info * ('s, 'v) access Pos.marked
+  | PrintIndent of ('s, 'v) m_expression
+  | PrintExpr of ('s, 'v) m_expression * int * int
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl =
-  | VarDecl of 'v access Pos.marked * 'v m_expression
-  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
+type ('s, 'v) formula_decl =
+  | VarDecl of ('s, 'v) access Pos.marked * ('s, 'v) m_expression
+  | EventFieldRef of ('s, 'v) m_expression * string Pos.marked * int * 'v
 
-type 'v formula =
-  | SingleFormula of 'v formula_decl
-  | MultipleFormulaes of 'v formula_loop * 'v formula_decl
+type ('s, 'v) formula =
+  | SingleFormula of ('s, 'v) formula_decl
+  | MultipleFormulaes of 'v formula_loop * ('s, 'v) formula_decl
 
-type ('v, 'e) instruction =
-  | Affectation of 'v formula Pos.marked
+type ('s, 'v, 'e) instruction =
+  | Affectation of ('s, 'v) formula Pos.marked
   | IfThenElse of
-      'v m_expression
-      * ('v, 'e) m_instruction list
-      * ('v, 'e) m_instruction list
+      ('s, 'v) m_expression
+      * ('s, 'v, 'e) m_instruction list
+      * ('s, 'v, 'e) m_instruction list
   | WhenDoElse of
-      ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
-      * ('v, 'e) m_instruction list Pos.marked
+      (('s, 'v) m_expression * ('s, 'v, 'e) m_instruction list * Pos.t) list
+      * ('s, 'v, 'e) m_instruction list Pos.marked
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
+  | ComputeVerifs of string Pos.marked list Pos.marked * ('s, 'v) m_expression
   | ComputeTarget of string Pos.marked * 'v list
-  | VerifBlock of ('v, 'e) m_instruction list
-  | Print of print_std * 'v print_arg Pos.marked list
+  | VerifBlock of ('s, 'v, 'e) m_instruction list
+  | Print of print_std * ('s, 'v) print_arg Pos.marked list
   | Iterate of
       'v
       * 'v list
-      * (Pos.t CatVar.Map.t * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * (Pos.t CatVar.Map.t * ('s, 'v) m_expression) list
+      * ('s, 'v, 'e) m_instruction list
   | Iterate_values of
       'v
-      * ('v m_expression * 'v m_expression * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * (('s, 'v) m_expression * ('s, 'v) m_expression * ('s, 'v) m_expression)
+        list
+      * ('s, 'v, 'e) m_instruction list
   | Restore of
       'v list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
-      * 'v m_expression list
-      * ('v * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * ('v * Pos.t CatVar.Map.t * ('s, 'v) m_expression) list
+      * ('s, 'v) m_expression list
+      * ('v * ('s, 'v) m_expression) list
+      * ('s, 'v, 'e) m_instruction list
   | ArrangeEvents of
-      ('v * 'v * 'v m_expression) option
-      * ('v * 'v m_expression) option
-      * 'v m_expression option
-      * ('v, 'e) m_instruction list
+      ('v * 'v * ('s, 'v) m_expression) option
+      * ('v * ('s, 'v) m_expression) option
+      * ('s, 'v) m_expression option
+      * ('s, 'v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
 
-and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+and ('s, 'v, 'e) m_instruction = ('s, 'v, 'e) instruction Pos.marked
 
-type ('v, 'e) target = {
+type ('s, 'v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
@@ -614,221 +656,223 @@ type ('v, 'e) target = {
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
-  target_prog : ('v, 'e) m_instruction list;
+  target_prog : ('s, 'v, 'e) m_instruction list;
 }
 
 let target_is_function t = t.target_result <> None
 
-let rec access_map_var f = function
-  | VarAccess v -> VarAccess (f v)
-  | TabAccess (v, m_i) ->
-      let v' = f v in
-      let m_i' = m_expr_map_var f m_i in
-      TabAccess (v', m_i')
-  | ConcAccess (vname, m_ifmt, m_i) ->
-      let m_i' = m_expr_map_var f m_i in
-      ConcAccess (vname, m_ifmt, m_i')
+let rec access_map_var sf vf = function
+  | VarAccess (sp, v) -> VarAccess (sf sp, vf v)
+  | TabAccess (sp, v, m_i) ->
+      let sp' = sf sp in
+      let v' = vf v in
+      let m_i' = m_expr_map_var sf vf m_i in
+      TabAccess (sp', v', m_i')
+  | ConcAccess (sp, vname, m_ifmt, m_i) ->
+      let sp' = sf sp in
+      let m_i' = m_expr_map_var sf vf m_i in
+      ConcAccess (sp', vname, m_ifmt, m_i')
   | FieldAccess (m_i, field, id) ->
-      let m_i' = m_expr_map_var f m_i in
+      let m_i' = m_expr_map_var sf vf m_i in
       FieldAccess (m_i', field, id)
 
-and m_access_map_var f m_access = Pos.map (access_map_var f) m_access
+and m_access_map_var sf vf m_access = Pos.map (access_map_var sf vf) m_access
 
-and set_value_map_var f = function
+and set_value_map_var sf vf = function
   | FloatValue value -> FloatValue value
   | VarValue m_access ->
-      let m_access' = m_access_map_var f m_access in
+      let m_access' = m_access_map_var sf vf m_access in
       VarValue m_access'
   | IntervalValue (i0, i1) -> IntervalValue (i0, i1)
 
-and atom_map_var f = function
-  | AtomVar v -> AtomVar (f v)
+and atom_map_var vf = function
+  | AtomVar v -> AtomVar (vf v)
   | AtomLiteral l -> AtomLiteral l
 
-and m_atom_map_var f m_a = Pos.map (atom_map_var f) m_a
+and m_atom_map_var vf m_a = Pos.map (atom_map_var vf) m_a
 
-and set_value_loop_map_var f = function
-  | Single m_a0 -> Single (m_atom_map_var f m_a0)
+and set_value_loop_map_var vf = function
+  | Single m_a0 -> Single (m_atom_map_var vf m_a0)
   | Range (m_a0, m_a1) ->
-      let m_a0' = m_atom_map_var f m_a0 in
-      let m_a1' = m_atom_map_var f m_a1 in
+      let m_a0' = m_atom_map_var vf m_a0 in
+      let m_a1' = m_atom_map_var vf m_a1 in
       Range (m_a0', m_a1')
   | Interval (m_a0, m_a1) ->
-      let m_a0' = m_atom_map_var f m_a0 in
-      let m_a1' = m_atom_map_var f m_a1 in
+      let m_a0' = m_atom_map_var vf m_a0 in
+      let m_a1' = m_atom_map_var vf m_a1 in
       Interval (m_a0', m_a1')
 
-and loop_variable_map_var f (m_ch, svl) =
-  let svl' = List.map (set_value_loop_map_var f) svl in
+and loop_variable_map_var vf (m_ch, svl) =
+  let svl' = List.map (set_value_loop_map_var vf) svl in
   (m_ch, svl')
 
-and loop_variables_map_var f = function
-  | ValueSets lvl -> ValueSets (List.map (loop_variable_map_var f) lvl)
-  | Ranges lvl -> Ranges (List.map (loop_variable_map_var f) lvl)
+and loop_variables_map_var vf = function
+  | ValueSets lvl -> ValueSets (List.map (loop_variable_map_var vf) lvl)
+  | Ranges lvl -> Ranges (List.map (loop_variable_map_var vf) lvl)
 
-and expr_map_var f = function
+and expr_map_var sf vf = function
   | TestInSet (positive, m_e0, values) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let values' = List.map (set_value_map_var f) values in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let values' = List.map (set_value_map_var sf vf) values in
       TestInSet (positive, m_e0', values')
-  | Unop (op, m_e0) -> Unop (op, m_expr_map_var f m_e0)
+  | Unop (op, m_e0) -> Unop (op, m_expr_map_var sf vf m_e0)
   | Comparison (op, m_e0, m_e1) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let m_e1' = m_expr_map_var f m_e1 in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let m_e1' = m_expr_map_var sf vf m_e1 in
       Comparison (op, m_e0', m_e1')
   | Binop (op, m_e0, m_e1) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let m_e1' = m_expr_map_var f m_e1 in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let m_e1' = m_expr_map_var sf vf m_e1 in
       Binop (op, m_e0', m_e1')
   | Conditional (m_e0, m_e1, m_e2_opt) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let m_e1' = m_expr_map_var f m_e1 in
-      let m_e2_opt' = Option.map (m_expr_map_var f) m_e2_opt in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let m_e1' = m_expr_map_var sf vf m_e1 in
+      let m_e2_opt' = Option.map (m_expr_map_var sf vf) m_e2_opt in
       Conditional (m_e0', m_e1', m_e2_opt')
   | FuncCall (fn, m_el) ->
-      let m_el' = List.map (m_expr_map_var f) m_el in
+      let m_el' = List.map (m_expr_map_var sf vf) m_el in
       FuncCall (fn, m_el')
   | FuncCallLoop (fn, m_loop, m_e0) ->
-      let m_loop' = Pos.map (loop_variables_map_var f) m_loop in
-      let m_e0' = m_expr_map_var f m_e0 in
+      let m_loop' = Pos.map (loop_variables_map_var vf) m_loop in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
       FuncCallLoop (fn, m_loop', m_e0')
   | Literal l -> Literal l
-  | Var access -> Var (access_map_var f access)
+  | Var access -> Var (access_map_var sf vf access)
   | Loop (m_loop, m_e0) ->
-      let m_loop' = Pos.map (loop_variables_map_var f) m_loop in
-      let m_e0' = m_expr_map_var f m_e0 in
+      let m_loop' = Pos.map (loop_variables_map_var vf) m_loop in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
       Loop (m_loop', m_e0')
   | NbCategory cvm -> NbCategory cvm
   | Attribut (m_access, attr) ->
-      let m_access' = Pos.map (access_map_var f) m_access in
+      let m_access' = Pos.map (access_map_var sf vf) m_access in
       Attribut (m_access', attr)
-  | Size m_access -> Size (Pos.map (access_map_var f) m_access)
+  | Size m_access -> Size (Pos.map (access_map_var sf vf) m_access)
   | IsVariable (m_access, name) ->
-      let m_access' = Pos.map (access_map_var f) m_access in
+      let m_access' = Pos.map (access_map_var sf vf) m_access in
       IsVariable (m_access', name)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
   | NbBloquantes -> NbBloquantes
 
-and m_expr_map_var f e = Pos.map (expr_map_var f) e
+and m_expr_map_var sf vf e = Pos.map (expr_map_var sf vf) e
 
-let rec print_arg_map_var f = function
+let rec print_arg_map_var sf vf = function
   | PrintString s -> PrintString s
-  | PrintAccess (info, m_a) -> PrintAccess (info, m_access_map_var f m_a)
-  | PrintIndent m_e0 -> PrintIndent (m_expr_map_var f m_e0)
-  | PrintExpr (m_e0, i0, i1) -> PrintExpr (m_expr_map_var f m_e0, i0, i1)
+  | PrintAccess (info, m_a) -> PrintAccess (info, m_access_map_var sf vf m_a)
+  | PrintIndent m_e0 -> PrintIndent (m_expr_map_var sf vf m_e0)
+  | PrintExpr (m_e0, i0, i1) -> PrintExpr (m_expr_map_var sf vf m_e0, i0, i1)
 
-and formula_loop_map_var f m_lvs = Pos.map (loop_variables_map_var f) m_lvs
+and formula_loop_map_var vf m_lvs = Pos.map (loop_variables_map_var vf) m_lvs
 
-and formula_decl_map_var f = function
+and formula_decl_map_var sf vf = function
   | VarDecl (m_access, m_e1) ->
-      let m_access' = m_access_map_var f m_access in
-      let m_e1' = m_expr_map_var f m_e1 in
+      let m_access' = m_access_map_var sf vf m_access in
+      let m_e1' = m_expr_map_var sf vf m_e1 in
       VarDecl (m_access', m_e1')
   | EventFieldRef (m_e0, m_if, id, v) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let v' = f v in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let v' = vf v in
       EventFieldRef (m_e0', m_if, id, v')
 
-and formula_map_var f = function
-  | SingleFormula fd -> SingleFormula (formula_decl_map_var f fd)
+and formula_map_var sf vf = function
+  | SingleFormula fd -> SingleFormula (formula_decl_map_var sf vf fd)
   | MultipleFormulaes (fl, fd) ->
-      let fl' = formula_loop_map_var f fl in
-      let fd' = formula_decl_map_var f fd in
+      let fl' = formula_loop_map_var vf fl in
+      let fd' = formula_decl_map_var sf vf fd in
       MultipleFormulaes (fl', fd')
 
-and instr_map_var f g = function
-  | Affectation m_f -> Affectation (Pos.map (formula_map_var f) m_f)
+and instr_map_var sf vf g = function
+  | Affectation m_f -> Affectation (Pos.map (formula_map_var sf vf) m_f)
   | IfThenElse (m_e0, m_il0, m_il1) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let m_il0' = List.map (m_instr_map_var f g) m_il0 in
-      let m_il1' = List.map (m_instr_map_var f g) m_il1 in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
+      let m_il0' = List.map (m_instr_map_var sf vf g) m_il0 in
+      let m_il1' = List.map (m_instr_map_var sf vf g) m_il1 in
       IfThenElse (m_e0', m_il0', m_il1')
   | WhenDoElse (m_eil, m_il) ->
       let map (m_e0, m_il0, pos) =
-        let m_e0' = m_expr_map_var f m_e0 in
-        let m_il0' = List.map (m_instr_map_var f g) m_il0 in
+        let m_e0' = m_expr_map_var sf vf m_e0 in
+        let m_il0' = List.map (m_instr_map_var sf vf g) m_il0 in
         (m_e0', m_il0', pos)
       in
       let m_eil' = List.map map m_eil in
-      let m_il' = Pos.map (List.map (m_instr_map_var f g)) m_il in
+      let m_il' = Pos.map (List.map (m_instr_map_var sf vf g)) m_il in
       WhenDoElse (m_eil', m_il')
   | ComputeDomain dom -> ComputeDomain dom
   | ComputeChaining ch -> ComputeChaining ch
   | ComputeVerifs (m_sl, m_e0) ->
-      let m_e0' = m_expr_map_var f m_e0 in
+      let m_e0' = m_expr_map_var sf vf m_e0 in
       ComputeVerifs (m_sl, m_e0')
   | ComputeTarget (tn, args) ->
-      let args' = List.map f args in
+      let args' = List.map vf args in
       ComputeTarget (tn, args')
-  | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
+  | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var sf vf g) m_il0)
   | Print (pr_std, pr_args) ->
-      let pr_args' = List.map (Pos.map (print_arg_map_var f)) pr_args in
+      let pr_args' = List.map (Pos.map (print_arg_map_var sf vf)) pr_args in
       Print (pr_std, pr_args')
   | Iterate (v, vl, cvml, m_il) ->
-      let v' = f v in
-      let vl' = List.map f vl in
+      let v' = vf v in
+      let vl' = List.map vf vl in
       let cvml' =
-        let map (cvm, m_e) = (cvm, m_expr_map_var f m_e) in
+        let map (cvm, m_e) = (cvm, m_expr_map_var sf vf m_e) in
         List.map map cvml
       in
-      let m_il' = List.map (m_instr_map_var f g) m_il in
+      let m_il' = List.map (m_instr_map_var sf vf g) m_il in
       Iterate (v', vl', cvml', m_il')
   | Iterate_values (v, e3l, m_il) ->
-      let v' = f v in
+      let v' = vf v in
       let e3l' =
         let map (m_e0, m_e1, m_e2) =
-          let m_e0' = m_expr_map_var f m_e0 in
-          let m_e1' = m_expr_map_var f m_e1 in
-          let m_e2' = m_expr_map_var f m_e2 in
+          let m_e0' = m_expr_map_var sf vf m_e0 in
+          let m_e1' = m_expr_map_var sf vf m_e1 in
+          let m_e2' = m_expr_map_var sf vf m_e2 in
           (m_e0', m_e1', m_e2')
         in
         List.map map e3l
       in
-      let m_il' = List.map (m_instr_map_var f g) m_il in
+      let m_il' = List.map (m_instr_map_var sf vf g) m_il in
       Iterate_values (v', e3l', m_il')
   | Restore (vl, cvml, el, vel, m_il) ->
-      let vl' = List.map f vl in
+      let vl' = List.map vf vl in
       let cvml' =
         let map (v, cvm, m_e0) =
-          let v' = f v in
-          let m_e0' = m_expr_map_var f m_e0 in
+          let v' = vf v in
+          let m_e0' = m_expr_map_var sf vf m_e0 in
           (v', cvm, m_e0')
         in
         List.map map cvml
       in
-      let el' = List.map (m_expr_map_var f) el in
+      let el' = List.map (m_expr_map_var sf vf) el in
       let vel' =
         let map (v, m_e0) =
-          let v' = f v in
-          let m_e0' = m_expr_map_var f m_e0 in
+          let v' = vf v in
+          let m_e0' = m_expr_map_var sf vf m_e0 in
           (v', m_e0')
         in
         List.map map vel
       in
-      let m_il' = List.map (m_instr_map_var f g) m_il in
+      let m_il' = List.map (m_instr_map_var sf vf g) m_il in
       Restore (vl', cvml', el', vel', m_il')
   | ArrangeEvents (vve_opt, ve_opt, e_opt, m_il) ->
       let vve_opt' =
         let map (v0, v1, m_e0) =
-          let v0' = f v0 in
-          let v1' = f v1 in
-          let m_e0' = m_expr_map_var f m_e0 in
+          let v0' = vf v0 in
+          let v1' = vf v1 in
+          let m_e0' = m_expr_map_var sf vf m_e0 in
           (v0', v1', m_e0')
         in
         Option.map map vve_opt
       in
       let ve_opt' =
         let map (v, m_e0) =
-          let v' = f v in
-          let m_e0' = m_expr_map_var f m_e0 in
+          let v' = vf v in
+          let m_e0' = m_expr_map_var sf vf m_e0 in
           (v', m_e0')
         in
         Option.map map ve_opt
       in
-      let e_opt' = Option.map (m_expr_map_var f) e_opt in
-      let m_il' = List.map (m_instr_map_var f g) m_il in
+      let e_opt' = Option.map (m_expr_map_var sf vf) e_opt in
+      let m_il' = List.map (m_instr_map_var sf vf g) m_il in
       ArrangeEvents (vve_opt', ve_opt', e_opt', m_il')
   | RaiseError (m_err, m_s_opt) ->
       let m_err' = Pos.map g m_err in
@@ -837,7 +881,7 @@ and instr_map_var f g = function
   | ExportErrors -> ExportErrors
   | FinalizeErrors -> FinalizeErrors
 
-and m_instr_map_var f g m_i = Pos.map (instr_map_var f g) m_i
+and m_instr_map_var sf vf g m_i = Pos.map (instr_map_var sf vf g) m_i
 
 let get_var_name v = match v with Normal s -> s | Generic s -> s.base
 
@@ -920,22 +964,23 @@ let format_comp_op fmt op =
     | Eq -> "="
     | Neq -> "!=")
 
-let format_access form_var form_expr fmt = function
-  | VarAccess v -> form_var fmt v
-  | TabAccess (v, m_i) ->
-      Format.fprintf fmt "%a[%a]" form_var v form_expr (Pos.unmark m_i)
-  | ConcAccess (m_vn, m_idxf, idx) ->
-      Format.fprintf fmt "%s{%s, %a}"
+let format_access form_sp form_var form_expr fmt = function
+  | VarAccess (sp, v) -> Pp.fpr fmt "%a%a" form_sp sp form_var v
+  | TabAccess (sp, v, m_i) ->
+      Pp.fpr fmt "%a%a[%a]" form_sp sp form_var v form_expr (Pos.unmark m_i)
+  | ConcAccess (sp, m_vn, m_idxf, idx) ->
+      Pp.fpr fmt "%a%s[%s: %a]" form_sp sp
         (get_var_name (Pos.unmark m_vn))
         (Pos.unmark m_idxf) form_expr (Pos.unmark idx)
   | FieldAccess (e, f, _) ->
       Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
         (Pos.unmark f)
 
-let format_set_value form_var form_expr fmt sv =
+let format_set_value form_sp form_var form_expr fmt sv =
   match sv with
   | FloatValue i -> Pp.fpr fmt "%f" (Pos.unmark i)
-  | VarValue m_acc -> format_access form_var form_expr fmt (Pos.unmark m_acc)
+  | VarValue m_acc ->
+      format_access form_sp form_var form_expr fmt (Pos.unmark m_acc)
   | IntervalValue (i1, i2) ->
       Pp.fpr fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
 
@@ -959,13 +1004,13 @@ let format_func fmt f =
     | NbEvents -> "nb_evenements"
     | Func fn -> fn)
 
-let rec format_expression form_var fmt =
-  let form_expr = format_expression form_var in
+let rec format_expression form_sp form_var fmt =
+  let form_expr = format_expression form_sp form_var in
   function
   | TestInSet (belong, e, values) ->
       Format.fprintf fmt "(%a %sdans %a)" form_expr (Pos.unmark e)
         (if belong then "" else "non ")
-        (Pp.list_comma (format_set_value form_var form_expr))
+        (Pp.list_comma (format_set_value form_sp form_var form_expr))
         values
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" form_expr (Pos.unmark e1) format_comp_op
@@ -990,7 +1035,7 @@ let rec format_expression form_var fmt =
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | Literal l -> format_literal fmt l
-  | Var acc -> format_access form_var form_expr fmt acc
+  | Var acc -> format_access form_sp form_var form_expr fmt acc
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"
         (format_loop_variables form_var)
@@ -999,73 +1044,66 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "nb_categorie(%a)" (CatVar.Map.pp_keys ()) cs
   | Attribut (m_acc, a) ->
       Format.fprintf fmt "attribut(%a, %s)"
-        (format_access form_var form_expr)
+        (format_access form_sp form_var form_expr)
         (Pos.unmark m_acc) (Pos.unmark a)
   | Size m_acc ->
       Format.fprintf fmt "taille(%a)"
-        (format_access form_var form_expr)
+        (format_access form_sp form_var form_expr)
         (Pos.unmark m_acc)
   | IsVariable (m_acc, name) ->
       Format.fprintf fmt "est_variable(%a, %s)"
-        (format_access form_var form_expr)
+        (format_access form_sp form_var form_expr)
         (Pos.unmark m_acc) (Pos.unmark name)
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
   | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
-let format_print_arg form_var fmt =
-  let form_expr = format_expression form_var in
+let format_print_arg form_sp form_var fmt =
+  let form_expr = format_expression form_sp form_var in
   function
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
   | PrintAccess (info, m_a) ->
       let infoStr = match info with Name -> "nom" | Alias -> "alias" in
       Format.fprintf fmt "%s(%a)" infoStr
-        (format_access form_var form_expr)
+        (format_access form_sp form_var form_expr)
         (Pos.unmark m_a)
-  | PrintIndent e ->
-      Format.fprintf fmt "indenter(%a)"
-        (Pp.unmark (format_expression form_var))
-        e
+  | PrintIndent e -> Format.fprintf fmt "indenter(%a)" (Pp.unmark form_expr) e
   | PrintExpr (e, min, max) ->
-      if min = max_int then
-        Format.fprintf fmt "(%a)" (Pp.unmark (format_expression form_var)) e
+      if min = max_int then Format.fprintf fmt "(%a)" (Pp.unmark form_expr) e
       else if max = max_int then
-        Format.fprintf fmt "(%a):%d"
-          (Pp.unmark (format_expression form_var))
-          e min
-      else
-        Format.fprintf fmt "(%a):%d..%d"
-          (Pp.unmark (format_expression form_var))
-          e min max
+        Format.fprintf fmt "(%a):%d" (Pp.unmark form_expr) e min
+      else Format.fprintf fmt "(%a):%d..%d" (Pp.unmark form_expr) e min max
 
-let format_formula_decl form_var fmt = function
+let format_formula_decl form_sp form_var fmt = function
   | VarDecl (m_access, e) ->
-      format_access form_var
-        (format_expression form_var)
+      format_access form_sp form_var
+        (format_expression form_sp form_var)
         fmt (Pos.unmark m_access);
-      Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
+      Format.fprintf fmt " = %a"
+        (format_expression form_sp form_var)
+        (Pos.unmark e)
   | EventFieldRef (idx, f, _, v) ->
       Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
-        (format_expression form_var)
+        (format_expression form_sp form_var)
         (Pos.unmark idx) (Pos.unmark f) form_var v
 
-let format_formula form_var fmt f =
+let format_formula form_sp form_var fmt f =
   match f with
-  | SingleFormula f -> format_formula_decl form_var fmt f
+  | SingleFormula f -> format_formula_decl form_sp form_var fmt f
   | MultipleFormulaes (lvs, f) ->
       Format.fprintf fmt "pour %a\n%a"
         (format_loop_variables form_var)
         (Pos.unmark lvs)
-        (format_formula_decl form_var)
+        (format_formula_decl form_sp form_var)
         f
 
-let rec format_instruction form_var form_err =
-  let form_expr = format_expression form_var in
-  let form_instrs = format_instructions form_var form_err in
+let rec format_instruction form_sp form_var form_err =
+  let form_expr = format_expression form_sp form_var in
+  let form_instrs = format_instructions form_sp form_var form_err in
   fun fmt instr ->
     match instr with
-    | Affectation f -> Pp.unmark (format_formula form_var) fmt f
+    | Affectation f -> Pp.unmark (format_formula form_sp form_var) fmt f
     | IfThenElse (cond, t, []) ->
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]@\n" form_expr
           (Pos.unmark cond) form_instrs t
@@ -1112,7 +1150,7 @@ let rec format_instruction form_var form_err =
           match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"
         in
         Format.fprintf fmt "%s %a;" print_cmd
-          (Pp.list_space (Pp.unmark (format_print_arg form_var)))
+          (Pp.list_space (Pp.unmark (format_print_arg form_sp form_var)))
           args
     | Iterate (var, vars, var_params, itb) ->
         let format_var_param fmt (vcs, expr) =
@@ -1191,5 +1229,7 @@ let rec format_instruction form_var form_err =
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
 
-and format_instructions form_var form_err fmt instrs =
-  Pp.list "" (Pp.unmark (format_instruction form_var form_err)) fmt instrs
+and format_instructions form_sp form_var form_err fmt instrs =
+  Pp.list ""
+    (Pp.unmark (format_instruction form_sp form_var form_err))
+    fmt instrs

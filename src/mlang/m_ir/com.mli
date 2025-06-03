@@ -13,7 +13,13 @@ module CatVar : sig
     val from_string_list : string Pos.marked list Pos.marked -> Pos.t t
   end
 
-  type loc = LocComputed | LocBase | LocInput
+  type loc = LocInput | LocComputed | LocBase
+
+  val pp_loc : Format.formatter -> loc -> unit
+
+  module LocSet : SetExt.T with type elt = loc
+
+  module LocMap : MapExt.T with type key = loc
 
   type data = {
     id : t;
@@ -195,6 +201,13 @@ type verif_domain_data = {
 
 type verif_domain = verif_domain_data domain
 
+type variable_space = {
+  vs_id : int;
+  vs_name : string Pos.marked;
+  vs_cats : CatVar.loc Pos.marked CatVar.LocMap.t;
+  vs_by_default : bool;
+}
+
 type literal = Float of float | Undefined
 
 (** Unary operators *)
@@ -243,13 +256,13 @@ type var_name = Normal of string | Generic of var_name_generic
 
 type m_var_name = var_name Pos.marked
 
-type 'v access =
-  | VarAccess of 'v
-  | TabAccess of 'v * 'v m_expression
-  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
-  | FieldAccess of 'v m_expression * string Pos.marked * int
+type ('s, 'v) access =
+  | VarAccess of 's * 'v
+  | TabAccess of 's * 'v * ('s, 'v) m_expression
+  | ConcAccess of 's * m_var_name * string Pos.marked * ('s, 'v) m_expression
+  | FieldAccess of ('s, 'v) m_expression * string Pos.marked * int
 
-and 'v m_access = 'v access Pos.marked
+and ('s, 'v) m_access = ('s, 'v) access Pos.marked
 
 (** Values that can be substituted for loop parameters *)
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
@@ -269,36 +282,40 @@ and 'v loop_variables =
   | ValueSets of 'v loop_variable list
   | Ranges of 'v loop_variable list
 
-and 'v set_value =
+and ('s, 'v) set_value =
   | FloatValue of float Pos.marked
-  | VarValue of 'v m_access
+  | VarValue of ('s, 'v) m_access
   | IntervalValue of int Pos.marked * int Pos.marked
 
-and 'v expression =
-  | TestInSet of bool * 'v m_expression * 'v set_value list
+and ('s, 'v) expression =
+  | TestInSet of bool * ('s, 'v) m_expression * ('s, 'v) set_value list
       (** Test if an expression is in a set of value (or not in the set if the
           flag is set to [false]) *)
-  | Unop of unop * 'v m_expression
-  | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
-  | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
-  | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
-  | FuncCall of func Pos.marked * 'v m_expression list
+  | Unop of unop * ('s, 'v) m_expression
+  | Comparison of
+      comp_op Pos.marked * ('s, 'v) m_expression * ('s, 'v) m_expression
+  | Binop of binop Pos.marked * ('s, 'v) m_expression * ('s, 'v) m_expression
+  | Conditional of
+      ('s, 'v) m_expression
+      * ('s, 'v) m_expression
+      * ('s, 'v) m_expression option
+  | FuncCall of func Pos.marked * ('s, 'v) m_expression list
   | FuncCallLoop of
-      func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
+      func Pos.marked * 'v loop_variables Pos.marked * ('s, 'v) m_expression
   | Literal of literal
-  | Var of 'v access
-  | Loop of 'v loop_variables Pos.marked * 'v m_expression
+  | Var of ('s, 'v) access
+  | Loop of 'v loop_variables Pos.marked * ('s, 'v) m_expression
       (** The loop is prefixed with the loop variables declarations *)
   | NbCategory of Pos.t CatVar.Map.t
-  | Attribut of 'v m_access * string Pos.marked
-  | Size of 'v m_access
-  | IsVariable of 'v m_access * string Pos.marked
+  | Attribut of ('s, 'v) m_access * string Pos.marked
+  | Size of ('s, 'v) m_access
+  | IsVariable of ('s, 'v) m_access * string Pos.marked
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
   | NbBloquantes
 
-and 'v m_expression = 'v expression Pos.marked
+and ('s, 'v) m_expression = ('s, 'v) expression Pos.marked
 
 module Error : sig
   type typ = Anomaly | Discordance | Information
@@ -332,11 +349,11 @@ type print_std = StdOut | StdErr
 
 type print_info = Name | Alias
 
-type 'v print_arg =
+type ('s, 'v) print_arg =
   | PrintString of string
-  | PrintAccess of print_info * 'v access Pos.marked
-  | PrintIndent of 'v m_expression
-  | PrintExpr of 'v m_expression * int * int
+  | PrintAccess of print_info * ('s, 'v) access Pos.marked
+  | PrintIndent of ('s, 'v) m_expression
+  | PrintExpr of ('s, 'v) m_expression * int * int
 
 (** In the M language, you can define multiple variables at once. This is the
     way they do looping since the definition can depend on the loop variable
@@ -344,57 +361,58 @@ type 'v print_arg =
 
 type 'v formula_loop = 'v loop_variables Pos.marked
 
-type 'v formula_decl =
-  | VarDecl of 'v access Pos.marked * 'v m_expression
-  | EventFieldRef of 'v m_expression * string Pos.marked * int * 'v
+type ('s, 'v) formula_decl =
+  | VarDecl of ('s, 'v) access Pos.marked * ('s, 'v) m_expression
+  | EventFieldRef of ('s, 'v) m_expression * string Pos.marked * int * 'v
 
-type 'v formula =
-  | SingleFormula of 'v formula_decl
-  | MultipleFormulaes of 'v formula_loop * 'v formula_decl
+type ('s, 'v) formula =
+  | SingleFormula of ('s, 'v) formula_decl
+  | MultipleFormulaes of 'v formula_loop * ('s, 'v) formula_decl
 
-type ('v, 'e) instruction =
-  | Affectation of 'v formula Pos.marked
+type ('s, 'v, 'e) instruction =
+  | Affectation of ('s, 'v) formula Pos.marked
   | IfThenElse of
-      'v m_expression
-      * ('v, 'e) m_instruction list
-      * ('v, 'e) m_instruction list
+      ('s, 'v) m_expression
+      * ('s, 'v, 'e) m_instruction list
+      * ('s, 'v, 'e) m_instruction list
   | WhenDoElse of
-      ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
-      * ('v, 'e) m_instruction list Pos.marked
+      (('s, 'v) m_expression * ('s, 'v, 'e) m_instruction list * Pos.t) list
+      * ('s, 'v, 'e) m_instruction list Pos.marked
   | ComputeDomain of string Pos.marked list Pos.marked
   | ComputeChaining of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
+  | ComputeVerifs of string Pos.marked list Pos.marked * ('s, 'v) m_expression
   | ComputeTarget of string Pos.marked * 'v list
-  | VerifBlock of ('v, 'e) m_instruction list
-  | Print of print_std * 'v print_arg Pos.marked list
+  | VerifBlock of ('s, 'v, 'e) m_instruction list
+  | Print of print_std * ('s, 'v) print_arg Pos.marked list
   | Iterate of
       'v
       * 'v list
-      * (Pos.t CatVar.Map.t * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * (Pos.t CatVar.Map.t * ('s, 'v) m_expression) list
+      * ('s, 'v, 'e) m_instruction list
   | Iterate_values of
       'v
-      * ('v m_expression * 'v m_expression * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * (('s, 'v) m_expression * ('s, 'v) m_expression * ('s, 'v) m_expression)
+        list
+      * ('s, 'v, 'e) m_instruction list
   | Restore of
       'v list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
-      * 'v m_expression list
-      * ('v * 'v m_expression) list
-      * ('v, 'e) m_instruction list
+      * ('v * Pos.t CatVar.Map.t * ('s, 'v) m_expression) list
+      * ('s, 'v) m_expression list
+      * ('v * ('s, 'v) m_expression) list
+      * ('s, 'v, 'e) m_instruction list
   | ArrangeEvents of
-      ('v * 'v * 'v m_expression) option
-      * ('v * 'v m_expression) option
-      * 'v m_expression option
-      * ('v, 'e) m_instruction list
+      ('v * 'v * ('s, 'v) m_expression) option
+      * ('v * ('s, 'v) m_expression) option
+      * ('s, 'v) m_expression option
+      * ('s, 'v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | ExportErrors
   | FinalizeErrors
 
-and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
+and ('s, 'v, 'e) m_instruction = ('s, 'v, 'e) instruction Pos.marked
 
-type ('v, 'e) target = {
+type ('s, 'v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
   target_apps : string Pos.marked StrMap.t;
@@ -404,20 +422,30 @@ type ('v, 'e) target = {
   target_nb_tmps : int;
   target_sz_tmps : int;
   target_nb_refs : int;
-  target_prog : ('v, 'e) m_instruction list;
+  target_prog : ('s, 'v, 'e) m_instruction list;
 }
 
-val target_is_function : ('v, 'e) target -> bool
+val target_is_function : ('s, 'v, 'e) target -> bool
 
-val expr_map_var : ('v -> 'w) -> 'v expression -> 'w expression
+val expr_map_var :
+  ('s -> 't) -> ('v -> 'w) -> ('s, 'v) expression -> ('t, 'w) expression
 
-val m_expr_map_var : ('v -> 'w) -> 'v m_expression -> 'w m_expression
+val m_expr_map_var :
+  ('s -> 't) -> ('v -> 'w) -> ('s, 'v) m_expression -> ('t, 'w) m_expression
 
 val instr_map_var :
-  ('v -> 'w) -> ('e -> 'f) -> ('v, 'e) instruction -> ('w, 'f) instruction
+  ('s -> 't) ->
+  ('v -> 'w) ->
+  ('e -> 'f) ->
+  ('s, 'v, 'e) instruction ->
+  ('t, 'w, 'f) instruction
 
 val m_instr_map_var :
-  ('v -> 'w) -> ('e -> 'f) -> ('v, 'e) m_instruction -> ('w, 'f) m_instruction
+  ('s -> 't) ->
+  ('v -> 'w) ->
+  ('e -> 'f) ->
+  ('s, 'v, 'e) m_instruction ->
+  ('t, 'w, 'f) m_instruction
 
 val get_var_name : var_name -> string
 
@@ -439,30 +467,48 @@ val format_binop : Pp.t -> binop -> unit
 val format_comp_op : Pp.t -> comp_op -> unit
 
 val format_set_value :
+  (Pp.t -> 's -> unit) ->
   (Pp.t -> 'v -> unit) ->
-  (Pp.t -> 'v expression -> unit) ->
+  (Pp.t -> ('s, 'v) expression -> unit) ->
   Pp.t ->
-  'v set_value ->
+  ('s, 'v) set_value ->
   unit
 
 val format_func : Pp.t -> func -> unit
 
-val format_expression : (Pp.t -> 'v -> unit) -> Pp.t -> 'v expression -> unit
+val format_expression :
+  (Pp.t -> 's -> unit) ->
+  (Pp.t -> 'v -> unit) ->
+  Pp.t ->
+  ('s, 'v) expression ->
+  unit
 
-val format_print_arg : (Pp.t -> 'v -> unit) -> Pp.t -> 'v print_arg -> unit
+val format_print_arg :
+  (Pp.t -> 's -> unit) ->
+  (Pp.t -> 'v -> unit) ->
+  Pp.t ->
+  ('s, 'v) print_arg ->
+  unit
 
-val format_formula : (Pp.t -> 'v -> unit) -> Pp.t -> 'v formula -> unit
+val format_formula :
+  (Pp.t -> 's -> unit) ->
+  (Pp.t -> 'v -> unit) ->
+  Pp.t ->
+  ('s, 'v) formula ->
+  unit
 
 val format_instruction :
+  (Pp.t -> 's -> unit) ->
   (Pp.t -> 'v -> unit) ->
   (Pp.t -> 'e -> unit) ->
   Pp.t ->
-  ('v, 'e) instruction ->
+  ('s, 'v, 'e) instruction ->
   unit
 
 val format_instructions :
+  (Pp.t -> 's -> unit) ->
   (Pp.t -> 'v -> unit) ->
   (Pp.t -> 'e -> unit) ->
   Pp.t ->
-  ('v, 'e) m_instruction list ->
+  ('s, 'v, 'e) m_instruction list ->
   unit
