@@ -59,8 +59,6 @@ type program = {
   prog_dict : Com.Var.t IntMap.t;
   prog_vars : int StrMap.t;
   prog_alias : int StrMap.t;
-  prog_var_spaces : int StrMap.t;
-  prog_var_spaces_idx : Com.variable_space IntMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
   prog_event_pos : Pos.t;

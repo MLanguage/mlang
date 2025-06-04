@@ -59,8 +59,6 @@ variable saisie penalite
 
 variable calculee
 : attribut primrest;
-
-espace_variables GLOBAL : categorie saisie, calculee, base : par_defaut;
 |}
 
 let rule_domains_declaration =

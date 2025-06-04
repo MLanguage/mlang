@@ -50,16 +50,10 @@ module type S = sig
 
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
-    ctx_var_spaces : ctx_var_space Array.t;
+    ctx_tgv : value Array.t;
     ctx_tmps : value Array.t;
     ctx_tmps_var : Com.Var.t Array.t;
     mutable ctx_tmps_org : int;
@@ -85,6 +79,8 @@ module type S = sig
   val literal_to_value : Com.literal -> value
 
   val value_to_literal : value -> Com.literal
+
+  val tgv_origin : ctx -> Com.Var.t -> int
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 

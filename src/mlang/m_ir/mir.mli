@@ -14,17 +14,17 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type set_value = (Com.variable_space, Com.Var.t) Com.set_value
+type set_value = Com.Var.t Com.set_value
 
-type expression = (Com.variable_space, Com.Var.t) Com.expression
+type expression = Com.Var.t Com.expression
 
 type m_expression = expression Pos.marked
 
-type instruction = (Com.variable_space, Com.Var.t, Com.Error.t) Com.instruction
+type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
-type target = (Com.variable_space, Com.Var.t, Com.Error.t) Com.target
+type target = (Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
   nb_calculated : int;
@@ -33,7 +33,7 @@ type stats = {
   nb_vars : int;
   nb_all_tmps : int;
   nb_all_refs : int;
-  sz_computed : int;
+  sz_calculated : int;
   sz_base : int;
   sz_input : int;
   sz_vars : int;
@@ -53,8 +53,6 @@ type program = {
   program_dict : Com.Var.t IntMap.t;
   program_vars : Com.Var.t StrMap.t;
   program_alias : Com.Var.t StrMap.t;
-  program_var_spaces : int StrMap.t;
-  program_var_spaces_idx : Com.variable_space IntMap.t;
   program_event_fields : Com.event_field StrMap.t;
   program_event_field_idxs : string IntMap.t;
   program_rules : string IntMap.t;

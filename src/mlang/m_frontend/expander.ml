@@ -84,12 +84,6 @@ module Err = struct
   let constant_forbidden_as_arg pos =
     Errors.raise_spanned_error "constant forbidden as argument" pos
 
-  let constant_forbidden_as_variable pos =
-    Errors.raise_spanned_error "constant forbidden as variable" pos
-
-  let constant_forbidden_as_variable_space pos =
-    Errors.raise_spanned_error "constant forbidden as variable space" pos
-
   let unknown_application app pos =
     let msg = Format.sprintf "application \"%s\" is unknown" app in
     Errors.raise_spanned_error msg pos
@@ -259,8 +253,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
                     in
                     (apps_env, prog_file)
               | VariableDecl _ | EventDecl _ | Error _ | Output _ | Func
-              | VarCatDecl _ | RuleDomDecl _ | VerifDomDecl _
-              | Mast.VariableSpaceDecl _ ->
+              | VarCatDecl _ | RuleDomDecl _ | VerifDomDecl _ ->
                   (apps_env, m_item :: prog_file))
             (apps_env, []) source_file
         in
@@ -560,51 +553,21 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
     (Pos.Mark (a, a_pos) : Com.m_var_name Com.m_access) :
     Com.m_var_name access_or_literal =
   match a with
-  | VarAccess (m_sp, _, m_v) -> (
+  | VarAccess m_v -> (
       match expand_variable const_map loop_map m_v with
-      | Pos.Mark (AtomLiteral lit, _) -> (
-          match Pos.unmark m_sp with
-          | "" -> ExpLiteral lit
-          | _ -> Err.constant_forbidden_as_variable (Pos.get m_v))
-      | Pos.Mark (AtomVar m_v, _) ->
-          let m_sp =
-            match Pos.unmark m_sp with
-            | "" -> m_sp
-            | _ -> (
-                match expand_variable const_map loop_map m_sp with
-                | Pos.Mark (AtomLiteral _, _) ->
-                    Err.constant_forbidden_as_variable_space (Pos.get m_sp)
-                | Pos.Mark (AtomVar m_sp, _) -> m_sp)
-          in
-          ExpAccess (Pos.mark (Com.VarAccess (m_sp, -1, m_v)) a_pos))
-  | TabAccess (m_sp, _, m_v, m_i) -> (
+      | Pos.Mark (AtomLiteral lit, _) -> ExpLiteral lit
+      | Pos.Mark (AtomVar m_v, var_pos) ->
+          ExpAccess (Pos.mark (Com.VarAccess m_v) var_pos))
+  | TabAccess (m_v, m_i) -> (
       match expand_variable const_map loop_map m_v with
       | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_table v_pos
-      | Pos.Mark (AtomVar m_v, _) ->
+      | Pos.Mark (AtomVar m_v, v_pos) ->
           let m_i' = expand_expression const_map loop_map m_i in
-          let m_sp =
-            match Pos.unmark m_sp with
-            | "" -> m_sp
-            | _ -> (
-                match expand_variable const_map loop_map m_sp with
-                | Pos.Mark (AtomLiteral _, _) ->
-                    Err.constant_forbidden_as_variable_space (Pos.get m_sp)
-                | Pos.Mark (AtomVar m_sp, _) -> m_sp)
-          in
-          ExpAccess (Pos.mark (Com.TabAccess (m_sp, -1, m_v, m_i')) a_pos))
-  | ConcAccess (m_sp, _, m_v, m_if, i) -> (
+          ExpAccess (Pos.mark (Com.TabAccess (m_v, m_i')) v_pos))
+  | ConcAccess (m_v, m_if, i) -> (
       match expand_variable const_map loop_map m_v with
       | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_arg v_pos
       | Pos.Mark (AtomVar m_v, v_pos) -> (
-          let m_sp =
-            match Pos.unmark m_sp with
-            | "" -> m_sp
-            | _ -> (
-                match expand_variable const_map loop_map m_sp with
-                | Pos.Mark (AtomLiteral _, _) ->
-                    Err.constant_forbidden_as_variable_space (Pos.get m_sp)
-                | Pos.Mark (AtomVar m_sp, _) -> m_sp)
-          in
           match expand_expression const_map loop_map i with
           | Pos.Mark (Com.Literal Undefined, i_pos) ->
               Err.constant_forbidden_as_arg i_pos
@@ -618,11 +581,12 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
                     Pos.mark (Com.Normal n') v_pos
                 | _ -> assert false
               in
-              ExpAccess (Pos.mark (Com.VarAccess (m_sp, -1, m_v')) a_pos)
+              ExpAccess (Pos.mark (Com.VarAccess m_v') a_pos)
           | i' ->
-              let m_v' = Pos.mark (Pos.unmark m_v) v_pos in
-              let access = Com.ConcAccess (m_sp, -1, m_v', m_if, i') in
-              ExpAccess (Pos.mark access a_pos)))
+              ExpAccess
+                (Pos.mark
+                   (Com.ConcAccess (Pos.mark (Pos.unmark m_v) v_pos, m_if, i'))
+                   a_pos)))
   | FieldAccess (e, f, i_f) ->
       let e' = expand_expression const_map loop_map e in
       ExpAccess (Pos.mark (Com.FieldAccess (e', f, i_f)) a_pos)
