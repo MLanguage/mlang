@@ -27,13 +27,13 @@ type m_instruction = instruction Pos.marked
 type target = (Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
-  nb_calculated : int;
+  nb_computed : int;
   nb_base : int;
   nb_input : int;
   nb_vars : int;
   nb_all_tmps : int;
   nb_all_refs : int;
-  sz_calculated : int;
+  sz_computed : int;
   sz_base : int;
   sz_input : int;
   sz_vars : int;
@@ -53,6 +53,9 @@ type program = {
   program_dict : Com.Var.t IntMap.t;
   program_vars : Com.Var.t StrMap.t;
   program_alias : Com.Var.t StrMap.t;
+  program_var_spaces : int StrMap.t;
+  program_var_spaces_idx : Com.variable_space IntMap.t;
+  program_var_space_def : Com.variable_space;
   program_event_fields : Com.event_field StrMap.t;
   program_event_field_idxs : string IntMap.t;
   program_rules : string IntMap.t;

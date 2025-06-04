@@ -68,6 +68,36 @@ module CatVar = struct
 
   type loc = LocComputed | LocBase | LocInput
 
+  let pp_loc oc = function
+    | LocInput -> Pp.fpr oc "input"
+    | LocComputed -> Pp.fpr oc "computed"
+    | LocBase -> Pp.fpr oc "base"
+
+  module LocSet = struct
+    include SetExt.Make (struct
+      type t = loc
+
+      let compare = Stdlib.compare
+    end)
+
+    let pp ?(sep = ", ") ?(pp_elt = pp_loc) (_ : unit) (fmt : Format.formatter)
+        (set : t) : unit =
+      pp ~sep ~pp_elt () fmt set
+  end
+
+  module LocMap = struct
+    include MapExt.Make (struct
+      type t = loc
+
+      let compare = Stdlib.compare
+    end)
+
+    let pp ?(sep = "; ") ?(pp_key = pp_loc) ?(assoc = " => ")
+        (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+        (map : 'a t) : unit =
+      pp ~sep ~pp_key ~assoc pp_val fmt map
+  end
+
   type data = {
     id : t;
     id_str : string;
@@ -390,6 +420,13 @@ type verif_domain_data = {
 }
 
 type verif_domain = verif_domain_data domain
+
+type variable_space = {
+  vs_id : int;
+  vs_name : string Pos.marked;
+  vs_cats : CatVar.loc Pos.marked CatVar.LocMap.t;
+  vs_by_default : bool;
+}
 
 type literal = Float of float | Undefined
 

@@ -422,23 +422,42 @@ struct S_event {
 typedef struct S_event T_event;
 
 struct S_irdata {
-  double *saisie;
-  double *calculee;
-  double *base;
-  double *tmps;
-  double **ref;
   char *def_saisie;
+  double *saisie;
   char *def_calculee;
+  double *calculee;
   char *def_base;
-  char *def_tmps;
-  char **def_ref;
-  T_varinfo **info_tmps;
-  char **ref_name;
-  T_varinfo **info_ref;
+  double *base;
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Com.CatVar.LocMap.iter
+        (fun loc _ ->
+          match loc with
+          | Com.CatVar.LocInput ->
+              Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
+              Pp.fpr fmt "  double *saisie_%s;@\n" sp
+          | Com.CatVar.LocComputed ->
+              Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
+              Pp.fpr fmt "  double *calculee_%s;@\n" sp
+          | Com.CatVar.LocBase ->
+              Pp.fpr fmt "  char *def_base_%s;@\n" sp;
+              Pp.fpr fmt "  double *base_%s;@\n" sp)
+        vsd.vs_cats)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt
+    {|  char *def_tmps;
+  double *tmps;
   int tmps_org;
   int nb_tmps_target;
+  T_varinfo **info_tmps;
+  char **def_ref;
+  double **ref;
+  T_varinfo **info_ref;
   int ref_org;
   int nb_refs_target;
+  char **ref_name;
   T_keep_discord *keep_discords;
   T_discord *discords;
   int nb_anos;
@@ -479,14 +498,14 @@ typedef struct S_irdata T_irdata;
     cprog.program_event_fields;
   Pp.fpr fmt
     {|
-#define DS_ irdata->def_saisie
-#define S_ irdata->saisie
+#define DS_(sp,idx) irdata->def_saisie_##sp[idx]
+#define S_(sp,idx) irdata->saisie_##sp[idx]
 
-#define DC_ irdata->def_calculee
-#define C_ irdata->calculee
+#define DC_(sp,idx) irdata->def_calculee_##sp[idx]
+#define C_(sp,idx) irdata->calculee_##sp[idx]
 
-#define DB_ irdata->def_base
-#define B_ irdata->base
+#define DB_(sp,idx) irdata->def_base_##sp[idx]
+#define B_(sp,idx) irdata->base_##sp[idx]
 
 #define I_(cat,idx) ((T_varinfo *)&(varinfo_##cat[idx]))
 
@@ -1225,14 +1244,29 @@ void init_saisie(T_irdata *irdata) {
   init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
 }
 
+void init_saisie_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_SAISIE);
+}
+
 void init_calculee(T_irdata *irdata) {
   if (irdata == NULL) return;
   init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
 }
 
+void init_calculee_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_CALCULEE);
+}
+
 void init_base(T_irdata *irdata) {
   if (irdata == NULL) return;
   init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+}
+
+void init_base_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_BASE);
 }
 
 void init_erreur(T_irdata *irdata) {
@@ -1247,12 +1281,45 @@ void init_erreur(T_irdata *irdata) {
 
 void detruis_irdata(T_irdata *irdata) {
   if (irdata == NULL) return;
-  if (irdata->saisie != NULL) free(irdata->saisie);
-  if (irdata->def_saisie != NULL) free(irdata->def_saisie);
-  if (irdata->calculee != NULL) free(irdata->calculee);
-  if (irdata->def_calculee != NULL) free(irdata->def_calculee);
-  if (irdata->base != NULL) free(irdata->base);
-  if (irdata->def_base != NULL) free(irdata->def_base);
+  irdata->def_saisie = NULL;
+  irdata->saisie = NULL;
+  irdata->def_calculee = NULL;
+  irdata->calculee = NULL;
+  irdata->def_base = NULL;
+  irdata->base = NULL;
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Com.CatVar.LocMap.iter
+        (fun loc _ ->
+          match loc with
+          | Com.CatVar.LocInput ->
+              Pp.fpr fmt
+                "  if (irdata->def_saisie_%s != NULL) \
+                 free(irdata->def_saisie_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->saisie_%s != NULL) free(irdata->saisie_%s);@\n"
+                sp sp
+          | Com.CatVar.LocComputed ->
+              Pp.fpr fmt
+                "  if (irdata->def_calculee_%s != NULL) \
+                 free(irdata->def_calculee_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->calculee_%s != NULL) free(irdata->calculee_%s);@\n"
+                sp sp
+          | Com.CatVar.LocBase ->
+              Pp.fpr fmt
+                "  if (irdata->def_base_%s != NULL) free(irdata->def_base_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->base_%s != NULL) free(irdata->base_%s);@\n" sp sp)
+        vsd.vs_cats)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt
+    {|
   if (irdata->tmps != NULL) free(irdata->tmps);
   if (irdata->def_tmps != NULL) free(irdata->def_tmps);
   if (irdata->info_tmps != NULL) free(irdata->info_tmps);
@@ -1279,33 +1346,47 @@ T_irdata *cree_irdata(void) {
   
   irdata = (T_irdata *)malloc(sizeof (T_irdata));
   if (irdata == NULL) return NULL;
-  irdata->saisie = NULL;
-  irdata->def_saisie = NULL;
-  if (TAILLE_SAISIE > 0) {
-    irdata->saisie = (double *)malloc(TAILLE_SAISIE * sizeof (double));
-    if (irdata->saisie == NULL) goto erreur_cree_irdata;
-    irdata->def_saisie = (char *)malloc(TAILLE_SAISIE * sizeof (char));
-    if (irdata->def_saisie == NULL) goto erreur_cree_irdata;
-  }
-  init_saisie(irdata);
-  irdata->calculee = NULL;
-  irdata->def_calculee = NULL;
-  if (TAILLE_CALCULEE > 0) {
-    irdata->calculee = (double *)malloc(TAILLE_CALCULEE * sizeof (double));
-    if (irdata->calculee == NULL) goto erreur_cree_irdata;
-    irdata->def_calculee = (char *)malloc(TAILLE_CALCULEE * sizeof (char));
-    if (irdata->def_calculee == NULL) goto erreur_cree_irdata;
-  }
-  init_calculee(irdata);
-  irdata->base = NULL;
-  irdata->def_base = NULL;
-  if (TAILLE_BASE > 0) {
-    irdata->base = (double *)malloc(TAILLE_BASE * sizeof (double));
-    if (irdata->base == NULL) goto erreur_cree_irdata;
-    irdata->def_base = (char *)malloc(TAILLE_BASE * sizeof (char));
-    if (irdata->def_base == NULL) goto erreur_cree_irdata;
-  }
-  init_base(irdata);
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Com.CatVar.LocMap.iter
+        (fun loc _ ->
+          let init_loc loc_str nb_str =
+            Pp.fpr fmt "  irdata->def_%s_%s = NULL;@\n" loc_str sp;
+            Pp.fpr fmt "  irdata->%s_%s = NULL;@\n" loc_str sp;
+            Pp.fpr fmt "  if (TAILLE_%s > 0) {@\n" nb_str;
+            Pp.fpr fmt
+              "    irdata->def_%s_%s = (char *)malloc(TAILLE_%s * sizeof \
+               (char));@\n"
+              loc_str sp nb_str;
+            Pp.fpr fmt
+              "    if (irdata->def_%s_%s == NULL) goto erreur_cree_irdata;@\n"
+              loc_str sp;
+            Pp.fpr fmt
+              "    irdata->%s_%s = (double *)malloc(TAILLE_%s * sizeof \
+               (double));@\n"
+              loc_str sp nb_str;
+            Pp.fpr fmt
+              "    if (irdata->%s_%s == NULL) goto erreur_cree_irdata;@\n"
+              loc_str sp;
+            Pp.fpr fmt
+              "    init_%s_espace(irdata->def_%s_%s, irdata->%s_%s);@\n" loc_str
+              loc_str sp loc_str sp;
+            Pp.fpr fmt "  }@\n";
+            if vsd.vs_by_default then (
+              Pp.fpr fmt "  irdata->def_%s = irdata->def_%s_%s;@\n" loc_str
+                loc_str sp;
+              Pp.fpr fmt "  irdata->%s = irdata->%s_%s;@\n" loc_str loc_str sp)
+          in
+          match loc with
+          | Com.CatVar.LocInput -> init_loc "saisie" "SAISIE"
+          | Com.CatVar.LocComputed -> init_loc "calculee" "CALCULEE"
+          | Com.CatVar.LocBase -> init_loc "base" "BASE")
+        vsd.vs_cats)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt "%s"
+    {|
   irdata->tmps = NULL;
   irdata->def_tmps = NULL;
   irdata->info_tmps = NULL;

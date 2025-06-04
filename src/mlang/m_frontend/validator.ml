@@ -128,6 +128,25 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
+  let variable_space_already_declared old_pos pos =
+    let msg =
+      Pp.spr "variable space declared more than once: already declared %a"
+        Pos.format old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let default_variable_space_already_declared old_pos pos =
+    let msg =
+      Pp.spr
+        "default variable space declared more than once: already declared %a"
+        Pos.format old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let no_default_variable_space () =
+    let msg = Pp.spr "there are no default variable space" in
+    Errors.raise_error msg
+
   let target_already_declared name old_pos pos =
     let msg =
       Format.asprintf
@@ -397,6 +416,8 @@ type program = {
   prog_dict : Com.Var.t IntMap.t;
   prog_vars : int StrMap.t;
   prog_alias : int StrMap.t;
+  prog_var_spaces : int StrMap.t;
+  prog_var_spaces_idx : Com.variable_space IntMap.t;
   prog_event_fields : Com.event_field StrMap.t;
   prog_event_field_idxs : string IntMap.t;
   prog_event_pos : Pos.t;
@@ -510,6 +531,8 @@ let empty_program (p : Mast.program) main_target =
     prog_var_cats = Com.CatVar.Map.empty;
     prog_dict = IntMap.empty;
     prog_vars = StrMap.empty;
+    prog_var_spaces = StrMap.empty;
+    prog_var_spaces_idx = IntMap.empty;
     prog_event_fields = StrMap.empty;
     prog_event_field_idxs = IntMap.empty;
     prog_event_pos = Pos.none;
@@ -726,6 +749,33 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       in
       let var = Com.Var.set_table var table in
       check_global_var var prog
+
+let check_variable_space_decl (vsd : Com.variable_space) (prog : program) :
+    program =
+  let name, pos = Pos.to_couple vsd.vs_name in
+  let vsd, prog_var_spaces_idx =
+    match StrMap.find_opt name prog.prog_var_spaces with
+    | Some old_id ->
+        let old_vsd = IntMap.find old_id prog.prog_var_spaces_idx in
+        Err.variable_space_already_declared (Pos.get old_vsd.vs_name) pos
+    | None ->
+        let vs_id = IntMap.cardinal prog.prog_var_spaces_idx in
+        let vsd = { vsd with vs_id } in
+        (vsd, IntMap.add vs_id vsd prog.prog_var_spaces_idx)
+  in
+  let prog_var_spaces =
+    if vsd.vs_by_default then
+      match StrMap.find_opt "" prog.prog_var_spaces with
+      | Some old_id ->
+          let old_vsd = IntMap.find old_id prog.prog_var_spaces_idx in
+          Err.default_variable_space_already_declared (Pos.get old_vsd.vs_name)
+            pos
+      | None ->
+          prog.prog_var_spaces |> StrMap.add "" vsd.vs_id
+          |> StrMap.add name vsd.vs_id
+    else prog.prog_var_spaces |> StrMap.add name vsd.vs_id
+  in
+  { prog with prog_var_spaces; prog_var_spaces_idx }
 
 let check_event_decl (evt_decl : Com.event_field list) (decl_pos : Pos.t)
     (prog : program) : program =
@@ -2850,6 +2900,7 @@ let proceed (main_target : string) (p : Mast.program) : program =
             | Mast.VarCatDecl (Pos.Mark (decl, pos)) ->
                 check_var_category decl pos prog
             | Mast.VariableDecl var_decl -> check_var_decl var_decl prog
+            | Mast.VariableSpaceDecl vsd -> check_variable_space_decl vsd prog
             | Mast.EventDecl evt_decl -> check_event_decl evt_decl pos_item prog
             | Mast.Error error -> check_error error prog
             | Mast.Func -> prog (* unused *)
@@ -2864,6 +2915,9 @@ let proceed (main_target : string) (p : Mast.program) : program =
       (empty_program p main_target)
       p
   in
+  (match StrMap.find_opt "" prog.prog_var_spaces with
+  | None -> Err.no_default_variable_space ()
+  | Some _ -> ());
   StrMap.iter
     (fun name (ef : Com.event_field) ->
       if ef.is_var && StrMap.cardinal prog.prog_vars = 0 then

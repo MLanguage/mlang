@@ -29,10 +29,16 @@ module type S = sig
 
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
+  type ctx_var_space = {
+    input : value Array.t;
+    computed : value Array.t;
+    base : value Array.t;
+  }
+
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
-    ctx_tgv : value Array.t;
+    ctx_var_spaces : ctx_var_space Array.t;
     ctx_tmps : value Array.t;
     ctx_tmps_var : Com.Var.t Array.t;
     mutable ctx_tmps_org : int;
@@ -57,8 +63,6 @@ module type S = sig
   val literal_to_value : Com.literal -> value
 
   val value_to_literal : value -> Com.literal
-
-  val tgv_origin : ctx -> Com.Var.t -> int
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
@@ -113,10 +117,16 @@ struct
 
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
+  type ctx_var_space = {
+    input : value Array.t;
+    computed : value Array.t;
+    base : value Array.t;
+  }
+
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
-    ctx_tgv : value Array.t;
+    ctx_var_spaces : ctx_var_space Array.t;
     ctx_tmps : value Array.t;
     ctx_tmps_var : Com.Var.t Array.t;
     mutable ctx_tmps_org : int;
@@ -143,10 +153,32 @@ struct
       let init i = IntMap.find i p.program_stats.table_map in
       Array.init (IntMap.cardinal p.program_stats.table_map) init
     in
+    let ctx_var_spaces =
+      let init i =
+        let vsd = IntMap.find i p.program_var_spaces_idx in
+        let input =
+          if Com.CatVar.LocMap.mem Com.CatVar.LocInput vsd.vs_cats then
+            Array.make p.program_stats.sz_input Undefined
+          else Array.make 0 Undefined
+        in
+        let computed =
+          if Com.CatVar.LocMap.mem Com.CatVar.LocComputed vsd.vs_cats then
+            Array.make p.program_stats.sz_computed Undefined
+          else Array.make 0 Undefined
+        in
+        let base =
+          if Com.CatVar.LocMap.mem Com.CatVar.LocBase vsd.vs_cats then
+            Array.make p.program_stats.sz_base Undefined
+          else Array.make 0 Undefined
+        in
+        { input; computed; base }
+      in
+      Array.init (IntMap.cardinal p.program_var_spaces_idx) init
+    in
     {
       ctx_prog = p;
       ctx_target = snd (StrMap.min_binding p.program_targets);
-      ctx_tgv = Array.make p.program_stats.sz_vars Undefined;
+      ctx_var_spaces;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
       ctx_tmps_var = Array.make p.program_stats.sz_all_tmps dummy_var;
       ctx_tmps_org = 0;
@@ -176,14 +208,6 @@ struct
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
 
-  let tgv_origin (ctx : ctx) (var : Com.Var.t) =
-    match Com.Var.cat_var_loc var with
-    | LocInput -> 0
-    | LocComputed -> ctx.ctx_prog.program_stats.nb_input
-    | LocBase ->
-        ctx.ctx_prog.program_stats.nb_input
-        + ctx.ctx_prog.program_stats.nb_calculated
-
   let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
       unit =
     let value_inputs =
@@ -194,9 +218,15 @@ struct
           | Com.Float f -> Number (N.of_float_input v f))
         inputs
     in
+    let default_space =
+      ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
+    in
     Com.Var.Map.iter
       (fun (var : Com.Var.t) value ->
-        ctx.ctx_tgv.(tgv_origin ctx var + Com.Var.loc_idx var) <- value)
+        match Com.Var.cat_var_loc var with
+        | LocInput -> default_space.input.(Com.Var.loc_idx var) <- value
+        | LocComputed -> default_space.computed.(Com.Var.loc_idx var) <- value
+        | LocBase -> default_space.base.(Com.Var.loc_idx var) <- value)
       value_inputs
 
   let update_ctx_with_events (ctx : ctx)
@@ -291,7 +321,7 @@ struct
 
   let get_var (ctx : ctx) (var : Com.Var.t) : Com.Var.t * int =
     match var.scope with
-    | Com.Var.Tgv _ -> (var, tgv_origin ctx var)
+    | Com.Var.Tgv _ -> (var, 0)
     | Com.Var.Temp _ -> (var, ctx.ctx_tmps_org)
     | Com.Var.Ref -> snd ctx.ctx_ref.(ctx.ctx_ref_org + Com.Var.loc_idx var)
 
@@ -306,7 +336,14 @@ struct
   let get_var_value_org (ctx : ctx) (var : Com.Var.t) (org : int) : value =
     let vi = org + Com.Var.loc_idx var in
     match var.scope with
-    | Com.Var.Tgv _ -> ctx.ctx_tgv.(vi)
+    | Com.Var.Tgv _ -> (
+        let var_space =
+          ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
+        in
+        match Com.Var.cat_var_loc var with
+        | LocInput -> var_space.input.(vi)
+        | LocComputed -> var_space.computed.(vi)
+        | LocBase -> var_space.base.(vi))
     | Com.Var.Temp _ -> ctx.ctx_tmps.(vi)
     | Com.Var.Ref -> assert false
 
@@ -430,7 +467,14 @@ struct
       (value : value) : unit =
     let vi = org + Com.Var.loc_idx var in
     match var.scope with
-    | Com.Var.Tgv _ -> ctx.ctx_tgv.(vi) <- value
+    | Com.Var.Tgv _ -> (
+        let var_space =
+          ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
+        in
+        match Com.Var.cat_var_loc var with
+        | LocInput -> var_space.input.(vi) <- value
+        | LocComputed -> var_space.computed.(vi) <- value
+        | LocBase -> var_space.base.(vi) <- value)
     | Com.Var.Temp _ -> ctx.ctx_tmps.(vi) <- value
     | Com.Var.Ref -> assert false
 
@@ -1198,10 +1242,16 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   Interp.update_ctx_with_events ctx events;
   Interp.evaluate_program ctx;
   let varMap =
+    let default_space =
+      ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
+    in
     let fold _ (var : Com.Var.t) res =
       if Com.Var.is_given_back var then
         let litt =
-          ctx.ctx_tgv.(Interp.tgv_origin ctx var + Com.Var.loc_idx var)
+          match Com.Var.cat_var_loc var with
+          | LocInput -> default_space.input.(Com.Var.loc_idx var)
+          | LocComputed -> default_space.computed.(Com.Var.loc_idx var)
+          | LocBase -> default_space.base.(Com.Var.loc_idx var)
         in
         let fVal = Interp.value_to_literal litt in
         Com.Var.Map.add var fVal res

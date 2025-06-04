@@ -15,6 +15,12 @@ module CatVar : sig
 
   type loc = LocComputed | LocBase | LocInput
 
+  val pp_loc : Format.formatter -> loc -> unit
+
+  module LocSet : SetExt.T with type elt = loc
+
+  module LocMap : MapExt.T with type key = loc
+
   type data = {
     id : t;
     id_str : string;
@@ -191,6 +197,13 @@ type rule_domain = rule_domain_data domain
 type verif_domain_data = {
   vdom_auth : Pos.t CatVar.Map.t;
   vdom_verifiable : bool;
+}
+
+type variable_space = {
+  vs_id : int;
+  vs_name : string Pos.marked;
+  vs_cats : CatVar.loc Pos.marked CatVar.LocMap.t;
+  vs_by_default : bool;
 }
 
 type verif_domain = verif_domain_data domain

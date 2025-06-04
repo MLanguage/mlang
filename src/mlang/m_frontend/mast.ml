@@ -210,6 +210,7 @@ type source_file_item =
   | VarCatDecl of var_category_decl Pos.marked
   | RuleDomDecl of rule_domain_decl
   | VerifDomDecl of verif_domain_decl
+  | VariableSpaceDecl of Com.variable_space
 
 (* TODO: parse something here *)
 
