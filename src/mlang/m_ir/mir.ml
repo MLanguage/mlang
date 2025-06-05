@@ -211,15 +211,12 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
 and expand_functions_access (access : 'var Com.access) : 'var Com.access =
   match access with
   | VarAccess _ -> access
-  | TabAccess (m_v, i) ->
+  | TabAccess (m_sp, i_sp, m_v, i) ->
       let i' = expand_functions_expr i in
-      TabAccess (m_v, i')
-  | ConcAccess (m_v, m_if, i) ->
-      let i' = expand_functions_expr i in
-      ConcAccess (m_v, m_if, i')
-  | FieldAccess (v_i, f, i_f) ->
+      TabAccess (m_sp, i_sp, m_v, i')
+  | FieldAccess (m_sp_opt, i_sp, v_i, f, i_f) ->
       let m_i = expand_functions_expr v_i in
-      FieldAccess (m_i, f, i_f)
+      FieldAccess (m_sp_opt, i_sp, m_i, f, i_f)
 
 let expand_functions (p : program) : program =
   let open Com in

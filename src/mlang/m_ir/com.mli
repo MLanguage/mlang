@@ -257,10 +257,10 @@ type var_name = Normal of string | Generic of var_name_generic
 type m_var_name = var_name Pos.marked
 
 type 'v access =
-  | VarAccess of 'v
-  | TabAccess of 'v * 'v m_expression
-  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
-  | FieldAccess of 'v m_expression * string Pos.marked * int
+  | VarAccess of m_var_name option * int * 'v
+  | TabAccess of m_var_name option * int * 'v * 'v m_expression
+  | FieldAccess of
+      m_var_name option * int * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 

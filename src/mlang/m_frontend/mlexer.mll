@@ -33,6 +33,7 @@ rule token = parse
       "unexpected end of comment"
       (mk_lexbuf_pos lexbuf)
   }
+| '.' { DOT }
 | ';' { SEMICOLON }
 | ':' { COLON }
 | ',' { COMMA }

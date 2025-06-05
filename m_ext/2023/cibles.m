@@ -994,57 +994,10 @@ iterer : variable I : 0..NB increment 1 : dans (
 )
 afficher_erreur indenter(-2) "test_tableaux\n\n";
 
-cible test_varcons:
-application: iliad;
-variables_temporaires: TOTO, TUTU, PROUT02;
-afficher_erreur "test_varcons\n" indenter(2);
-TOTO = 2;
-PROUT02 = 2;
-si (TOTO dans (PROUT[00: TOTO])) alors
-  afficher_erreur "dans OK\n";
-sinon
-  afficher_erreur "dans KO\n";
-finsi
-TOTO = 2;
-afficher_erreur
-  nom(PROUT[00: TOTO])
-  " = " (PROUT[00: TOTO]) " (" alias(PROUT[00: TOTO]) ")\n";
-iterer : variable TRUC2 : PROUT02 : dans (
-  afficher_erreur
-    "TRUC2: " nom(TRUC[0: TOTO])
-    " = " (TRUC[0: TOTO]) " (" alias(TRUC[0: TOTO]) ")\n";
-)
-afficher_erreur
-  "attribut(" nom(ALLO[0: TOTO]) ", priorite) = "
-  (attribut(ALLO[0: TOTO], priorite)) " (" alias(ALLO[0: TOTO]) ")\n";
-afficher_erreur
-  "taille(" nom(TMAJORSE[0: TOTO]) ") = "
-  (taille(TMAJORSE[0: TOTO])) " (" alias(TMAJORSE[0: TOTO]) ")\n";
-PROUT[00: TOTO] = 11;
-afficher_erreur nom(PROUT[00: TOTO]) " = " (PROUT[00: TOTO]) "\n";
-STR_TR[00: 3] = 12;
-afficher_erreur nom(STR_TR[00: 3]) " = " (STR_TR[00: 3]) "\n";
-TOTO = 22;
-STR_TR[00: TOTO] = 13;
-afficher_erreur nom(STR_TR[00: TOTO]) " = " (STR_TR[00: TOTO]) "\n";
-TUTU = indefini;
-iterer : variable TRUC2 : TUTU : dans (
-  TRUC[0: 2] = 14;
-  afficher_erreur nom(TRUC[0: 2]) " = " (TRUC[0: 2]) "\n";
-)
-TUTU = indefini;
-TOTO = 2;
-iterer : variable TRUC2 : TUTU : dans (
-  TRUC[0: TOTO] = 15;
-  afficher_erreur nom(TRUC[0: TOTO]) " = " (TRUC[0: TOTO]) "\n";
-)
-afficher_erreur indenter(-2) "test_varcons\n\n";
-
 cible test:
 application: iliad;
 calculer cible test_evenements;
 calculer cible test_tableaux;
-calculer cible test_varcons;
 
 cible enchainement_primitif:
 application: iliad;

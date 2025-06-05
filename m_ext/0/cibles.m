@@ -24,28 +24,6 @@ TOTO03 : calculee primrest = 0 restituee : "" ;
 TOTO05 : calculee primrest = 0 restituee : "" ;
 TUTU : tableau[5] calculee primrest = 0 restituee : "" ;
 
-cible test_varcons:
-application: iliad;
-variables_temporaires: TITI tableau[5];
-afficher_erreur "entree test_varcons\n" indenter(2);
-iterer : variable I : 1..5 increment 2 : dans (
-  TOTO[00: I] = 450 + I;
-  afficher_erreur nom(TOTO[00: I]) " = " (TOTO[00: I]) "\n";
-)
-iterer : variable I : 0..(taille(TUTU) - 1) increment 1 : dans (
-  TUTU[I] = 787800 + I;
-)
-iterer : variable I : 0..(taille(TUTU) - 1) increment 1 : dans (
-  afficher_erreur nom(TUTU[0: I]) " = " (TUTU[I]) "\n";
-)
-iterer : variable I : 0..(taille(TITI) - 1) increment 1 : dans (
-  TITI[I] = 717100 + I;
-)
-iterer : variable I : 0..(taille(TITI) - 1) increment 1 : dans (
-  afficher_erreur nom(TITI[0: I]) " = " (TITI[I]) "\n";
-)
-afficher_erreur indenter(-2) "sortie test_varcons\n";
-
 fonction toto_fonction:
 application: iliad;
 arguments: A0, A1, A2, A3, A4, A5, A6;
@@ -69,7 +47,13 @@ application: iliad;
 variables_temporaires: A0, A1, A2, A3, AA tableau[3], A4, A5, A6, R;
 afficher_erreur "entree test_args\n" indenter(2);
 iterer : variable I : 0..6 increment 1 : dans (
-  A[0: I] = I;
+  A0 = 0;
+  A1 = 1;
+  A2 = 2;
+  A3 = 3;
+  A4 = 4;
+  A5 = 5;
+  A6 = 6;
 )
 R = 7;
 calculer cible toto_cible : avec A0, A1, A2, A3, A4, A5, A6, R;
@@ -149,7 +133,6 @@ afficher_erreur "temporaire A0 <" nom(A0) "> <" alias(A0) ">\n";
 afficher_erreur "temporaire A2 <" nom(A2) "> <" alias(A2) ">\n";
 afficher_erreur "temporaire tableau AA <" nom(AA) "> <" alias(AA) ">\n";
 afficher_erreur "temporaire AA[2] <" nom(AA[2]) "> <" alias(AA[2]) ">\n";
-afficher_erreur "temporaire A[0: 2] <" nom(A[0: 2]) "> <" alias(A[0: 2]) ">\n";
 iterer : variable VAR : V_IND_TRAIT, TOTO01, A2 : dans (
   afficher_erreur "reference VAR <" nom(VAR) "> <" alias(VAR) ">\n";
 )

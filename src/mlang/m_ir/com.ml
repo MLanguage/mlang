@@ -466,10 +466,10 @@ type var_name = Normal of string | Generic of var_name_generic
 type m_var_name = var_name Pos.marked
 
 type 'v access =
-  | VarAccess of 'v
-  | TabAccess of 'v * 'v m_expression
-  | ConcAccess of m_var_name * string Pos.marked * 'v m_expression
-  | FieldAccess of 'v m_expression * string Pos.marked * int
+  | VarAccess of m_var_name option * int * 'v
+  | TabAccess of m_var_name option * int * 'v * 'v m_expression
+  | FieldAccess of
+      m_var_name option * int * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
@@ -657,17 +657,14 @@ type ('v, 'e) target = {
 let target_is_function t = t.target_result <> None
 
 let rec access_map_var f = function
-  | VarAccess v -> VarAccess (f v)
-  | TabAccess (v, m_i) ->
+  | VarAccess (m_sp_opt, i_sp, v) -> VarAccess (m_sp_opt, i_sp, f v)
+  | TabAccess (m_sp_opt, i_sp, v, m_i) ->
       let v' = f v in
       let m_i' = m_expr_map_var f m_i in
-      TabAccess (v', m_i')
-  | ConcAccess (vname, m_ifmt, m_i) ->
+      TabAccess (m_sp_opt, i_sp, v', m_i')
+  | FieldAccess (m_sp_opt, i_sp, m_i, field, id) ->
       let m_i' = m_expr_map_var f m_i in
-      ConcAccess (vname, m_ifmt, m_i')
-  | FieldAccess (m_i, field, id) ->
-      let m_i' = m_expr_map_var f m_i in
-      FieldAccess (m_i', field, id)
+      FieldAccess (m_sp_opt, i_sp, m_i', field, id)
 
 and m_access_map_var f m_access = Pos.map (access_map_var f) m_access
 
@@ -958,15 +955,27 @@ let format_comp_op fmt op =
     | Neq -> "!=")
 
 let format_access form_var form_expr fmt = function
-  | VarAccess v -> form_var fmt v
-  | TabAccess (v, m_i) ->
-      Format.fprintf fmt "%a[%a]" form_var v form_expr (Pos.unmark m_i)
-  | ConcAccess (m_vn, m_idxf, idx) ->
-      Format.fprintf fmt "%s{%s, %a}"
-        (get_var_name (Pos.unmark m_vn))
-        (Pos.unmark m_idxf) form_expr (Pos.unmark idx)
-  | FieldAccess (e, f, _) ->
-      Format.fprintf fmt "champ_evenement(%a, %s)" form_expr (Pos.unmark e)
+  | VarAccess (m_sp_opt, _, v) ->
+      let sp_str =
+        match m_sp_opt with
+        | None -> ""
+        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+      in
+      Pp.fpr fmt "%s%a" sp_str form_var v
+  | TabAccess (m_sp_opt, _, v, m_i) ->
+      let sp_str =
+        match m_sp_opt with
+        | None -> ""
+        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+      in
+      Pp.fpr fmt "%s%a[%a]" sp_str form_var v form_expr (Pos.unmark m_i)
+  | FieldAccess (m_sp_opt, _, e, f, _) ->
+      let sp_str =
+        match m_sp_opt with
+        | None -> ""
+        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+      in
+      Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str form_expr (Pos.unmark e)
         (Pos.unmark f)
 
 let format_set_value form_var form_expr fmt sv =

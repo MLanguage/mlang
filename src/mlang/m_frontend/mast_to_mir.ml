@@ -341,9 +341,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
     and aux_access tdata m_a =
       match Pos.unmark m_a with
       | Com.VarAccess _ -> (0, 0, 0, tdata)
-      | Com.TabAccess (_, mi)
-      | Com.ConcAccess (_, _, mi)
-      | Com.FieldAccess (mi, _, _) ->
+      | Com.TabAccess (_, _, _, mi) | Com.FieldAccess (_, _, mi, _, _) ->
           aux_expr tdata mi
     and aux_instr tdata (Pos.Mark (instr, _pos)) =
       match instr with
@@ -485,9 +483,8 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       match expr with
       | Com.TestInSet (_, me, values) ->
           let fold (nb, sz, nbRef, tdata) = function
-            | Com.VarValue (Pos.Mark (TabAccess (_, mei), _))
-            | Com.VarValue (Pos.Mark (ConcAccess (_, _, mei), _))
-            | Com.VarValue (Pos.Mark (FieldAccess (mei, _, _), _)) ->
+            | Com.VarValue (Pos.Mark (TabAccess (_, _, _, mei), _))
+            | Com.VarValue (Pos.Mark (FieldAccess (_, _, mei, _, _), _)) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata mei in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
             | _ -> (nb, sz, nbRef, tdata)
@@ -498,18 +495,14 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
           (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
-      | Com.Var (TabAccess (_, me))
-      | Com.Var (ConcAccess (_, _, me))
-      | Com.Var (FieldAccess (me, _, _))
-      | Com.Size (Pos.Mark (TabAccess (_, me), _))
-      | Com.Size (Pos.Mark (ConcAccess (_, _, me), _))
-      | Com.Size (Pos.Mark (FieldAccess (me, _, _), _))
-      | Com.Attribut (Pos.Mark (TabAccess (_, me), _), _)
-      | Com.Attribut (Pos.Mark (ConcAccess (_, _, me), _), _)
-      | Com.Attribut (Pos.Mark (FieldAccess (me, _, _), _), _)
-      | Com.IsVariable (Pos.Mark (TabAccess (_, me), _), _)
-      | Com.IsVariable (Pos.Mark (ConcAccess (_, _, me), _), _)
-      | Com.IsVariable (Pos.Mark (FieldAccess (me, _, _), _), _) ->
+      | Com.Var (TabAccess (_, _, _, me))
+      | Com.Var (FieldAccess (_, _, me, _, _))
+      | Com.Size (Pos.Mark (TabAccess (_, _, _, me), _))
+      | Com.Size (Pos.Mark (FieldAccess (_, _, me, _, _), _))
+      | Com.Attribut (Pos.Mark (TabAccess (_, _, _, me), _), _)
+      | Com.Attribut (Pos.Mark (FieldAccess (_, _, me, _, _), _), _)
+      | Com.IsVariable (Pos.Mark (TabAccess (_, _, _, me), _), _)
+      | Com.IsVariable (Pos.Mark (FieldAccess (_, _, me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
@@ -624,46 +617,60 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
     | NbCategory cs -> NbCategory (Validator.mast_to_catvars cs p.prog_var_cats)
     | Attribut (Pos.Mark (access, pos), a) -> (
         match access with
-        | VarAccess m_id -> (
+        | VarAccess (_, _, m_id) -> (
             let var = get_var dict m_id in
             if Com.Var.is_ref var then
-              Attribut (Pos.same (VarAccess var) m_id, a)
+              let access' = translate_access p dict access in
+              Attribut (Pos.mark access' pos, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
               | None -> Literal Undefined)
-        | TabAccess (m_id, _) -> (
+        | TabAccess (_, _, m_id, _) -> (
             let var = get_var dict m_id in
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
             | Some l -> Literal (Float (float (Pos.unmark l)))
             | None -> Literal Undefined)
-        | ConcAccess (m_vn, m_if, i) ->
-            let i' = translate_expression p dict i in
-            Attribut (Pos.mark (ConcAccess (m_vn, m_if, i')) pos, a)
-        | FieldAccess (e, f, _) ->
+        | FieldAccess (m_sp_opt, _, e, f, _) ->
+            let i_sp =
+              let sp_name =
+                match m_sp_opt with
+                | None -> ""
+                | Some m_sp -> Com.get_normal_var @@ Pos.unmark m_sp
+              in
+              StrMap.find sp_name p.prog_var_spaces
+            in
             let e' = translate_expression p dict e in
             let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-            Attribut (Pos.mark (FieldAccess (e', f, i)) pos, a))
+            Attribut (Pos.mark (FieldAccess (m_sp_opt, i_sp, e', f, i)) pos, a))
     | Size (Pos.Mark (access, pos)) -> (
         match access with
-        | VarAccess m_id ->
-            let var = get_var dict m_id in
-            if Com.Var.is_ref var then Size (Pos.same (VarAccess var) m_id)
-            else Literal (Float (float @@ Com.Var.size var))
-        | TabAccess _ -> Literal (Float 1.0)
-        | ConcAccess (m_vn, m_if, i) ->
-            let i' = translate_expression p dict i in
-            Size (Pos.mark (ConcAccess (m_vn, m_if, i')) pos)
-        | FieldAccess (e, f, _) ->
-            let e' = translate_expression p dict e in
-            let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
-            Size (Pos.mark (FieldAccess (e', f, i)) pos))
-    | IsVariable (Pos.Mark (access, pos), m_name) -> (
-        match access with
-        | VarAccess m_id -> (
+        | VarAccess (_, _, m_id) ->
             let var = get_var dict m_id in
             if Com.Var.is_ref var then
-              IsVariable (Pos.same (VarAccess var) m_id, m_name)
+              let access' = translate_access p dict access in
+              Size (Pos.mark access' pos)
+            else Literal (Float (float @@ Com.Var.size var))
+        | TabAccess _ -> Literal (Float 1.0)
+        | FieldAccess (m_sp_opt, _, e, f, _) ->
+            let i_sp =
+              let sp_name =
+                match m_sp_opt with
+                | None -> ""
+                | Some m_sp -> Com.get_normal_var @@ Pos.unmark m_sp
+              in
+              StrMap.find sp_name p.prog_var_spaces
+            in
+            let e' = translate_expression p dict e in
+            let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
+            Size (Pos.mark (FieldAccess (m_sp_opt, i_sp, e', f, i)) pos))
+    | IsVariable (Pos.Mark (access, pos), m_name) -> (
+        match access with
+        | VarAccess (_, _, m_id) -> (
+            let var = get_var dict m_id in
+            if Com.Var.is_ref var then
+              let access' = translate_access p dict access in
+              IsVariable (Pos.mark access' pos, m_name)
             else
               let name = Pos.unmark m_name in
               if Com.Var.name_str var = name then Literal (Float 1.0)
@@ -684,21 +691,36 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
 
 and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
     (access : int Pos.marked Com.access) : Com.Var.t Com.access =
+  let get_i_sp m_sp_opt =
+    let sp_name =
+      match m_sp_opt with
+      | None -> ""
+      | Some m_sp -> Com.get_normal_var @@ Pos.unmark m_sp
+    in
+    StrMap.find sp_name p.prog_var_spaces
+  in
   match access with
-  | VarAccess m_v ->
+  | VarAccess (m_sp_opt, _, m_v) ->
+      let i_sp = get_i_sp m_sp_opt in
       let v' = get_var dict m_v in
-      Com.VarAccess v'
-  | TabAccess (m_v, m_i) ->
+      Com.VarAccess (m_sp_opt, i_sp, v')
+  | TabAccess (m_sp_opt, _, m_v, m_i) ->
+      let i_sp = get_i_sp m_sp_opt in
       let v' = get_var dict m_v in
       let m_i' = translate_expression p dict m_i in
-      Com.TabAccess (v', m_i')
-  | ConcAccess (m_vn, m_if, i) ->
-      let i' = translate_expression p dict i in
-      Com.ConcAccess (m_vn, m_if, i')
-  | FieldAccess (i, f, _) ->
+      Com.TabAccess (m_sp_opt, i_sp, v', m_i')
+  | FieldAccess (m_sp_opt, _, i, f, _) ->
+      let i_sp =
+        let sp_name =
+          match m_sp_opt with
+          | None -> ""
+          | Some m_sp -> Com.get_normal_var @@ Pos.unmark m_sp
+        in
+        StrMap.find sp_name p.prog_var_spaces
+      in
       let i' = translate_expression p dict i in
       let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
-      Com.FieldAccess (i', f, ef.index)
+      Com.FieldAccess (m_sp_opt, i_sp, i', f, ef.index)
 
 (** {2 Translation of instructions} *)
 

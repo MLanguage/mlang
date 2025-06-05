@@ -84,6 +84,12 @@ module Err = struct
   let constant_forbidden_as_arg pos =
     Errors.raise_spanned_error "constant forbidden as argument" pos
 
+  let constant_forbidden_as_var pos =
+    Errors.raise_spanned_error "constant forbidden as variable" pos
+
+  let constant_forbidden_as_var_space pos =
+    Errors.raise_spanned_error "constant forbidden as variable space" pos
+
   let unknown_application app pos =
     let msg = Format.sprintf "application \"%s\" is unknown" app in
     Errors.raise_spanned_error msg pos
@@ -554,43 +560,52 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
     (Pos.Mark (a, a_pos) : Com.m_var_name Com.m_access) :
     Com.m_var_name access_or_literal =
   match a with
-  | VarAccess m_v -> (
+  | VarAccess (m_sp_opt, i_sp, m_v) -> (
+      let m_sp_opt' =
+        Option.map
+          (fun m_sp ->
+            match expand_variable const_map loop_map m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> m_sp')
+          m_sp_opt
+      in
       match expand_variable const_map loop_map m_v with
-      | Pos.Mark (AtomLiteral lit, _) -> ExpLiteral lit
-      | Pos.Mark (AtomVar m_v, var_pos) ->
-          ExpAccess (Pos.mark (Com.VarAccess m_v) var_pos))
-  | TabAccess (m_v, m_i) -> (
+      | Pos.Mark (AtomLiteral lit, lit_pos) -> (
+          match m_sp_opt with
+          | None -> ExpLiteral lit
+          | Some _ -> Err.constant_forbidden_as_var lit_pos)
+      | Pos.Mark (AtomVar m_v', _) ->
+          let a' = Com.VarAccess (m_sp_opt', i_sp, m_v') in
+          ExpAccess (Pos.mark a' a_pos))
+  | TabAccess (m_sp_opt, i_sp, m_v, m_i) -> (
       match expand_variable const_map loop_map m_v with
       | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_table v_pos
-      | Pos.Mark (AtomVar m_v, v_pos) ->
+      | Pos.Mark (AtomVar m_v', _) ->
+          let m_sp_opt' =
+            Option.map
+              (fun m_sp ->
+                match expand_variable const_map loop_map m_sp with
+                | Pos.Mark (AtomLiteral _, sp_pos) ->
+                    Err.constant_forbidden_as_var_space sp_pos
+                | Pos.Mark (AtomVar m_sp', _) -> m_sp')
+              m_sp_opt
+          in
           let m_i' = expand_expression const_map loop_map m_i in
-          ExpAccess (Pos.mark (Com.TabAccess (m_v, m_i')) v_pos))
-  | ConcAccess (m_v, m_if, i) -> (
-      match expand_variable const_map loop_map m_v with
-      | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_arg v_pos
-      | Pos.Mark (AtomVar m_v, v_pos) -> (
-          match expand_expression const_map loop_map i with
-          | Pos.Mark (Com.Literal Undefined, i_pos) ->
-              Err.constant_forbidden_as_arg i_pos
-          | Pos.Mark (Com.Literal (Float f), i_pos) ->
-              let fi = int_of_float f in
-              if fi < 0 then Err.constant_forbidden_as_arg i_pos;
-              let m_v' =
-                match Pos.unmark m_v with
-                | Com.Normal n ->
-                    let n' = Strings.concat_int n (Pos.unmark m_if) fi in
-                    Pos.mark (Com.Normal n') v_pos
-                | _ -> assert false
-              in
-              ExpAccess (Pos.mark (Com.VarAccess m_v') a_pos)
-          | i' ->
-              ExpAccess
-                (Pos.mark
-                   (Com.ConcAccess (Pos.mark (Pos.unmark m_v) v_pos, m_if, i'))
-                   a_pos)))
-  | FieldAccess (e, f, i_f) ->
+          let a' = Com.TabAccess (m_sp_opt', i_sp, m_v', m_i') in
+          ExpAccess (Pos.mark a' a_pos))
+  | FieldAccess (m_sp_opt, i_sp, e, f, i_f) ->
+      let m_sp_opt' =
+        Option.map
+          (fun m_sp ->
+            match expand_variable const_map loop_map m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> m_sp')
+          m_sp_opt
+      in
       let e' = expand_expression const_map loop_map e in
-      ExpAccess (Pos.mark (Com.FieldAccess (e', f, i_f)) a_pos)
+      ExpAccess (Pos.mark (Com.FieldAccess (m_sp_opt', i_sp, e', f, i_f)) a_pos)
 
 and expand_expression (const_map : const_context) (loop_map : loop_context)
     (m_expr : Mast.expression Pos.marked) : Mast.expression Pos.marked =

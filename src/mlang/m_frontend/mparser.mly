@@ -42,7 +42,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
-%token RANGE
+%token RANGE DOT
 
 %token BOOLEAN DATE_YEAR DATE_DAY_MONTH_YEAR DATE_MONTH INTEGER REAL
 %token ONE IN APPLICATION CHAINING TYPE TABLE
@@ -999,21 +999,27 @@ for_formula:
 | FOR lv = with_pos(loop_variables) COLON ft = formula { (lv, ft) }
 
 var_access:
-| s = symbol_with_pos m_i_opt = with_pos(brackets)? {
-    let m_v = Pos.map (parse_variable $sloc) s in
-    match m_i_opt with
-    | None -> Com.VarAccess m_v
-    | Some m_i -> Com.TabAccess (m_v, m_i)
-  }
-| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
-  COLON idx = with_pos(sum_expression) RBRACKET {
+| sp = symbol_with_pos DOT v = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    let idxFmt = parse_index_format idxFmt in
-    Com.ConcAccess (m_v, idxFmt, idx)
+    match m_i_opt with
+    | None -> Com.VarAccess (Some m_sp, -1, m_v)
+    | Some m_i -> Com.TabAccess (Some m_sp, -1, m_v, m_i)
+  }
+| v = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    match m_i_opt with
+    | None -> Com.VarAccess (None, -1, m_v)
+    | Some m_i -> Com.TabAccess (None, -1, m_v, m_i)
+  }
+| sp = symbol_with_pos DOT EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA f = symbol_with_pos RPAREN {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    Com.FieldAccess (Some m_sp, -1, idx, f, -1)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
-    Com.FieldAccess (idx, f, -1)
+    Com.FieldAccess (None, -1, idx, f, -1)
   }
 
 formula:
@@ -1187,22 +1193,39 @@ enumeration:
 
 enumeration_item:
 | bounds = interval { bounds }
+| sp = symbol_with_pos DOT EVENT_FIELD LPAREN idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    let pos = mk_position $sloc in
+    let access = Com.FieldAccess (Some m_sp, -1, idx, field, -1) in
+    Com.VarValue (Pos.mark access pos)
+  }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
     let pos = mk_position $sloc in
-    Com.VarValue (Pos.mark (Com.FieldAccess (idx, field, -1)) pos)
+    let access = Com.FieldAccess (None, -1, idx, field, -1) in
+    Com.VarValue (Pos.mark access pos)
   }
-| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
-  COLON idx = with_pos(sum_expression) RBRACKET {
+| sp = symbol_with_pos DOT v = symbol_with_pos m_i_opt = with_pos(brackets)? {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    let idxFmt = parse_index_format idxFmt in
-    let pos = mk_position $sloc in
-    Com.VarValue (Pos.mark (Com.ConcAccess (m_v, idxFmt, idx)) pos)
+    let a =
+      match m_i_opt with
+      | None -> Com.VarAccess (Some m_sp, -1, m_v)
+      | Some m_i -> Com.TabAccess (Some m_sp, -1, m_v, m_i)
+    in
+    Com.VarValue (Pos.mark a (mk_position $sloc))
   }
-| s = SYMBOL {
+| v = symbol_with_pos LBRACKET m_i = with_pos(expression) RBRACKET {
+    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    let a = Com.TabAccess (None, -1, m_v, m_i) in
+    Com.VarValue (Pos.mark a (mk_position $sloc))
+  }
+| v = SYMBOL {
     let pos = mk_position $sloc in
-    match parse_variable_or_int $sloc s with
-    | ParseVar v -> Com.VarValue (Pos.mark (Com.VarAccess (Pos.mark v pos)) pos)
+    match parse_variable_or_int $sloc v with
+    | ParseVar v' ->
+        Com.VarValue (Pos.mark (Com.VarAccess (None, -1, Pos.mark v' pos)) pos)
     | ParseInt i -> Com.FloatValue (Pos.mark (float_of_int i) pos)
   }
 
@@ -1269,25 +1292,36 @@ factor:
 | MINUS e = with_pos(factor) { Com.Unop (Minus, e) }
 | e = ternary_operator { e }
 | e = function_call { e }
+| sp = symbol_with_pos DOT EVENT_FIELD LPAREN m_idx = with_pos(expression)
+  COMMA field = symbol_with_pos RPAREN {
+    let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    Var (FieldAccess (Some m_sp, -1, m_idx, field, -1))
+  }
 | EVENT_FIELD LPAREN m_idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
-    Var (FieldAccess (m_idx, field, -1))
+    Var (FieldAccess (None, -1, m_idx, field, -1))
   }
-| v = symbol_with_pos LBRACKET idxFmt = symbol_with_pos
-  COLON idx = with_pos(sum_expression) RBRACKET {
-    let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    let idxFmt = parse_index_format idxFmt in
-    Var (ConcAccess (m_v, idxFmt, idx))
+| sp = symbol_with_pos DOT v = symbol_with_pos
+  LBRACKET m_i = with_pos(sum_expression) RBRACKET {
+    let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    Var (TabAccess (Some m_sp, -1, m_v, m_i))
   }
-| s = symbol_with_pos m_i = with_pos(brackets) {
-    let m_v = Pos.same (parse_variable $sloc (Pos.unmark s)) s in
-    Var (TabAccess (m_v, m_i))
+| v = symbol_with_pos LBRACKET m_i = with_pos(sum_expression) RBRACKET {
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    Var (TabAccess (None, -1, m_v, m_i))
   }
-| a = factor_atom {
-    match a with
-    | Com.AtomVar v -> Com.Var (VarAccess v)
+| sp = symbol_with_pos DOT v = symbol_with_pos {
+    let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
+    Var (VarAccess (Some m_sp, -1, m_v))
+  }
+| a = SYMBOL {
+    match parse_atom $sloc a with
+    | Com.AtomVar v -> Com.Var (VarAccess (None, -1, v))
     | Com.AtomLiteral l -> Com.Literal l
   }
+| UNDEFINED { Com.Literal Undefined }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:
@@ -1305,12 +1339,6 @@ ternary_operator:
 
 else_branch:
 | ELSE e = with_pos(expression) { e }
-
-factor_atom:
-| UNDEFINED { AtomLiteral Undefined }
-| s = SYMBOL { parse_atom $sloc s }(*
-  Some symbols start with a digit and make it hard to parse with (float / integer / symbol)
-  *)
 
 function_name:
 | VERIF_NUMBER { "numero_verif" }
