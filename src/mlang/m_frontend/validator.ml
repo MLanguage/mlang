@@ -1072,13 +1072,20 @@ let complete_vdom_decls (prog : program) : program =
 
 type var_mem_type = Num | Table | Both
 
-type var_env = { prog : program; vars : int StrMap.t }
+type proc_type = Target | Rule | Verif | Func | Filter
+
+type var_env = { prog : program; proc_type : proc_type; vars : int StrMap.t }
+
+let new_var_env ?(vars = StrMap.empty) prog proc_type =
+  { prog; proc_type; vars }
+
+let mod_var_env env proc_type = { env with proc_type }
 
 let add_var_env (var : Com.Var.t) env =
   let prog_dict = IntMap.add var.id var env.prog.prog_dict in
   let prog = { env.prog with prog_dict } in
   let vars = StrMap.add (Com.Var.name_str var) var.id env.vars in
-  { prog; vars }
+  { env with prog; vars }
 
 let check_name_in_env env m_name =
   let name, pos = Pos.to_couple m_name in
@@ -1093,9 +1100,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
     (fold_sp : Com.m_var_name option -> var_env -> 'a -> 'a)
     (fold_var :
       Com.m_var_name option -> 'v -> var_mem_type -> var_env -> 'a -> 'a)
-    (is_filter : bool) (acc : 'a) (m_expr : 'v Com.m_expression) (env : var_env)
-    : 'a =
-  let fold_aux = fold_var_expr get_var fold_sp fold_var is_filter in
+    (acc : 'a) (m_expr : 'v Com.m_expression) (env : var_env) : 'a =
+  let fold_aux = fold_var_expr get_var fold_sp fold_var in
   let expr, expr_pos = Pos.to_couple m_expr in
   match expr with
   | TestInSet (_positive, e, values) ->
@@ -1104,7 +1110,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
         (fun acc set_value ->
           match set_value with
           | Com.VarValue (Pos.Mark (a, a_pos)) -> (
-              if is_filter then Err.forbidden_expresion_in_filter a_pos;
+              if env.proc_type = Filter then
+                Err.forbidden_expresion_in_filter a_pos;
               match a with
               | VarAccess (m_sp_opt, _, m_v) ->
                   let acc = fold_sp m_sp_opt env acc in
@@ -1146,7 +1153,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
       in
       match func_name with
       | Com.Multimax -> (
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           match args with
           | [ expr; var_expr ] -> (
               let acc = fold_aux acc expr env in
@@ -1169,13 +1177,16 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
       | Com.InfFunc -> check_func 1
       | Com.Supzero -> check_func 1
       | Com.PresentFunc ->
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           check_func 1
       | Com.NbEvents ->
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           check_func 0
       | Com.Func fn ->
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           let fd =
             match StrMap.find_opt fn env.prog.prog_functions with
             | Some fd -> fd
@@ -1184,7 +1195,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           check_func (List.length fd.target_args))
   | Literal _ -> acc
   | Var access -> (
-      if is_filter then Err.variable_forbidden_in_filter expr_pos;
+      if env.proc_type = Filter then Err.variable_forbidden_in_filter expr_pos;
       match access with
       | VarAccess (m_sp_opt, _, m_v) ->
           let acc = fold_sp m_sp_opt env acc in
@@ -1200,7 +1211,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
               fold_aux acc e env
           | None -> Err.unknown_event_field (Pos.unmark f) (Pos.get f)))
   | NbCategory cs ->
-      if not is_filter then Err.expression_only_in_filter expr_pos;
+      if not (env.proc_type = Filter) then
+        Err.expression_only_in_filter expr_pos;
       let cats = mast_to_catvars cs env.prog.prog_var_cats in
       Com.CatVar.Map.iter
         (fun cat pos ->
@@ -1242,7 +1254,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           let acc = fold_var m_sp_opt m_v Table env acc in
           fold_aux acc m_i env
       | FieldAccess (m_sp_opt, _, e, f, _) ->
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           let acc = fold_sp m_sp_opt env acc in
           let f_name, f_pos = Pos.to_couple f in
           (match StrMap.find_opt f_name env.prog.prog_event_fields with
@@ -1266,7 +1279,8 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           let acc = fold_var m_sp_opt m_v Table env acc in
           fold_aux acc m_i env
       | FieldAccess (m_sp_opt, _, e, f, _) ->
-          if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+          if env.proc_type = Filter then
+            Err.forbidden_expresion_in_filter expr_pos;
           let acc = fold_sp m_sp_opt env acc in
           let f_name, f_pos = Pos.to_couple f in
           (match StrMap.find_opt f_name env.prog.prog_event_fields with
@@ -1275,7 +1289,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           | None -> Err.unknown_event_field f_name f_pos);
           fold_aux acc e env)
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
-      if is_filter then Err.forbidden_expresion_in_filter expr_pos;
+      if env.proc_type = Filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
   | FuncCallLoop _ | Loop _ -> assert false
 
@@ -1313,14 +1327,13 @@ let check_variable (m_sp_opt : Com.m_var_name option) (var : Com.m_var_name)
   | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get var)
   | Table, Num -> Err.table_used_as_variable decl_pos (Pos.get var)
 
-let check_expression (is_filter : bool) (env : var_env)
-    (m_expr : Mast.m_expression) : unit =
+let check_expression (env : var_env) (m_expr : Mast.m_expression) : unit =
   let get_var m_v = Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v in
   let fold_sp m_sp_opt env _acc = check_var_space m_sp_opt env in
   let fold_var m_sp_opt var idx_mem env _acc =
     check_variable m_sp_opt var idx_mem env
   in
-  fold_var_expr get_var fold_sp fold_var is_filter () m_expr env
+  fold_var_expr get_var fold_sp fold_var () m_expr env
 
 let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
   let buf = Buffer.create 100 in
@@ -1381,7 +1394,7 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
   in
   aux Com.CatVar.Map.empty l
 
-let rec check_instructions (is_rule : bool) (env : var_env)
+let rec check_instructions (env : var_env)
     (instrs : Mast.instruction Pos.marked list) :
     program * (int Pos.marked, Mast.error_name) Com.m_instruction list =
   let map_var env m_v =
@@ -1390,7 +1403,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
     Pos.same id m_v
   in
   let map_expr env m_expr =
-    check_expression false env m_expr;
+    check_expression env m_expr;
     Com.m_expr_map_var (map_var env) m_expr
   in
   let check_it_var env var =
@@ -1398,7 +1411,6 @@ let rec check_instructions (is_rule : bool) (env : var_env)
     check_name_in_env env m_name;
     m_name
   in
-  let check_aux = check_instructions is_rule in
   let rec aux
       ((env, res) :
         var_env * (int Pos.marked, Mast.error_name) Com.m_instruction list)
@@ -1427,7 +1439,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                       let m_i' = map_expr env m_i in
                       Pos.mark (Com.TabAccess (m_sp_opt, i_sp, m_v', m_i')) apos
                   | FieldAccess (m_sp_opt, i_sp, m_i, f, id) ->
-                      if is_rule then
+                      if env.proc_type = Rule then
                         Err.insruction_forbidden_in_rules instr_pos;
                       check_var_space m_sp_opt env;
                       let f_name, f_pos = Pos.to_couple f in
@@ -1445,7 +1457,8 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                 let instr' = Com.Affectation (Pos.mark f' fpos) in
                 aux (env, Pos.mark instr' instr_pos :: res) il
             | Com.SingleFormula (EventFieldRef (m_i, f, iFmt, m_v)) ->
-                if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+                if env.proc_type = Rule then
+                  Err.insruction_forbidden_in_rules instr_pos;
                 let f_name, f_pos = Pos.to_couple f in
                 (match StrMap.find_opt f_name env.prog.prog_event_fields with
                 | Some ef when ef.is_var -> ()
@@ -1462,9 +1475,9 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
             let expr' = map_expr env expr in
-            let prog, res_then = check_aux env i_then in
+            let prog, res_then = check_instructions env i_then in
             let env = { env with prog } in
-            let prog, res_else = check_aux env i_else in
+            let prog, res_else = check_instructions env i_else in
             let env = { env with prog } in
             let res_instr = Com.IfThenElse (expr', res_then, res_else) in
             aux (env, Pos.mark res_instr instr_pos :: res) il
@@ -1472,12 +1485,12 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let rec wde (env, res) = function
               | (expr, dl, pos) :: l ->
                   let expr' = map_expr env expr in
-                  let prog, res_do = check_aux env dl in
+                  let prog, res_do = check_instructions env dl in
                   let env = { env with prog } in
                   let res = (expr', res_do, pos) :: res in
                   wde (env, res) l
               | [] ->
-                  let prog, res_ed = check_aux env (Pos.unmark ed) in
+                  let prog, res_ed = check_instructions env (Pos.unmark ed) in
                   let env = { env with prog } in
                   let ed' = Pos.same res_ed ed in
                   let res = Com.WhenDoElse (List.rev res, ed') in
@@ -1486,7 +1499,8 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let env, wde_res = wde (env, []) wdl in
             aux (env, Pos.mark wde_res instr_pos :: res) il
         | Com.ComputeDomain (Pos.Mark (rdom_list, rdom_pos)) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let rdom_id =
               let id = Com.DomainId.from_marked_list rdom_list in
@@ -1502,19 +1516,21 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.ComputeChaining _ ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.ComputeVerifs (Pos.Mark (vdom_list, vdom_pos), expr) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let vdom_id =
               let id = Com.DomainId.from_marked_list vdom_list in
               Pos.unmark (Com.DomainIdMap.find id env.prog.prog_vdom_syms)
             in
             let seq, prog = get_seq env.prog in
-            check_expression true env expr;
+            check_expression (mod_var_env env Filter) expr;
             let prog_vdom_calls =
               let used_data = (Pos.mark seq vdom_pos, vdom_id, expr) in
               StrMap.add tname used_data prog.prog_vdom_calls
@@ -1524,13 +1540,15 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let res_instr = Com.ComputeTarget (Pos.without tname, []) in
             aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.VerifBlock instrs ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
-            let prog, res_instrs = check_aux env instrs in
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
+            let prog, res_instrs = check_instructions env instrs in
             let env = { env with prog } in
             let res_instr = Com.VerifBlock res_instrs in
             aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.ComputeTarget (Pos.Mark (tn, tpos), targs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             (match StrMap.find_opt tn env.prog.prog_targets with
             | None -> Err.unknown_target tn tpos
             | Some target ->
@@ -1596,7 +1614,8 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let instr' = Com.Print (std, args') in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Iterate (var, vars, var_params, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let m_name = check_it_var env var in
             let env' =
               let v = Com.Var.new_ref ~name:m_name in
@@ -1625,7 +1644,7 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   (vcats, map_expr env' expr))
                 var_params
             in
-            let prog, instrs' = check_aux env' instrs in
+            let prog, instrs' = check_instructions env' instrs in
             let env = { env with prog } in
             let instr' = Com.Iterate (var', vars', var_params', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
@@ -1645,12 +1664,13 @@ let rec check_instructions (is_rule : bool) (env : var_env)
                   (e0', e1', step'))
                 var_intervals
             in
-            let prog, instrs' = check_aux env' instrs in
+            let prog, instrs' = check_instructions env' instrs in
             let env = { env with prog } in
             let instr' = Com.Iterate_values (var', var_intervals', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let vars' =
               let fold (vars', seen) var =
                 let var_pos = Pos.get var in
@@ -1700,14 +1720,15 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               let env, evtfs' = List.fold_left fold (env, []) evtfs in
               (env, List.rev evtfs')
             in
-            let prog, instrs' = check_aux env instrs in
+            let prog, instrs' = check_instructions env instrs in
             let env = { env with prog } in
             let instr' =
               Com.Restore (vars', var_params', evts', evtfs', instrs')
             in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.ArrangeEvents (sort, filter, add, instrs) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let env, sort' =
               match sort with
               | Some (var0, var1, expr) ->
@@ -1741,12 +1762,13 @@ let rec check_instructions (is_rule : bool) (env : var_env)
               | None -> (env, None)
             in
             let add' = Option.map (map_expr env) add in
-            let prog, instrs' = check_aux env instrs in
+            let prog, instrs' = check_instructions env instrs in
             let env = { env with prog } in
             let instr' = Com.ArrangeEvents (sort', filter', add', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.RaiseError (m_err, m_var_opt) ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             let err_name, err_pos = Pos.to_couple m_err in
             (match StrMap.find_opt err_name env.prog.prog_errors with
             | None -> Err.unknown_error err_pos
@@ -1764,22 +1786,25 @@ let rec check_instructions (is_rule : bool) (env : var_env)
             let instr' = Com.RaiseError (m_err, m_var_opt) in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.CleanErrors ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             aux (env, Pos.mark Com.CleanErrors instr_pos :: res) il
         | Com.ExportErrors ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             aux (env, Pos.mark Com.ExportErrors instr_pos :: res) il
         | Com.FinalizeErrors ->
-            if is_rule then Err.insruction_forbidden_in_rules instr_pos;
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
             aux (env, Pos.mark Com.FinalizeErrors instr_pos :: res) il)
   in
   let env, res = aux (env, []) instrs in
   (env.prog, res)
 
-let inout_expression (prog : program) (m_expr : int Pos.marked Com.m_expression)
+let inout_expression (env : var_env) (m_expr : int Pos.marked Com.m_expression)
     : Pos.t StrMap.t =
   let get_var m_id =
-    let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+    let var = IntMap.find (Pos.unmark m_id) env.prog.prog_dict in
     Pos.same (Com.Var.name_str var) m_id
   in
   let fold_sp m_sp_opt env acc = acc in
@@ -1787,10 +1812,9 @@ let inout_expression (prog : program) (m_expr : int Pos.marked Com.m_expression)
     let name, pos = Pos.to_couple @@ get_var m_id in
     StrMap.union_snd (StrMap.one name pos) acc
   in
-  let env = { prog; vars = StrMap.empty } in
-  fold_var_expr get_var fold_sp fold_var false StrMap.empty m_expr env
+  fold_var_expr get_var fold_sp fold_var StrMap.empty m_expr env
 
-let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
+let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
     (instrs : (int Pos.marked, Mast.error_name) Com.m_instruction list) :
     Pos.t StrMap.t * Pos.t StrMap.t * Pos.t list StrMap.t =
   let diff_map m0 m1 =
@@ -1824,11 +1848,13 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
             match f with
             | Com.SingleFormula (VarDecl (m_access, e)) -> (
                 let access, access_pos = Pos.to_couple m_access in
-                let in_vars_aff = inout_expression prog e in
+                let in_vars_aff = inout_expression env e in
                 match access with
                 | VarAccess (_, _, m_id) ->
                     let m_v =
-                      let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+                      let var =
+                        IntMap.find (Pos.unmark m_id) env.prog.prog_dict
+                      in
                       Pos.same (Com.Var.name_str var) m_id
                     in
                     let out_vars_lvalue =
@@ -1850,13 +1876,15 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
                     aux (tmps, in_vars, out_vars, def_vars) il
                 | TabAccess (_, _, m_id, m_i) ->
                     let m_v =
-                      let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+                      let var =
+                        IntMap.find (Pos.unmark m_id) env.prog.prog_dict
+                      in
                       Pos.same (Com.Var.name_str var) m_id
                     in
                     let out_vars_lvalue =
                       StrMap.one (Pos.unmark m_v) (Pos.get m_v)
                     in
-                    let in_vars_i = inout_expression prog m_i in
+                    let in_vars_i = inout_expression env m_i in
                     let in_vars_aff = StrMap.union_fst in_vars_i in_vars_aff in
                     let in_vars =
                       StrMap.union_fst in_vars (diff_map in_vars_aff out_vars)
@@ -1877,9 +1905,9 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
                 Err.insruction_forbidden_in_rules instr_pos
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
-            let in_expr = inout_expression prog expr in
-            let in_then, out_then, def_then = inout_instrs prog tmps i_then in
-            let in_else, out_else, def_else = inout_instrs prog tmps i_else in
+            let in_expr = inout_expression env expr in
+            let in_then, out_then, def_then = inout_instrs env tmps i_then in
+            let in_else, out_else, def_else = inout_instrs env tmps i_else in
             let in_vars =
               in_vars |> StrMap.union_snd in_expr |> StrMap.union_snd in_then
               |> StrMap.union_snd in_else
@@ -1894,8 +1922,8 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
         | Com.WhenDoElse (wdl, ed) ->
             let rec wde (in_vars, out_vars, def_vars) = function
               | (expr, dl, _pos) :: l ->
-                  let in_expr = inout_expression prog expr in
-                  let in_do, out_do, def_do = inout_instrs prog tmps dl in
+                  let in_expr = inout_expression env expr in
+                  let in_do, out_do, def_do = inout_instrs env tmps dl in
                   let in_vars =
                     in_vars |> StrMap.union_snd in_expr
                     |> StrMap.union_snd in_do
@@ -1905,7 +1933,7 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
                   wde (in_vars, out_vars, def_vars) l
               | [] ->
                   let in_ed, out_ed, def_ed =
-                    inout_instrs prog tmps (Pos.unmark ed)
+                    inout_instrs env tmps (Pos.unmark ed)
                   in
                   let in_vars = in_vars |> StrMap.union_snd in_ed in
                   let out_vars = out_vars |> StrMap.union_snd out_ed in
@@ -1924,7 +1952,7 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
         | Com.Iterate _ -> Err.insruction_forbidden_in_rules instr_pos
         | Com.Iterate_values (m_id, var_intervals, instrs) ->
             let var_name, var_pos =
-              let var = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+              let var = IntMap.find (Pos.unmark m_id) env.prog.prog_dict in
               (Com.Var.name_str var, Pos.get m_id)
             in
             let tmps' = StrMap.add var_name var_pos tmps in
@@ -1932,13 +1960,13 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
               List.fold_left
                 (fun in_exprs (e0, e1, step) ->
                   in_exprs
-                  |> StrMap.union_snd (inout_expression prog e0)
-                  |> StrMap.union_snd (inout_expression prog e1)
-                  |> StrMap.union_snd (inout_expression prog step))
+                  |> StrMap.union_snd (inout_expression env e0)
+                  |> StrMap.union_snd (inout_expression env e1)
+                  |> StrMap.union_snd (inout_expression env step))
                 StrMap.empty var_intervals
             in
             let in_instrs, out_instrs, def_instrs =
-              inout_instrs prog tmps' instrs
+              inout_instrs env tmps' instrs
             in
             let in_vars =
               in_vars
@@ -1974,10 +2002,9 @@ let rec inout_instrs (prog : program) (tmps : Pos.t StrMap.t)
   let def_vars = diff_map def_vars tmps' in
   (in_vars, out_vars, def_vars)
 
-let check_code (is_rule : bool) (is_function : bool)
-    (m_tname : string Pos.marked) (prog : program) tmp_vars args result instrs =
+let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
+    result instrs =
   let tname, tpos = Pos.to_couple m_tname in
-  let env = { prog; vars = prog.prog_vars } in
   let tmp_vars', env =
     let vars, env =
       List.fold_left
@@ -1990,7 +2017,7 @@ let check_code (is_rule : bool) (is_function : bool)
             | Some (Pos.Mark (_, old_pos)) -> err old_pos
             | None -> ()
           in
-          check_name_in_tgv prog m_v;
+          check_name_in_tgv env.prog m_v;
           check_tmp vars m_v;
           let size = Option.map Pos.unmark (Mast.get_table_size_opt sz) in
           match size with
@@ -2033,13 +2060,13 @@ let check_code (is_rule : bool) (is_function : bool)
       (vars, env) tmp_vars
   in
   let args', env =
-    if is_rule then ([], env)
+    if env.proc_type = Rule then ([], env)
     else
       let fold (args, env) m_v =
-        check_name_in_tgv prog m_v;
+        check_name_in_tgv env.prog m_v;
         check_name_in_tmp tmp_vars' m_v;
         let var =
-          if is_function then Com.Var.new_arg ~name:m_v
+          if env.proc_type = Func then Com.Var.new_arg ~name:m_v
           else Com.Var.new_ref ~name:m_v
         in
         (Pos.same var.id m_v :: args, add_var_env var env)
@@ -2048,25 +2075,26 @@ let check_code (is_rule : bool) (is_function : bool)
       (List.rev args', env)
   in
   let result', env =
-    if is_rule then (None, env)
+    if env.proc_type = Rule then (None, env)
     else
       match result with
       | Some m_name ->
-          if not is_function then Err.target_must_not_have_a_result tname tpos;
-          check_name_in_tgv prog m_name;
+          if not (env.proc_type = Func) then
+            Err.target_must_not_have_a_result tname tpos;
+          check_name_in_tgv env.prog m_name;
           check_name_in_tmp tmp_vars' m_name;
           check_name_in_args env.prog.prog_dict args' m_name;
           let var = Com.Var.new_res ~name:m_name in
           (Some (Pos.same var.id m_name), add_var_env var env)
       | None ->
-          if is_function then Err.function_result_missing tname tpos;
+          if env.proc_type = Func then Err.function_result_missing tname tpos;
           (None, env)
   in
-  let prog', instrs' = check_instructions (is_rule || is_function) env instrs in
+  let prog', instrs' = check_instructions env instrs in
   let env' = { env with prog = prog' } in
-  if is_function then (
+  if env.proc_type = Func then (
     let tmps = StrMap.map Pos.get tmp_vars' in
-    let in_vars, out_vars, _ = inout_instrs prog' tmps instrs' in
+    let in_vars, out_vars, _ = inout_instrs env' tmps instrs' in
     let vr = Pos.unmark (Option.get result) in
     let bad_in_vars =
       List.fold_left
@@ -2083,7 +2111,7 @@ let check_code (is_rule : bool) (is_function : bool)
       Err.forbidden_out_var_in_function vn tname vpos);
   (env', args', result', tmp_vars', instrs')
 
-let check_target (is_function : bool) (t : Mast.target) (prog : program) :
+let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     program =
   let target_name = t.target_name in
   let tname, tpos = Pos.to_couple target_name in
@@ -2098,9 +2126,10 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
     (* Already checked during preprocessing *)
     t.target_apps
   in
+  let env = new_var_env ~vars:prog.prog_vars prog proc_type in
   let env, target_args, target_result, target_tmp_vars, target_prog =
-    check_code false is_function target_name prog t.target_tmp_vars
-      t.target_args t.target_result t.target_prog
+    check_code env target_name t.target_tmp_vars t.target_args t.target_result
+      t.target_prog
   in
   let prog = env.prog in
   let target =
@@ -2118,7 +2147,7 @@ let check_target (is_function : bool) (t : Mast.target) (prog : program) :
         target_prog;
       }
   in
-  if is_function then
+  if proc_type = Func then
     let prog_functions = StrMap.add tname target prog.prog_functions in
     { prog with prog_functions }
   else
@@ -2158,14 +2187,14 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
+  let env = new_var_env ~vars:prog.prog_vars prog Rule in
   let env, _, _, rule_tmp_vars, rule_instrs =
-    check_code true false (Pos.without "") prog r.rule_tmp_vars [] None
-      r.rule_formulaes
+    check_code env (Pos.without "") r.rule_tmp_vars [] None r.rule_formulaes
   in
   let prog = env.prog in
   let rule_in_vars, rule_out_vars =
     let tmps = StrMap.map Pos.get rule_tmp_vars in
-    let in_vars, out_vars, _ = inout_instrs prog tmps rule_instrs in
+    let in_vars, out_vars, _ = inout_instrs env tmps rule_instrs in
     (StrMap.keySet in_vars, out_vars)
   in
   let rule_seq, prog = get_seq prog in
@@ -2550,8 +2579,8 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             (vdom_sts, var_sts)
           in
           let init = (Com.CatVar.Map.empty, StrMap.empty) in
-          let env = { prog; vars = prog.prog_vars } in
-          fold_var_expr get_var fold_sp fold_var false init verif_expr env
+          let env = new_var_env ~vars:prog.prog_vars prog Verif in
+          fold_var_expr get_var fold_sp fold_var init verif_expr env
         in
         let verif_seq, prog = get_seq prog in
         let verif =
@@ -2936,8 +2965,8 @@ let proceed (main_target : string) (p : Mast.program) : program =
             | Mast.Output _ -> prog (* unused *)
             | Mast.RuleDomDecl decl -> check_rule_dom_decl decl prog
             | Mast.VerifDomDecl decl -> check_verif_dom_decl decl prog
-            | Mast.Function f -> check_target true f prog
-            | Mast.Target t -> check_target false t prog
+            | Mast.Function f -> check_target Func f prog
+            | Mast.Target t -> check_target Target t prog
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)
           prog source_file)

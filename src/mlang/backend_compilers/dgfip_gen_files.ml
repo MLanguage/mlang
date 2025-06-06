@@ -421,6 +421,24 @@ struct S_event {
 
 typedef struct S_event T_event;
 
+struct S_var_space {
+  int id;
+  char *name;
+  char *def_saisie;
+  double *saisie;
+  char *def_calculee;
+  double *calculee;
+  char *def_base;
+  double *base;
+};
+
+typedef struct S_var_space T_var_space;
+
+|};
+  Pp.fpr fmt "#define NB_ESPACES_VARIABLES %d@\n@\n"
+    (IntMap.cardinal cprog.program_var_spaces_idx);
+  Pp.fpr fmt
+    {|
 struct S_irdata {
   char *def_saisie;
   double *saisie;
@@ -447,7 +465,8 @@ struct S_irdata {
         vsd.vs_cats)
     cprog.program_var_spaces_idx;
   Pp.fpr fmt
-    {|  char *def_tmps;
+    {|  T_var_space var_spaces[NB_ESPACES_VARIABLES + 1];
+  char *def_tmps;
   double *tmps;
   int tmps_org;
   int nb_tmps_target;
@@ -1318,6 +1337,15 @@ void detruis_irdata(T_irdata *irdata) {
                 "  if (irdata->base_%s != NULL) free(irdata->base_%s);@\n" sp sp)
         vsd.vs_cats)
     cprog.program_var_spaces_idx;
+  IntMap.iter
+    (fun id _ ->
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_saisie = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].saisie = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_calculee = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].calculee = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_base = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].base = NULL;@\n" id)
+    cprog.program_var_spaces_idx;
   Pp.fpr fmt
     {|
   if (irdata->tmps != NULL) free(irdata->tmps);
@@ -1385,9 +1413,25 @@ T_irdata *cree_irdata(void) {
           | Com.CatVar.LocBase -> init_loc "base" "BASE")
         vsd.vs_cats)
     cprog.program_var_spaces_idx;
+  IntMap.iter
+    (fun id (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "  irdata->var_spaces[%d].id = %d;@\n" id id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].name = \"%s\";@\n" id sp;
+      Pp.fpr fmt
+        "  irdata->var_spaces[%d].def_saisie = irdata->def_saisie_%s;@\n" id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].saisie = irdata->saisie_%s;@\n" id sp;
+      Pp.fpr fmt
+        "  irdata->var_spaces[%d].def_calculee = irdata->def_calculee_%s;@\n" id
+        sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].calculee = irdata->calculee_%s;@\n"
+        id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_base = irdata->def_base_%s;@\n"
+        id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
+    cprog.program_var_spaces_idx;
   Pp.fpr fmt "%s"
-    {|
-  irdata->tmps = NULL;
+    {|  irdata->tmps = NULL;
   irdata->def_tmps = NULL;
   irdata->info_tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
