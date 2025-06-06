@@ -163,14 +163,15 @@ let default_flags =
     xflg = false;
   }
 
-let handler (income_year : int) (iliad_pro : bool) (cfir : bool)
-    (batch : int option) (primitive_only : bool) (extraction : bool)
-    (separate_controls : bool) (immediate_controls : bool) (overlays : bool)
-    (optim_min_max : bool) (register : bool) (short : bool)
-    (output_labels : bool) (debug : bool) (nb_debug_c : int) (trace : bool)
-    (ticket : bool) (colored_output : bool) (cross_references : bool) : flags =
-  let has_iliad = List.mem "iliad" !Cli.application_names in
-  let has_pro = List.mem "pro" !Cli.application_names in
+let handler ~(application_names : string list) (income_year : int)
+    (iliad_pro : bool) (cfir : bool) (batch : int option)
+    (primitive_only : bool) (extraction : bool) (separate_controls : bool)
+    (immediate_controls : bool) (overlays : bool) (optim_min_max : bool)
+    (register : bool) (short : bool) (output_labels : bool) (debug : bool)
+    (nb_debug_c : int) (trace : bool) (ticket : bool) (colored_output : bool)
+    (cross_references : bool) : flags =
+  let has_iliad = List.mem "iliad" application_names in
+  let has_pro = List.mem "pro" application_names in
   {
     (* iliad, pro, (GP) *)
     annee_revenu = income_year;
@@ -197,9 +198,9 @@ let handler (income_year : int) (iliad_pro : bool) (cfir : bool)
     xflg = cross_references;
   }
 
-let process_dgfip_options options =
+let process_dgfip_options ~application_names options =
   let options = Array.of_list ("mlang" :: options) in
-  let cmd = Cmd.v info (dgfip_t handler) in
+  let cmd = Cmd.v info (dgfip_t (handler ~application_names)) in
   let res = Cmd.eval_value ~argv:options cmd in
   match res with
   | Ok res -> ( match res with `Ok res -> Some res | _ -> None)
