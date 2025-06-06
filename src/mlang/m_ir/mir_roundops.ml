@@ -54,10 +54,12 @@ module MultiRoundOps (N : Mir_number.NumberInterface) :
     if N.(x < zero ()) then N.ceil N.(x -. e) else N.floor N.(x +. e)
 end
 
-module MainframeRoundOps (L : sig
-  val max_long : Int64.t ref
-end)
-(N : Mir_number.NumberInterface) : RoundOpsInterface with type t = N.t = struct
+module MainframeRoundOps
+    (L : sig
+      val max_long : Int64.t ref
+    end)
+    (N : Mir_number.NumberInterface) : RoundOpsInterface with type t = N.t =
+struct
   type t = N.t
 
   let epsilon = !Cli.comparison_error_margin
