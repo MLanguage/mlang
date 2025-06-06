@@ -171,24 +171,25 @@ let driver (files : string list) (application_names : string list)
             (Format.asprintf "Unkown precision option: %s" precision)
   in
   let round_ops =
-    let roundops = Option.get roundops in
-    if roundops = "default" then Cli.RODefault
-    else if roundops = "multi" then Cli.ROMulti
-    else
-      let mf_regex = Re.Pcre.regexp "^mainframe(\\d+)$" in
-      if Re.Pcre.pmatch ~rex:mf_regex roundops then
-        let mf_long_size =
-          Re.Pcre.get_substring (Re.Pcre.exec ~rex:mf_regex roundops) 1
-        in
-        match int_of_string mf_long_size with
-        | (32 | 64) as sz -> Cli.ROMainframe sz
-        | _ ->
-            Errors.raise_error
-              (Format.asprintf "Invalid long size for mainframe: %s"
-                 mf_long_size)
-      else
-        Errors.raise_error
-          (Format.asprintf "Unkown roundops option: %s" roundops)
+    match roundops with
+    | Some "default" -> Cli.RODefault
+    | Some "multi" -> Cli.ROMulti
+    | Some roundops ->
+        let mf_regex = Re.Pcre.regexp "^mainframe(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:mf_regex roundops then
+          let mf_long_size =
+            Re.Pcre.get_substring (Re.Pcre.exec ~rex:mf_regex roundops) 1
+          in
+          match int_of_string mf_long_size with
+          | (32 | 64) as sz -> Cli.ROMainframe sz
+          | _ ->
+              Errors.raise_error
+                (Format.asprintf "Invalid long size for mainframe: %s"
+                   mf_long_size)
+        else
+          Errors.raise_error
+            (Format.asprintf "Unknown roundops option: %s" roundops)
+    | None -> Errors.raise_error @@ Format.asprintf "Unspecified roundops@."
   in
   Cli.set_all_arg_refs files application_names without_dgfip_m debug
     var_info_debug display_time dep_graph_file print_cycles output
