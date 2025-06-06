@@ -147,54 +147,47 @@ let driver (files : string list) (application_names : string list)
     optimize_unsafe_float m_clean_calls comparison_error_margin income_year
     value_sort round_ops;
   let dgfip_flags = process_dgfip_options backend dgfip_options in
+let parse () =
+  let current_progress, finish = Cli.create_progress_bar "Parsing" in
+  let m_program = ref [] in
+
+  let parse filebuf source_file =
+    current_progress source_file;
+    let lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } in
+    let filebuf = { filebuf with lex_curr_p } in
+    let commands = Mparser.source_file token filebuf in
+    m_program := commands :: !m_program
+  in
+
+  (if not !Cli.without_dgfip_m then
+   let filebuf = Lexing.from_string Dgfip_m.declarations in
+   let source = Dgfip_m.internal_m in
+   try parse filebuf source
+   with Mparser.Error ->
+     let err = Format.sprintf "M syntax error in %s" source in
+     Errors.raise_error err);
+
+  let parse_file source_file =
+    let input = open_in source_file in
+    let filebuf = Lexing.from_channel input in
+    try parse filebuf source_file
+    with Mparser.Error ->
+      close_in input;
+      let pos =
+        Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)
+      in
+      Errors.raise_spanned_error "M syntax error" pos
+  in
+
+  List.iter parse_file @@ Cli.get_files !Cli.source_files;
+  m_program := List.rev !m_program;
+  m_program := patch_rule_1 !Cli.backend !Cli.dgfip_flags !m_program;
+  finish "completed!";
+  m_program
   try
     Cli.debug_print "Reading M files...";
-    let current_progress, finish = Cli.create_progress_bar "Parsing" in
-    let m_program = ref [] in
-    if not without_dgfip_m then (
-      let filebuf = Lexing.from_string Dgfip_m.declarations in
-      current_progress Dgfip_m.internal_m;
-      let filebuf =
-        {
-          filebuf with
-          lex_curr_p =
-            { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
-        }
-      in
-      try
-        let commands = Mparser.source_file token filebuf in
-        m_program := commands :: !m_program
-      with Mparser.Error ->
-        Errors.raise_error
-          (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m));
-    if List.length !Cli.source_files = 0 then
-      Errors.raise_error "please provide at least one M source file";
-    List.iter
-      (fun source_file ->
-        let filebuf, input =
-          if source_file <> "" then
-            let input = open_in source_file in
-            (Lexing.from_channel input, input)
-          else failwith "You have to specify at least one file!"
-        in
-        current_progress source_file;
-        let filebuf =
-          {
-            filebuf with
-            lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
-          }
-        in
-        try
-          let commands = Mparser.source_file token filebuf in
-          m_program := commands :: !m_program
-        with Mparser.Error ->
-          close_in input;
-          Errors.raise_spanned_error "M syntax error"
-            (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
-      !Cli.source_files;
-    m_program := List.rev !m_program;
-    m_program := patch_rule_1 backend dgfip_flags !m_program;
-    finish "completed!";
+    let m_program = parse () in
+
     Cli.debug_print "Elaborating...";
     let m_program = Mast_to_mir.translate !m_program mpp_function in
     let m_program = Mir.expand_functions m_program in
