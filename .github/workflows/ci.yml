@@ -1,0 +1,31 @@
+name: Ocaml CI
+
+on:
+  - pull_request
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v4
+
+        # We don't want to init all submodules as some are private.
+      - name: Init ir-calcul submodule
+        run:
+          git submodule init ir-calcul
+
+          git submodule update ir-calcul
+
+      - name: Set-up Ocaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 4.14.2
+          opam-pin: false
+
+      - run: opam install . --deps-only
+
+      - run: opam exec -- dune build
+
+      - run: opam exec -- make tests

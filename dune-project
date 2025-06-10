@@ -6,8 +6,8 @@
 
 (generate_opam_files true)
 
-(source
- (uri git+https://github.com/MLanguage/mlang.git))
+;(source
+; (uri git+https://github.com/MLanguage/mlang.git))
 
 (homepage https://github.com/MLanguage/mlang)
 
