@@ -424,6 +424,7 @@ typedef struct S_event T_event;
 struct S_var_space {
   int id;
   char *name;
+  char is_default;
   char *def_saisie;
   double *saisie;
   char *def_calculee;
@@ -1382,6 +1383,8 @@ T_irdata *cree_irdata(void) {
       let sp = Pos.unmark vsd.vs_name in
       Pp.fpr fmt "  irdata->var_spaces[%d].id = %d;@\n" id id;
       Pp.fpr fmt "  irdata->var_spaces[%d].name = \"%s\";@\n" id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].is_default = %d;@\n" id
+        (if vsd.vs_by_default then 1 else 0);
       Pp.fpr fmt
         "  irdata->var_spaces[%d].def_saisie = irdata->def_saisie_%s;@\n" id sp;
       Pp.fpr fmt "  irdata->var_spaces[%d].saisie = irdata->saisie_%s;@\n" id sp;

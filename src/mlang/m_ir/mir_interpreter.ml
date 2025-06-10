@@ -322,6 +322,18 @@ struct
     | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
     | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
+  let get_var_space (ctx : ctx) =
+    let i_sp = ctx.ctx_var_space in
+    IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
+
+  let get_var_space_from (ctx : ctx) = function
+    | None -> get_var_space ctx
+    | Some (_, i_sp) -> IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
+
+  let get_var_space_opt (ctx : ctx) = function
+    | None -> None
+    | Some (_, i_sp) -> IntMap.find_opt i_sp ctx.ctx_prog.program_var_spaces_idx
+
   let get_var (ctx : ctx) (var : Com.Var.t) : Com.Var.t * int =
     match var.scope with
     | Com.Var.Tgv _ -> (var, 0)
@@ -369,8 +381,7 @@ struct
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) ->
-        let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
-        let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
+        let vsd = get_var_space_from ctx m_sp_opt in
         get_var_value ctx vsd v
     | Com.TabAccess (m_sp_opt, m_v, m_idx) -> (
         match evaluate_expr ctx m_idx with
@@ -386,10 +397,7 @@ struct
                   ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i)
                 else v
               in
-              let i_sp =
-                Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt
-              in
-              let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
+              let vsd = get_var_space_from ctx m_sp_opt in
               get_var_value_org ctx vsd v' vorg
         | Undefined -> Undefined)
     | Com.FieldAccess (m_sp_opt, e, _, j) -> (
@@ -401,45 +409,35 @@ struct
               match events.(i).(j) with
               | Com.Numeric n -> n
               | Com.RefVar v ->
-                  let i_sp =
-                    Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt
-                  in
-                  let vsd =
-                    IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
-                  in
+                  let vsd = get_var_space_from ctx m_sp_opt in
                   get_var_value ctx vsd v
             else Undefined
         | _ -> Undefined)
 
   and get_access_var ctx access =
     match access with
-    | Com.VarAccess (m_sp_opt, v) ->
-        let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
-        let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
-        Some (vsd, v)
+    | Com.VarAccess (m_sp_opt, v) -> Some (get_var_space_opt ctx m_sp_opt, v)
     | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
-            let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
-            let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
+            let vsd_opt = get_var_space_opt ctx m_sp_opt in
             let v = fst @@ get_var ctx m_v in
             let i = Int64.to_int @@ N.to_int z in
             if 0 <= i && i < Com.Var.size v then
               if Com.Var.is_table v then
-                Some (vsd, ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i))
-              else Some (vsd, v)
+                Some (vsd_opt, ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i))
+              else Some (vsd_opt, v)
             else None
         | Undefined -> None)
     | Com.FieldAccess (m_sp_opt, m_e, _, j) -> (
         match evaluate_expr ctx m_e with
         | Number z ->
-            let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
-            let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
+            let vsd_opt = get_var_space_opt ctx m_sp_opt in
             let i = Int64.to_int @@ N.to_int z in
             let events = List.hd ctx.ctx_events in
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
-              | Com.RefVar v -> Some (vsd, v)
+              | Com.RefVar v -> Some (vsd_opt, v)
               | Com.Numeric _ -> None
             else None
         | _ -> None)
@@ -469,7 +467,11 @@ struct
 
   and set_access ctx access vexpr =
     match get_access_var ctx access with
-    | Some (vsd, v) -> set_var_value ctx vsd v @@ evaluate_expr ctx vexpr
+    | Some (vsd_opt, v) ->
+        let vsd =
+          match vsd_opt with None -> get_var_space ctx | Some vsd -> vsd
+        in
+        set_var_value ctx vsd v @@ evaluate_expr ctx vexpr
     | None -> ()
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
@@ -610,7 +612,7 @@ struct
                 in
                 match var_arg2_opt with
                 | None -> Undefined
-                | Some (vsd, var_arg2) -> (
+                | Some (vsd_opt, var_arg2) -> (
                     let cast_to_int (v : value) : Int64.t option =
                       match v with
                       | Number f -> Some (N.to_int @@ roundf f)
@@ -621,6 +623,11 @@ struct
                         Pos.same (Com.Literal (Float (float_of_int i))) arg2
                       in
                       let instr =
+                        let vsd =
+                          match vsd_opt with
+                          | None -> get_var_space ctx
+                          | Some vsd -> vsd
+                        in
                         let m_sp_opt =
                           let vn = Com.Normal (Pos.unmark vsd.vs_name) in
                           Some (Pos.without vn, vsd.vs_id)
@@ -745,20 +752,25 @@ struct
     | Com.ComputeTarget (Pos.Mark (tn, _), args) ->
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
         evaluate_target canBlock ctx tf args
-    | Com.Print (std, args) -> begin
+    | Com.Print (std, args) ->
         let std_fmt, ctx_pr =
           match std with
           | Com.StdOut -> (Format.std_formatter, ctx.ctx_pr_out)
           | Com.StdErr -> (Format.err_formatter, ctx.ctx_pr_err)
         in
-        let pr_indent ctx_pr =
+        let pr_flush () =
+          match std with
+          | Com.StdOut -> ()
+          | Com.StdErr -> Format.pp_print_flush Format.err_formatter ()
+        in
+        let pr_indent () =
           if ctx_pr.is_newline then (
             for _i = 1 to ctx_pr.indent do
               Format.fprintf std_fmt " "
             done;
             ctx_pr.is_newline <- false)
         in
-        let pr_raw ctx_pr s =
+        let pr_raw s =
           let len = String.length s in
           let rec aux = function
             | n when n >= len -> ()
@@ -766,48 +778,60 @@ struct
                 match s.[n] with
                 | '\n' ->
                     Format.fprintf std_fmt "\n";
+                    pr_flush ();
                     ctx_pr.is_newline <- true;
                     aux (n + 1)
                 | c ->
-                    pr_indent ctx_pr;
+                    pr_indent ();
                     Format.fprintf std_fmt "%c" c;
                     aux (n + 1))
           in
           aux 0
         in
-        let pr_info info ctx_pr (vsd : Com.variable_space) var =
+        let pr_set_indent diff =
+          ctx_pr.indent <- max 0 (ctx_pr.indent + diff)
+        in
+        let pr_value mi ma value =
+          pr_raw (Pp.spr "%a" (format_value_prec mi ma) value)
+        in
+        let pr_info info (vsd_opt : Com.variable_space option) var =
+          (match vsd_opt with
+          | None ->
+              let vsd = get_var_space ctx in
+              if not vsd.vs_by_default then (
+                pr_raw (Pos.unmark vsd.vs_name);
+                pr_raw ".")
+          | Some vsd ->
+              pr_raw (Pos.unmark vsd.vs_name);
+              pr_raw ".");
           let v = fst @@ get_var ctx var in
-          let sp_str =
-            if vsd.vs_by_default then "" else Pos.unmark vsd.vs_name ^ "."
-          in
           match info with
-          | Com.Name -> pr_raw ctx_pr (sp_str ^ Com.Var.name_str v)
-          | Com.Alias -> pr_raw ctx_pr (sp_str ^ Com.Var.alias_str v)
+          | Com.Name -> pr_raw (Com.Var.name_str v)
+          | Com.Alias -> pr_raw (Com.Var.alias_str v)
         in
         List.iter
           (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
-            | PrintString s -> pr_raw ctx_pr s
+            | PrintString s ->
+                pr_raw s;
+                pr_flush ()
             | PrintAccess (info, m_a) -> (
                 match get_access_var ctx @@ Pos.unmark m_a with
-                | Some (vsd, var) -> pr_info info ctx_pr vsd var
+                | Some (vsd_opt, var) ->
+                    pr_info info vsd_opt var;
+                    pr_flush ()
                 | None -> ())
-            | PrintIndent e ->
-                let diff =
-                  match evaluate_expr ctx e with
-                  | Undefined -> 0
-                  | Number x -> Int64.to_int @@ N.to_int @@ roundf x
-                in
-                ctx_pr.indent <- max 0 (ctx_pr.indent + diff)
+            | PrintIndent e -> (
+                match evaluate_expr ctx e with
+                | Undefined -> ()
+                | Number x ->
+                    let diff = Int64.to_int @@ N.to_int @@ roundf x in
+                    pr_set_indent diff)
             | PrintExpr (e, mi, ma) ->
-                let value = evaluate_expr ctx e in
-                pr_indent ctx_pr;
-                format_value_prec mi ma std_fmt value)
+                pr_value mi ma (evaluate_expr ctx e);
+                pr_flush ())
           args;
-        match std with
-        | Com.StdOut -> ()
-        | Com.StdErr -> Format.pp_print_flush Format.err_formatter ()
-      end
+        pr_flush ()
     | Com.Iterate ((var : Com.Var.t), vars, var_params, stmts) ->
         List.iter
           (fun v ->
@@ -1233,6 +1257,8 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   Interp.update_ctx_with_inputs ctx inputs;
   Interp.update_ctx_with_events ctx events;
   Interp.evaluate_program ctx;
+  Format.pp_print_flush Format.std_formatter ();
+  Format.pp_print_flush Format.err_formatter ();
   let varMap =
     let default_space =
       ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)

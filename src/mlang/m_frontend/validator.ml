@@ -371,6 +371,16 @@ module Err = struct
   let unknown_var_space name pos =
     let msg = Format.asprintf "unknown variable space \"%s\"" name in
     Errors.raise_spanned_error msg pos
+
+  let var_spaces_forbidden_in_this this pos =
+    let msg = Pp.spr "variable spaces are forbidden in %s" this in
+    Errors.raise_spanned_error msg pos
+
+  let variable_not_in_var_space var_name sp_name pos =
+    let msg =
+      Pp.spr "variable \"%s\" does not belong to space \"%s\"" var_name sp_name
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1312,21 +1322,41 @@ let check_var_space (m_sp_opt : (Com.m_var_name * int) option) (env : var_env) :
   match m_sp_opt with
   | None -> ()
   | Some (m_sp, _) -> (
-      let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
-      match StrMap.find_opt sp_name env.prog.prog_var_spaces with
-      | Some _ -> ()
-      | None -> Err.unknown_var_space sp_name (Pos.get m_sp))
+      match env.proc_type with
+      | Rule -> Err.var_spaces_forbidden_in_this "rules" (Pos.get m_sp)
+      | Verif -> Err.var_spaces_forbidden_in_this "verifs" (Pos.get m_sp)
+      | Func -> Err.var_spaces_forbidden_in_this "functions" (Pos.get m_sp)
+      | Filter -> Err.var_spaces_forbidden_in_this "filters" (Pos.get m_sp)
+      | Target -> (
+          let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
+          match StrMap.find_opt sp_name env.prog.prog_var_spaces with
+          | Some _ -> ()
+          | None -> Err.unknown_var_space sp_name (Pos.get m_sp)))
 
 let check_variable (m_sp_opt : (Com.m_var_name * int) option)
-    (var : Com.m_var_name) (idx_mem : var_mem_type) (env : var_env) : unit =
-  let decl_mem, decl_pos = Pos.to_couple @@ get_var_mem_type var env in
-  match (decl_mem, idx_mem) with
+    (m_vn : Com.m_var_name) (idx_mem : var_mem_type) (env : var_env) : unit =
+  let decl_mem, decl_pos = Pos.to_couple @@ get_var_mem_type m_vn env in
+  (match (decl_mem, idx_mem) with
   | _, Both | Num, Num | Table, Table -> ()
   | Both, _ -> assert false
-  (* | Both, Num -> Err.mixed_variable_used_as_num decl_pos (Pos.get var)
-     | Both, Table -> Err.mixed_variable_used_as_table decl_pos (Pos.get var)*)
-  | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get var)
-  | Table, Num -> Err.table_used_as_variable decl_pos (Pos.get var)
+  (* | Both, Num -> Err.mixed_variable_used_as_num decl_pos (Pos.get m_vn)
+     | Both, Table -> Err.mixed_variable_used_as_table decl_pos (Pos.get m_vn)*)
+  | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get m_vn)
+  | Table, Num -> Err.table_used_as_variable decl_pos (Pos.get m_vn));
+  match m_sp_opt with
+  | None -> ()
+  | Some (m_sp, _) ->
+      let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
+      let sp_id = StrMap.find sp_name env.prog.prog_var_spaces in
+      let vsd = IntMap.find sp_id env.prog.prog_var_spaces_idx in
+      let v_name = Com.get_normal_var @@ Pos.unmark m_vn in
+      let var =
+        let id = StrMap.find v_name env.vars in
+        IntMap.find id env.prog.prog_dict
+      in
+      let var_loc = Com.Var.cat_var_loc var in
+      if not (Com.CatVar.LocMap.mem var_loc vsd.vs_cats) then
+        Err.variable_not_in_var_space v_name sp_name (Pos.get m_vn)
 
 let check_expression (env : var_env) (m_expr : Mast.m_expression) : unit =
   let get_var m_v = Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v in
@@ -1808,8 +1838,8 @@ let inout_expression (env : var_env) (m_expr : int Pos.marked Com.m_expression)
     let var = IntMap.find (Pos.unmark m_id) env.prog.prog_dict in
     Pos.same (Com.Var.name_str var) m_id
   in
-  let fold_sp m_sp_opt env acc = acc in
-  let fold_var m_sp_opt m_id _idx_mem _env acc =
+  let fold_sp _m_sp_opt _env acc = acc in
+  let fold_var _m_sp_opt m_id _idx_mem _env acc =
     let name, pos = Pos.to_couple @@ get_var m_id in
     StrMap.union_snd (StrMap.one name pos) acc
   in
@@ -1989,15 +2019,16 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
   let tmps', in_vars, out_vars, def_vars =
     aux (tmps, StrMap.empty, StrMap.empty, StrMap.empty) instrs
   in
-  StrMap.iter
-    (fun vn l ->
-      if List.length l > 1 && not (is_vartmp vn) then
-        Errors.print_multispanned_warning
-          (Format.asprintf
-             "Variable %s is defined more than once in the same rule" vn)
-          (List.map (fun pos -> (None, pos)) (List.rev l)))
-    (* List.rev for purely cosmetic reasons *)
-    def_vars;
+  if env.proc_type = Rule then
+    StrMap.iter
+      (fun vn l ->
+        if List.length l > 1 && not (is_vartmp vn) then
+          Errors.print_multispanned_warning
+            (Format.asprintf
+               "Variable %s is defined more than once in the same rule" vn)
+            (List.map (fun pos -> (None, pos)) (List.rev l)))
+      (* List.rev for purely cosmetic reasons *)
+      def_vars;
   let in_vars = diff_map in_vars tmps' in
   let out_vars = diff_map out_vars tmps' in
   let def_vars = diff_map def_vars tmps' in
@@ -2565,8 +2596,10 @@ let check_verif (v : Mast.verification) (prog : program) : program =
           let get_var m_v =
             Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v
           in
-          let fold_sp m_sp_opt env (vdom_sts, var_sts) = (vdom_sts, var_sts) in
-          let fold_var m_sp_opt m_v idx_mem env (vdom_sts, var_sts) =
+          let fold_sp _m_sp_opt _env (vdom_sts, var_sts) =
+            (vdom_sts, var_sts)
+          in
+          let fold_var _m_sp_opt m_v idx_mem env (vdom_sts, var_sts) =
             check_variable None m_v idx_mem env;
             let name = Com.get_normal_var (Pos.unmark m_v) in
             let id = StrMap.find name env.vars in

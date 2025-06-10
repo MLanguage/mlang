@@ -822,14 +822,30 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
                 (str_escape s)
           | PrintAccess (info, m_a) -> (
+              let pr_sp m_sp_opt =
+                let vs_def = "irdata->var_spaces[irdata->var_space]" in
+                match m_sp_opt with
+                | None ->
+                    pr "@;@[<v 2>if (%s.is_default == 0) {" vs_def;
+                    pr "@;print_string(%s, %s, %s.name);" print_std pr_ctx
+                      vs_def;
+                    pr "@;print_string(%s, %s, \".\");" print_std pr_ctx;
+                    pr "@]@;}@;"
+                | Some (_, i_sp) ->
+                    pr "@;print_string(%s, %s, irdata->var_spaces[%d].name);"
+                      print_std pr_ctx i_sp;
+                    pr "@;print_string(%s, %s, \".\");" print_std pr_ctx
+              in
               match Pos.unmark m_a with
               | VarAccess (m_sp_opt, v) ->
+                  pr_sp m_sp_opt;
                   let ptr = VID.gen_info_ptr v in
                   let fld =
                     match info with Com.Name -> "name" | Com.Alias -> "alias"
                   in
                   pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr fld
               | TabAccess (m_sp_opt, v, m_idx) ->
+                  pr_sp m_sp_opt;
                   pr "@;@[<v 2>{";
                   pr "T_varinfo *info;";
                   let idx_tab = Com.Var.loc_tab_idx v in
@@ -844,6 +860,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
                     print_std pr_ctx fld;
                   pr "@]@;}"
               | FieldAccess (m_sp_opt, e, f, _) ->
+                  pr_sp m_sp_opt;
                   let fld =
                     match info with Com.Name -> "name" | Com.Alias -> "alias"
                   in

@@ -33,7 +33,7 @@ TOTO01 = V_IND_TRAIT;
 
 regle primitive 20:
 application : iliad;
-ESP.TOTO02 = TOTO01 * 10 + 1;
+TOTO02 = TOTO01 * 10 + 1;
 
 regle primitive 30:
 application : iliad;
