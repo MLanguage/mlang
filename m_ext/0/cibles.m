@@ -20,9 +20,51 @@ V_IND_TRAIT : saisie contexte
 
 RESULTAT : calculee primrest = 0 restituee : "resultat du traitement" ;
 TOTO01 : calculee primrest = 0 restituee : "" ;
+TOTO02 : calculee primrest = 0 restituee : "" ;
 TOTO03 : calculee primrest = 0 restituee : "" ;
 TOTO05 : calculee primrest = 0 restituee : "" ;
 TUTU : tableau[5] calculee primrest = 0 restituee : "" ;
+
+espace_variables ESP : categorie saisie;
+
+regle primitive 10:
+application : iliad;
+TOTO01 = V_IND_TRAIT;
+
+regle primitive 20:
+application : iliad;
+ESP.TOTO02 = TOTO01 * 10 + 1;
+
+regle primitive 30:
+application : iliad;
+RESULTAT = TOTO02 + 1;
+
+cible test_esp:
+application : iliad;
+afficher_erreur "entree test_esp\n" indenter(2);
+afficher_erreur nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n";
+afficher_erreur nom(GLOBAL.V_IND_TRAIT) " = " (GLOBAL.V_IND_TRAIT) "\n";
+afficher_erreur "0: " nom(ESP.V_IND_TRAIT) " = " (ESP.V_IND_TRAIT) "\n";
+ESP.V_IND_TRAIT = 47;
+afficher_erreur "1: " nom(ESP.V_IND_TRAIT) " = " (ESP.V_IND_TRAIT) "\n";
+
+afficher_erreur "primitive 0:"
+  indenter(2) "\n"
+  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
+  nom(TOTO01) " = " (TOTO01) "\n"
+  nom(TOTO02) " = " (TOTO02) "\n"
+  nom(RESULTAT) " = " (RESULTAT) "\n"
+  indenter(-2);
+calculer domaine primitive;
+afficher_erreur "primitive 1:"
+  indenter(2) "\n"
+  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
+  nom(TOTO01) " = " (TOTO01) "\n"
+  nom(TOTO02) " = " (TOTO02) "\n"
+  nom(RESULTAT) " = " (RESULTAT) "\n"
+  indenter(-2);
+
+afficher_erreur indenter(-2) "sortie test_esp\n";
 
 fonction toto_fonction:
 application: iliad;
@@ -187,9 +229,6 @@ afficher_erreur
 afficher_erreur
   nom(AA) "[" (X) "]: AA03 " (est_variable(AA[X], AA03))
   ", PROUT " (est_variable(AA[X], PROUT)) "\n";
-afficher_erreur
-  nom(A[KKK: X]) ": AKK3 " (est_variable(A[KKK: X], AKK3))
-  ", PROUT " (est_variable(A[KKK: X], PROUT)) "\n";
 iterer
 : variable VAR
 : V_ANREV, A0, AA03, AKK3
@@ -212,12 +251,13 @@ afficher_erreur indenter(-2) "sortie test_est_variable\n";
 cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
+calculer cible test_esp;
 #calculer cible test_varcons;
 #calculer cible test_args;
 #calculer cible test_tmpref;
-calculer cible test_aff;
-calculer cible test_tab;
-calculer cible test_est_variable;
+#calculer cible test_aff;
+#calculer cible test_tab;
+#calculer cible test_est_variable;
 
 cible enchainement_primitif:
 application: iliad;

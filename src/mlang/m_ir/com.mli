@@ -257,10 +257,10 @@ type var_name = Normal of string | Generic of var_name_generic
 type m_var_name = var_name Pos.marked
 
 type 'v access =
-  | VarAccess of m_var_name option * int * 'v
-  | TabAccess of m_var_name option * int * 'v * 'v m_expression
+  | VarAccess of (m_var_name * int) option * 'v
+  | TabAccess of (m_var_name * int) option * 'v * 'v m_expression
   | FieldAccess of
-      m_var_name option * int * 'v m_expression * string Pos.marked * int
+      (m_var_name * int) option * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
@@ -431,6 +431,32 @@ val instr_map_var :
 
 val m_instr_map_var :
   ('v -> 'w) -> ('e -> 'f) -> ('v, 'e) m_instruction -> ('w, 'f) m_instruction
+
+type var_usage = Read | Write | Info | DeclRef | ArgRef | DeclLocal | Macro
+
+val expr_fold_var :
+  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  'v expression ->
+  'a ->
+  'a
+
+val m_expr_fold_var :
+  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  'v m_expression ->
+  'a ->
+  'a
+
+val instr_fold_var :
+  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  ('v, 'e) instruction ->
+  'a ->
+  'a
+
+val m_instr_fold_var :
+  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  ('v, 'e) m_instruction ->
+  'a ->
+  'a
 
 val get_var_name : var_name -> string
 

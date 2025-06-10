@@ -466,10 +466,10 @@ type var_name = Normal of string | Generic of var_name_generic
 type m_var_name = var_name Pos.marked
 
 type 'v access =
-  | VarAccess of m_var_name option * int * 'v
-  | TabAccess of m_var_name option * int * 'v * 'v m_expression
+  | VarAccess of (m_var_name * int) option * 'v
+  | TabAccess of (m_var_name * int) option * 'v * 'v m_expression
   | FieldAccess of
-      m_var_name option * int * 'v m_expression * string Pos.marked * int
+      (m_var_name * int) option * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
@@ -657,14 +657,14 @@ type ('v, 'e) target = {
 let target_is_function t = t.target_result <> None
 
 let rec access_map_var f = function
-  | VarAccess (m_sp_opt, i_sp, v) -> VarAccess (m_sp_opt, i_sp, f v)
-  | TabAccess (m_sp_opt, i_sp, v, m_i) ->
+  | VarAccess (m_sp_opt, v) -> VarAccess (m_sp_opt, f v)
+  | TabAccess (m_sp_opt, v, m_i) ->
       let v' = f v in
       let m_i' = m_expr_map_var f m_i in
-      TabAccess (m_sp_opt, i_sp, v', m_i')
-  | FieldAccess (m_sp_opt, i_sp, m_i, field, id) ->
+      TabAccess (m_sp_opt, v', m_i')
+  | FieldAccess (m_sp_opt, m_i, field, id) ->
       let m_i' = m_expr_map_var f m_i in
-      FieldAccess (m_sp_opt, i_sp, m_i', field, id)
+      FieldAccess (m_sp_opt, m_i', field, id)
 
 and m_access_map_var f m_access = Pos.map (access_map_var f) m_access
 
@@ -734,11 +734,11 @@ and expr_map_var f = function
       Loop (m_loop', m_e0')
   | NbCategory cvm -> NbCategory cvm
   | Attribut (m_access, attr) ->
-      let m_access' = Pos.map (access_map_var f) m_access in
+      let m_access' = m_access_map_var f m_access in
       Attribut (m_access', attr)
-  | Size m_access -> Size (Pos.map (access_map_var f) m_access)
+  | Size m_access -> Size (m_access_map_var f m_access)
   | IsVariable (m_access, name) ->
-      let m_access' = Pos.map (access_map_var f) m_access in
+      let m_access' = m_access_map_var f m_access in
       IsVariable (m_access', name)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
@@ -873,6 +873,178 @@ and instr_map_var f g = function
 
 and m_instr_map_var f g m_i = Pos.map (instr_map_var f g) m_i
 
+type var_usage = Read | Write | Info | DeclRef | ArgRef | DeclLocal | Macro
+
+let fold_list fold l acc = List.fold_left (fun a e -> fold e a) acc l
+
+let fold_opt fold opt acc = match opt with Some e -> fold e acc | None -> acc
+
+let rec access_fold_var usage f a acc =
+  match a with
+  | VarAccess (m_sp_opt, v) -> acc |> f usage m_sp_opt (Some v)
+  | TabAccess (m_sp_opt, v, m_i) ->
+      acc |> f usage m_sp_opt (Some v) |> m_expr_fold_var f m_i
+  | FieldAccess (m_sp_opt, m_i, _, _) ->
+      acc |> f usage m_sp_opt None |> m_expr_fold_var f m_i
+
+and m_access_fold_var usage f m_access acc =
+  acc |> access_fold_var usage f (Pos.unmark m_access)
+
+and set_value_fold_var f sv acc =
+  match sv with
+  | FloatValue _ -> acc
+  | VarValue m_access -> acc |> m_access_fold_var Read f m_access
+  | IntervalValue _ -> acc
+
+and atom_fold_var f a acc =
+  match a with
+  | AtomVar v -> acc |> f Macro None (Some v)
+  | AtomLiteral _ -> acc
+
+and m_atom_fold_var f m_a acc = acc |> atom_fold_var f (Pos.unmark m_a)
+
+and set_value_loop_fold_var f svl acc =
+  match svl with
+  | Single m_a0 -> acc |> m_atom_fold_var f m_a0
+  | Range (m_a0, m_a1) ->
+      acc |> m_atom_fold_var f m_a0 |> m_atom_fold_var f m_a1
+  | Interval (m_a0, m_a1) ->
+      acc |> m_atom_fold_var f m_a0 |> m_atom_fold_var f m_a1
+
+and loop_variable_fold_var f (_, svl) acc =
+  fold_list (set_value_loop_fold_var f) svl acc
+
+and loop_variables_fold_var f lv acc =
+  match lv with
+  | ValueSets lvl -> fold_list (loop_variable_fold_var f) lvl acc
+  | Ranges lvl -> fold_list (loop_variable_fold_var f) lvl acc
+
+and expr_fold_var f e acc =
+  match e with
+  | TestInSet (_, m_e0, values) ->
+      acc |> m_expr_fold_var f m_e0 |> fold_list (set_value_fold_var f) values
+  | Unop (_, m_e0) -> m_expr_fold_var f m_e0 acc
+  | Comparison (_, m_e0, m_e1) ->
+      acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
+  | Binop (_, m_e0, m_e1) ->
+      acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
+  | Conditional (m_e0, m_e1, m_e2_opt) ->
+      acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
+      |> fold_opt (m_expr_fold_var f) m_e2_opt
+  | FuncCall (_, m_el) -> fold_list (m_expr_fold_var f) m_el acc
+  | FuncCallLoop (_, m_loop, m_e0) ->
+      acc
+      |> loop_variables_fold_var f (Pos.unmark m_loop)
+      |> m_expr_fold_var f m_e0
+  | Literal _ -> acc
+  | Var access -> access_fold_var Read f access acc
+  | Loop (m_loop, m_e0) ->
+      acc
+      |> loop_variables_fold_var f (Pos.unmark m_loop)
+      |> m_expr_fold_var f m_e0
+  | NbCategory _ -> acc
+  | Attribut (m_access, _) -> m_access_fold_var Info f m_access acc
+  | Size m_access -> m_access_fold_var Info f m_access acc
+  | IsVariable (m_access, _) -> m_access_fold_var Info f m_access acc
+  | NbAnomalies -> acc
+  | NbDiscordances -> acc
+  | NbInformatives -> acc
+  | NbBloquantes -> acc
+
+and m_expr_fold_var f e acc = expr_fold_var f (Pos.unmark e) acc
+
+let rec print_arg_fold_var f pa acc =
+  match pa with
+  | PrintString _ -> acc
+  | PrintAccess (_, m_a) -> m_access_fold_var Info f m_a acc
+  | PrintIndent m_e0 -> m_expr_fold_var f m_e0 acc
+  | PrintExpr (m_e0, _, _) -> m_expr_fold_var f m_e0 acc
+
+and m_print_arg_fold_var f m_pa acc = print_arg_fold_var f (Pos.unmark m_pa) acc
+
+and formula_loop_fold_var f m_lvs acc =
+  loop_variables_fold_var f (Pos.unmark m_lvs) acc
+
+and formula_decl_fold_var f fd acc =
+  match fd with
+  | VarDecl (m_access, m_e1) ->
+      acc |> m_access_fold_var Write f m_access |> m_expr_fold_var f m_e1
+  | EventFieldRef (m_e0, _, _, v) ->
+      acc |> m_expr_fold_var f m_e0 |> f ArgRef None (Some v)
+
+and formula_fold_var f fm acc =
+  match fm with
+  | SingleFormula fd -> formula_decl_fold_var f fd acc
+  | MultipleFormulaes (fl, fd) ->
+      acc |> formula_loop_fold_var f fl |> formula_decl_fold_var f fd
+
+and instr_fold_var f instr acc =
+  let listFoldF usage v acc = f usage None (Some v) acc in
+  match instr with
+  | Affectation m_f -> formula_fold_var f (Pos.unmark m_f) acc
+  | IfThenElse (m_e0, m_il0, m_il1) ->
+      acc |> m_expr_fold_var f m_e0
+      |> fold_list (m_instr_fold_var f) m_il0
+      |> fold_list (m_instr_fold_var f) m_il1
+  | WhenDoElse (m_eil, m_il) ->
+      let fold (m_e0, m_il0, _) accu =
+        accu |> m_expr_fold_var f m_e0 |> fold_list (m_instr_fold_var f) m_il0
+      in
+      acc |> fold_list fold m_eil
+      |> fold_list (m_instr_fold_var f) (Pos.unmark m_il)
+  | ComputeDomain _ -> acc
+  | ComputeChaining _ -> acc
+  | ComputeVerifs (_, m_e0) -> m_expr_fold_var f m_e0 acc
+  | ComputeTarget (_, args) -> fold_list (listFoldF DeclRef) args acc
+  | VerifBlock m_il0 -> fold_list (m_instr_fold_var f) m_il0 acc
+  | Print (_, pr_args) -> fold_list (m_print_arg_fold_var f) pr_args acc
+  | Iterate (v, vl, cvml, m_il) ->
+      acc |> f DeclRef None (Some v)
+      |> fold_list (listFoldF ArgRef) vl
+      |> (let fold (_, m_e) accu = m_expr_fold_var f m_e accu in
+          fold_list fold cvml)
+      |> fold_list (m_instr_fold_var f) m_il
+  | Iterate_values (v, e3l, m_il) ->
+      acc |> f DeclLocal None (Some v)
+      |> (let fold (m_e0, m_e1, m_e2) accu =
+            accu |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
+            |> m_expr_fold_var f m_e2
+          in
+          fold_list fold e3l)
+      |> fold_list (m_instr_fold_var f) m_il
+  | Restore (vl, cvml, el, vel, m_il) ->
+      acc
+      |> fold_list (listFoldF ArgRef) vl
+      |> (let fold (v, _, m_e0) accu =
+            accu |> f DeclRef None (Some v) |> m_expr_fold_var f m_e0
+          in
+          fold_list fold cvml)
+      |> fold_list (m_expr_fold_var f) el
+      |> (let fold (v, m_e0) accu =
+            accu |> f DeclRef None (Some v) |> m_expr_fold_var f m_e0
+          in
+          fold_list fold vel)
+      |> fold_list (m_instr_fold_var f) m_il
+  | ArrangeEvents (vve_opt, ve_opt, e_opt, m_il) ->
+      acc
+      |> (let fold (v0, v1, m_e0) accu =
+            accu |> f DeclLocal None (Some v0) |> f DeclLocal None (Some v1)
+            |> m_expr_fold_var f m_e0
+          in
+          fold_opt fold vve_opt)
+      |> (let fold (v, m_e0) accu =
+            accu |> f DeclLocal None (Some v) |> m_expr_fold_var f m_e0
+          in
+          fold_opt fold ve_opt)
+      |> fold_opt (m_expr_fold_var f) e_opt
+      |> fold_list (m_instr_fold_var f) m_il
+  | RaiseError _ -> acc
+  | CleanErrors -> acc
+  | ExportErrors -> acc
+  | FinalizeErrors -> acc
+
+and m_instr_fold_var f m_i acc = instr_fold_var f (Pos.unmark m_i) acc
+
 let get_var_name v = match v with Normal s -> s | Generic s -> s.base
 
 let get_normal_var = function Normal name -> name | Generic _ -> assert false
@@ -955,25 +1127,25 @@ let format_comp_op fmt op =
     | Neq -> "!=")
 
 let format_access form_var form_expr fmt = function
-  | VarAccess (m_sp_opt, _, v) ->
+  | VarAccess (m_sp_opt, v) ->
       let sp_str =
         match m_sp_opt with
         | None -> ""
-        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
       in
       Pp.fpr fmt "%s%a" sp_str form_var v
-  | TabAccess (m_sp_opt, _, v, m_i) ->
+  | TabAccess (m_sp_opt, v, m_i) ->
       let sp_str =
         match m_sp_opt with
         | None -> ""
-        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
       in
       Pp.fpr fmt "%s%a[%a]" sp_str form_var v form_expr (Pos.unmark m_i)
-  | FieldAccess (m_sp_opt, _, e, f, _) ->
+  | FieldAccess (m_sp_opt, e, f, _) ->
       let sp_str =
         match m_sp_opt with
         | None -> ""
-        | Some m_sp -> get_var_name (Pos.unmark m_sp) ^ "."
+        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
       in
       Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str form_expr (Pos.unmark e)
         (Pos.unmark f)

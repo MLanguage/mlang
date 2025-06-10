@@ -1003,23 +1003,23 @@ var_access:
     let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     match m_i_opt with
-    | None -> Com.VarAccess (Some m_sp, -1, m_v)
-    | Some m_i -> Com.TabAccess (Some m_sp, -1, m_v, m_i)
+    | None -> Com.VarAccess (Some (m_sp, -1), m_v)
+    | Some m_i -> Com.TabAccess (Some (m_sp, -1), m_v, m_i)
   }
 | v = symbol_with_pos m_i_opt = with_pos(brackets)? {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     match m_i_opt with
-    | None -> Com.VarAccess (None, -1, m_v)
-    | Some m_i -> Com.TabAccess (None, -1, m_v, m_i)
+    | None -> Com.VarAccess (None, m_v)
+    | Some m_i -> Com.TabAccess (None, m_v, m_i)
   }
 | sp = symbol_with_pos DOT EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
     let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
-    Com.FieldAccess (Some m_sp, -1, idx, f, -1)
+    Com.FieldAccess (Some (m_sp, -1), idx, f, -1)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
-    Com.FieldAccess (None, -1, idx, f, -1)
+    Com.FieldAccess (None, idx, f, -1)
   }
 
 formula:
@@ -1197,13 +1197,13 @@ enumeration_item:
   COMMA field = symbol_with_pos RPAREN {
     let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let pos = mk_position $sloc in
-    let access = Com.FieldAccess (Some m_sp, -1, idx, field, -1) in
+    let access = Com.FieldAccess (Some (m_sp, -1), idx, field, -1) in
     Com.VarValue (Pos.mark access pos)
   }
 | EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
     let pos = mk_position $sloc in
-    let access = Com.FieldAccess (None, -1, idx, field, -1) in
+    let access = Com.FieldAccess (None, idx, field, -1) in
     Com.VarValue (Pos.mark access pos)
   }
 | sp = symbol_with_pos DOT v = symbol_with_pos m_i_opt = with_pos(brackets)? {
@@ -1211,21 +1211,21 @@ enumeration_item:
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     let a =
       match m_i_opt with
-      | None -> Com.VarAccess (Some m_sp, -1, m_v)
-      | Some m_i -> Com.TabAccess (Some m_sp, -1, m_v, m_i)
+      | None -> Com.VarAccess (Some (m_sp, -1), m_v)
+      | Some m_i -> Com.TabAccess (Some (m_sp, -1), m_v, m_i)
     in
     Com.VarValue (Pos.mark a (mk_position $sloc))
   }
 | v = symbol_with_pos LBRACKET m_i = with_pos(expression) RBRACKET {
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    let a = Com.TabAccess (None, -1, m_v, m_i) in
+    let a = Com.TabAccess (None, m_v, m_i) in
     Com.VarValue (Pos.mark a (mk_position $sloc))
   }
 | v = SYMBOL {
     let pos = mk_position $sloc in
     match parse_variable_or_int $sloc v with
     | ParseVar v' ->
-        Com.VarValue (Pos.mark (Com.VarAccess (None, -1, Pos.mark v' pos)) pos)
+        Com.VarValue (Pos.mark (Com.VarAccess (None, Pos.mark v' pos)) pos)
     | ParseInt i -> Com.FloatValue (Pos.mark (float_of_int i) pos)
   }
 
@@ -1295,30 +1295,30 @@ factor:
 | sp = symbol_with_pos DOT EVENT_FIELD LPAREN m_idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
     let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
-    Var (FieldAccess (Some m_sp, -1, m_idx, field, -1))
+    Var (FieldAccess (Some (m_sp, -1), m_idx, field, -1))
   }
 | EVENT_FIELD LPAREN m_idx = with_pos(expression)
   COMMA field = symbol_with_pos RPAREN {
-    Var (FieldAccess (None, -1, m_idx, field, -1))
+    Var (FieldAccess (None, m_idx, field, -1))
   }
 | sp = symbol_with_pos DOT v = symbol_with_pos
   LBRACKET m_i = with_pos(sum_expression) RBRACKET {
     let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    Var (TabAccess (Some m_sp, -1, m_v, m_i))
+    Var (TabAccess (Some (m_sp, -1), m_v, m_i))
   }
 | v = symbol_with_pos LBRACKET m_i = with_pos(sum_expression) RBRACKET {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    Var (TabAccess (None, -1, m_v, m_i))
+    Var (TabAccess (None, m_v, m_i))
   }
 | sp = symbol_with_pos DOT v = symbol_with_pos {
     let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    Var (VarAccess (Some m_sp, -1, m_v))
+    Var (VarAccess (Some (m_sp, -1), m_v))
   }
 | a = SYMBOL {
     match parse_atom $sloc a with
-    | Com.AtomVar v -> Com.Var (VarAccess (None, -1, v))
+    | Com.AtomVar v -> Com.Var (VarAccess (None, v))
     | Com.AtomLiteral l -> Com.Literal l
   }
 | UNDEFINED { Com.Literal Undefined }

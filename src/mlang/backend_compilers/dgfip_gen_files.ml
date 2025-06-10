@@ -450,22 +450,16 @@ struct S_irdata {
   IntMap.iter
     (fun _ (vsd : Com.variable_space) ->
       let sp = Pos.unmark vsd.vs_name in
-      Com.CatVar.LocMap.iter
-        (fun loc _ ->
-          match loc with
-          | Com.CatVar.LocInput ->
-              Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
-              Pp.fpr fmt "  double *saisie_%s;@\n" sp
-          | Com.CatVar.LocComputed ->
-              Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
-              Pp.fpr fmt "  double *calculee_%s;@\n" sp
-          | Com.CatVar.LocBase ->
-              Pp.fpr fmt "  char *def_base_%s;@\n" sp;
-              Pp.fpr fmt "  double *base_%s;@\n" sp)
-        vsd.vs_cats)
+      Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
+      Pp.fpr fmt "  double *saisie_%s;@\n" sp;
+      Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
+      Pp.fpr fmt "  double *calculee_%s;@\n" sp;
+      Pp.fpr fmt "  char *def_base_%s;@\n" sp;
+      Pp.fpr fmt "  double *base_%s;@\n" sp)
     cprog.program_var_spaces_idx;
   Pp.fpr fmt
     {|  T_var_space var_spaces[NB_ESPACES_VARIABLES + 1];
+  int var_space;
   char *def_tmps;
   double *tmps;
   int tmps_org;
@@ -722,7 +716,6 @@ extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
 extern int nb_evenements(T_irdata *irdata);
 
-extern char *concat_nom_index(char *nom, const char *fmt, char def, double val);
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 
 extern char lis_varinfo(
@@ -762,23 +755,6 @@ extern void ecris_tabaccess(
   char def, double val
 );
 
-extern char lis_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char *res_def, double *res_val
-);
-
-extern T_varinfo *lis_concaccess_varinfo(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val
-);
-
-extern void ecris_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char def, double val
-);
-
 extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
 extern void pr_out_var(T_irdata *irdata, char *nom);
 extern void pr_err_var(T_irdata *irdata, char *nom);
@@ -790,12 +766,6 @@ extern char est_variable(
 extern char est_variable_tabaccess(
   T_irdata *irdata, int idx_tab,
   char idx_def, double idx_val,
-  char *nomCmp, char *res_def, double *res_val
-);
-
-extern char est_variable_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
   char *nomCmp, char *res_def, double *res_val
 );
 
@@ -1378,40 +1348,34 @@ T_irdata *cree_irdata(void) {
   IntMap.iter
     (fun _ (vsd : Com.variable_space) ->
       let sp = Pos.unmark vsd.vs_name in
-      Com.CatVar.LocMap.iter
-        (fun loc _ ->
-          let init_loc loc_str nb_str =
-            Pp.fpr fmt "  irdata->def_%s_%s = NULL;@\n" loc_str sp;
-            Pp.fpr fmt "  irdata->%s_%s = NULL;@\n" loc_str sp;
-            Pp.fpr fmt "  if (TAILLE_%s > 0) {@\n" nb_str;
-            Pp.fpr fmt
-              "    irdata->def_%s_%s = (char *)malloc(TAILLE_%s * sizeof \
-               (char));@\n"
-              loc_str sp nb_str;
-            Pp.fpr fmt
-              "    if (irdata->def_%s_%s == NULL) goto erreur_cree_irdata;@\n"
-              loc_str sp;
-            Pp.fpr fmt
-              "    irdata->%s_%s = (double *)malloc(TAILLE_%s * sizeof \
-               (double));@\n"
-              loc_str sp nb_str;
-            Pp.fpr fmt
-              "    if (irdata->%s_%s == NULL) goto erreur_cree_irdata;@\n"
-              loc_str sp;
-            Pp.fpr fmt
-              "    init_%s_espace(irdata->def_%s_%s, irdata->%s_%s);@\n" loc_str
-              loc_str sp loc_str sp;
-            Pp.fpr fmt "  }@\n";
-            if vsd.vs_by_default then (
-              Pp.fpr fmt "  irdata->def_%s = irdata->def_%s_%s;@\n" loc_str
-                loc_str sp;
-              Pp.fpr fmt "  irdata->%s = irdata->%s_%s;@\n" loc_str loc_str sp)
-          in
-          match loc with
-          | Com.CatVar.LocInput -> init_loc "saisie" "SAISIE"
-          | Com.CatVar.LocComputed -> init_loc "calculee" "CALCULEE"
-          | Com.CatVar.LocBase -> init_loc "base" "BASE")
-        vsd.vs_cats)
+      let init_loc loc loc_str nb_str =
+        Pp.fpr fmt "  irdata->def_%s_%s = NULL;@\n" loc_str sp;
+        Pp.fpr fmt "  irdata->%s_%s = NULL;@\n" loc_str sp;
+        if Com.CatVar.LocMap.mem loc vsd.vs_cats then (
+          Pp.fpr fmt "  if (TAILLE_%s > 0) {@\n" nb_str;
+          Pp.fpr fmt
+            "    irdata->def_%s_%s = (char *)malloc(TAILLE_%s * sizeof (char));@\n"
+            loc_str sp nb_str;
+          Pp.fpr fmt
+            "    if (irdata->def_%s_%s == NULL) goto erreur_cree_irdata;@\n"
+            loc_str sp;
+          Pp.fpr fmt
+            "    irdata->%s_%s = (double *)malloc(TAILLE_%s * sizeof (double));@\n"
+            loc_str sp nb_str;
+          Pp.fpr fmt
+            "    if (irdata->%s_%s == NULL) goto erreur_cree_irdata;@\n" loc_str
+            sp;
+          Pp.fpr fmt "    init_%s_espace(irdata->def_%s_%s, irdata->%s_%s);@\n"
+            loc_str loc_str sp loc_str sp;
+          Pp.fpr fmt "  }@\n");
+        if vsd.vs_by_default then (
+          Pp.fpr fmt "  irdata->def_%s = irdata->def_%s_%s;@\n" loc_str loc_str
+            sp;
+          Pp.fpr fmt "  irdata->%s = irdata->%s_%s;@\n" loc_str loc_str sp)
+      in
+      init_loc Com.CatVar.LocInput "saisie" "SAISIE";
+      init_loc Com.CatVar.LocComputed "calculee" "CALCULEE";
+      init_loc Com.CatVar.LocBase "base" "BASE")
     cprog.program_var_spaces_idx;
   IntMap.iter
     (fun id (vsd : Com.variable_space) ->
@@ -1430,6 +1394,7 @@ T_irdata *cree_irdata(void) {
         id sp;
       Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
     cprog.program_var_spaces_idx;
+  Pp.fpr fmt "  irdata->var_space = %d;\n" cprog.program_var_space_def.vs_id;
   Pp.fpr fmt "%s"
     {|  irdata->tmps = NULL;
   irdata->def_tmps = NULL;
@@ -1664,50 +1629,6 @@ int lis_erreur_type(T_erreur *err) {
 int nb_evenements(T_irdata *irdata) {
   if (irdata == NULL) return 0;
   return irdata->nb_events;
-}
-
-char *concat_nom_index(char *nom, const char *fmt, char def, double val) {
-  char *res;
-  int sz = 0;
-  int szNom, szFmt;
-  int idx = (int)val;
-  int j, k;
-  if (nom == NULL || fmt == NULL || def == 0 || idx < 0) return NULL;
-  j = idx;
-  while (j > 0) {
-    j = j / 10;
-    sz++;
-  }
-  szNom = strlen(nom);
-  szFmt = strlen(fmt);
-  sz = szNom + (szFmt > sz ? szFmt : sz);
-  res = (char *)malloc((sz + 1) * (sizeof (char)));
-  res[sz] = 0;
-  for (k = 0; k < szNom; k++) {
-    res[k] = nom[k];
-  }
-  for (k = 0; k < szFmt; k++) {
-    res[szNom + k] = fmt[k];
-  }
-  j = idx;
-  k = sz - 1;
-  while (j > 0) {
-    switch (j % 10) {
-      case 0: res[k] = '0'; break;
-      case 1: res[k] = '1'; break;
-      case 2: res[k] = '2'; break;
-      case 3: res[k] = '3'; break;
-      case 4: res[k] = '4'; break;
-      case 5: res[k] = '5'; break;
-      case 6: res[k] = '6'; break;
-      case 7: res[k] = '7'; break;
-      case 8: res[k] = '8'; break;
-      case 9: res[k] = '9'; break;
-    }
-    k--;
-    j = j / 10;
-  }
-  return res;
 }
 
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
@@ -1955,39 +1876,6 @@ void ecris_tabaccess(
   ecris_varinfo_tab(irdata, idx_tab, idx_def, idx_val, def, val);
 }
 
-char lis_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char *res_def, double *res_val
-) {
-  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
-  T_varinfo *info = cherche_varinfo(irdata, vn);
-  *res_def = lis_varinfo(irdata, info, res_def, res_val);
-  free(vn);
-  return *res_def;
-}
-
-T_varinfo *lis_concaccess_varinfo(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val
-) {
-  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
-  T_varinfo *info = cherche_varinfo(irdata, vn);
-  free(vn);
-  return info;
-}
-
-void ecris_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char def, double val
-) {
-  char *vn = concat_nom_index(nom, fmt, idx_def, idx_val);
-  T_varinfo *info = cherche_varinfo(irdata, vn);
-  free(vn);
-  ecris_varinfo(irdata, info, def, val);
-}
-
 /* !!! */
 void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
   T_varinfo *info = NULL;
@@ -2041,15 +1929,6 @@ char est_variable_tabaccess(
   char *nomCmp, char *res_def, double *res_val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
-  return est_variable(info, nomCmp, res_def, res_val);
-}
-
-char est_variable_concaccess(
-  T_irdata *irdata,
-  char *nom, const char *fmt, char idx_def, double idx_val,
-  char *nomCmp, char *res_def, double *res_val
-) {
-  T_varinfo *info = lis_concaccess_varinfo(irdata, nom, fmt, idx_def, idx_val);
   return est_variable(info, nomCmp, res_def, res_val);
 }
 

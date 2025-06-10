@@ -38,6 +38,7 @@ module type S = sig
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
+    mutable ctx_var_space : int;
     ctx_var_spaces : ctx_var_space Array.t;
     ctx_tmps : value Array.t;
     ctx_tmps_var : Com.Var.t Array.t;
@@ -126,6 +127,7 @@ struct
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
+    mutable ctx_var_space : int;
     ctx_var_spaces : ctx_var_space Array.t;
     ctx_tmps : value Array.t;
     ctx_tmps_var : Com.Var.t Array.t;
@@ -178,6 +180,7 @@ struct
     {
       ctx_prog = p;
       ctx_target = snd (StrMap.min_binding p.program_targets);
+      ctx_var_space = p.program_var_space_def.vs_id;
       ctx_var_spaces;
       ctx_tmps = Array.make p.program_stats.sz_all_tmps Undefined;
       ctx_tmps_var = Array.make p.program_stats.sz_all_tmps dummy_var;
@@ -363,33 +366,13 @@ struct
 
   exception BlockingError
 
-  let get_var_by_name ctx name =
-    match StrMap.find_opt name ctx.ctx_prog.program_vars with
-    | Some v -> Some v
-    | None -> (
-        let rec searchTmp i =
-          if i < ctx.ctx_target.target_nb_tmps then
-            let v = ctx.ctx_tmps_var.(ctx.ctx_tmps_org - 1 - i) in
-            if Com.Var.name_str v = name then Some v else searchTmp (i + 1)
-          else None
-        in
-        match searchTmp 0 with
-        | Some v -> Some v
-        | None ->
-            let rec searchRef i =
-              if i < ctx.ctx_target.target_nb_refs then
-                let v = fst @@ ctx.ctx_ref.(ctx.ctx_ref_org - 1 - i) in
-                if Com.Var.name_str v = name then Some v else searchRef (i + 1)
-              else None
-            in
-            searchRef 0)
-
   let rec get_access_value ctx access =
     match access with
-    | Com.VarAccess (_, i_sp, v) ->
+    | Com.VarAccess (m_sp_opt, v) ->
+        let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
         let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
         get_var_value ctx vsd v
-    | Com.TabAccess (_, i_sp, m_v, m_idx) -> (
+    | Com.TabAccess (m_sp_opt, m_v, m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let v, vorg = get_var ctx m_v in
@@ -403,10 +386,13 @@ struct
                   ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i)
                 else v
               in
+              let i_sp =
+                Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt
+              in
               let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
               get_var_value_org ctx vsd v' vorg
         | Undefined -> Undefined)
-    | Com.FieldAccess (_, i_sp, e, _, j) -> (
+    | Com.FieldAccess (m_sp_opt, e, _, j) -> (
         match evaluate_expr ctx e with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -415,6 +401,9 @@ struct
               match events.(i).(j) with
               | Com.Numeric n -> n
               | Com.RefVar v ->
+                  let i_sp =
+                    Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt
+                  in
                   let vsd =
                     IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
                   in
@@ -424,12 +413,14 @@ struct
 
   and get_access_var ctx access =
     match access with
-    | Com.VarAccess (_, i_sp, v) ->
+    | Com.VarAccess (m_sp_opt, v) ->
+        let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
         let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
         Some (vsd, v)
-    | Com.TabAccess (_, i_sp, m_v, m_i) -> (
+    | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
+            let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
             let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
             let v = fst @@ get_var ctx m_v in
             let i = Int64.to_int @@ N.to_int z in
@@ -439,9 +430,10 @@ struct
               else Some (vsd, v)
             else None
         | Undefined -> None)
-    | Com.FieldAccess (_, i_sp, m_e, _, j) -> (
+    | Com.FieldAccess (m_sp_opt, m_e, _, j) -> (
         match evaluate_expr ctx m_e with
         | Number z ->
+            let i_sp = Option.fold ~none:ctx.ctx_var_space ~some:snd m_sp_opt in
             let vsd = IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx in
             let i = Int64.to_int @@ N.to_int z in
             let events = List.hd ctx.ctx_events in
@@ -630,14 +622,10 @@ struct
                       in
                       let instr =
                         let m_sp_opt =
-                          if vsd.vs_by_default then None
-                          else
-                            let vn = Com.Normal (Pos.unmark vsd.vs_name) in
-                            Some (Pos.without vn)
+                          let vn = Com.Normal (Pos.unmark vsd.vs_name) in
+                          Some (Pos.without vn, vsd.vs_id)
                         in
-                        let a =
-                          Com.TabAccess (m_sp_opt, vsd.vs_id, var_arg2, ei)
-                        in
+                        let a = Com.TabAccess (m_sp_opt, var_arg2, ei) in
                         Pos.same (Com.Var a) arg2
                       in
                       cast_to_int @@ evaluate_expr ctx instr

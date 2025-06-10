@@ -105,7 +105,7 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let mk_assign name value l =
     if var_exists name then
       let m_access =
-        Pos.without (Com.VarAccess (None, -1, Pos.without (Com.Normal name)))
+        Pos.without (Com.VarAccess (None, Pos.without (Com.Normal name)))
       in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
       let cmd = Com.SingleFormula (VarDecl (m_access, Pos.without litt)) in

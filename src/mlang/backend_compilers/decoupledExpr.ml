@@ -1,11 +1,11 @@
 module VID = Dgfip_varid
 
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
-    (vsd : Com.variable_space) (var : Com.Var.t) : string =
+    (m_sp_opt : (Com.m_var_name * int) option) (var : Com.Var.t) : string =
   try
-    if def_flag then VID.gen_def vsd var
+    if def_flag then VID.gen_def m_sp_opt var
     else
-      let access_val = VID.gen_val vsd var in
+      let access_val = VID.gen_val m_sp_opt var in
       (* When the trace flag is present, we print the value of the
          non-temporary variable being used *)
       if trace_flag && not (Com.Var.is_temp var) then
@@ -54,7 +54,7 @@ and expr =
 
 and expr_var =
   | Local of stack_slot
-  | M of Com.variable_space * Com.Var.t * dflag
+  | M of (Com.m_var_name * int) option * Com.Var.t * dflag
 
 and t = expr * dflag * local_vars
 
@@ -193,9 +193,9 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (vsd : Com.variable_space) (v : Com.Var.t) (df : dflag) _stacks _lv :
-    t =
-  (Dvar (M (vsd, v, df)), df, [])
+let m_var (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t)
+    (df : dflag) _stacks _lv : t =
+  (Dvar (M (m_sp_opt, v, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
     =
@@ -441,10 +441,11 @@ let format_slot fmt ({ kind; depth } : stack_slot) =
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
   match ev with
   | Local slot -> format_slot fmt slot
-  | M (vsd, var, df) ->
+  | M (m_sp_opt, var, df) ->
       let def_flag = df = Def in
       Format.fprintf fmt "%s"
-        (generate_variable ~trace_flag:dgfip_flags.flg_trace ~def_flag vsd var)
+        (generate_variable ~trace_flag:dgfip_flags.flg_trace ~def_flag m_sp_opt
+           var)
 
 let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   let format_dexpr = format_dexpr dgfip_flags in

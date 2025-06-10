@@ -1,7 +1,7 @@
 val generate_variable :
   ?def_flag:bool ->
   ?trace_flag:bool ->
-  Com.variable_space ->
+  (Com.m_var_name * int) option ->
   Com.Var.t ->
   string
 
@@ -59,7 +59,7 @@ val dfalse : constr
 val lit : float -> constr
 (** Float literal *)
 
-val m_var : Com.variable_space -> Com.Var.t -> dflag -> constr
+val m_var : (Com.m_var_name * int) option -> Com.Var.t -> dflag -> constr
 (** Value from TGV. [m_var v off df] represents an access to the TGV variable
     [v] with [df] to read defineness or valuation. [off] is the access type for
     M array, and should be [None] most of the time. For array access, see
