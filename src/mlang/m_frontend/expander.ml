@@ -859,7 +859,16 @@ let rec expand_instruction (const_map : const_context)
   | Com.VerifBlock instrs ->
       let instrs' = expand_instructions const_map instrs in
       Pos.same (Com.VerifBlock instrs') m_instr :: prev
-  | Com.ComputeTarget (tn, targs) ->
+  | Com.ComputeTarget (tn, targs, m_sp_opt) ->
+      let m_sp_opt' =
+        Option.map
+          (fun (m_sp, i_sp) ->
+            match expand_variable const_map ParamsMap.empty m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> (m_sp', i_sp))
+          m_sp_opt
+      in
       let map var =
         match expand_variable const_map ParamsMap.empty var with
         | Pos.Mark (AtomVar m_v, v_pos) -> Pos.mark (Pos.unmark m_v) v_pos
@@ -868,8 +877,41 @@ let rec expand_instruction (const_map : const_context)
         | _ -> assert false
       in
       let targs' = List.map map targs in
-      Pos.same (Com.ComputeTarget (tn, targs')) m_instr :: prev
-  | Com.ComputeVerifs _ | Com.ComputeDomain _ | Com.ComputeChaining _
+      Pos.same (Com.ComputeTarget (tn, targs', m_sp_opt')) m_instr :: prev
+  | Com.ComputeDomain (dom, m_sp_opt) ->
+      let m_sp_opt' =
+        Option.map
+          (fun (m_sp, i_sp) ->
+            match expand_variable const_map ParamsMap.empty m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> (m_sp', i_sp))
+          m_sp_opt
+      in
+      Pos.same (Com.ComputeDomain (dom, m_sp_opt')) m_instr :: prev
+  | Com.ComputeVerifs (dom, expr, m_sp_opt) ->
+      let expr' = expand_expression const_map ParamsMap.empty expr in
+      let m_sp_opt' =
+        Option.map
+          (fun (m_sp, i_sp) ->
+            match expand_variable const_map ParamsMap.empty m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> (m_sp', i_sp))
+          m_sp_opt
+      in
+      Pos.same (Com.ComputeVerifs (dom, expr', m_sp_opt')) m_instr :: prev
+  | Com.ComputeChaining (chain, m_sp_opt) ->
+      let m_sp_opt' =
+        Option.map
+          (fun (m_sp, i_sp) ->
+            match expand_variable const_map ParamsMap.empty m_sp with
+            | Pos.Mark (AtomLiteral _, sp_pos) ->
+                Err.constant_forbidden_as_var_space sp_pos
+            | Pos.Mark (AtomVar m_sp', _) -> (m_sp', i_sp))
+          m_sp_opt
+      in
+      Pos.same (Com.ComputeChaining (chain, m_sp_opt')) m_instr :: prev
   | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors
     ->
       m_instr :: prev

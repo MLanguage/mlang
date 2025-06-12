@@ -608,10 +608,14 @@ type ('v, 'e) instruction =
   | WhenDoElse of
       ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
       * ('v, 'e) m_instruction list Pos.marked
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked * 'v list
+  | ComputeDomain of
+      string Pos.marked list Pos.marked * (m_var_name * int) option
+  | ComputeChaining of string Pos.marked * (m_var_name * int) option
+  | ComputeVerifs of
+      string Pos.marked list Pos.marked
+      * 'v m_expression
+      * (m_var_name * int) option
+  | ComputeTarget of string Pos.marked * 'v list * (m_var_name * int) option
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
@@ -788,14 +792,14 @@ and instr_map_var f g = function
       let m_eil' = List.map map m_eil in
       let m_il' = Pos.map (List.map (m_instr_map_var f g)) m_il in
       WhenDoElse (m_eil', m_il')
-  | ComputeDomain dom -> ComputeDomain dom
-  | ComputeChaining ch -> ComputeChaining ch
-  | ComputeVerifs (m_sl, m_e0) ->
+  | ComputeDomain (dom, m_sp_opt) -> ComputeDomain (dom, m_sp_opt)
+  | ComputeChaining (ch, m_sp_opt) -> ComputeChaining (ch, m_sp_opt)
+  | ComputeVerifs (m_sl, m_e0, m_sp_opt) ->
       let m_e0' = m_expr_map_var f m_e0 in
-      ComputeVerifs (m_sl, m_e0')
-  | ComputeTarget (tn, args) ->
+      ComputeVerifs (m_sl, m_e0', m_sp_opt)
+  | ComputeTarget (tn, args, m_sp_opt) ->
       let args' = List.map f args in
-      ComputeTarget (tn, args')
+      ComputeTarget (tn, args', m_sp_opt)
   | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
   | Print (pr_std, pr_args) ->
       let pr_args' = List.map (Pos.map (print_arg_map_var f)) pr_args in
@@ -994,8 +998,8 @@ and instr_fold_var f instr acc =
       |> fold_list (m_instr_fold_var f) (Pos.unmark m_il)
   | ComputeDomain _ -> acc
   | ComputeChaining _ -> acc
-  | ComputeVerifs (_, m_e0) -> m_expr_fold_var f m_e0 acc
-  | ComputeTarget (_, args) -> fold_list (listFoldF DeclRef) args acc
+  | ComputeVerifs (_, m_e0, _) -> m_expr_fold_var f m_e0 acc
+  | ComputeTarget (_, args, _) -> fold_list (listFoldF DeclRef) args acc
   | VerifBlock m_il0 -> fold_list (m_instr_fold_var f) m_il0 acc
   | Print (_, pr_args) -> fold_list (m_print_arg_fold_var f) pr_args acc
   | Iterate (v, vl, cvml, m_il) ->
@@ -1312,19 +1316,48 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt
           "@[<v 2># debut verif block@\n%a@]@\n# fin verif block@\n" form_instrs
           vb
-    | ComputeDomain l ->
-        Format.fprintf fmt "calculer domaine %a;"
+    | ComputeDomain (l, m_sp_opt) ->
+        let pp_sp fmt m_sp_opt =
+          match m_sp_opt with
+          | None -> ()
+          | Some (m_sp, _) ->
+              Pp.fpr fmt " : espace %s" (get_var_name (Pos.unmark m_sp))
+        in
+        Format.fprintf fmt "calculer domaine %a%a;"
           (Pp.list_space (Pp.unmark Pp.string))
-          (Pos.unmark l)
-    | ComputeChaining ch ->
-        Format.fprintf fmt "calculer enchaineur %s;" (Pos.unmark ch)
-    | ComputeVerifs (l, expr) ->
-        Format.fprintf fmt "verifier %a : avec %a;"
+          (Pos.unmark l) pp_sp m_sp_opt
+    | ComputeChaining (ch, m_sp_opt) ->
+        let pp_sp fmt m_sp_opt =
+          match m_sp_opt with
+          | None -> ()
+          | Some (m_sp, _) ->
+              Pp.fpr fmt " : espace %s" (get_var_name (Pos.unmark m_sp))
+        in
+        Format.fprintf fmt "calculer enchaineur %s%a;" (Pos.unmark ch) pp_sp
+          m_sp_opt
+    | ComputeVerifs (l, expr, m_sp_opt) ->
+        let pp_sp fmt m_sp_opt =
+          match m_sp_opt with
+          | None -> ()
+          | Some (m_sp, _) ->
+              Pp.fpr fmt " : espace %s" (get_var_name (Pos.unmark m_sp))
+        in
+        Format.fprintf fmt "verifier %a%a : avec %a;"
           (Pp.list_space (Pp.unmark Pp.string))
-          (Pos.unmark l) (Pp.unmark form_expr) expr
-    | ComputeTarget (tname, targs) ->
-        Format.fprintf fmt "calculer cible %s : avec %a@," (Pos.unmark tname)
-          (Pp.list_comma form_var) targs
+          (Pos.unmark l) (Pp.unmark form_expr) expr pp_sp m_sp_opt
+    | ComputeTarget (tname, targs, m_sp_opt) ->
+        let pp_sp fmt m_sp_opt =
+          match m_sp_opt with
+          | None -> ()
+          | Some (m_sp, _) ->
+              Pp.fpr fmt " : espace %s" (get_var_name (Pos.unmark m_sp))
+        in
+        let pp_args fmt = function
+          | [] -> ()
+          | args -> Pp.fpr fmt "%a" (Pp.list_comma form_var) args
+        in
+        Format.fprintf fmt "calculer cible %s%a%a@," (Pos.unmark tname) pp_args
+          targs pp_sp m_sp_opt
     | Print (std, args) ->
         let print_cmd =
           match std with StdOut -> "afficher" | StdErr -> "afficher_erreur"

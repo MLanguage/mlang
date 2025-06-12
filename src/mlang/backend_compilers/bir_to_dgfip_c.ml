@@ -896,7 +896,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}")
         args;
       pr "@]@;}"
-  | ComputeTarget (Pos.Mark (tn, _), targs) ->
+  | ComputeTarget (Pos.Mark (tn, _), targs, m_sp_opt) ->
+      pr "@;@[<v 2>{";
+      (match m_sp_opt with
+      | None -> ()
+      | Some (_, vs_id) ->
+          pr "@;int var_space_sav = irdata->var_space;";
+          pr "@;irdata->var_space = %d;" vs_id);
       ignore
         (List.fold_left
            (fun n (v : Com.Var.t) ->
@@ -916,7 +922,11 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
              pr "@;%s = %s;" ref_val v_val_p;
              n + 1)
            0 targs);
-      pr "@;%s(irdata);" tn
+      pr "@;%s(irdata);" tn;
+      (match m_sp_opt with
+      | None -> ()
+      | Some _ -> pr "@;irdata->var_space = var_space_sav;");
+      pr "@]@;}@;"
   | Iterate (var, vars, var_params, stmts) ->
       let it_name = fresh_c_local "iterate" in
       let ref_name = VID.gen_ref_name_ptr var in

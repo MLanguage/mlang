@@ -374,10 +374,14 @@ type ('v, 'e) instruction =
   | WhenDoElse of
       ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
       * ('v, 'e) m_instruction list Pos.marked
-  | ComputeDomain of string Pos.marked list Pos.marked
-  | ComputeChaining of string Pos.marked
-  | ComputeVerifs of string Pos.marked list Pos.marked * 'v m_expression
-  | ComputeTarget of string Pos.marked * 'v list
+  | ComputeDomain of
+      string Pos.marked list Pos.marked * (m_var_name * int) option
+  | ComputeChaining of string Pos.marked * (m_var_name * int) option
+  | ComputeVerifs of
+      string Pos.marked list Pos.marked
+      * 'v m_expression
+      * (m_var_name * int) option
+  | ComputeTarget of string Pos.marked * 'v list * (m_var_name * int) option
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of

@@ -353,7 +353,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
               (max nbA nb, max szA sz, max nbRefA nbRef, tdata)
           | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
           | MultipleFormulaes _ -> assert false)
-      | Com.ComputeTarget (tn, _args) -> aux_call tdata (Pos.unmark tn)
+      | Com.ComputeTarget (tn, _, _) -> aux_call tdata (Pos.unmark tn)
       | Com.IfThenElse (meI, ilT, ilE) ->
           let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
           let nbT, szT, nbRefT, tdata = aux_instrs tdata ilT in
@@ -760,10 +760,19 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let ed', dict = aux ([], dict) (Pos.unmark ed) in
         let ed' = Pos.same ed' ed in
         aux (Pos.mark (Com.WhenDoElse (wdl', ed')) pos :: res, dict) il
-    | Pos.Mark (Com.ComputeTarget (tn, targs), pos) :: il ->
+    | Pos.Mark (Com.ComputeTarget (tn, targs, m_sp_opt), pos) :: il ->
         let map v = get_var dict v in
         let targs' = List.map map targs in
-        aux (Pos.mark (Com.ComputeTarget (tn, targs')) pos :: res, dict) il
+        let m_sp_opt' =
+          Option.map
+            (fun (m_sp, _) ->
+              let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
+              let i_sp = StrMap.find sp_name p.prog_var_spaces in
+              (m_sp, i_sp))
+            m_sp_opt
+        in
+        let instr' = Com.ComputeTarget (tn, targs', m_sp_opt') in
+        aux (Pos.mark instr' pos :: res, dict) il
     | Pos.Mark (Com.VerifBlock instrs, pos) :: il ->
         let instrs', dict = aux ([], dict) instrs in
         aux (Pos.mark (Com.VerifBlock instrs') pos :: res, dict) il
@@ -904,7 +913,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         aux (Pos.mark Com.FinalizeErrors pos :: res, dict) il
     | Pos.Mark (Com.ComputeDomain _, _) :: _
     | Pos.Mark (Com.ComputeChaining _, _) :: _
-    | Pos.Mark (Com.ComputeVerifs (_, _), _) :: _ ->
+    | Pos.Mark (Com.ComputeVerifs _, _) :: _ ->
         assert false
   in
   aux ([], dict) prog

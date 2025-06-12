@@ -25,19 +25,45 @@ TOTO03 : calculee primrest = 0 restituee : "" ;
 TOTO05 : calculee primrest = 0 restituee : "" ;
 TUTU : tableau[5] calculee primrest = 0 restituee : "" ;
 
-espace_variables ESP : categorie saisie;
+BOBO1 : calculee base primrest = 0 restituee : "" ;
+BOBO2 : calculee base primrest = 0 restituee : "" ;
+BOBO3 : calculee base primrest = 0 restituee : "" ;
+BOBO4 : calculee base primrest = 0 restituee : "" ;
+BOBORES : calculee base primrest = 0 restituee : "" ;
+
+espace_variables ESP : categorie saisie, base;
 
 regle primitive 10:
 application : iliad;
-TOTO01 = V_IND_TRAIT;
+BOBO1 = V_IND_TRAIT;
 
 regle primitive 20:
 application : iliad;
-TOTO02 = TOTO01 * 10 + 1;
+BOBO2 = BOBO1 * 10 + 1;
 
 regle primitive 30:
 application : iliad;
-RESULTAT = TOTO02 + 1;
+BOBORES = BOBO2 + 1;
+
+cible calc_prim:
+application : iliad;
+afficher_erreur "entree calc_prim\n" indenter(2);
+afficher_erreur "primitive 0:"
+  indenter(2) "\n"
+  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
+  nom(BOBO1) " = " (BOBO1) "\n"
+  nom(BOBO2) " = " (BOBO2) "\n"
+  nom(BOBORES) " = " (BOBORES) "\n"
+  indenter(-2);
+calculer domaine primitive;
+afficher_erreur "primitive 1:"
+  indenter(2) "\n"
+  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
+  nom(BOBO1) " = " (BOBO1) "\n"
+  nom(BOBO2) " = " (BOBO2) "\n"
+  nom(BOBORES) " = " (BOBORES) "\n"
+  indenter(-2);
+afficher_erreur indenter(-2) "sortie calc_prim\n";
 
 cible test_esp:
 application : iliad;
@@ -47,23 +73,8 @@ afficher_erreur nom(GLOBAL.V_IND_TRAIT) " = " (GLOBAL.V_IND_TRAIT) "\n";
 afficher_erreur "0: " nom(ESP.V_IND_TRAIT) " = " (ESP.V_IND_TRAIT) "\n";
 ESP.V_IND_TRAIT = 47;
 afficher_erreur "1: " nom(ESP.V_IND_TRAIT) " = " (ESP.V_IND_TRAIT) "\n";
-
-afficher_erreur "primitive 0:"
-  indenter(2) "\n"
-  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
-  nom(TOTO01) " = " (TOTO01) "\n"
-  nom(TOTO02) " = " (TOTO02) "\n"
-  nom(RESULTAT) " = " (RESULTAT) "\n"
-  indenter(-2);
-calculer domaine primitive;
-afficher_erreur "primitive 1:"
-  indenter(2) "\n"
-  nom(V_IND_TRAIT) " = " (V_IND_TRAIT) "\n"
-  nom(TOTO01) " = " (TOTO01) "\n"
-  nom(TOTO02) " = " (TOTO02) "\n"
-  nom(RESULTAT) " = " (RESULTAT) "\n"
-  indenter(-2);
-
+calculer cible calc_prim : espace GLOBAL;
+calculer cible calc_prim : espace ESP;
 afficher_erreur indenter(-2) "sortie test_esp\n";
 
 fonction toto_fonction:

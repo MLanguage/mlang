@@ -749,9 +749,13 @@ struct
         in
         aux wdl
     | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
-    | Com.ComputeTarget (Pos.Mark (tn, _), args) ->
+    | Com.ComputeTarget (Pos.Mark (tn, _), args, m_sp_opt) ->
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
-        evaluate_target canBlock ctx tf args
+        let vsd = get_var_space_from ctx m_sp_opt in
+        let vs_id_sav = ctx.ctx_var_space in
+        ctx.ctx_var_space <- vsd.vs_id;
+        evaluate_target canBlock ctx tf args;
+        ctx.ctx_var_space <- vs_id_sav
     | Com.Print (std, args) ->
         let std_fmt, ctx_pr =
           match std with

@@ -88,6 +88,7 @@ rule token = parse
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
     | "erreur" -> ERROR
+    | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE
     | "est_variable" -> IS_VARIABLE
     | "et" -> AND

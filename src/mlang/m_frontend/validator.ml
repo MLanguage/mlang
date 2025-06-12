@@ -420,6 +420,58 @@ type verif = {
 
 type target = (int Pos.marked, Mast.error_name) Com.target
 
+type call_compute =
+  | CallDomain of Com.DomainId.t * string option
+  | CallVerifs of Com.DomainId.t * string option
+  | CallChaining of string * string option
+  | CallTarget of string * string option
+
+let compare_call_compute cc0 cc1 =
+  let cons_to_int = function
+    | CallDomain _ -> 0
+    | CallVerifs _ -> 1
+    | CallChaining _ -> 2
+    | CallTarget _ -> 3
+  in
+  let c = Int.compare (cons_to_int cc0) (cons_to_int cc1) in
+  if c <> 0 then c
+  else
+    match (cc0, cc1) with
+    | CallDomain (dom0, sp_opt0), CallDomain (dom1, sp_opt1)
+    | CallVerifs (dom0, sp_opt0), CallVerifs (dom1, sp_opt1) ->
+        let c = Com.DomainId.compare dom0 dom1 in
+        if c <> 0 then c else compare sp_opt0 sp_opt1
+    | CallChaining (name0, sp_opt0), CallChaining (name1, sp_opt1)
+    | CallTarget (name0, sp_opt0), CallTarget (name1, sp_opt1) ->
+        let c = String.compare name0 name1 in
+        if c <> 0 then c else compare sp_opt0 sp_opt1
+    | _, _ -> assert false
+
+let pp_call_compute fmt = function
+  | CallDomain (dom, sp_opt) ->
+      Pp.fpr fmt "CallDomain(%a, %a)" (Com.DomainId.pp ()) dom
+        (Pp.option Pp.string) sp_opt
+  | CallVerifs (dom, sp_opt) ->
+      Pp.fpr fmt "CallVerifs(%a, %a)" (Com.DomainId.pp ()) dom
+        (Pp.option Pp.string) sp_opt
+  | CallChaining (name, sp_opt) ->
+      Pp.fpr fmt "CallChaining(%s, %a)" name (Pp.option Pp.string) sp_opt
+  | CallTarget (name, sp_opt) ->
+      Pp.fpr fmt "CallTarget(%s, %a)" name (Pp.option Pp.string) sp_opt
+
+module CallMap = struct
+  include MapExt.Make (struct
+    type t = call_compute
+
+    let compare = compare_call_compute
+  end)
+
+  let pp ?(sep = "; ") ?(pp_key = pp_call_compute) ?(assoc = " => ")
+      (pp_val : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (map : 'a t) : unit =
+    pp ~sep ~pp_key ~assoc pp_val fmt map
+end
+
 type program = {
   prog_prefix : string;
   prog_seq : int;
@@ -448,6 +500,7 @@ type program = {
     (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
   prog_main_target : string;
+  prog_call_map : (Pos.t CallMap.t * Pos.t) CallMap.t;
 }
 
 let is_vartmp (var : string) =
@@ -563,6 +616,7 @@ let empty_program (p : Mast.program) main_target =
     prog_vdom_calls = StrMap.empty;
     prog_targets = StrMap.empty;
     prog_main_target = main_target;
+    prog_call_map = CallMap.empty;
   }
 
 let get_seq (prog : program) : int * program =
@@ -587,7 +641,11 @@ let check_chaining (name : string) (pos : Pos.t)
   let chain_rules = IntMap.empty in
   let chaining = { chain_name; chain_apps; chain_rules } in
   let prog_chainings = StrMap.add name chaining prog.prog_chainings in
-  { prog with prog_chainings }
+  let prog_call_map =
+    let cc = CallChaining (name, None) in
+    CallMap.add cc (CallMap.empty, pos) prog.prog_call_map
+  in
+  { prog with prog_chainings; prog_call_map }
 
 let get_var_cat_id_str (var_cat : Com.CatVar.t) : string =
   let buf = Buffer.create 100 in
@@ -849,7 +907,8 @@ let check_error (error : Mast.error_) (prog : program) : program =
       { prog with prog_errors }
 
 let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
-    (dom_data : 'b) ((doms, syms) : 'b doms * syms) : 'b doms * syms =
+    (dom_data : 'b) ((doms, syms) : 'b doms * syms) :
+    'b Com.domain * 'b doms * syms =
   let dom_names =
     List.fold_left
       (fun dom_names (Pos.Mark (sl, sl_pos)) ->
@@ -897,14 +956,21 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
     else syms
   in
   let doms = Com.DomainIdMap.add dom_id_name domain doms in
-  (doms, syms)
+  (domain, doms, syms)
 
 let check_rule_dom_decl (decl : Mast.rule_domain_decl) (prog : program) :
     program =
   let dom_data = Com.{ rdom_computable = decl.Mast.dom_data.rdom_computable } in
   let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
-  let doms, syms = check_domain Rule decl dom_data doms_syms in
-  { prog with prog_rdoms = doms; prog_rdom_syms = syms }
+  let domain, doms, syms = check_domain Rule decl dom_data doms_syms in
+  let prog_call_map =
+    if domain.dom_data.rdom_computable then
+      let dom = fst @@ Com.DomainIdMap.min_binding domain.dom_names in
+      let cc = CallDomain (dom, None) in
+      CallMap.add cc (CallMap.empty, Pos.get domain.dom_id) prog.prog_call_map
+    else prog.prog_call_map
+  in
+  { prog with prog_rdoms = doms; prog_rdom_syms = syms; prog_call_map }
 
 let mast_to_catvars (cs : Pos.t Com.CatVar.Map.t)
     (cats : Com.CatVar.data Com.CatVar.Map.t) : Pos.t Com.CatVar.Map.t =
@@ -944,8 +1010,15 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let vdom_verifiable = decl.Mast.dom_data.vdom_verifiable in
   let dom_data = Com.{ vdom_auth; vdom_verifiable } in
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
-  let doms, syms = check_domain Verif decl dom_data doms_syms in
-  { prog with prog_vdoms = doms; prog_vdom_syms = syms }
+  let domain, doms, syms = check_domain Verif decl dom_data doms_syms in
+  let prog_call_map =
+    if false (* domain.dom_data.vdom_verifiable *) then
+      let dom, pos = Pos.to_couple domain.dom_id in
+      let cc = CallVerifs (dom, None) in
+      CallMap.add cc (CallMap.empty, pos) prog.prog_call_map
+    else prog.prog_call_map
+  in
+  { prog with prog_vdoms = doms; prog_vdom_syms = syms; prog_call_map }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1082,7 +1155,7 @@ let complete_vdom_decls (prog : program) : program =
 
 type var_mem_type = Num | Table | Both
 
-type proc_type = Target | Rule | Verif | Func | Filter
+type proc_type = Target of call_compute * Pos.t | Rule | Verif | Func | Filter
 
 type var_env = { prog : program; proc_type : proc_type; vars : int StrMap.t }
 
@@ -1327,7 +1400,7 @@ let check_var_space (m_sp_opt : (Com.m_var_name * int) option) (env : var_env) :
       | Verif -> Err.var_spaces_forbidden_in_this "verifs" (Pos.get m_sp)
       | Func -> Err.var_spaces_forbidden_in_this "functions" (Pos.get m_sp)
       | Filter -> Err.var_spaces_forbidden_in_this "filters" (Pos.get m_sp)
-      | Target -> (
+      | Target _ -> (
           let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
           match StrMap.find_opt sp_name env.prog.prog_var_spaces with
           | Some _ -> ()
@@ -1385,7 +1458,7 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
     id
   in
   (match instr with
-  | Com.ComputeDomain l -> (
+  | Com.ComputeDomain (l, _) -> (
       Buffer.add_string buf "_rules";
       let id = add_sml buf l in
       match Com.DomainIdMap.find_opt id prog.prog_rdom_syms with
@@ -1394,13 +1467,13 @@ let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
           if not rdom.Com.dom_data.rdom_computable then
             Err.rule_domain_not_computable (Pos.get l)
       | None -> Err.unknown_domain Rule (Pos.get l))
-  | Com.ComputeChaining (Pos.Mark (ch_name, ch_pos)) -> (
+  | Com.ComputeChaining (Pos.Mark (ch_name, ch_pos), _) -> (
       Buffer.add_string buf "_chaining_";
       Buffer.add_string buf ch_name;
       match StrMap.find_opt ch_name prog.prog_chainings with
       | Some _ -> ()
       | None -> Err.unknown_chaining ch_pos)
-  | Com.ComputeVerifs (l, _) -> (
+  | Com.ComputeVerifs (l, _, _) -> (
       Buffer.add_string buf "_verifs";
       let id = add_sml buf l in
       Buffer.add_char buf '_';
@@ -1441,6 +1514,30 @@ let rec check_instructions (env : var_env)
     let m_name = Pos.same (Com.get_normal_var (Pos.unmark var)) var in
     check_name_in_env env m_name;
     m_name
+  in
+  let get_sp_opt m_sp_opt =
+    match m_sp_opt with
+    | None -> None
+    | Some (Pos.Mark (sp_name, sp_opt), _) -> (
+        let sp = Com.get_normal_var sp_name in
+        match StrMap.find_opt sp env.prog.prog_var_spaces with
+        | Some _ -> Some sp
+        | None -> Err.unknown_var_space sp sp_opt)
+  in
+  let update_call_map env called instr_pos =
+    match env.proc_type with
+    | Target (cc, cc_pos) -> (
+        match CallMap.find_opt cc env.prog.prog_call_map with
+        | Some (called_map, _) -> (
+            match CallMap.find_opt called called_map with
+            | Some _ -> env.prog.prog_call_map
+            | None ->
+                let called_map = CallMap.add called instr_pos called_map in
+                CallMap.add cc (called_map, cc_pos) env.prog.prog_call_map)
+        | None ->
+            let called_map = CallMap.one called instr_pos in
+            CallMap.add cc (called_map, cc_pos) env.prog.prog_call_map)
+    | _ -> env.prog.prog_call_map
   in
   let rec aux
       ((env, res) :
@@ -1529,12 +1626,12 @@ let rec check_instructions (env : var_env)
             in
             let env, wde_res = wde (env, []) wdl in
             aux (env, Pos.mark wde_res instr_pos :: res) il
-        | Com.ComputeDomain (Pos.Mark (rdom_list, rdom_pos)) ->
+        | Com.ComputeDomain (Pos.Mark (rdom_list, rdom_pos), m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
+            let id = Com.DomainId.from_marked_list rdom_list in
             let rdom_id =
-              let id = Com.DomainId.from_marked_list rdom_list in
               Pos.unmark (Com.DomainIdMap.find id env.prog.prog_rdom_syms)
             in
             let seq, prog = get_seq env.prog in
@@ -1542,22 +1639,36 @@ let rec check_instructions (env : var_env)
               let used_data = (Pos.mark seq rdom_pos, rdom_id) in
               StrMap.add tname used_data prog.prog_rdom_calls
             in
-            let prog = { prog with prog_rdom_calls } in
+            let prog_call_map =
+              let sp_opt = get_sp_opt m_sp_opt in
+              update_call_map env (CallDomain (id, sp_opt)) instr_pos
+            in
+            let prog = { prog with prog_rdom_calls; prog_call_map } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
+            let res_instr =
+              Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
+            in
             aux (env, Pos.mark res_instr instr_pos :: res) il
-        | Com.ComputeChaining _ ->
+        | Com.ComputeChaining (_, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
-            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
+            let prog_call_map =
+              let sp_opt = get_sp_opt m_sp_opt in
+              update_call_map env (CallChaining (tname, sp_opt)) instr_pos
+            in
+            let prog = { env.prog with prog_call_map } in
+            let env = { env with prog } in
+            let res_instr =
+              Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
+            in
             aux (env, Pos.mark res_instr instr_pos :: res) il
-        | Com.ComputeVerifs (Pos.Mark (vdom_list, vdom_pos), expr) ->
+        | Com.ComputeVerifs (Pos.Mark (vdom_list, vdom_pos), expr, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
+            let id = Com.DomainId.from_marked_list vdom_list in
             let vdom_id =
-              let id = Com.DomainId.from_marked_list vdom_list in
               Pos.unmark (Com.DomainIdMap.find id env.prog.prog_vdom_syms)
             in
             let seq, prog = get_seq env.prog in
@@ -1566,9 +1677,16 @@ let rec check_instructions (env : var_env)
               let used_data = (Pos.mark seq vdom_pos, vdom_id, expr) in
               StrMap.add tname used_data prog.prog_vdom_calls
             in
-            let prog = { prog with prog_vdom_calls } in
+            let prog_call_map =
+              prog.prog_call_map
+              (* let sp_opt = get_sp_opt m_sp_opt in
+                 update_call_map env (CallVerifs (id, sp_opt)) instr_pos *)
+            in
+            let prog = { prog with prog_vdom_calls; prog_call_map } in
             let env = { env with prog } in
-            let res_instr = Com.ComputeTarget (Pos.without tname, []) in
+            let res_instr =
+              Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
+            in
             aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.VerifBlock instrs ->
             if env.proc_type = Rule then
@@ -1577,7 +1695,7 @@ let rec check_instructions (env : var_env)
             let env = { env with prog } in
             let res_instr = Com.VerifBlock res_instrs in
             aux (env, Pos.mark res_instr instr_pos :: res) il
-        | Com.ComputeTarget (Pos.Mark (tn, tpos), targs) ->
+        | Com.ComputeTarget (Pos.Mark (tn, tpos), targs, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             (match StrMap.find_opt tn env.prog.prog_targets with
@@ -1586,6 +1704,12 @@ let rec check_instructions (env : var_env)
                 let nb_args = List.length target.target_args in
                 if List.length targs <> nb_args then
                   Err.wrong_number_of_args nb_args tpos);
+            let prog_call_map =
+              let sp_opt = get_sp_opt m_sp_opt in
+              update_call_map env (CallTarget (tn, sp_opt)) instr_pos
+            in
+            let prog = { env.prog with prog_call_map } in
+            let env = { env with prog } in
             let targs' =
               let map v =
                 check_variable None v Num env;
@@ -1593,7 +1717,9 @@ let rec check_instructions (env : var_env)
               in
               List.map map targs
             in
-            let instr' = Com.ComputeTarget (Pos.mark tn tpos, targs') in
+            let instr' =
+              Com.ComputeTarget (Pos.mark tn tpos, targs', m_sp_opt)
+            in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Print (std, args) ->
             let args' =
@@ -2184,7 +2310,13 @@ let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     { prog with prog_functions }
   else
     let prog_targets = StrMap.add tname target prog.prog_targets in
-    { prog with prog_targets }
+    let prog_call_map =
+      match proc_type with
+      | Target (cc, _) ->
+          CallMap.add cc (CallMap.empty, tpos) prog.prog_call_map
+      | _ -> prog.prog_call_map
+    in
+    { prog with prog_targets; prog_call_map }
 
 let check_rule (r : Mast.rule) (prog : program) : program =
   let id, id_pos = Pos.to_couple r.Mast.rule_number in
@@ -2255,13 +2387,14 @@ let convert_rules (prog : program) : program =
   let prog_targets =
     IntMap.fold
       (fun id rule prog_targets ->
+        let tpos = Pos.get rule.rule_id in
         let tname = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
-        let target_file = Some (get_target_file (Pos.get rule.rule_id)) in
+        let target_file = Some (get_target_file tpos) in
         let target_prog = rule.rule_instrs in
         let target =
           Com.
             {
-              target_name = Pos.without tname;
+              target_name = Pos.mark tname tpos;
               target_file;
               target_apps = StrMap.mapi Pos.mark prog.prog_app;
               target_args = [];
@@ -2314,9 +2447,8 @@ let create_rule_graph (in_vars_from : rule -> StrSet.t)
       Some edges)
     rules
 
-let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
-    (rule_graph : string IntMap.t option IntMap.t) :
-    (int Pos.marked, Mast.error_name) Com.m_instruction list =
+let rule_graph_to_target_names (rdom_chain : rdom_or_chain) (prog : program)
+    (rule_graph : string IntMap.t option IntMap.t) : string Pos.marked list =
   let module RuleGraph :
     TopologicalSorting.GRAPH
       with type 'a t = string IntMap.t option IntMap.t
@@ -2363,7 +2495,8 @@ let rule_graph_to_instrs (rdom_chain : rdom_or_chain) (prog : program)
   List.map
     (fun id ->
       let name = Format.sprintf "%s_regle_%d" prog.prog_prefix id in
-      Pos.without (Com.ComputeTarget (Pos.without name, [])))
+      let rule = IntMap.find id prog.prog_rules in
+      Pos.same name rule.rule_id)
     sorted_rules
 
 let rdom_rule_filter (rdom : Com.rule_domain_data Com.domain) (rule : rule) :
@@ -2411,9 +2544,9 @@ let check_no_variable_duplicates (rdom_rules : rule IntMap.t)
     rule_defined
 
 let complete_rule_domains (prog : program) : program =
-  let prog_targets =
+  let prog_targets, prog_call_map =
     Com.DomainIdMap.fold
-      (fun rdom_id rdom prog_targets ->
+      (fun rdom_id rdom (prog_targets, prog_call_map) ->
         if rdom.Com.dom_data.Com.rdom_computable then (
           let rdom_rules =
             IntMap.filter
@@ -2427,19 +2560,38 @@ let complete_rule_domains (prog : program) : program =
               (fun r -> StrMap.keySet r.rule_out_vars)
               rdom_rules
           in
-          let target_prog =
-            rule_graph_to_instrs (RuleDomain rdom_id) prog rule_graph
+          let target_names =
+            rule_graph_to_target_names (RuleDomain rdom_id) prog rule_graph
           in
+          let target_prog =
+            List.map
+              (fun m_name ->
+                Pos.same (Com.ComputeTarget (m_name, [], None)) m_name)
+              target_names
+          in
+          let tpos = Pos.get rdom.Com.dom_id in
           let tname =
             let spl =
               Com.DomainId.fold (fun s l -> Pos.without s :: l) rdom_id []
             in
-            get_compute_id_str (Com.ComputeDomain (Pos.without spl)) prog
+            let instr = Com.ComputeDomain (Pos.mark spl tpos, None) in
+            get_compute_id_str instr prog
+          in
+          let prog_call_map =
+            let cc_dom = CallDomain (rdom_id, None) in
+            let ccm =
+              List.fold_left
+                (fun ccm m_name ->
+                  let cc = CallTarget (Pos.unmark m_name, None) in
+                  CallMap.add cc (Pos.get m_name) ccm)
+                CallMap.empty target_names
+            in
+            CallMap.add cc_dom (ccm, tpos) prog_call_map
           in
           let target =
             Com.
               {
-                target_name = Pos.without tname;
+                target_name = Pos.mark tname tpos;
                 target_file = None;
                 target_apps = StrMap.mapi Pos.mark prog.prog_app;
                 target_args = [];
@@ -2451,11 +2603,13 @@ let complete_rule_domains (prog : program) : program =
                 target_nb_refs = 0;
               }
           in
-          StrMap.add tname target prog_targets)
-        else prog_targets)
-      prog.prog_rdoms prog.prog_targets
+          let prog_targets = StrMap.add tname target prog_targets in
+          (prog_targets, prog_call_map))
+        else (prog_targets, prog_call_map))
+      prog.prog_rdoms
+      (prog.prog_targets, prog.prog_call_map)
   in
-  { prog with prog_targets }
+  { prog with prog_targets; prog_call_map }
 
 let rdom_id_rule_filter (prog : program) (rdom_id : Com.DomainId.t)
     (rule : rule) : bool =
@@ -2469,9 +2623,9 @@ let rdom_ids_rule_filter (prog : program) (rdom_ids : Com.DomainIdSet.t)
     rdom_ids
 
 let complete_chainings (prog : program) : program =
-  let prog_targets =
+  let prog_targets, prog_call_map =
     StrMap.fold
-      (fun ch_name chain prog_targets ->
+      (fun ch_name chain (prog_targets, prog_call_map) ->
         let all_ids =
           Com.DomainIdMap.fold
             (fun _ rdom ids ->
@@ -2529,16 +2683,34 @@ let complete_chainings (prog : program) : program =
             (fun r -> StrMap.keySet r.rule_out_vars)
             rules
         in
-        let target_prog =
-          rule_graph_to_instrs (Chaining ch_name) prog rule_graph
+        let target_names =
+          rule_graph_to_target_names (Chaining ch_name) prog rule_graph
         in
+        let target_prog =
+          List.map
+            (fun m_name ->
+              Pos.same (Com.ComputeTarget (m_name, [], None)) m_name)
+            target_names
+        in
+        let tpos = Pos.get chain.chain_name in
         let tname =
-          get_compute_id_str (Com.ComputeChaining (Pos.without ch_name)) prog
+          get_compute_id_str (Com.ComputeChaining (chain.chain_name, None)) prog
+        in
+        let prog_call_map =
+          let cc_dom = CallChaining (Pos.unmark chain.chain_name, None) in
+          let ccm =
+            List.fold_left
+              (fun ccm m_name ->
+                let cc = CallTarget (Pos.unmark m_name, None) in
+                CallMap.add cc (Pos.get m_name) ccm)
+              CallMap.empty target_names
+          in
+          CallMap.add cc_dom (ccm, tpos) prog_call_map
         in
         let target =
           Com.
             {
-              target_name = Pos.without tname;
+              target_name = Pos.mark tname tpos;
               target_file = None;
               target_apps = StrMap.mapi Pos.mark prog.prog_app;
               target_args = [];
@@ -2550,10 +2722,12 @@ let complete_chainings (prog : program) : program =
               target_nb_refs = 0;
             }
         in
-        StrMap.add tname target prog_targets)
-      prog.prog_chainings prog.prog_targets
+        let prog_targets = StrMap.add tname target prog_targets in
+        (prog_targets, prog_call_map))
+      prog.prog_chainings
+      (prog.prog_targets, prog.prog_call_map)
   in
-  { prog with prog_targets }
+  { prog with prog_targets; prog_call_map }
 
 let check_verif (v : Mast.verification) (prog : program) : program =
   let verif_apps =
@@ -2647,8 +2821,9 @@ let convert_verifs (prog : program) : program =
   let prog_targets =
     IntMap.fold
       (fun id verif prog_targets ->
+        let tpos = Pos.get verif.verif_id in
         let tname = Format.sprintf "%s_verif_%d" prog.prog_prefix id in
-        let target_file = Some (get_target_file (Pos.get verif.verif_id)) in
+        let target_file = Some (get_target_file tpos) in
         let target_prog =
           let map_var m_v =
             let name = Com.get_normal_var (Pos.unmark m_v) in
@@ -2671,7 +2846,7 @@ let convert_verifs (prog : program) : program =
         let target =
           Com.
             {
-              target_name = Pos.without tname;
+              target_name = Pos.mark tname tpos;
               target_file;
               target_apps = StrMap.mapi Pos.mark prog.prog_app;
               target_args = [];
@@ -2903,6 +3078,7 @@ module OrdVerifSetMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
+(* completer prog_call_map !!! *)
 let complete_verif_calls (prog : program) : program =
   let prog_targets, _ =
     StrMap.fold
@@ -2919,7 +3095,7 @@ let complete_verif_calls (prog : program) : program =
         match OrdVerifSetMap.find_opt verif_set verif_calls with
         | Some tn ->
             let target_prog =
-              [ Pos.without (Com.ComputeTarget (Pos.without tn, [])) ]
+              [ Pos.without (Com.ComputeTarget (Pos.without tn, [], None)) ]
             in
             let target =
               Com.
@@ -2947,7 +3123,8 @@ let complete_verif_calls (prog : program) : program =
                     let verif_tn =
                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
                     in
-                    Pos.without (Com.ComputeTarget (Pos.without verif_tn, []))
+                    Pos.without
+                      (Com.ComputeTarget (Pos.without verif_tn, [], None))
                     :: target_prog)
                   verif_set []
               in
@@ -2977,6 +3154,114 @@ let complete_verif_calls (prog : program) : program =
   in
   { prog with prog_targets }
 
+let check_called_spaces (prog : program) : program =
+  let pp_call_trace fmt call_map =
+    let iter cc (ccm, cc_pos) =
+      Pp.fpr fmt "@;@[<v 2>call %a %a:" pp_call_compute cc Pos.format_short
+        cc_pos;
+      let iter' cc' cc_pos' =
+        Pp.fpr fmt "@;%a %a" pp_call_compute cc' Pos.format_short cc_pos'
+      in
+      CallMap.iter iter' ccm;
+      Pp.fpr fmt "@]@;"
+    in
+    CallMap.iter iter call_map
+  in
+  Pp.epr "%a@." pp_call_trace prog.prog_call_map;
+  let name_of_dom dom =
+    let spl = Com.DomainId.fold (fun s l -> Pos.without s :: l) dom [] in
+    get_compute_id_str (Com.ComputeDomain (Pos.without spl, None)) prog
+  in
+  let name_of_verifs dom =
+    let spl = Com.DomainId.fold (fun s l -> Pos.without s :: l) dom [] in
+    let m_expr = Pos.without (Com.Literal (Com.Float 1.0)) in
+    get_compute_id_str (Com.ComputeVerifs (Pos.without spl, m_expr, None)) prog
+  in
+  let name_of_chaining name =
+    get_compute_id_str (Com.ComputeChaining (Pos.without name, None)) prog
+  in
+  let get_cc_tname = function
+    | CallDomain (dom, _) -> name_of_dom dom
+    | CallVerifs (dom, _) -> name_of_verifs dom
+    | CallChaining (name, _) -> name_of_chaining name
+    | CallTarget (name, _) -> name
+  in
+  let get_sp_opt = function
+    | CallDomain (_, sp_opt)
+    | CallVerifs (_, sp_opt)
+    | CallChaining (_, sp_opt)
+    | CallTarget (_, sp_opt) ->
+        sp_opt
+  in
+  let check_cc trace checked cc cc_pos =
+    if CallMap.mem cc checked then (
+      Pp.epr "@\nchecked: %a@." pp_call_compute cc;
+      checked)
+    else (
+      Pp.epr "@\ntrace: %a@." pp_call_compute cc;
+      List.iter
+        (fun (cc, cc_pos) ->
+          Pp.epr "  %a %a@." pp_call_compute cc Pos.format_short cc_pos)
+        trace;
+      let tname = get_cc_tname cc in
+      let target =
+        match StrMap.find_opt tname prog.prog_targets with
+        | Some t -> t
+        | None -> failwith tname
+      in
+      let sp_opt = get_sp_opt cc in
+      let vs_name = match sp_opt with None -> "" | Some vsn -> vsn in
+      let vsd_def =
+        let vs_id = StrMap.find vs_name prog.prog_var_spaces in
+        IntMap.find vs_id prog.prog_var_spaces_idx
+      in
+      let check_var usage m_sp_opt v_opt () =
+        match (m_sp_opt, v_opt, usage) with
+        | None, Some m_id, Com.(Read | Write | ArgRef) ->
+            let v = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+            if Com.Var.is_tgv v then (
+              Pp.epr "check_var <%s> %s@." vs_name (Com.Var.name_str v);
+              let loc = Com.Var.cat_var_loc v in
+              if not (Com.CatVar.LocMap.mem loc vsd_def.vs_cats) then (
+                Pp.epr "@.trace:@.";
+                List.iter
+                  (fun (cc', cc_pos') ->
+                    Pp.epr "  %a %a@." pp_call_compute cc' Pos.format_short
+                      cc_pos')
+                  ((cc, cc_pos) :: trace);
+                Err.variable_not_in_var_space (Com.Var.name_str v)
+                  (Pos.unmark vsd_def.vs_name)
+                  (Pos.get m_id)))
+        | _ -> ()
+      in
+      let iter m_i = Com.m_instr_fold_var check_var m_i () in
+      List.iter iter target.target_prog;
+      CallMap.add cc () checked)
+  in
+  let cc_sp sp_opt = function
+    | CallDomain (dom, _) -> CallDomain (dom, sp_opt)
+    | CallVerifs (dom, _) -> CallVerifs (dom, sp_opt)
+    | CallChaining (name, _) -> CallChaining (name, sp_opt)
+    | CallTarget (name, _) -> CallTarget (name, sp_opt)
+  in
+  let rec foldCcm sp_opt cc pos (trace, checked) =
+    let cc_sp_opt = get_sp_opt cc in
+    let sp_opt' = match cc_sp_opt with None -> sp_opt | _ -> cc_sp_opt in
+    let cc' = cc_sp sp_opt' cc in
+    let checked = check_cc trace checked cc' pos in
+    match CallMap.find_opt (cc_sp None cc) prog.prog_call_map with
+    | Some (ccm, _) ->
+        let trace' = (cc, pos) :: trace in
+        let checked =
+          snd @@ CallMap.fold (foldCcm sp_opt') ccm (trace', checked)
+        in
+        (trace, checked)
+    | None -> (trace, checked)
+  in
+  let call_map = CallMap.map snd prog.prog_call_map in
+  ignore @@ CallMap.fold (foldCcm None) call_map ([], CallMap.empty);
+  prog
+
 let proceed (main_target : string) (p : Mast.program) : program =
   (* à paramétrer *)
   let prog =
@@ -3000,7 +3285,9 @@ let proceed (main_target : string) (p : Mast.program) : program =
             | Mast.RuleDomDecl decl -> check_rule_dom_decl decl prog
             | Mast.VerifDomDecl decl -> check_verif_dom_decl decl prog
             | Mast.Function f -> check_target Func f prog
-            | Mast.Target t -> check_target Target t prog
+            | Mast.Target t ->
+                let cc = CallTarget (Pos.unmark t.target_name, None) in
+                check_target (Target (cc, pos_item)) t prog
             | Mast.Rule r -> check_rule r prog
             | Mast.Verification v -> check_verif v prog)
           prog source_file)
@@ -3021,4 +3308,4 @@ let proceed (main_target : string) (p : Mast.program) : program =
   | Some _ -> ());
   prog |> complete_rdom_decls |> complete_vdom_decls |> convert_rules
   |> complete_rule_domains |> complete_chainings |> convert_verifs
-  |> complete_verif_calls
+  |> complete_verif_calls |> check_called_spaces

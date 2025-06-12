@@ -59,7 +59,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token IS_VARIABLE VARIABLE_SPACE
+%token IS_VARIABLE VARIABLE_SPACE SPACE
 
 %token EOF
 
@@ -657,6 +657,11 @@ temporary_variable_name:
     (Pos.mark (parse_variable_name $sloc name_str) name_pos), size
   }
 
+compute_space:
+| COLON SPACE sp = symbol_with_pos {
+    Pos.same (parse_variable $sloc (Pos.unmark sp)) sp
+  }
+
 instruction_list_etc:
 | i_opt = with_pos(instruction) l = with_pos(symbol_colon_etc)* {
     match Pos.unmark i_opt with
@@ -698,19 +703,63 @@ instruction:
     let iltwl, ed = iltwe in
     Some (parse_when_do_etc ((e, List.rev ild, mk_position $sloc) :: iltwl, ed))
   }
-| COMPUTE DOMAIN dom = symbol_list_with_pos SEMICOLON { Some (ComputeDomain dom) }
-| COMPUTE CHAINING chain = symbol_with_pos SEMICOLON { Some (ComputeChaining chain) }
-| COMPUTE TARGET target = symbol_with_pos args = target_args? SEMICOLON {
-    let args_list = match args with None -> [] | Some l -> l in
-    Some (ComputeTarget (target, args_list))
+| COMPUTE DOMAIN dom = symbol_list_with_pos sp_opt = compute_space? SEMICOLON {
+    match sp_opt with
+    | None -> Some (ComputeDomain (dom, None))
+    | Some m_sp -> Some (ComputeDomain (dom, Some (m_sp, -1)))
   }
-| VERIFY DOMAIN dom = symbol_list_with_pos SEMICOLON {
-    let expr = Pos.without (Com.Literal (Com.Float 1.0)) in
-    Some (ComputeVerifs (dom, expr))
+| COMPUTE CHAINING chain = symbol_with_pos sp_opt = compute_space? SEMICOLON {
+    match sp_opt with
+    | None -> Some (ComputeChaining (chain, None))
+    | Some m_sp -> Some (ComputeChaining (chain, Some (m_sp, -1)))
   }
-| VERIFY DOMAIN dom = symbol_list_with_pos COLON
-  WITH expr = with_pos(expression) SEMICOLON {
-    Some (ComputeVerifs (dom, expr))
+| COMPUTE TARGET
+  target = symbol_with_pos
+  params = list(with_pos(target_param))
+  SEMICOLON {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (spo, alo) = function
+    | Pos.Mark ((Some sp, _), pos) ->
+        if spo = None then Some sp, alo
+        else err "variable space is already defined" pos
+    | Pos.Mark ((_, Some al), pos) ->
+        if alo = None then spo, Some al
+        else err "arguments are already specified" pos
+    | Pos.Mark ((_, _), _) -> assert false
+    in
+    let init = None, None in
+    let spo, alo = List.fold_left fold init params in
+    let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
+    let args =
+      match alo with
+      | Some al -> al
+      | None -> []
+    in
+    Some (ComputeTarget (target, args, m_sp_opt))
+  }
+| VERIFY DOMAIN
+  dom = symbol_list_with_pos
+  params = list(with_pos(verify_param))
+  SEMICOLON {
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (spo, eo) = function
+    | Pos.Mark ((Some sp, _), pos) ->
+        if spo = None then Some sp, eo
+        else err "variable space is already defined" pos
+    | Pos.Mark ((_, Some e), pos) ->
+        if eo = None then spo, Some e
+        else err "filter is already specified" pos
+    | Pos.Mark ((_, _), _) -> assert false
+    in
+    let init = None, None in
+    let spo, eo = List.fold_left fold init params in
+    let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
+    let expr =
+      match eo with
+      | Some expr -> expr
+      | None -> Pos.without (Com.Literal (Com.Float 1.0))
+    in
+    Some (ComputeVerifs (dom, expr, m_sp_opt))
   }
 | PRINT args = with_pos(print_argument)* SEMICOLON {
     Some (Print (StdOut, args))
@@ -820,11 +869,26 @@ instruction:
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
 
-target_args:
-| COLON WITH args = separated_nonempty_list(COMMA, arg_variable) { args }
+target_param:
+| COLON SPACE sp = symbol_with_pos {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    Some m_sp, None
+  }
+| COLON WITH args = separated_nonempty_list(COMMA, arg_variable) {
+    None, Some args
+  }
 
 arg_variable:
 | s = with_pos(SYMBOL) { Pos.same (parse_variable $sloc (Pos.unmark s)) s }
+
+verify_param:
+| COLON SPACE sp = symbol_with_pos {
+    let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    Some m_sp, None
+  }
+| COLON WITH expr = with_pos(expression) {
+  None, Some expr
+}
 
 instruction_else_branch:
 | ELSEIF e = with_pos(expression)

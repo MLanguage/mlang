@@ -49,6 +49,14 @@ type verif = {
 
 type target = (int Pos.marked, Mast.error_name) Com.target
 
+type call_compute =
+  | CallDomain of Com.DomainId.t * string option
+  | CallVerifs of Com.DomainId.t * string option
+  | CallChaining of string * string option
+  | CallTarget of string * string option
+
+module CallMap : MapExt.T with type key = call_compute
+
 type program = {
   prog_prefix : string;
   prog_seq : int;
@@ -77,6 +85,7 @@ type program = {
     (int Pos.marked * Com.DomainId.t * Mast.expression Pos.marked) StrMap.t;
   prog_targets : target StrMap.t;
   prog_main_target : string;
+  prog_call_map : (Pos.t CallMap.t * Pos.t) CallMap.t;
 }
 
 val mast_to_catvars :
@@ -88,8 +97,5 @@ val cats_variable_from_decl_list :
   Mast.var_category_id list ->
   Com.CatVar.data Com.CatVar.Map.t ->
   Pos.t Com.CatVar.Map.t
-
-val check_domain :
-  rule_or_verif -> 'a Mast.domain_decl -> 'b -> 'b doms * syms -> 'b doms * syms
 
 val proceed : string -> Mast.program -> program
