@@ -421,9 +421,9 @@ type verif = {
 type target = (int Pos.marked, Mast.error_name) Com.target
 
 type call_compute =
-  | CallDomain of Com.DomainId.t * string option
-  | CallVerifs of Com.DomainId.t * string option
-  | CallChaining of string * string option
+  | CallDomain of string * Com.DomainId.t * string option
+  | CallVerifs of string * Com.DomainId.t * string option
+  | CallChaining of string * string * string option
   | CallTarget of string * string option
 
 let compare_call_compute cc0 cc1 =
@@ -437,25 +437,23 @@ let compare_call_compute cc0 cc1 =
   if c <> 0 then c
   else
     match (cc0, cc1) with
-    | CallDomain (dom0, sp_opt0), CallDomain (dom1, sp_opt1)
-    | CallVerifs (dom0, sp_opt0), CallVerifs (dom1, sp_opt1) ->
-        let c = Com.DomainId.compare dom0 dom1 in
-        if c <> 0 then c else compare sp_opt0 sp_opt1
-    | CallChaining (name0, sp_opt0), CallChaining (name1, sp_opt1)
-    | CallTarget (name0, sp_opt0), CallTarget (name1, sp_opt1) ->
-        let c = String.compare name0 name1 in
+    | CallDomain (tn0, _, sp_opt0), CallDomain (tn1, _, sp_opt1)
+    | CallVerifs (tn0, _, sp_opt0), CallVerifs (tn1, _, sp_opt1)
+    | CallChaining (tn0, _, sp_opt0), CallChaining (tn1, _, sp_opt1)
+    | CallTarget (tn0, sp_opt0), CallTarget (tn1, sp_opt1) ->
+        let c = String.compare tn0 tn1 in
         if c <> 0 then c else compare sp_opt0 sp_opt1
     | _, _ -> assert false
 
 let pp_call_compute fmt = function
-  | CallDomain (dom, sp_opt) ->
+  | CallDomain (_, dom, sp_opt) ->
       Pp.fpr fmt "CallDomain(%a, %a)" (Com.DomainId.pp ()) dom
         (Pp.option Pp.string) sp_opt
-  | CallVerifs (dom, sp_opt) ->
+  | CallVerifs (_, dom, sp_opt) ->
       Pp.fpr fmt "CallVerifs(%a, %a)" (Com.DomainId.pp ()) dom
         (Pp.option Pp.string) sp_opt
-  | CallChaining (name, sp_opt) ->
-      Pp.fpr fmt "CallChaining(%s, %a)" name (Pp.option Pp.string) sp_opt
+  | CallChaining (_, chain, sp_opt) ->
+      Pp.fpr fmt "CallChaining(%s, %a)" chain (Pp.option Pp.string) sp_opt
   | CallTarget (name, sp_opt) ->
       Pp.fpr fmt "CallTarget(%s, %a)" name (Pp.option Pp.string) sp_opt
 
@@ -641,11 +639,7 @@ let check_chaining (name : string) (pos : Pos.t)
   let chain_rules = IntMap.empty in
   let chaining = { chain_name; chain_apps; chain_rules } in
   let prog_chainings = StrMap.add name chaining prog.prog_chainings in
-  let prog_call_map =
-    let cc = CallChaining (name, None) in
-    CallMap.add cc (CallMap.empty, pos) prog.prog_call_map
-  in
-  { prog with prog_chainings; prog_call_map }
+  { prog with prog_chainings }
 
 let get_var_cat_id_str (var_cat : Com.CatVar.t) : string =
   let buf = Buffer.create 100 in
@@ -907,8 +901,7 @@ let check_error (error : Mast.error_) (prog : program) : program =
       { prog with prog_errors }
 
 let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
-    (dom_data : 'b) ((doms, syms) : 'b doms * syms) :
-    'b Com.domain * 'b doms * syms =
+    (dom_data : 'b) ((doms, syms) : 'b doms * syms) : 'b doms * syms =
   let dom_names =
     List.fold_left
       (fun dom_names (Pos.Mark (sl, sl_pos)) ->
@@ -956,21 +949,14 @@ let check_domain (rov : rule_or_verif) (decl : 'a Mast.domain_decl)
     else syms
   in
   let doms = Com.DomainIdMap.add dom_id_name domain doms in
-  (domain, doms, syms)
+  (doms, syms)
 
 let check_rule_dom_decl (decl : Mast.rule_domain_decl) (prog : program) :
     program =
   let dom_data = Com.{ rdom_computable = decl.Mast.dom_data.rdom_computable } in
   let doms_syms = (prog.prog_rdoms, prog.prog_rdom_syms) in
-  let domain, doms, syms = check_domain Rule decl dom_data doms_syms in
-  let prog_call_map =
-    if domain.dom_data.rdom_computable then
-      let dom = fst @@ Com.DomainIdMap.min_binding domain.dom_names in
-      let cc = CallDomain (dom, None) in
-      CallMap.add cc (CallMap.empty, Pos.get domain.dom_id) prog.prog_call_map
-    else prog.prog_call_map
-  in
-  { prog with prog_rdoms = doms; prog_rdom_syms = syms; prog_call_map }
+  let doms, syms = check_domain Rule decl dom_data doms_syms in
+  { prog with prog_rdoms = doms; prog_rdom_syms = syms }
 
 let mast_to_catvars (cs : Pos.t Com.CatVar.Map.t)
     (cats : Com.CatVar.data Com.CatVar.Map.t) : Pos.t Com.CatVar.Map.t =
@@ -1010,15 +996,8 @@ let check_verif_dom_decl (decl : Mast.verif_domain_decl) (prog : program) :
   let vdom_verifiable = decl.Mast.dom_data.vdom_verifiable in
   let dom_data = Com.{ vdom_auth; vdom_verifiable } in
   let doms_syms = (prog.prog_vdoms, prog.prog_vdom_syms) in
-  let domain, doms, syms = check_domain Verif decl dom_data doms_syms in
-  let prog_call_map =
-    if false (* domain.dom_data.vdom_verifiable *) then
-      let dom, pos = Pos.to_couple domain.dom_id in
-      let cc = CallVerifs (dom, None) in
-      CallMap.add cc (CallMap.empty, pos) prog.prog_call_map
-    else prog.prog_call_map
-  in
-  { prog with prog_vdoms = doms; prog_vdom_syms = syms; prog_call_map }
+  let doms, syms = check_domain Verif decl dom_data doms_syms in
+  { prog with prog_vdoms = doms; prog_vdom_syms = syms }
 
 let complete_dom_decls (rov : rule_or_verif) ((doms, syms) : 'a doms * syms) :
     'a doms =
@@ -1641,7 +1620,7 @@ let rec check_instructions (env : var_env)
             in
             let prog_call_map =
               let sp_opt = get_sp_opt m_sp_opt in
-              update_call_map env (CallDomain (id, sp_opt)) instr_pos
+              update_call_map env (CallDomain (tname, id, sp_opt)) instr_pos
             in
             let prog = { prog with prog_rdom_calls; prog_call_map } in
             let env = { env with prog } in
@@ -1649,13 +1628,14 @@ let rec check_instructions (env : var_env)
               Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
             in
             aux (env, Pos.mark res_instr instr_pos :: res) il
-        | Com.ComputeChaining (_, m_sp_opt) ->
+        | Com.ComputeChaining (chain, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             let tname = get_compute_id_str instr env.prog in
             let prog_call_map =
               let sp_opt = get_sp_opt m_sp_opt in
-              update_call_map env (CallChaining (tname, sp_opt)) instr_pos
+              let cc = CallChaining (tname, Pos.unmark chain, sp_opt) in
+              update_call_map env cc instr_pos
             in
             let prog = { env.prog with prog_call_map } in
             let env = { env with prog } in
@@ -1678,9 +1658,8 @@ let rec check_instructions (env : var_env)
               StrMap.add tname used_data prog.prog_vdom_calls
             in
             let prog_call_map =
-              prog.prog_call_map
-              (* let sp_opt = get_sp_opt m_sp_opt in
-                 update_call_map env (CallVerifs (id, sp_opt)) instr_pos *)
+              let sp_opt = get_sp_opt m_sp_opt in
+              update_call_map env (CallVerifs (tname, id, sp_opt)) instr_pos
             in
             let prog = { prog with prog_vdom_calls; prog_call_map } in
             let env = { env with prog } in
@@ -2310,13 +2289,7 @@ let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     { prog with prog_functions }
   else
     let prog_targets = StrMap.add tname target prog.prog_targets in
-    let prog_call_map =
-      match proc_type with
-      | Target (cc, _) ->
-          CallMap.add cc (CallMap.empty, tpos) prog.prog_call_map
-      | _ -> prog.prog_call_map
-    in
-    { prog with prog_targets; prog_call_map }
+    { prog with prog_targets }
 
 let check_rule (r : Mast.rule) (prog : program) : program =
   let id, id_pos = Pos.to_couple r.Mast.rule_number in
@@ -2578,7 +2551,7 @@ let complete_rule_domains (prog : program) : program =
             get_compute_id_str instr prog
           in
           let prog_call_map =
-            let cc_dom = CallDomain (rdom_id, None) in
+            let cc_dom = CallDomain (tname, rdom_id, None) in
             let ccm =
               List.fold_left
                 (fun ccm m_name ->
@@ -2697,7 +2670,9 @@ let complete_chainings (prog : program) : program =
           get_compute_id_str (Com.ComputeChaining (chain.chain_name, None)) prog
         in
         let prog_call_map =
-          let cc_dom = CallChaining (Pos.unmark chain.chain_name, None) in
+          let cc_dom =
+            CallChaining (tname, Pos.unmark chain.chain_name, None)
+          in
           let ccm =
             List.fold_left
               (fun ccm m_name ->
@@ -3078,11 +3053,10 @@ module OrdVerifSetMap = struct
     pp ~sep ~pp_key ~assoc pp_val fmt map
 end
 
-(* completer prog_call_map !!! *)
 let complete_verif_calls (prog : program) : program =
-  let prog_targets, _ =
+  let prog_targets, prog_call_map, _ =
     StrMap.fold
-      (fun tname (_, vdom_id, expr) (prog_targets, verif_calls) ->
+      (fun tname (_, vdom_id, expr) (prog_targets, prog_call_map, verif_calls) ->
         let verif_set =
           IntMap.fold
             (fun _verif_id verif verif_set ->
@@ -3113,22 +3087,29 @@ let complete_verif_calls (prog : program) : program =
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
-            (prog_targets, verif_calls)
+            let ccm = CallMap.one (CallTarget (tn, None)) Pos.none in
+            let cc = CallTarget (tname, None) in
+            let prog_call_map = CallMap.add cc (ccm, Pos.none) prog_call_map in
+            (prog_targets, prog_call_map, verif_calls)
         | None ->
-            let instrs =
-              let instrs =
+            let instrs, ccm =
+              let instrs, ccm =
                 OrdVerifSet.fold
-                  (fun ord_verif target_prog ->
+                  (fun ord_verif (target_prog, ccm) ->
                     let verif_id = OrdVerif.get_id ord_verif in
                     let verif_tn =
                       Format.sprintf "%s_verif_%d" prog.prog_prefix verif_id
                     in
-                    Pos.without
-                      (Com.ComputeTarget (Pos.without verif_tn, [], None))
-                    :: target_prog)
-                  verif_set []
+                    let instr =
+                      Com.ComputeTarget (Pos.without verif_tn, [], None)
+                    in
+                    let target_prog = Pos.without instr :: target_prog in
+                    let cc = CallTarget (verif_tn, None) in
+                    let ccm = CallMap.add cc Pos.none ccm in
+                    (target_prog, ccm))
+                  verif_set ([], CallMap.empty)
               in
-              List.rev instrs
+              (List.rev instrs, ccm)
             in
             let target_prog = [ Pos.without (Com.VerifBlock instrs) ] in
             let target =
@@ -3147,13 +3128,18 @@ let complete_verif_calls (prog : program) : program =
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
+            let cc = CallTarget (tname, None) in
+            let prog_call_map = CallMap.add cc (ccm, Pos.none) prog_call_map in
             let verif_calls = OrdVerifSetMap.add verif_set tname verif_calls in
-            (prog_targets, verif_calls))
+            (prog_targets, prog_call_map, verif_calls))
       prog.prog_vdom_calls
-      (prog.prog_targets, OrdVerifSetMap.empty)
+      (prog.prog_targets, prog.prog_call_map, OrdVerifSetMap.empty)
   in
-  { prog with prog_targets }
+  { prog with prog_targets; prog_call_map }
 
+(* !!! *)
+(* par_defaut => toutes catégories *)
+(* transformer CallMap en StrMap *)
 let check_called_spaces (prog : program) : program =
   let pp_call_trace fmt call_map =
     let iter cc (ccm, cc_pos) =
@@ -3168,80 +3154,60 @@ let check_called_spaces (prog : program) : program =
     CallMap.iter iter call_map
   in
   Pp.epr "%a@." pp_call_trace prog.prog_call_map;
-  let name_of_dom dom =
-    let spl = Com.DomainId.fold (fun s l -> Pos.without s :: l) dom [] in
-    get_compute_id_str (Com.ComputeDomain (Pos.without spl, None)) prog
-  in
-  let name_of_verifs dom =
-    let spl = Com.DomainId.fold (fun s l -> Pos.without s :: l) dom [] in
-    let m_expr = Pos.without (Com.Literal (Com.Float 1.0)) in
-    get_compute_id_str (Com.ComputeVerifs (Pos.without spl, m_expr, None)) prog
-  in
-  let name_of_chaining name =
-    get_compute_id_str (Com.ComputeChaining (Pos.without name, None)) prog
-  in
   let get_cc_tname = function
-    | CallDomain (dom, _) -> name_of_dom dom
-    | CallVerifs (dom, _) -> name_of_verifs dom
-    | CallChaining (name, _) -> name_of_chaining name
-    | CallTarget (name, _) -> name
+    | CallDomain (tname, _, _)
+    | CallVerifs (tname, _, _)
+    | CallChaining (tname, _, _)
+    | CallTarget (tname, _) ->
+        tname
   in
   let get_sp_opt = function
-    | CallDomain (_, sp_opt)
-    | CallVerifs (_, sp_opt)
-    | CallChaining (_, sp_opt)
+    | CallDomain (_, _, sp_opt)
+    | CallVerifs (_, _, sp_opt)
+    | CallChaining (_, _, sp_opt)
     | CallTarget (_, sp_opt) ->
         sp_opt
   in
   let check_cc trace checked cc cc_pos =
-    if CallMap.mem cc checked then (
-      Pp.epr "@\nchecked: %a@." pp_call_compute cc;
-      checked)
-    else (
-      Pp.epr "@\ntrace: %a@." pp_call_compute cc;
-      List.iter
-        (fun (cc, cc_pos) ->
-          Pp.epr "  %a %a@." pp_call_compute cc Pos.format_short cc_pos)
-        trace;
+    if CallMap.mem cc checked then checked
+    else
       let tname = get_cc_tname cc in
-      let target =
-        match StrMap.find_opt tname prog.prog_targets with
-        | Some t -> t
-        | None -> failwith tname
-      in
-      let sp_opt = get_sp_opt cc in
-      let vs_name = match sp_opt with None -> "" | Some vsn -> vsn in
-      let vsd_def =
-        let vs_id = StrMap.find vs_name prog.prog_var_spaces in
-        IntMap.find vs_id prog.prog_var_spaces_idx
-      in
-      let check_var usage m_sp_opt v_opt () =
-        match (m_sp_opt, v_opt, usage) with
-        | None, Some m_id, Com.(Read | Write | ArgRef) ->
-            let v = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-            if Com.Var.is_tgv v then (
-              Pp.epr "check_var <%s> %s@." vs_name (Com.Var.name_str v);
-              let loc = Com.Var.cat_var_loc v in
-              if not (Com.CatVar.LocMap.mem loc vsd_def.vs_cats) then (
-                Pp.epr "@.trace:@.";
-                List.iter
-                  (fun (cc', cc_pos') ->
-                    Pp.epr "  %a %a@." pp_call_compute cc' Pos.format_short
-                      cc_pos')
-                  ((cc, cc_pos) :: trace);
-                Err.variable_not_in_var_space (Com.Var.name_str v)
-                  (Pos.unmark vsd_def.vs_name)
-                  (Pos.get m_id)))
-        | _ -> ()
-      in
-      let iter m_i = Com.m_instr_fold_var check_var m_i () in
-      List.iter iter target.target_prog;
-      CallMap.add cc () checked)
+      match StrMap.find_opt tname prog.prog_targets with
+      | None -> CallMap.add cc () checked
+      | Some target ->
+          let sp_opt = get_sp_opt cc in
+          let vs_name = match sp_opt with None -> "" | Some vsn -> vsn in
+          let vsd_def =
+            let vs_id = StrMap.find vs_name prog.prog_var_spaces in
+            IntMap.find vs_id prog.prog_var_spaces_idx
+          in
+          let check_var usage m_sp_opt v_opt () =
+            match (m_sp_opt, v_opt, usage) with
+            | None, Some m_id, Com.(Read | Write | ArgRef) ->
+                let v = IntMap.find (Pos.unmark m_id) prog.prog_dict in
+                if Com.Var.is_tgv v then (
+                  Pp.epr "check_var <%s> %s@." vs_name (Com.Var.name_str v);
+                  let loc = Com.Var.cat_var_loc v in
+                  if not (Com.CatVar.LocMap.mem loc vsd_def.vs_cats) then (
+                    Pp.epr "@.trace:@.";
+                    List.iter
+                      (fun (cc', cc_pos') ->
+                        Pp.epr "  %a %a@." pp_call_compute cc' Pos.format_short
+                          cc_pos')
+                      ((cc, cc_pos) :: trace);
+                    Err.variable_not_in_var_space (Com.Var.name_str v)
+                      (Pos.unmark vsd_def.vs_name)
+                      (Pos.get m_id)))
+            | _ -> ()
+          in
+          let iter m_i = Com.m_instr_fold_var check_var m_i () in
+          List.iter iter target.target_prog;
+          CallMap.add cc () checked
   in
   let cc_sp sp_opt = function
-    | CallDomain (dom, _) -> CallDomain (dom, sp_opt)
-    | CallVerifs (dom, _) -> CallVerifs (dom, sp_opt)
-    | CallChaining (name, _) -> CallChaining (name, sp_opt)
+    | CallDomain (tn, dom, _) -> CallDomain (tn, dom, sp_opt)
+    | CallVerifs (tn, dom, _) -> CallVerifs (tn, dom, sp_opt)
+    | CallChaining (tn, name, _) -> CallChaining (tn, name, sp_opt)
     | CallTarget (name, _) -> CallTarget (name, sp_opt)
   in
   let rec foldCcm sp_opt cc pos (trace, checked) =

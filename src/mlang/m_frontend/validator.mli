@@ -50,9 +50,9 @@ type verif = {
 type target = (int Pos.marked, Mast.error_name) Com.target
 
 type call_compute =
-  | CallDomain of Com.DomainId.t * string option
-  | CallVerifs of Com.DomainId.t * string option
-  | CallChaining of string * string option
+  | CallDomain of string * Com.DomainId.t * string option
+  | CallVerifs of string * Com.DomainId.t * string option
+  | CallChaining of string * string * string option
   | CallTarget of string * string option
 
 module CallMap : MapExt.T with type key = call_compute
