@@ -514,9 +514,99 @@ afficher_erreur "Bonjour le monde !\n";
 calculer cible tests;
 RESULTAT = 0;
 
+# Test stop
+X : saisie restituee revenu acompte = 1 avfisc = 0 categorie_TL = 20 classe = 2 cotsoc = 5 ind_abat = 0 modcat = 1 nat_code = 0 primrest = 0 priorite = 17 rapcat = 8 sanction = 2 alias X2 : "x";
+Y : calculee restituee primrest = 1 : "y";
+Z : calculee restituee primrest = 1 : "z";
+A : calculee restituee primrest = 1 : "a";
+COMPTEUR : calculee restituee primrest = 0 : "compteur";
+
+cible compter_calculee :
+application : iliad;
+afficher "DEBUT test compter_calculee\n";
+iterer
+: variable B
+: categorie calculee base
+: dans ( 
+#  afficher "Je m'affiche en début de boucle B\n";
+  iterer
+  : variable C
+  : categorie calculee base
+  : dans (
+    COMPTEUR = COMPTEUR + 1;
+ #   afficher "Compteur = ";
+ #   afficher(COMPTEUR);
+ #   afficher "\n";
+    si (COMPTEUR % 3 = 0) alors
+ #     afficher "On arrete la boucle C une fois\n";
+      stop;
+    finsi
+    si COMPTEUR > 6 alors
+ #     afficher "On stoppe tout!\n";
+      stop B;
+    finsi
+  )
+#  afficher "Fin de la boucle B!\n";
+)
+afficher "Compteur = 7 ? ";
+afficher(COMPTEUR);
+afficher "\n";
+afficher "FIN test compter_calculee\n";
+
+# Test stop & restore
+cible compter_calculee_restaurer :
+application : iliad;
+
+afficher "DEBUT Test compter_calculee_restaurer\n";
+COMPTEUR = 0;
+Y = 0;
+Z = 0;
+iterer
+: variable B
+: categorie calculee base
+: dans ( 
+#  afficher "Je m'affiche en début de boucle B\n";
+ restaurer
+  : variable REV_AC
+  : categorie calculee
+  : avec attribut(REV_AC, primrest) = 0
+  : apres (
+      iterer
+      : variable C
+      : categorie calculee base
+      : dans (
+#	  afficher "Compteur = ";
+#	  afficher(COMPTEUR);
+#	  afficher "\n";
+          COMPTEUR = COMPTEUR + 1;
+	  Y = Y + 2;
+	  Z = Z + 3;
+	  si (COMPTEUR % 3 = 0) alors
+#	    afficher "On arrete la boucle C une fois\n";
+	    stop;
+	  finsi
+	  si Y > 50 alors
+#	    afficher "On stoppe tout!\n";
+	    stop B;
+	  finsi
+      )
+    )
+#  afficher "Fin de la boucle B!\n";
+  )
+afficher "Compteur = 0 ? ";
+afficher(COMPTEUR);
+afficher "\n";
+afficher "Y = 52 ? ";
+afficher(Y);
+afficher "\n";
+afficher "FIN test compter_calculee_restauree\n";
+
 cible enchainement_primitif_interpreteur:
 application: iliad;
 calculer cible enchainement_primitif;
+calculer cible compter_calculee;
+calculer cible compter_calculee_restaurer;
+
 afficher_erreur "FIN\n";
 
 
