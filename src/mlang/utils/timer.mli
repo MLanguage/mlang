@@ -1,5 +1,5 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
+(* Copyright (C) 2025 Contributor: Steven de Oliveira
+   <steven.de-oliveira@ocamlpro.com>
 
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
@@ -14,15 +14,22 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(** This module with a single entry point generates C files from a
-    {!Bir.program}. *)
+type t
+(** A simple timer to keep track of system time through a user friendly
+    interface. *)
 
-(** The optimized code generation for M code, which represents the vast majority
-    of the output, is built in {!DecoupledExpr}. *)
+val start : ?run:bool -> unit -> t
+(** Starts a timer. If [run] is set to false (default: [true]), the timer does
+    not start yet. *)
 
-val generate_c_program :
-  files_need_no_regen:string list ->
-  Dgfip_options.flags ->
-  Mir.program ->
-  (* filename *) string ->
-  unit
+val restart : t -> unit
+(** Restarts a timer. *)
+
+val curr_time : t -> float
+(** Returns the timer's total active time. *)
+
+val stop : t -> unit
+(** Stops a timer. *)
+
+val time_of : (unit -> 'a) -> float * 'a
+(** Calls the function in argument and returns the time it took to run. *)

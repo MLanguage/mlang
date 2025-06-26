@@ -42,6 +42,9 @@ let without_dgfip_m =
 let debug =
   Arg.(value & flag & info [ "debug"; "d" ] ~doc:"Prints debug information")
 
+let stats =
+  Arg.(value & flag & info [ "stats" ] ~doc:"Prints statistics information")
+
 let var_info_debug =
   Arg.(
     value & opt_all string []
@@ -182,13 +185,20 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
+let only_compil_new =
+  Arg.(
+    value & flag
+    & info [ "only-compile-new" ]
+        ~doc:
+          "(experimental) Only parses & compiles files that have been changed.")
+
 let mlang_t f =
   Term.(
-    const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
-    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
+    const f $ files $ applications $ without_dgfip_m $ debug $ stats
+    $ var_info_debug $ display_time $ dep_graph_file $ no_print_cycles $ backend
+    $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
     $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ income_year_cli $ m_clean_calls $ dgfip_options $ only_compil_new)
 
 let info =
   let doc =
@@ -260,6 +270,8 @@ let var_info_debug = ref []
 
 let warning_flag = ref true
 
+let stats_flag = ref false
+
 let no_print_cycles_flag = ref false
 
 let display_time = ref false
@@ -274,6 +286,8 @@ let value_sort = ref RegularFloat
 
 let round_ops = ref RODefault
 
+let only_compile_new = ref false
+
 (* Default value for the epsilon slack when comparing things in the
    interpreter *)
 let comparison_error_margin = ref 0.000001
@@ -281,16 +295,18 @@ let comparison_error_margin = ref 0.000001
 let income_year = ref 0
 
 let set_all_arg_refs (files_ : string list) applications_
-    (without_dgfip_m_ : bool) (debug_ : bool) (var_info_debug_ : string list)
-    (display_time_ : bool) (dep_graph_file_ : string) (no_print_cycles_ : bool)
+    (without_dgfip_m_ : bool) (debug_ : bool) (stats_ : bool)
+    (var_info_debug_ : string list) (display_time_ : bool)
+    (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
     (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) =
+    (round_ops_ : round_ops) (only_compile_new_ : bool) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
   debug_flag := debug_;
+  stats_flag := stats_;
   var_info_debug := var_info_debug_;
   var_info_flag := !var_info_debug <> [];
   display_time := display_time_;
@@ -304,6 +320,7 @@ let set_all_arg_refs (files_ : string list) applications_
      | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
   value_sort := value_sort_;
   round_ops := round_ops_;
+  only_compile_new := only_compile_new_;
   match output_file_ with
   | None -> ()
   | Some o -> (
@@ -338,7 +355,7 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
 
 (**{2 Markers}*)
 
-(** Prints [\[INFO\]] in blue on the terminal standard output *)
+(** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
 
@@ -361,28 +378,32 @@ let format_with_style (styles : ANSITerminal.style list)
   if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
   else Printf.sprintf str
 
-(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
-    timing since last debug *)
+(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
+    since last debug *)
 let debug_marker (f_time : bool) =
   if f_time then time_marker ();
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
 
-(** Prints [\[ERROR\]] in red on the terminal error output *)
+(** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () =
   ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
 
-(** Prints [\[WARNING\]] in yellow on the terminal standard output *)
+(** Prints [[WARNING]] in yellow on the terminal standard output *)
 let warning_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
 
-(** Prints [\[RESULT\]] in green on the terminal standard output *)
+(** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
+
+(** Prints [[STATS]] in blue on the terminal standard output *)
+let stats_marker () =
+  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[STATS] "
 
 let clocks =
   Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
-(** Prints [\[🕛\]] in blue on the terminal standard output *)
+(** Prints [[🕛]] in blue on the terminal standard output *)
 let clock_marker i =
   let new_time = Unix.gettimeofday () in
   let initial_time = !initial_time in
@@ -419,6 +440,14 @@ let error_print kont =
   Format.kasprintf
     (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str)
     kont
+
+let stats_print kont =
+  ANSITerminal.erase ANSITerminal.Eol;
+  if !stats_flag then
+    Format.kasprintf
+      (fun str -> Format.printf "%a%s@." (fun _ -> stats_marker) () str)
+      kont
+  else Format.ifprintf Format.std_formatter kont
 
 let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
   let step_ticks = 5 in

@@ -273,7 +273,9 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
 
 module ConstMap = StrMap
 
-type const_context = float Pos.marked ConstMap.t
+type const_data = { v : float Pos.marked; mutable used_by_file : StrSet.t }
+
+type const_context = const_data ConstMap.t
 
 module ParamsMap = struct
   include CharMap
@@ -301,32 +303,39 @@ let format_loop_context fmt (ld : loop_context) =
 let format_loop_domain fmt (ld : loop_domain) =
   ParamsMap.pp (Pp.list_comma format_loop_param_value) fmt ld
 
-let add_const (Pos.Mark (name, name_pos)) (Pos.Mark (cval, cval_pos)) const_map
-    =
-  match ConstMap.find_opt name const_map with
-  | Some (Pos.Mark (_, old_pos)) ->
+let add_const (Pos.Mark (name, name_pos)) (Pos.Mark (cval, cval_pos))
+    (const_map : const_context) =
+  match ConstMap.find name const_map with
+  | { v = Pos.Mark (_, old_pos); _ } ->
       Err.constant_already_defined old_pos name_pos
-  | None -> (
+  | exception Not_found -> (
       match cval with
       | Com.AtomLiteral (Com.Float f) ->
-          ConstMap.add name (Pos.mark f name_pos) const_map
+          ConstMap.add name
+            { v = Pos.mark f name_pos; used_by_file = StrSet.empty }
+            const_map
       | Com.AtomVar (Pos.Mark (Com.Normal const, _)) -> (
-          match ConstMap.find_opt const const_map with
-          | Some (Pos.Mark (value, _)) ->
-              ConstMap.add name (Pos.mark value name_pos) const_map
-          | None -> Err.unknown_constant cval_pos)
+          match ConstMap.find const const_map with
+          | { v = Pos.Mark (value, _); used_by_file } ->
+              ConstMap.add name
+                { v = Pos.mark value name_pos; used_by_file }
+                const_map
+          | exception Not_found -> Err.unknown_constant cval_pos)
       | _ -> assert false)
 
 let expand_table_size (const_map : const_context) table_size =
   match table_size with
   | Some (Pos.Mark (Mast.SymbolSize c, size_pos)) -> (
       match ConstMap.find_opt c const_map with
-      | Some (Pos.Mark (f, _)) ->
+      | Some ({ v = Pos.Mark (f, _); used_by_file } as cd) ->
           let i = int_of_float f in
           if f <> float i then Err.table_size_must_be_int size_pos
           else if i < 0 then Err.table_size_must_be_positive size_pos
           else if i = 0 then Err.table_cannot_be_empty size_pos
-          else Some (Pos.mark (Mast.LiteralSize i) size_pos)
+          else
+            let file = Pos.get_file size_pos in
+            cd.used_by_file <- StrSet.add file used_by_file;
+            Some (Pos.mark (Mast.LiteralSize i) size_pos)
       | None -> Err.unknown_constant size_pos)
   | _ -> table_size
 
@@ -335,7 +344,10 @@ let rec expand_variable (const_map : const_context) (loop_map : loop_context)
   match Pos.unmark m_var with
   | Com.Normal name -> (
       match ConstMap.find_opt name const_map with
-      | Some (Pos.Mark (f, _)) -> Pos.same (Com.AtomLiteral (Float f)) m_var
+      | Some ({ v = Pos.Mark (f, var_pos); used_by_file } as cd) ->
+          let file = Pos.get_file var_pos in
+          cd.used_by_file <- StrSet.add file used_by_file;
+          Pos.same (Com.AtomLiteral (Float f)) m_var
       | None -> Pos.same (Com.AtomVar m_var) m_var)
   | Com.Generic gen_name ->
       if List.length gen_name.Com.parameters == 0 then
@@ -420,7 +432,10 @@ let var_or_int_value (const_map : const_context)
   | Com.AtomVar m_v -> (
       let name = Com.get_var_name (Pos.unmark m_v) in
       match ConstMap.find_opt name const_map with
-      | Some (Pos.Mark (fvalue, _)) -> IntIndex (int_of_float fvalue)
+      | Some ({ v = Pos.Mark (fvalue, loc); used_by_file } as cd) ->
+          let file = Pos.get_file loc in
+          cd.used_by_file <- StrSet.add file used_by_file;
+          IntIndex (int_of_float fvalue)
       | None -> VarIndex (Pos.unmark m_v))
   | Com.AtomLiteral (Com.Float f) -> IntIndex (int_of_float f)
   | Com.AtomLiteral Com.Undefined -> assert false
@@ -514,9 +529,11 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
     iterated values.
 
     In OCaml terms, if you want [translate_loop_variables lvs f ctx], then you
-    should define [f] by [let f = fun lc i ctx -> ...] and use {!val:
-    merge_loop_ctx} inside [...] before translating the loop body. [lc] is the
-    loop context, [i] the loop sequence index and [ctx] the translation context. *)
+    should define [f] by [let f = fun lc i ctx -> ...] and use
+    {!val:
+    merge_loop_ctx} inside [...] before translating the loop body.
+    [lc] is the loop context, [i] the loop sequence index and [ctx] the
+    translation context. *)
 
 let expand_loop_variables (lvs : Com.m_var_name Com.loop_variables Pos.marked)
     (const_map : const_context) : (loop_context -> 'a) -> 'a list =
@@ -919,8 +936,8 @@ and expand_instructions (const_map : const_context)
     Mast.instruction Pos.marked list =
   List.fold_left (expand_instruction const_map) [] (List.rev instrs)
 
-let elim_constants_and_loops (p : Mast.program) : Mast.program =
-  let _, expanded_prog =
+let elim_constants_and_loops (p : Mast.program) : const_context * Mast.program =
+  let const_map, expanded_prog =
     List.fold_left
       (fun (const_map, prog) source_file ->
         let const_map, prog_file =
@@ -1019,10 +1036,10 @@ let elim_constants_and_loops (p : Mast.program) : Mast.program =
         (const_map, List.rev prog_file :: prog))
       (ConstMap.empty, []) p
   in
-  List.rev expanded_prog
+  (const_map, List.rev expanded_prog)
 
 (** Main preprocessor function *)
-let proceed (p : Mast.program) : Mast.program =
+let proceed (p : Mast.program) : const_data StrMap.t * Mast.program =
   p |> elim_unselected_apps |> elim_constants_and_loops
 
 (* Screugneugneuh ! *)
