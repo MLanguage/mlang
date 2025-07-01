@@ -35,7 +35,7 @@
   (ANSITerminal
    (= 0.8.2))
   (cmdliner
-   (= 1.1.0))
+   (= 1.3.0))
   (re
    (= 1.9.0))
   (ocamlgraph
@@ -43,7 +43,7 @@
   (odoc
    (>= 1.5.3))
   (dune-build-info
-   (= 2.5.1))
+   (= 2.9.3))
   (num
    (>= 1.3))
   (mlgmpidl
