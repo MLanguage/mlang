@@ -1418,53 +1418,62 @@ let check_expression (env : var_env) (m_expr : Mast.m_expression) : unit =
   in
   fold_var_expr get_var fold_sp fold_var () m_expr env
 
-let get_compute_id_str (instr : Mast.instruction) (prog : program) : string =
+let add_sml buf sml =
+  let id = Com.DomainId.from_marked_list (Pos.unmark sml) in
+  let add s =
+    String.iter
+      (function
+        | '_' -> Buffer.add_string buf "__" | c -> Buffer.add_char buf c)
+      s
+  in
+  Com.DomainId.iter
+    (fun s ->
+      Buffer.add_char buf '_';
+      add s)
+    id;
+  id
+
+let get_compute_domain_id_str (l : string Pos.marked list Pos.marked)
+    (prog : program) : string =
   let buf = Buffer.create 100 in
   Buffer.add_string buf prog.prog_prefix;
-  let add_sml buf sml =
-    let id = Com.DomainId.from_marked_list (Pos.unmark sml) in
-    let add s =
-      String.iter
-        (function
-          | '_' -> Buffer.add_string buf "__" | c -> Buffer.add_char buf c)
-        s
-    in
-    Com.DomainId.iter
-      (fun s ->
-        Buffer.add_char buf '_';
-        add s)
-      id;
-    id
-  in
-  (match instr with
-  | Com.ComputeDomain (l, _) -> (
-      Buffer.add_string buf "_rules";
-      let id = add_sml buf l in
-      match Com.DomainIdMap.find_opt id prog.prog_rdom_syms with
-      | Some (Pos.Mark (dom_id, _)) ->
-          let rdom = Com.DomainIdMap.find dom_id prog.prog_rdoms in
-          if not rdom.Com.dom_data.rdom_computable then
-            Err.rule_domain_not_computable (Pos.get l)
-      | None -> Err.unknown_domain Rule (Pos.get l))
-  | Com.ComputeChaining (Pos.Mark (ch_name, ch_pos), _) -> (
-      Buffer.add_string buf "_chaining_";
-      Buffer.add_string buf ch_name;
-      match StrMap.find_opt ch_name prog.prog_chainings with
-      | Some _ -> ()
-      | None -> Err.unknown_chaining ch_pos)
-  | Com.ComputeVerifs (l, _, _) -> (
-      Buffer.add_string buf "_verifs";
-      let id = add_sml buf l in
-      Buffer.add_char buf '_';
-      let cpt = StrMap.cardinal prog.prog_vdom_calls in
-      Buffer.add_string buf (Format.sprintf "%d" cpt);
-      match Com.DomainIdMap.find_opt id prog.prog_vdom_syms with
-      | Some (Pos.Mark (dom_id, _)) ->
-          let vdom = Com.DomainIdMap.find dom_id prog.prog_vdoms in
-          if not vdom.Com.dom_data.vdom_verifiable then
-            Err.verif_domain_not_verifiable (Pos.get l)
-      | None -> Err.unknown_domain Verif (Pos.get l))
-  | _ -> assert false);
+  Buffer.add_string buf "_rules";
+  let id = add_sml buf l in
+  (match Com.DomainIdMap.find_opt id prog.prog_rdom_syms with
+  | Some (Pos.Mark (dom_id, _)) ->
+      let rdom = Com.DomainIdMap.find dom_id prog.prog_rdoms in
+      if not rdom.Com.dom_data.rdom_computable then
+        Err.rule_domain_not_computable (Pos.get l)
+  | None -> Err.unknown_domain Rule (Pos.get l));
+  Buffer.contents buf
+
+let get_compute_chaining_id_str (ch : string Pos.marked) (prog : program) :
+    string =
+  let buf = Buffer.create 100 in
+  Buffer.add_string buf prog.prog_prefix;
+  let ch_name, ch_pos = Pos.to_couple ch in
+  Buffer.add_string buf "_chaining_";
+  Buffer.add_string buf ch_name;
+  (match StrMap.find_opt ch_name prog.prog_chainings with
+  | Some _ -> ()
+  | None -> Err.unknown_chaining ch_pos);
+  Buffer.contents buf
+
+let get_compute_verifs_id_str (l : string Pos.marked list Pos.marked)
+    (prog : program) : string =
+  let buf = Buffer.create 100 in
+  Buffer.add_string buf prog.prog_prefix;
+  Buffer.add_string buf "_verifs";
+  let id = add_sml buf l in
+  Buffer.add_char buf '_';
+  let cpt = StrMap.cardinal prog.prog_vdom_calls in
+  Buffer.add_string buf (Format.sprintf "%d" cpt);
+  (match Com.DomainIdMap.find_opt id prog.prog_vdom_syms with
+  | Some (Pos.Mark (dom_id, _)) ->
+      let vdom = Com.DomainIdMap.find dom_id prog.prog_vdoms in
+      if not vdom.Com.dom_data.vdom_verifiable then
+        Err.verif_domain_not_verifiable (Pos.get l)
+  | None -> Err.unknown_domain Verif (Pos.get l));
   Buffer.contents buf
 
 let cats_variable_from_decl_list (l : Mast.var_category_id list)
@@ -1605,10 +1614,11 @@ let rec check_instructions (env : var_env)
             in
             let env, wde_res = wde (env, []) wdl in
             aux (env, Pos.mark wde_res instr_pos :: res) il
-        | Com.ComputeDomain (Pos.Mark (rdom_list, rdom_pos), m_sp_opt) ->
+        | Com.ComputeDomain (rdom, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
-            let tname = get_compute_id_str instr env.prog in
+            let tname = get_compute_domain_id_str rdom env.prog in
+            let rdom_list, rdom_pos = Pos.to_couple rdom in
             let id = Com.DomainId.from_marked_list rdom_list in
             let rdom_id =
               Pos.unmark (Com.DomainIdMap.find id env.prog.prog_rdom_syms)
@@ -1631,7 +1641,7 @@ let rec check_instructions (env : var_env)
         | Com.ComputeChaining (chain, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
-            let tname = get_compute_id_str instr env.prog in
+            let tname = get_compute_chaining_id_str chain env.prog in
             let prog_call_map =
               let sp_opt = get_sp_opt m_sp_opt in
               let cc = CallChaining (tname, Pos.unmark chain, sp_opt) in
@@ -1643,10 +1653,11 @@ let rec check_instructions (env : var_env)
               Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
             in
             aux (env, Pos.mark res_instr instr_pos :: res) il
-        | Com.ComputeVerifs (Pos.Mark (vdom_list, vdom_pos), expr, m_sp_opt) ->
+        | Com.ComputeVerifs (vdom, expr, m_sp_opt) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
-            let tname = get_compute_id_str instr env.prog in
+            let vdom_list, vdom_pos = Pos.to_couple vdom in
+            let tname = get_compute_verifs_id_str vdom env.prog in
             let id = Com.DomainId.from_marked_list vdom_list in
             let vdom_id =
               Pos.unmark (Com.DomainIdMap.find id env.prog.prog_vdom_syms)
@@ -2547,8 +2558,7 @@ let complete_rule_domains (prog : program) : program =
             let spl =
               Com.DomainId.fold (fun s l -> Pos.without s :: l) rdom_id []
             in
-            let instr = Com.ComputeDomain (Pos.mark spl tpos, None) in
-            get_compute_id_str instr prog
+            get_compute_domain_id_str (Pos.mark spl tpos) prog
           in
           let prog_call_map =
             let cc_dom = CallDomain (tname, rdom_id, None) in
@@ -2666,9 +2676,7 @@ let complete_chainings (prog : program) : program =
             target_names
         in
         let tpos = Pos.get chain.chain_name in
-        let tname =
-          get_compute_id_str (Com.ComputeChaining (chain.chain_name, None)) prog
-        in
+        let tname = get_compute_chaining_id_str chain.chain_name prog in
         let prog_call_map =
           let cc_dom =
             CallChaining (tname, Pos.unmark chain.chain_name, None)
@@ -3138,7 +3146,6 @@ let complete_verif_calls (prog : program) : program =
   { prog with prog_targets; prog_call_map }
 
 (* !!! *)
-(* par_defaut => toutes catégories *)
 (* transformer CallMap en StrMap *)
 let check_called_spaces (prog : program) : program =
   let pp_call_trace fmt call_map =

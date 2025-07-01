@@ -406,12 +406,20 @@ variable_space_decl:
   vs_params = separated_nonempty_list(COLON, with_pos(vs_param)) SEMICOLON {
     let err msg pos = Errors.raise_spanned_error msg pos in
     let fold (co, pdo) = function
-    | Pos.Mark ((Some cats, _), pos) ->
-        if co = None then Some cats, pdo
-        else err "variable space categories are already specified" pos
-    | Pos.Mark ((_, Some ()), pos) ->
-        if pdo = None then co, Some ()
-        else err "by_default is already calculated" pos
+    | Pos.Mark ((Some cats, _), pos) -> (
+        match co, pdo with
+        | _, Some _ ->
+            err "variable space categories are implicit with by_default" pos
+        | Some _, _ -> err "variable space categories are already specified" pos
+        | None, _  -> Some cats, pdo
+      )
+    | Pos.Mark ((_, Some ()), pos) -> (
+        match co, pdo with
+        | Some _, _ ->
+            err "variable space categories are implicit with by_default" pos
+        | _, Some _ -> err "by_default is already specified" pos
+        | _, None  -> co, Some ()
+      )
     | Pos.Mark ((_, _), _) -> assert false
     in
     let init = None, None in
@@ -422,8 +430,12 @@ variable_space_decl:
       vs_cats = (
         match co with
         | None ->
-            let msg = Pp.spr "a category must be specified" in
-            Errors.raise_spanned_error msg (Pos.get m_name)
+            Com.CatVar.(
+              LocMap.empty
+              |> LocMap.add LocInput (Pos.without LocInput)
+              |> LocMap.add LocComputed (Pos.without LocComputed)
+              |> LocMap.add LocBase (Pos.without LocBase)
+            )
         | Some cats -> cats
       );
       vs_by_default = (match pdo with None -> false | _ -> true);
