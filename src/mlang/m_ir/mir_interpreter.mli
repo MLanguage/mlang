@@ -48,6 +48,15 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
+  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
+
+  type ctx_ref_var = {
+    mutable var : Com.Var.t;
+    mutable var_space : Com.variable_space;
+    mutable ref_var : Com.Var.t;
+    mutable org : int;
+  }
+
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
   type ctx_var_space = {
@@ -61,10 +70,9 @@ module type S = sig
     mutable ctx_target : Mir.target;
     mutable ctx_var_space : int;
     ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : value Array.t;
-    ctx_tmps_var : Com.Var.t Array.t;
+    ctx_tmps : ctx_tmp_var Array.t;
     mutable ctx_tmps_org : int;
-    ctx_ref : (Com.Var.t * (Com.Var.t * int)) Array.t;
+    ctx_ref : ctx_ref_var Array.t;
     mutable ctx_ref_org : int;
     ctx_tab_map : Com.Var.t Array.t;
     ctx_pr_out : print_ctx;

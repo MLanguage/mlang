@@ -3145,22 +3145,20 @@ let complete_verif_calls (prog : program) : program =
   in
   { prog with prog_targets; prog_call_map }
 
-(* !!! *)
-(* transformer CallMap en StrMap *)
 let check_called_spaces (prog : program) : program =
-  let pp_call_trace fmt call_map =
-    let iter cc (ccm, cc_pos) =
-      Pp.fpr fmt "@;@[<v 2>call %a %a:" pp_call_compute cc Pos.format_short
-        cc_pos;
-      let iter' cc' cc_pos' =
-        Pp.fpr fmt "@;%a %a" pp_call_compute cc' Pos.format_short cc_pos'
-      in
-      CallMap.iter iter' ccm;
-      Pp.fpr fmt "@]@;"
-    in
-    CallMap.iter iter call_map
-  in
-  Pp.epr "%a@." pp_call_trace prog.prog_call_map;
+  (* let pp_call_trace fmt call_map =
+       let iter cc (ccm, cc_pos) =
+         Pp.fpr fmt "@;@[<v 2>call %a %a:" pp_call_compute cc Pos.format_short
+           cc_pos;
+         let iter' cc' cc_pos' =
+           Pp.fpr fmt "@;%a %a" pp_call_compute cc' Pos.format_short cc_pos'
+         in
+         CallMap.iter iter' ccm;
+         Pp.fpr fmt "@]@;"
+       in
+       CallMap.iter iter call_map
+     in
+     Pp.epr "%a@." pp_call_trace prog.prog_call_map; *)
   let get_cc_tname = function
     | CallDomain (tname, _, _)
     | CallVerifs (tname, _, _)
@@ -3192,8 +3190,8 @@ let check_called_spaces (prog : program) : program =
             match (m_sp_opt, v_opt, usage) with
             | None, Some m_id, Com.(Read | Write | ArgRef) ->
                 let v = IntMap.find (Pos.unmark m_id) prog.prog_dict in
-                if Com.Var.is_tgv v then (
-                  Pp.epr "check_var <%s> %s@." vs_name (Com.Var.name_str v);
+                if Com.Var.is_tgv v then
+                  (* Pp.epr "check_var <%s> %s@." vs_name (Com.Var.name_str v); *)
                   let loc = Com.Var.cat_var_loc v in
                   if not (Com.CatVar.LocMap.mem loc vsd_def.vs_cats) then (
                     Pp.epr "@.trace:@.";
@@ -3204,7 +3202,7 @@ let check_called_spaces (prog : program) : program =
                       ((cc, cc_pos) :: trace);
                     Err.variable_not_in_var_space (Com.Var.name_str v)
                       (Pos.unmark vsd_def.vs_name)
-                      (Pos.get m_id)))
+                      (Pos.get m_id))
             | _ -> ()
           in
           let iter m_i = Com.m_instr_fold_var check_var m_i () in

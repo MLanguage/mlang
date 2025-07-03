@@ -906,17 +906,17 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags)
       ignore
         (List.fold_left
            (fun n (v : Com.Var.t) ->
-             let ref_idx = Format.sprintf "irdata->ref_org + %d" n in
-             let ref_name = Format.sprintf "irdata->ref_name[%s]" ref_idx in
+             let ref_idx = Format.sprintf "irdata->refs_org + %d" n in
+             let ref_name = Format.sprintf "irdata->refs[%s].name" ref_idx in
              pr "@;%s = \"%s\";" ref_name (Com.Var.name_str v);
-             let ref_info = Format.sprintf "irdata->info_ref[%s]" ref_idx in
+             let ref_info = Format.sprintf "irdata->refs[%s].info" ref_idx in
              let v_info_p = VID.gen_info_ptr v in
              pr "@;%s = %s;" ref_info v_info_p;
-             let ref_def = Format.sprintf "irdata->def_ref[%s]" ref_idx in
+             let ref_def = Format.sprintf "irdata->refs[%s].def" ref_idx in
              let v_def_p = VID.gen_def_ptr None v in
              (* !!! *)
              pr "@;%s = %s;" ref_def v_def_p;
-             let ref_val = Format.sprintf "irdata->ref[%s]" ref_idx in
+             let ref_val = Format.sprintf "irdata->refs[%s].val" ref_idx in
              let v_val_p = VID.gen_val_ptr None v in
              (* !!! *)
              pr "@;%s = %s;" ref_val v_val_p;
@@ -1301,44 +1301,44 @@ let generate_function_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
   pr "@;@[<v 2>{";
   pr "@;int i;";
   pr "@;T_varinfo *info;";
-  pr "@;irdata->def_tmps[irdata->tmps_org] = 0;";
-  pr "@;irdata->tmps[irdata->tmps_org] = 0.0;";
-  pr "@;irdata->info_tmps[irdata->tmps_org] = NULL;";
+  pr "@;irdata->tmps[irdata->tmps_org].def = 0;";
+  pr "@;irdata->tmps[irdata->tmps_org].val = 0.0;";
+  pr "@;irdata->tmps[irdata->tmps_org].info = NULL;";
   List.iteri
     (fun i var ->
       let idx = Pp.spr "irdata->tmps_org + %d" (i + 1) in
-      pr "@;irdata->def_tmps[%s] = arg_def%d;" idx i;
-      pr "@;irdata->tmps[%s] = arg_val%d;" idx i;
+      pr "@;irdata->tmps[%s].def = arg_def%d;" idx i;
+      pr "@;irdata->tmps[%s].val = arg_val%d;" idx i;
       let loc_cat_idx = Com.Var.loc_cat_idx var in
       let name = Com.Var.name_str var in
-      pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s  */" idx
+      pr "@;irdata->tmps[%s].info = &(tmp_varinfo[%d]); /* %s  */" idx
         loc_cat_idx name)
     tf.target_args;
   let vres = Option.get tf.target_result in
   let loc_cat_idx_vres = Com.Var.loc_cat_idx vres in
   let name_vres = Com.Var.name_str vres in
-  pr "@;irdata->def_tmps[irdata->tmps_org] = 0;";
-  pr "@;irdata->tmps[irdata->tmps_org] = 0.0;";
-  pr "@;irdata->info_tmps[irdata->tmps_org] = &(tmp_varinfo[%d]); /* %s */"
+  pr "@;irdata->tmps[irdata->tmps_org].def = 0;";
+  pr "@;irdata->tmps[irdata->tmps_org].val = 0.0;";
+  pr "@;irdata->tmps[irdata->tmps_org].info = &(tmp_varinfo[%d]); /* %s */"
     loc_cat_idx_vres name_vres;
   if tf.target_sz_tmps > 0 then (
     pr "@;@[<v 2>@[<hov 2>for (i = %d;@ i < %d;@ i++) {@]" (1 + nb_args)
       tf.target_sz_tmps;
-    pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
-    pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
-    pr "@;irdata->info_tmps[irdata->tmps_org + i] = NULL;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].def = 0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].val = 0.0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].info = NULL;";
     pr "@]@;}";
     pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
     StrMap.iter
       (fun vn var ->
         let loc_str = Pp.spr "irdata->tmps_org + (%d)" (Com.Var.loc_idx var) in
         let loc_cat_idx = Com.Var.loc_cat_idx var in
-        pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s */" loc_str
+        pr "@;irdata->tmps[%s].info = &(tmp_varinfo[%d]); /* %s */" loc_str
           loc_cat_idx vn)
       tf.target_tmp_vars);
   pr "@]@;}";
   if tf.target_nb_refs > 0 then
-    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs
+    pr "@;irdata->refs_org = irdata->refs_org + %d;" tf.target_nb_refs
 
 let generate_function_prototype (add_semicolon : bool) (oc : Format.formatter)
     (fd : Mir.target) =
@@ -1374,13 +1374,13 @@ let generate_function (dgfip_flags : Dgfip_options.flags)
   if dgfip_flags.flg_trace then pr "@;aff1(\"fin %s\\n\");" fn;
   pr "@;";
   if fd.target_nb_refs > 0 then
-    pr "@;irdata->ref_org = irdata->ref_org - %d;" fd.target_nb_refs;
+    pr "@;irdata->refs_org = irdata->refs_org - %d;" fd.target_nb_refs;
   if fd.target_sz_tmps > 0 then
     pr "@;irdata->tmps_org = irdata->tmps_org - %d;" fd.target_sz_tmps;
   pr "@;irdata->nb_refs_target = %s;" sav_nb_refs;
   pr "@;irdata->nb_tmps_target = %s;" sav_nb_tmps;
-  pr "@;*res_def = irdata->def_tmps[irdata->tmps_org];";
-  pr "@;*res_val = irdata->tmps[irdata->tmps_org];";
+  pr "@;*res_def = irdata->tmps[irdata->tmps_org].def;";
+  pr "@;*res_val = irdata->tmps[irdata->tmps_org].val;";
   pr "@;return 1;";
   pr "@]@;}@."
 
@@ -1407,21 +1407,21 @@ let generate_cible_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
     pr "@;int i;";
     pr "@;T_varinfo *info;";
     pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
-    pr "@;irdata->def_tmps[irdata->tmps_org + i] = 0;";
-    pr "@;irdata->tmps[irdata->tmps_org + i] = 0.0;";
-    pr "@;irdata->info_tmps[irdata->tmps_org + i] = NULL;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].def = 0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].val = 0.0;";
+    pr "@;irdata->tmps[irdata->tmps_org + i].info = NULL;";
     pr "@]@;}";
     pr "@;irdata->tmps_org = irdata->tmps_org + %d;" tf.target_sz_tmps;
     StrMap.iter
       (fun vn var ->
         let loc_str = Pp.spr "irdata->tmps_org + (%d)" (Com.Var.loc_idx var) in
         let loc_cat_idx = Com.Var.loc_cat_idx var in
-        pr "@;irdata->info_tmps[%s] = &(tmp_varinfo[%d]); /* %s */" loc_str
+        pr "@;irdata->tmps[%s].info = &(tmp_varinfo[%d]); /* %s */" loc_str
           loc_cat_idx vn)
       tf.target_tmp_vars;
     pr "@]@;}");
   if tf.target_nb_refs > 0 then
-    pr "@;irdata->ref_org = irdata->ref_org + %d;" tf.target_nb_refs
+    pr "@;irdata->refs_org = irdata->refs_org + %d;" tf.target_nb_refs
 
 let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
     (oc : Format.formatter) (f : string) =
@@ -1443,7 +1443,7 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (program : Mir.program)
   if dgfip_flags.flg_trace then pr "@;aff1(\"fin %s\\n\");" f;
   pr "@;";
   if tf.target_nb_refs > 0 then
-    pr "@;irdata->ref_org = irdata->ref_org - %d;" tf.target_nb_refs;
+    pr "@;irdata->refs_org = irdata->refs_org - %d;" tf.target_nb_refs;
   if tf.target_sz_tmps > 0 then
     pr "@;irdata->tmps_org = irdata->tmps_org - %d;" tf.target_sz_tmps;
   pr "@;irdata->nb_refs_target = %s;" sav_nb_refs;

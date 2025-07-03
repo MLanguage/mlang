@@ -435,6 +435,24 @@ struct S_var_space {
 
 typedef struct S_var_space T_var_space;
 
+struct S_tmp_var {
+  char def;
+  double val;
+  T_varinfo *info;
+};
+
+typedef struct S_tmp_var T_tmp_var;
+
+struct S_ref_var {
+  char *name;
+  int var_space;
+  char *def;
+  double *val;
+  T_varinfo *info;
+};
+
+typedef struct S_ref_var T_ref_var;
+
 |};
   Pp.fpr fmt "#define NB_ESPACES_VARIABLES %d@\n@\n"
     (IntMap.cardinal cprog.program_var_spaces_idx);
@@ -461,17 +479,12 @@ struct S_irdata {
   Pp.fpr fmt
     {|  T_var_space var_spaces[NB_ESPACES_VARIABLES + 1];
   int var_space;
-  char *def_tmps;
-  double *tmps;
+  T_tmp_var *tmps;
   int tmps_org;
   int nb_tmps_target;
-  T_varinfo **info_tmps;
-  char **def_ref;
-  double **ref;
-  T_varinfo **info_ref;
-  int ref_org;
+  T_ref_var *refs;
+  int refs_org;
   int nb_refs_target;
-  char **ref_name;
   T_keep_discord *keep_discords;
   T_discord *discords;
   int nb_anos;
@@ -523,14 +536,14 @@ typedef struct S_irdata T_irdata;
 
 #define I_(cat,idx) ((T_varinfo *)&(varinfo_##cat[idx]))
 
-#define DT_(idx) (irdata->def_tmps[irdata->tmps_org + (idx)])
-#define T_(idx) (irdata->tmps[irdata->tmps_org + (idx)])
-#define IT_(idx) (irdata->info_tmps[irdata->tmps_org + (idx)])
+#define DT_(idx) (irdata->tmps[irdata->tmps_org + (idx)].def)
+#define T_(idx) (irdata->tmps[irdata->tmps_org + (idx)].val)
+#define IT_(idx) (irdata->tmps[irdata->tmps_org + (idx)].info)
 
-#define DR_(idx) (irdata->def_ref[irdata->ref_org + (idx)])
-#define R_(idx) (irdata->ref[irdata->ref_org + (idx)])
-#define NR_(idx) (irdata->ref_name[irdata->ref_org + (idx)])
-#define IR_(idx) (irdata->info_ref[irdata->ref_org + (idx)])
+#define DR_(idx) (irdata->refs[irdata->refs_org + (idx)].def)
+#define R_(idx) (irdata->refs[irdata->refs_org + (idx)].val)
+#define NR_(idx) (irdata->refs[irdata->refs_org + (idx)].name)
+#define IR_(idx) (irdata->refs[irdata->refs_org + (idx)].info)
 
 extern T_event *event(T_irdata *irdata, char idx_def, double idx_val);
 extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
@@ -1320,12 +1333,7 @@ void detruis_irdata(T_irdata *irdata) {
   Pp.fpr fmt
     {|
   if (irdata->tmps != NULL) free(irdata->tmps);
-  if (irdata->def_tmps != NULL) free(irdata->def_tmps);
-  if (irdata->info_tmps != NULL) free(irdata->info_tmps);
-  if (irdata->ref != NULL) free(irdata->ref);
-  if (irdata->def_ref != NULL) free(irdata->def_ref);
-  if (irdata->ref_name != NULL) free(irdata->ref_name);
-  if (irdata->info_ref != NULL) free(irdata->info_ref);
+  if (irdata->refs != NULL) free(irdata->refs);
   init_erreur(irdata);
   if (irdata->err_finalise != NULL) free(irdata->err_finalise);
   if (irdata->err_sortie != NULL) free(irdata->err_sortie);
@@ -1400,33 +1408,18 @@ T_irdata *cree_irdata(void) {
   Pp.fpr fmt "  irdata->var_space = %d;\n" cprog.program_var_space_def.vs_id;
   Pp.fpr fmt "%s"
     {|  irdata->tmps = NULL;
-  irdata->def_tmps = NULL;
-  irdata->info_tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
-    irdata->tmps = (double *)malloc(TAILLE_TMP_VARS * sizeof (double));
+    irdata->tmps = (T_tmp_var *)malloc(TAILLE_TMP_VARS * sizeof (T_tmp_var));
     if (irdata->tmps == NULL) goto erreur_cree_irdata;
-    irdata->def_tmps = (char *)malloc(TAILLE_TMP_VARS * sizeof (char));
-    if (irdata->def_tmps == NULL) goto erreur_cree_irdata;
-    irdata->info_tmps = (T_varinfo **)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo *));    
-    if (irdata->info_tmps == NULL) goto erreur_cree_irdata;
   }
-  irdata->ref = NULL;
-  irdata->def_ref = NULL;
-  irdata->ref_name = NULL;
-  irdata->info_ref = NULL;
+  irdata->refs = NULL;
   if (TAILLE_REFS > 0) {
-    irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
-    if (irdata->ref == NULL) goto erreur_cree_irdata;
-    irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
-    if (irdata->def_ref == NULL) goto erreur_cree_irdata;
-    irdata->ref_name = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
-    if (irdata->ref_name == NULL) goto erreur_cree_irdata;
-    irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
-    if (irdata->info_ref == NULL) goto erreur_cree_irdata;
+    irdata->refs = (T_ref_var *)malloc(TAILLE_REFS * (sizeof (T_ref_var)));
+    if (irdata->refs == NULL) goto erreur_cree_irdata;
   }
   irdata->tmps_org = 0;
   irdata->nb_tmps_target = 0;
-  irdata->ref_org = 0;
+  irdata->refs_org = 0;
   irdata->nb_refs_target = 0;
   irdata->keep_discords = NULL;
   irdata->discords = NULL;
@@ -1657,15 +1650,15 @@ T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
     return map->info;
   }
   for (i = 1; i <= irdata->nb_tmps_target; i++) {
-    T_varinfo *info = irdata->info_tmps[irdata->tmps_org - i];
+    T_varinfo *info = irdata->tmps[irdata->tmps_org - i].info;
     if (info != NULL && strcmp(nom, info->name) == 0) {
       return info;
     }
   }
   for (i = 1; i <= irdata->nb_refs_target; i++) {
-    char *ref_name = irdata->ref_name[irdata->ref_org - i];
+    char *ref_name = irdata->refs[irdata->refs_org - i].name;
     if (strcmp(nom, ref_name) == 0) {
-      return irdata->info_ref[irdata->ref_org - i];
+      return irdata->refs[irdata->refs_org - i].info;
     }
   }
   return NULL;
@@ -1693,8 +1686,8 @@ char lis_varinfo(
       *res_val = irdata->base[info->idx];
       return *res_def;
     case EST_TEMPORAIRE:
-      *res_def = irdata->def_tmps[irdata->tmps_org + info->idx];
-      *res_val = irdata->tmps[irdata->tmps_org + info->idx];
+      *res_def = irdata->tmps[irdata->tmps_org + info->idx].def;
+      *res_val = irdata->tmps[irdata->tmps_org + info->idx].val;
       return *res_def;
     default:
       return *res_def;
@@ -1731,8 +1724,8 @@ char lis_varinfo_tab(
       *res_val = irdata->base[info->idx + idx];
       return *res_def;
     case EST_TEMPORAIRE:
-      *res_def = irdata->def_tmps[irdata->tmps_org + info->idx + idx];
-      *res_val = irdata->tmps[irdata->tmps_org + info->idx + idx];
+      *res_def = irdata->tmps[irdata->tmps_org + info->idx + idx].def;
+      *res_val = irdata->tmps[irdata->tmps_org + info->idx + idx].val;
       return *res_def;
     default:
       return *res_def;
@@ -1750,7 +1743,7 @@ char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
     case EST_BASE:
       return irdata->def_base[info->idx + idx];
     case EST_TEMPORAIRE:
-      return irdata->def_tmps[irdata->tmps_org + info->idx + idx];
+      return irdata->tmps[irdata->tmps_org + info->idx + idx].def;
     default:
       return 0;
   }
@@ -1777,8 +1770,8 @@ void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
       irdata->base[info->idx] = val;
       return;
     case EST_TEMPORAIRE:
-      irdata->def_tmps[irdata->tmps_org + info->idx] = def;
-      irdata->tmps[irdata->tmps_org + info->idx] = val;
+      irdata->tmps[irdata->tmps_org + info->idx].def = def;
+      irdata->tmps[irdata->tmps_org + info->idx].val = val;
       return;
     default:
       return;
@@ -1814,8 +1807,8 @@ void ecris_varinfo_tab(
       irdata->base[info->idx + idx] = val;
       return;
     case EST_TEMPORAIRE:
-      irdata->def_tmps[irdata->tmps_org + info->idx + idx] = def;
-      irdata->tmps[irdata->tmps_org + info->idx + idx] = val;
+      irdata->tmps[irdata->tmps_org + info->idx + idx].def = def;
+      irdata->tmps[irdata->tmps_org + info->idx + idx].val = val;
       return;
     default:
       return;
@@ -1996,8 +1989,8 @@ void aff_val(
       def = irdata->def_base[(indice & INDICE_VAL) + expr];
       break;
     case EST_TEMPORAIRE:
-      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
-      def = irdata->def_tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
+      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr].val;
+      def = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr].def;
       break;
   }
   if (is_tab) {
