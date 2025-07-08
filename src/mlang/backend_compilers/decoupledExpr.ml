@@ -1,7 +1,7 @@
 module VID = Dgfip_varid
 
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
-    (m_sp_opt : (Com.m_var_name * int) option) (var : Com.Var.t) : string =
+    (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
   try
     if def_flag then VID.gen_def m_sp_opt var
     else
@@ -52,9 +52,7 @@ and expr =
   | Dinstr of string
   | Ddirect of expr
 
-and expr_var =
-  | Local of stack_slot
-  | M of (Com.m_var_name * int) option * Com.Var.t * dflag
+and expr_var = Local of stack_slot | M of Com.var_space * Com.Var.t * dflag
 
 and t = expr * dflag * local_vars
 
@@ -193,8 +191,8 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t)
-    (df : dflag) _stacks _lv : t =
+let m_var (m_sp_opt : Com.var_space) (v : Com.Var.t) (df : dflag) _stacks _lv :
+    t =
   (Dvar (M (m_sp_opt, v, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t

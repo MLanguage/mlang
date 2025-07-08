@@ -18,6 +18,12 @@ V_IND_TRAIT : saisie contexte
   alias IND_TRAIT
   : "indicateur de nature de traitement primitif ou correctif";
 
+V_ARG : saisie contexte
+  classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 0
+  restituee
+  alias ARG
+  : "argument";
+
 RESULTAT : calculee primrest = 0 restituee : "resultat du traitement" ;
 TOTO01 : calculee primrest = 0 restituee : "" ;
 TOTO02 : calculee primrest = 0 restituee : "" ;
@@ -76,6 +82,60 @@ afficher_erreur "1: " nom(ESP.V_IND_TRAIT) " = " (ESP.V_IND_TRAIT) "\n";
 calculer cible calc_prim : espace GLOBAL;
 calculer cible calc_prim : espace ESP;
 afficher_erreur indenter(-2) "sortie test_esp\n";
+
+cible cible_sp_args:
+application : iliad;
+arguments: ARG_TMP, ARG;
+afficher_erreur "entree cible_sp_args\n" indenter(2);
+afficher_erreur "0: "
+  nom(ARG_TMP) " = " (ARG_TMP) ", "
+  nom(ARG) " = " (ARG) "\n";
+ARG_TMP = ARG_TMP + 1;
+ARG = 42;
+afficher_erreur "1: "
+  nom(ARG_TMP) " = " (ARG_TMP) ", "
+  nom(ARG) " = " (ARG) "\n";
+afficher_erreur indenter(-2) "sortie cible_sp_args\n";
+
+cible test_cible_avec_args:
+application : iliad;
+variables_temporaires: TMP;
+afficher_erreur "entree test_cible_avec_args\n" indenter(2);
+V_ARG = indefini;
+ESP.V_ARG = indefini;
+TMP = 0;
+afficher_erreur
+  nom(TMP) " = " (TMP) ", "
+  nom(V_ARG) " = " (V_ARG) "\n";
+calculer cible cible_sp_args : avec TMP, V_ARG;
+afficher_erreur
+  nom(TMP) " = " (TMP) ", "
+  nom(V_ARG) " = " (V_ARG) "\n";
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(ESP.V_ARG) " = " (ESP.V_ARG) "\n";
+calculer cible cible_sp_args : avec TMP, ESP.V_ARG;
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(ESP.V_ARG) " = " (ESP.V_ARG) "\n";
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(TUTU[2]) " = " (TUTU[2]) "\n";
+calculer cible cible_sp_args : avec TMP, TUTU[2];
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(TUTU[2]) " = " (TUTU[2]) "\n";
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(champ_evenement(2, code)) " = " (champ_evenement(2, code)) "\n";
+calculer cible cible_sp_args : avec TMP, champ_evenement(2, code);
+afficher_erreur
+  nom(TMP) " = " (TMP) ", " 
+  nom(champ_evenement(2, code)) " = " (champ_evenement(2, code)) "\n";
+afficher_erreur "cible_sp_args sans exec ?\n";
+calculer cible cible_sp_args : avec TUTU[-2], TMP;
+afficher_erreur "cible_sp_args sans exec !\n";
+afficher_erreur indenter(-2) "sortie test_cible_avec_args\n";
 
 fonction toto_fonction:
 application: iliad;
@@ -263,6 +323,7 @@ cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
 calculer cible test_esp;
+calculer cible test_cible_avec_args;
 #calculer cible test_varcons;
 #calculer cible test_args;
 #calculer cible test_tmpref;

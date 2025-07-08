@@ -16,6 +16,10 @@
 
 type set_value = Com.Var.t Com.set_value
 
+type access = Com.Var.t Com.access
+
+type m_access = access Pos.marked
+
 type expression = Com.Var.t Com.expression
 
 type m_expression = expression Pos.marked

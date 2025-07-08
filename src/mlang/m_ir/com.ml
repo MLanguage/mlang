@@ -465,11 +465,12 @@ type var_name = Normal of string | Generic of var_name_generic
 
 type m_var_name = var_name Pos.marked
 
+type var_space = (m_var_name * int) option
+
 type 'v access =
-  | VarAccess of (m_var_name * int) option * 'v
-  | TabAccess of (m_var_name * int) option * 'v * 'v m_expression
-  | FieldAccess of
-      (m_var_name * int) option * 'v m_expression * string Pos.marked * int
+  | VarAccess of var_space * 'v
+  | TabAccess of var_space * 'v * 'v m_expression
+  | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
@@ -608,14 +609,11 @@ type ('v, 'e) instruction =
   | WhenDoElse of
       ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
       * ('v, 'e) m_instruction list Pos.marked
-  | ComputeDomain of
-      string Pos.marked list Pos.marked * (m_var_name * int) option
-  | ComputeChaining of string Pos.marked * (m_var_name * int) option
+  | ComputeDomain of string Pos.marked list Pos.marked * var_space
+  | ComputeChaining of string Pos.marked * var_space
   | ComputeVerifs of
-      string Pos.marked list Pos.marked
-      * 'v m_expression
-      * (m_var_name * int) option
-  | ComputeTarget of string Pos.marked * 'v list * (m_var_name * int) option
+      string Pos.marked list Pos.marked * 'v m_expression * var_space
+  | ComputeTarget of string Pos.marked * 'v m_access list * var_space
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
@@ -798,7 +796,7 @@ and instr_map_var f g = function
       let m_e0' = m_expr_map_var f m_e0 in
       ComputeVerifs (m_sl, m_e0', m_sp_opt)
   | ComputeTarget (tn, args, m_sp_opt) ->
-      let args' = List.map f args in
+      let args' = List.map (m_access_map_var f) args in
       ComputeTarget (tn, args', m_sp_opt)
   | VerifBlock m_il0 -> VerifBlock (List.map (m_instr_map_var f g) m_il0)
   | Print (pr_std, pr_args) ->
@@ -999,7 +997,8 @@ and instr_fold_var f instr acc =
   | ComputeDomain _ -> acc
   | ComputeChaining _ -> acc
   | ComputeVerifs (_, m_e0, _) -> m_expr_fold_var f m_e0 acc
-  | ComputeTarget (_, args, _) -> fold_list (listFoldF DeclRef) args acc
+  | ComputeTarget (_, args, _) ->
+      fold_list (m_access_fold_var DeclRef f) args acc
   | VerifBlock m_il0 -> fold_list (m_instr_fold_var f) m_il0 acc
   | Print (_, pr_args) -> fold_list (m_print_arg_fold_var f) pr_args acc
   | Iterate (v, vl, cvml, m_il) ->
@@ -1354,7 +1353,11 @@ let rec format_instruction form_var form_err =
         in
         let pp_args fmt = function
           | [] -> ()
-          | args -> Pp.fpr fmt "%a" (Pp.list_comma form_var) args
+          | args ->
+              let pp_m_access fmt m_a =
+                format_access form_var form_expr fmt (Pos.unmark m_a)
+              in
+              Pp.list_comma pp_m_access fmt args
         in
         Format.fprintf fmt "calculer cible %s%a%a@," (Pos.unmark tname) pp_args
           targs pp_sp m_sp_opt

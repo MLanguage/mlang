@@ -21,8 +21,7 @@ let gen_tab = function
   | Com.CatVar.LocComputed -> "calculee"
   | Com.CatVar.LocBase -> "base"
 
-let gen_tgv_def (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv) vn
-    =
+let gen_tgv_def (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   let tab = gen_tab l.loc_cat in
   match m_sp_opt with
   | Some (m_sp, _) ->
@@ -32,8 +31,7 @@ let gen_tgv_def (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv) vn
       Pp.spr "(irdata->var_spaces[irdata->var_space].def_%s[%d/*%s*/])" tab
         l.loc_idx vn
 
-let gen_tgv_val (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv) vn
-    =
+let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   let tab = gen_tab l.loc_cat in
   match m_sp_opt with
   | Some (m_sp, _) ->
@@ -43,12 +41,10 @@ let gen_tgv_val (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv) vn
       Pp.spr "(irdata->var_spaces[irdata->var_space].%s[%d/*%s*/])" tab
         l.loc_idx vn
 
-let gen_tgv_def_ptr (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv)
-    vn =
+let gen_tgv_def_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   Pp.spr "&%s" (gen_tgv_def m_sp_opt l vn)
 
-let gen_tgv_val_ptr (m_sp_opt : (Com.m_var_name * int) option) (l : Com.loc_tgv)
-    vn =
+let gen_tgv_val_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   Pp.spr "&%s" (gen_tgv_val m_sp_opt l vn)
 
 let gen_tgv_info_ptr (l : Com.loc_tgv) vn =
@@ -81,14 +77,14 @@ let gen_ref_val i vn = Pp.spr "*(%s)" (gen_ref_val_ptr i vn)
 
 (* generic accessors *)
 
-let gen_def (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t) =
+let gen_def (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
   | LocTgv (_, l) -> gen_tgv_def m_sp_opt l vn
   | LocTmp (_, l) -> gen_tmp_def l vn
   | LocRef (_, i) -> gen_ref_def i vn
 
-let gen_val (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t) =
+let gen_val (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
   | LocTgv (_, l) -> gen_tgv_val m_sp_opt l vn
@@ -102,14 +98,14 @@ let gen_info_ptr (v : Com.Var.t) =
   | LocTmp (_, l) -> gen_tmp_info_ptr l vn
   | LocRef (_, i) -> gen_ref_info_ptr i vn
 
-let gen_def_ptr (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t) =
+let gen_def_ptr (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
   | LocTgv (_, l) -> gen_tgv_def_ptr m_sp_opt l vn
   | LocTmp (_, l) -> gen_tmp_def_ptr l vn
   | LocRef (_, i) -> gen_ref_def_ptr i vn
 
-let gen_val_ptr (m_sp_opt : (Com.m_var_name * int) option) (v : Com.Var.t) =
+let gen_val_ptr (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
   | LocTgv (_, l) -> gen_tgv_val_ptr m_sp_opt l vn
@@ -143,3 +139,12 @@ let gen_size (v : Com.Var.t) =
   match v.loc with
   | LocTgv _ | LocTmp _ -> Pp.spr "%d" (Com.Var.size v)
   | LocRef (_, i) -> Pp.spr "(%s->size)" (gen_ref_info_ptr i vn)
+
+let gen_var_space_id_opt = function
+  | None -> "(irdata->var_space)"
+  | Some (_, i_sp) -> Pp.spr "%d" i_sp
+
+let gen_var_space_id (m_sp_opt : Com.var_space) (v : Com.Var.t) =
+  match v.loc with
+  | LocTgv _ | LocTmp _ -> gen_var_space_id_opt m_sp_opt
+  | LocRef (_, i) -> Pp.spr "(irdata->refs[irdata->refs_org + %d].var_space)" i

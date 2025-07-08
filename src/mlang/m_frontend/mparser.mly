@@ -886,12 +886,9 @@ target_param:
     let m_sp = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     Some m_sp, None
   }
-| COLON WITH args = separated_nonempty_list(COMMA, arg_variable) {
+| COLON WITH args = separated_nonempty_list(COMMA, with_pos(var_access)) {
     None, Some args
   }
-
-arg_variable:
-| s = with_pos(SYMBOL) { Pos.same (parse_variable $sloc (Pos.unmark s)) s }
 
 verify_param:
 | COLON SPACE sp = symbol_with_pos {

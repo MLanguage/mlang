@@ -519,8 +519,8 @@ typedef struct S_irdata T_irdata;
            idx_def, double idx_val);\n"
           f;
       Pp.fpr fmt
-        "extern char event_field_%s(T_irdata *irdata, char *res_def, double \
-         *res_val, char idx_def, double idx_val);\n"
+        "extern char event_field_%s(T_irdata *irdata, int var_space, char \
+         *res_def, double *res_val, char idx_def, double idx_val);\n"
         f)
     cprog.program_event_fields;
   Pp.fpr fmt
@@ -584,7 +584,7 @@ extern double floor_g(double);
 extern double ceil_g(double);
 
 extern int multimax_varinfo(
-  T_irdata *irdata, T_varinfo *info,
+  T_irdata *irdata, int var_space, T_varinfo *info,
   char nb_def, double nb_val,
   char *res_def, double *res_val
 );
@@ -734,20 +734,27 @@ extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 
 extern char lis_varinfo(
   T_irdata *irdata,
+  int var_space,
   T_varinfo *info,
   char *res_def, double *res_val
 );
 
+extern char *lis_varinfo_def_ptr(T_irdata *irdata, int var_space, T_varinfo *info);
+extern double *lis_varinfo_val_ptr(T_irdata *irdata, int var_space, T_varinfo *info);
+
 extern char lis_varinfo_tab(
-  T_irdata *irdata,
+  T_irdata *irdata, int var_space,
   int idx_tab, char idx_def, double idx_val,
   char *res_def, double *res_val
 );
 
-extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
+extern void ecris_varinfo(
+  T_irdata *irdata, int var_space,
+  T_varinfo *info, char def, double val
+);
 
 extern void ecris_varinfo_tab(
-  T_irdata *irdata,
+  T_irdata *irdata, int var_space,
   int idx_tab, int idx_def, double idx_val,
   char def, double val
 );
@@ -757,21 +764,31 @@ extern T_varinfo *lis_tabaccess_varinfo(
   char idx_def, double idx_val
 );
 
+extern char *lis_tabaccess_def_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+);
+
+extern double *lis_tabaccess_val_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+);
+
 extern char lis_tabaccess(
-  T_irdata *irdata, int idx_tab,
+  T_irdata *irdata, int var_space, int idx_tab,
   char idx_def, double idx_val,
   char *res_def, double *res_val
 );
 
 extern void ecris_tabaccess(
-  T_irdata *irdata, int idx_tab,
+  T_irdata *irdata, int var_space, int idx_tab,
   char idx_def, double idx_val,
   char def, double val
 );
 
-extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
-extern void pr_out_var(T_irdata *irdata, char *nom);
-extern void pr_err_var(T_irdata *irdata, char *nom);
+extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom);
+extern void pr_out_var(T_irdata *irdata, int var_space, char *nom);
+extern void pr_err_var(T_irdata *irdata, int var_space, char *nom);
 
 extern char est_variable(
   T_varinfo *info, char *nomCmp, char *res_def, double *res_val
@@ -1054,7 +1071,7 @@ T_discord *no_error(T_irdata *irdata) {
 }
 
 int multimax_varinfo(
-  T_irdata *irdata, T_varinfo *info,
+  T_irdata *irdata, int var_space, T_varinfo *info,
   char nb_def, double nb_val,
   char *res_def, double *res_val
 ) {
@@ -1066,7 +1083,7 @@ int multimax_varinfo(
   *res_val = 0.0;
   if (irdata == NULL || info == NULL || info->tab_idx < 0 || nb_def == 0) return *res_def;
   for (i = 0; i < nb && i < info->size; i++) {
-    lis_tabaccess(irdata, info->tab_idx, 1, (double)i, &def, &val);
+    lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
     if (def == 1) *res_def = 1;
     if (val >= *res_val) *res_val = val;
   }
@@ -1664,26 +1681,45 @@ T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   return NULL;
 }
 
+static T_var_space *get_var_space(T_irdata *irdata, int var_space) {
+  if (irdata == NULL) return NULL;
+  if (0 <= var_space || var_space < NB_ESPACES_VARIABLES) {
+    return &(irdata->var_spaces[var_space]);
+  } else {
+    return &(irdata->var_spaces[irdata->var_space]);
+  }
+
+}
+
 char lis_varinfo(
   T_irdata *irdata,
+  int var_space,
   T_varinfo *info,
   char *res_def, double *res_val
 ) {
+  T_var_space *vsp;
   *res_def = 0;
   *res_val = 0.0;
   if (irdata == NULL || info == NULL) return *res_def;
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      *res_def = irdata->def_saisie[info->idx];
-      *res_val = irdata->saisie[info->idx];
+      if (vsp->def_saisie != NULL) {
+        *res_def = vsp->def_saisie[info->idx];
+        *res_val = vsp->saisie[info->idx];
+      }
       return *res_def;
     case EST_CALCULEE:
-      *res_def = irdata->def_calculee[info->idx];
-      *res_val = irdata->calculee[info->idx];
+      if (vsp->def_calculee != NULL) {
+        *res_def = vsp->def_calculee[info->idx];
+        *res_val = vsp->calculee[info->idx];
+      }
       return *res_def;
     case EST_BASE:
-      *res_def = irdata->def_base[info->idx];
-      *res_val = irdata->base[info->idx];
+      if (vsp->def_base != NULL) {
+        *res_def = vsp->def_base[info->idx];
+        *res_val = vsp->base[info->idx];
+      }
       return *res_def;
     case EST_TEMPORAIRE:
       *res_def = irdata->tmps[irdata->tmps_org + info->idx].def;
@@ -1694,13 +1730,56 @@ char lis_varinfo(
   }
 }
 
+char *lis_varinfo_def_ptr(T_irdata *irdata, int var_space, T_varinfo *info) {
+  T_var_space *vsp;
+  if (irdata == NULL || info == NULL) return NULL;
+  vsp = get_var_space(irdata, var_space);
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      if (vsp->def_saisie == NULL) return NULL;
+      return &(vsp->def_saisie[info->idx]);
+    case EST_CALCULEE:
+      if (vsp->def_calculee == NULL) return NULL;
+      return &(vsp->def_calculee[info->idx]);
+    case EST_BASE:
+      if (vsp->def_base == NULL) return NULL;
+      return &(vsp->def_base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->tmps[irdata->tmps_org + info->idx].def);
+    default:
+      return NULL;
+  }
+}
+
+double *lis_varinfo_val_ptr(T_irdata *irdata, int var_space, T_varinfo *info) {
+  T_var_space *vsp;
+  if (irdata == NULL || info == NULL) return NULL;
+  vsp = get_var_space(irdata, var_space);
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      if (vsp->saisie == NULL) return NULL;
+      return &(vsp->saisie[info->idx]);
+    case EST_CALCULEE:
+      if (vsp->calculee == NULL) return NULL;
+      return &(vsp->calculee[info->idx]);
+    case EST_BASE:
+      if (vsp->base == NULL) return NULL;
+      return &(vsp->base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->tmps[irdata->tmps_org + info->idx].val);
+    default:
+      return NULL;
+  }
+}
+
 char lis_varinfo_tab(
-  T_irdata *irdata,
+  T_irdata *irdata, int var_space,
   int idx_tab, char idx_def, double idx_val,
   char *res_def, double *res_val
 ) {
   int idx = (int)idx_val;
   T_varinfo *info = NULL;
+  T_var_space *vsp;
   *res_def = 0;
   *res_val = 0.0;
   if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return *res_def;
@@ -1710,18 +1789,22 @@ char lis_varinfo_tab(
     *res_def = 1;
     return *res_def;
   }
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      *res_def = irdata->def_saisie[info->idx + idx];
-      *res_val = irdata->saisie[info->idx + idx];
+      if (vsp->def_saisie == NULL) return *res_def;
+      *res_def = vsp->def_saisie[info->idx + idx];
+      *res_val = vsp->saisie[info->idx + idx];
       return *res_def;
     case EST_CALCULEE:
-      *res_def = irdata->def_calculee[info->idx + idx];
-      *res_val = irdata->calculee[info->idx + idx];
+      if (vsp->def_calculee == NULL) return *res_def;
+      *res_def = vsp->def_calculee[info->idx + idx];
+      *res_val = vsp->calculee[info->idx + idx];
       return *res_def;
     case EST_BASE:
-      *res_def = irdata->def_base[info->idx + idx];
-      *res_val = irdata->base[info->idx + idx];
+      if (vsp->def_base == NULL) return *res_def;
+      *res_def = vsp->def_base[info->idx + idx];
+      *res_val = vsp->base[info->idx + idx];
       return *res_def;
     case EST_TEMPORAIRE:
       *res_def = irdata->tmps[irdata->tmps_org + info->idx + idx].def;
@@ -1732,16 +1815,21 @@ char lis_varinfo_tab(
   }
 }
 
-char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
+char lis_varinfo_tab_def(T_irdata *irdata, int var_space, T_varinfo *info, int idx) {
+  T_var_space *vsp;
   if (irdata == NULL || info == NULL || info->size <= idx) return 0;
   if (idx < 0) return 1;
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      return irdata->def_saisie[info->idx + idx];
+      if (vsp->def_saisie == NULL) return 0;
+      return vsp->def_saisie[info->idx + idx];
     case EST_CALCULEE:
-      return irdata->def_calculee[info->idx + idx];
+      if (vsp->def_calculee == NULL) return 0;
+      return vsp->def_calculee[info->idx + idx];
     case EST_BASE:
-      return irdata->def_base[info->idx + idx];
+      if (vsp->def_base == NULL) return 0;
+      return vsp->def_base[info->idx + idx];
     case EST_TEMPORAIRE:
       return irdata->tmps[irdata->tmps_org + info->idx + idx].def;
     default:
@@ -1749,25 +1837,30 @@ char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
   }
 }
 
-void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
+void ecris_varinfo(T_irdata *irdata, int var_space, T_varinfo *info, char def, double val) {
+  T_var_space *vsp;
   if (irdata == NULL || info == NULL) return;
   if (def == 0) {
     val = 0.0;
   } else {
     def = 1;
   }
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      irdata->def_saisie[info->idx] = def;
-      irdata->saisie[info->idx] = val;
+      if (vsp->def_saisie == NULL) return;
+      vsp->def_saisie[info->idx] = def;
+      vsp->saisie[info->idx] = val;
       return;
     case EST_CALCULEE:
-      irdata->def_calculee[info->idx] = def;
-      irdata->calculee[info->idx] = val;
+      if (vsp->def_calculee == NULL) return;
+      vsp->def_calculee[info->idx] = def;
+      vsp->calculee[info->idx] = val;
       return;
     case EST_BASE:
-      irdata->def_base[info->idx] = def;
-      irdata->base[info->idx] = val;
+      if (vsp->def_base == NULL) return;
+      vsp->def_base[info->idx] = def;
+      vsp->base[info->idx] = val;
       return;
     case EST_TEMPORAIRE:
       irdata->tmps[irdata->tmps_org + info->idx].def = def;
@@ -1779,12 +1872,13 @@ void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
 }
 
 void ecris_varinfo_tab(
-  T_irdata *irdata,
+  T_irdata *irdata, int var_space,
   int idx_tab, int idx_def, double idx_val,
   char def, double val
 ) {
   int idx = (int)idx_val;
   T_varinfo *info = NULL;
+  T_var_space *vsp;
   if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return;
   info = tab_varinfo[idx_tab];
   if (info == NULL || idx_def == 0 || idx < 0 || info->size <= idx) return;
@@ -1793,18 +1887,22 @@ void ecris_varinfo_tab(
   } else {
     def = 1;
   }
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      irdata->def_saisie[info->idx + idx] = def;
-      irdata->saisie[info->idx + idx] = val;
+      if (vsp->def_saisie == NULL) return;
+      vsp->def_saisie[info->idx + idx] = def;
+      vsp->saisie[info->idx + idx] = val;
       return;
     case EST_CALCULEE:
-      irdata->def_calculee[info->idx + idx] = def;
-      irdata->calculee[info->idx + idx] = val;
+      if (vsp->def_calculee == NULL) return;
+      vsp->def_calculee[info->idx + idx] = def;
+      vsp->calculee[info->idx + idx] = val;
       return;
     case EST_BASE:
-      irdata->def_base[info->idx + idx] = def;
-      irdata->base[info->idx + idx] = val;
+      if (vsp->def_base == NULL) return;
+      vsp->def_base[info->idx + idx] = def;
+      vsp->base[info->idx + idx] = val;
       return;
     case EST_TEMPORAIRE:
       irdata->tmps[irdata->tmps_org + info->idx + idx].def = def;
@@ -1827,8 +1925,26 @@ T_varinfo *lis_tabaccess_varinfo(
   return tab_varinfo[idx_tab + idx + 1];
 }
 
+char *lis_tabaccess_def_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  if (info == NULL) return NULL;
+  return lis_varinfo_def_ptr(irdata, var_space, info);
+}
+
+double *lis_tabaccess_val_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  if (info == NULL) return NULL;
+  return lis_varinfo_val_ptr(irdata, var_space, info);
+}
+
 char lis_tabaccess(
-  T_irdata *irdata, int idx_tab,
+  T_irdata *irdata, int var_space, int idx_tab,
   char idx_def, double idx_val,
   char *res_def, double *res_val
 ) {
@@ -1846,35 +1962,36 @@ char lis_tabaccess(
     }
     return *res_def;
   }
-  lis_varinfo(irdata, info, res_def, res_val);
+  lis_varinfo(irdata, var_space, info, res_def, res_val);
   /* tableau originel */
-  {
+  /*{
     char res2_def;
     double res2_val;
-    lis_varinfo_tab(irdata, idx_tab, idx_def, idx_val, &res2_def, &res2_val);
+    lis_varinfo_tab(irdata, var_space, idx_tab, idx_def, idx_val, &res2_def, &res2_val);
     if (*res_def != res2_def || *res_val != res2_val) {
       *res_def = res2_def;
       *res_val = res2_val;
-      ecris_varinfo(irdata, info, *res_def, *res_val);
+      ecris_varinfo(irdata, var_space, info, *res_def, *res_val);
     }
-  }
+  }*/  
   return *res_def;
 }
 
 void ecris_tabaccess(
-  T_irdata *irdata, int idx_tab,
+  T_irdata *irdata, int var_space, int idx_tab,
   char idx_def, double idx_val,
   char def, double val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
-  ecris_varinfo(irdata, info, def, val);
+  ecris_varinfo(irdata, var_space, info, def, val);
   /* tableau originel */
-  ecris_varinfo_tab(irdata, idx_tab, idx_def, idx_val, def, val);
+  /*ecris_varinfo_tab(irdata, var_space, idx_tab, idx_def, idx_val, def, val);*/
 }
 
 /* !!! */
-void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
+void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom) {
   T_varinfo *info = NULL;
+  T_var_space *vsp;
   char res_def = 0;
   double res_val = 0.0;
 
@@ -1883,7 +2000,8 @@ void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
   if (info == NULL) {
     fprintf(pr_ctx->std, "inconnu");
   } else {
-    lis_varinfo(irdata, info, &res_def, &res_val);
+    vsp = get_var_space(irdata, var_space);
+    lis_varinfo(irdata, var_space, info, &res_def, &res_val);
     if (res_def == 0) {
       fprintf(pr_ctx->std, "indefini");
     } else {
@@ -1892,14 +2010,14 @@ void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
   }
 }
 
-void pr_out_var(T_irdata *irdata, char *nom) {
+void pr_out_var(T_irdata *irdata, int var_space, char *nom) {
   if (irdata == NULL) return;
-  pr_var(&(irdata->ctx_pr_out), irdata, nom);
+  pr_var(&(irdata->ctx_pr_out), irdata, var_space, nom);
 }
 
-void pr_err_var(T_irdata *irdata, char *nom) {
+void pr_err_var(T_irdata *irdata, int var_space, char *nom) {
   if (irdata == NULL) return;
-  pr_var(&(irdata->ctx_pr_err), irdata, nom);
+  pr_var(&(irdata->ctx_pr_err), irdata, var_space, nom);
 }
 
 char est_variable(T_varinfo *info, char *nomCmp, char *res_def, double *res_val) {
@@ -2067,8 +2185,8 @@ void aff_val(
     (fun f (ef : Com.event_field) ->
       let pr form = Pp.fpr fmt form in
       pr
-        "char event_field_%s(T_irdata *irdata, char *res_def, double *res_val, \
-         char idx_def, double idx_val) {\n"
+        "char event_field_%s(T_irdata *irdata, int var_space, char *res_def, \
+         double *res_val, char idx_def, double idx_val) {\n"
         f;
       if ef.is_var then pr "  T_varinfo *info = NULL;\n";
       pr "  int idx = (int)floor(idx_val);\n";
@@ -2079,7 +2197,7 @@ void aff_val(
       pr "  }\n";
       if ef.is_var then (
         pr "  info = irdata->events[idx]->field_%s_var;\n" f;
-        pr "  lis_varinfo(irdata, info, res_def, res_val);\n")
+        pr "  lis_varinfo(irdata, var_space, info, res_def, res_val);\n")
       else (
         pr "  *res_def = irdata->events[idx]->field_%s_def;\n" f;
         pr "  *res_val = irdata->events[idx]->field_%s_val;\n" f);

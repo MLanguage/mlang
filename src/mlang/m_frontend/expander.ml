@@ -869,12 +869,10 @@ let rec expand_instruction (const_map : const_context)
             | Pos.Mark (AtomVar m_sp', _) -> (m_sp', i_sp))
           m_sp_opt
       in
-      let map var =
-        match expand_variable const_map ParamsMap.empty var with
-        | Pos.Mark (AtomVar m_v, v_pos) -> Pos.mark (Pos.unmark m_v) v_pos
-        | Pos.Mark (AtomLiteral (Float _), v_pos) ->
-            Err.constant_forbidden_as_arg v_pos
-        | _ -> assert false
+      let map m_a =
+        match expand_access const_map ParamsMap.empty m_a with
+        | ExpLiteral _ -> Err.constant_forbidden_as_arg (Pos.get m_a)
+        | ExpAccess m_a' -> m_a'
       in
       let targs' = List.map map targs in
       Pos.same (Com.ComputeTarget (tn, targs', m_sp_opt')) m_instr :: prev

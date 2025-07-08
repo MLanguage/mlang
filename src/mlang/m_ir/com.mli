@@ -256,11 +256,12 @@ type var_name = Normal of string | Generic of var_name_generic
 
 type m_var_name = var_name Pos.marked
 
+type var_space = (m_var_name * int) option
+
 type 'v access =
-  | VarAccess of (m_var_name * int) option * 'v
-  | TabAccess of (m_var_name * int) option * 'v * 'v m_expression
-  | FieldAccess of
-      (m_var_name * int) option * 'v m_expression * string Pos.marked * int
+  | VarAccess of var_space * 'v
+  | TabAccess of var_space * 'v * 'v m_expression
+  | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
@@ -374,14 +375,11 @@ type ('v, 'e) instruction =
   | WhenDoElse of
       ('v m_expression * ('v, 'e) m_instruction list * Pos.t) list
       * ('v, 'e) m_instruction list Pos.marked
-  | ComputeDomain of
-      string Pos.marked list Pos.marked * (m_var_name * int) option
-  | ComputeChaining of string Pos.marked * (m_var_name * int) option
+  | ComputeDomain of string Pos.marked list Pos.marked * var_space
+  | ComputeChaining of string Pos.marked * var_space
   | ComputeVerifs of
-      string Pos.marked list Pos.marked
-      * 'v m_expression
-      * (m_var_name * int) option
-  | ComputeTarget of string Pos.marked * 'v list * (m_var_name * int) option
+      string Pos.marked list Pos.marked * 'v m_expression * var_space
+  | ComputeTarget of string Pos.marked * 'v m_access list * var_space
   | VerifBlock of ('v, 'e) m_instruction list
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
@@ -439,25 +437,22 @@ val m_instr_map_var :
 type var_usage = Read | Write | Info | DeclRef | ArgRef | DeclLocal | Macro
 
 val expr_fold_var :
-  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
-  'v expression ->
-  'a ->
-  'a
+  (var_usage -> var_space -> 'v option -> 'a -> 'a) -> 'v expression -> 'a -> 'a
 
 val m_expr_fold_var :
-  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  (var_usage -> var_space -> 'v option -> 'a -> 'a) ->
   'v m_expression ->
   'a ->
   'a
 
 val instr_fold_var :
-  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  (var_usage -> var_space -> 'v option -> 'a -> 'a) ->
   ('v, 'e) instruction ->
   'a ->
   'a
 
 val m_instr_fold_var :
-  (var_usage -> (m_var_name * int) option -> 'v option -> 'a -> 'a) ->
+  (var_usage -> var_space -> 'v option -> 'a -> 'a) ->
   ('v, 'e) m_instruction ->
   'a ->
   'a

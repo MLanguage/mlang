@@ -1159,9 +1159,8 @@ let check_name_in_env env m_name =
   | None -> ()
 
 let rec fold_var_expr (get_var : 'v -> string Pos.marked)
-    (fold_sp : (Com.m_var_name * int) option -> var_env -> 'a -> 'a)
-    (fold_var :
-      (Com.m_var_name * int) option -> 'v -> var_mem_type -> var_env -> 'a -> 'a)
+    (fold_sp : Com.var_space -> var_env -> 'a -> 'a)
+    (fold_var : Com.var_space -> 'v -> var_mem_type -> var_env -> 'a -> 'a)
     (acc : 'a) (m_expr : 'v Com.m_expression) (env : var_env) : 'a =
   let fold_aux = fold_var_expr get_var fold_sp fold_var in
   let expr, expr_pos = Pos.to_couple m_expr in
@@ -1369,8 +1368,7 @@ let get_var_mem_type (var : Com.m_var_name) (env : var_env) :
       Pos.same mem (Com.Var.name var)
   | None -> Err.unknown_variable var_pos
 
-let check_var_space (m_sp_opt : (Com.m_var_name * int) option) (env : var_env) :
-    unit =
+let check_var_space (m_sp_opt : Com.var_space) (env : var_env) : unit =
   match m_sp_opt with
   | None -> ()
   | Some (m_sp, _) -> (
@@ -1385,8 +1383,8 @@ let check_var_space (m_sp_opt : (Com.m_var_name * int) option) (env : var_env) :
           | Some _ -> ()
           | None -> Err.unknown_var_space sp_name (Pos.get m_sp)))
 
-let check_variable (m_sp_opt : (Com.m_var_name * int) option)
-    (m_vn : Com.m_var_name) (idx_mem : var_mem_type) (env : var_env) : unit =
+let check_variable (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name)
+    (idx_mem : var_mem_type) (env : var_env) : unit =
   let decl_mem, decl_pos = Pos.to_couple @@ get_var_mem_type m_vn env in
   (match (decl_mem, idx_mem) with
   | _, Both | Num, Num | Table, Table -> ()
@@ -1486,6 +1484,7 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
   in
   aux Com.CatVar.Map.empty l
 
+(*  changer "= Rule" en "<> Target" !!! *)
 let rec check_instructions (env : var_env)
     (instrs : Mast.instruction Pos.marked list) :
     program * (int Pos.marked, Mast.error_name) Com.m_instruction list =
@@ -1527,6 +1526,34 @@ let rec check_instructions (env : var_env)
             CallMap.add cc (called_map, cc_pos) env.prog.prog_call_map)
     | _ -> env.prog.prog_call_map
   in
+  let check_m_access ~onlyVar env m_a =
+    let access, apos = Pos.to_couple m_a in
+    match access with
+    | Com.VarAccess (m_sp_opt, m_v) ->
+        check_var_space m_sp_opt env;
+        check_variable m_sp_opt m_v Num env;
+        let m_v' = map_var env m_v in
+        Pos.mark (Com.VarAccess (m_sp_opt, m_v')) apos
+    | Com.TabAccess (m_sp_opt, m_v, m_i) ->
+        check_var_space m_sp_opt env;
+        check_variable m_sp_opt m_v Table env;
+        let m_v' = map_var env m_v in
+        let m_i' = map_expr env m_i in
+        Pos.mark (Com.TabAccess (m_sp_opt, m_v', m_i')) apos
+    | Com.FieldAccess (m_sp_opt, m_i, f, id) ->
+        if env.proc_type = Rule then
+          Err.insruction_forbidden_in_rules (Pos.get m_a);
+        check_var_space m_sp_opt env;
+        let f_name, f_pos = Pos.to_couple f in
+        (match StrMap.find_opt f_name env.prog.prog_event_fields with
+        | Some ef ->
+            if onlyVar && not ef.is_var then
+              Err.event_field_is_not_a_reference f_name f_pos
+        | None -> Err.unknown_event_field f_name f_pos);
+        let m_i' = map_expr env m_i in
+        let a' = Com.FieldAccess (m_sp_opt, m_i', f, id) in
+        Pos.mark a' apos
+  in
   let rec aux
       ((env, res) :
         var_env * (int Pos.marked, Mast.error_name) Com.m_instruction list)
@@ -1540,34 +1567,7 @@ let rec check_instructions (env : var_env)
         | Com.Affectation (Pos.Mark (f, fpos)) -> (
             match f with
             | Com.SingleFormula (VarDecl (m_a, e)) ->
-                let m_a' =
-                  let access, apos = Pos.to_couple m_a in
-                  match access with
-                  | VarAccess (m_sp_opt, m_v) ->
-                      check_var_space m_sp_opt env;
-                      check_variable m_sp_opt m_v Num env;
-                      let m_v' = map_var env m_v in
-                      Pos.mark (Com.VarAccess (m_sp_opt, m_v')) apos
-                  | TabAccess (m_sp_opt, m_v, m_i) ->
-                      check_var_space m_sp_opt env;
-                      check_variable m_sp_opt m_v Table env;
-                      let m_v' = map_var env m_v in
-                      let m_i' = map_expr env m_i in
-                      Pos.mark (Com.TabAccess (m_sp_opt, m_v', m_i')) apos
-                  | FieldAccess (m_sp_opt, m_i, f, id) ->
-                      if env.proc_type = Rule then
-                        Err.insruction_forbidden_in_rules instr_pos;
-                      check_var_space m_sp_opt env;
-                      let f_name, f_pos = Pos.to_couple f in
-                      (match
-                         StrMap.find_opt f_name env.prog.prog_event_fields
-                       with
-                      | Some _ -> ()
-                      | None -> Err.unknown_event_field f_name f_pos);
-                      let m_i' = map_expr env m_i in
-                      let a' = Com.FieldAccess (m_sp_opt, m_i', f, id) in
-                      Pos.mark a' apos
-                in
+                let m_a' = check_m_access ~onlyVar:false env m_a in
                 let e' = map_expr env e in
                 let f' = Com.SingleFormula (VarDecl (m_a', e')) in
                 let instr' = Com.Affectation (Pos.mark f' fpos) in
@@ -1700,13 +1700,7 @@ let rec check_instructions (env : var_env)
             in
             let prog = { env.prog with prog_call_map } in
             let env = { env with prog } in
-            let targs' =
-              let map v =
-                check_variable None v Num env;
-                map_var env v
-              in
-              List.map map targs
-            in
+            let targs' = List.map (check_m_access ~onlyVar:true env) targs in
             let instr' =
               Com.ComputeTarget (Pos.mark tn tpos, targs', m_sp_opt)
             in

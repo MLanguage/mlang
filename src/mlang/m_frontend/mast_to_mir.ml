@@ -761,8 +761,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let ed' = Pos.same ed' ed in
         aux (Pos.mark (Com.WhenDoElse (wdl', ed')) pos :: res, dict) il
     | Pos.Mark (Com.ComputeTarget (tn, targs, m_sp_opt), pos) :: il ->
-        let map v = get_var dict v in
-        let targs' = List.map map targs in
+        let targs' = List.map (Pos.map (translate_access p dict)) targs in
         let m_sp_opt' =
           Option.map
             (fun (m_sp, _) ->
