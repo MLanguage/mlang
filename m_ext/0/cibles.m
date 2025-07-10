@@ -201,6 +201,8 @@ afficher_erreur
   nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 iterer : variable V
 : V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code), ESP.champ_evenement(3, code)
+: categorie saisie contexte : avec attribut(V, primrest) = 10
+: categorie saisie contexte : avec attribut(V, primrest) = 10 : espace ESP
 : dans (
   afficher_erreur "it -- " nom(V) " = " (V) "\n"; 
 )

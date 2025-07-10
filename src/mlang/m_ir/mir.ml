@@ -281,9 +281,9 @@ let expand_functions (p : program) : program =
       | Iterate (v_id, vars, var_params, instrs) ->
           let var_params' =
             List.map
-              (fun (cats, e) ->
+              (fun (cats, e, m_sp_opt) ->
                 let e' = expand_functions_expr e in
-                (cats, e'))
+                (cats, e', m_sp_opt))
               var_params
           in
           let instrs' = List.map map_instr instrs in

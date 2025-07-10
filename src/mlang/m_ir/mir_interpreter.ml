@@ -869,7 +869,7 @@ struct
             | None -> ())
           al;
         List.iter
-          (fun (vcs, expr) ->
+          (fun (vcs, expr, m_sp_opt) ->
             let eval vc _ =
               StrMap.iter
                 (fun _ v ->
@@ -877,7 +877,7 @@ struct
                     Com.CatVar.compare (Com.Var.cat v) vc = 0
                     && not (Com.Var.is_table v)
                   then (
-                    let vsd = get_var_space_from ctx None in
+                    let vsd = get_var_space_from ctx m_sp_opt in
                     let vsd, v, org = get_var ctx vsd v in
                     set_var_ref ctx var vsd v org;
                     match evaluate_expr ctx expr with

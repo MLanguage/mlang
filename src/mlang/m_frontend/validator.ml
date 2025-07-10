@@ -1766,9 +1766,27 @@ let rec check_instructions (env : var_env)
             let al' = List.map (check_m_access ~onlyVar:true Num env) al in
             let var_params' =
               List.map
-                (fun (vcats, expr) ->
-                  ignore (mast_to_catvars vcats env.prog.prog_var_cats);
-                  (vcats, map_expr env' expr))
+                (fun (vcats, expr, m_sp_opt) ->
+                  let cats = mast_to_catvars vcats env.prog.prog_var_cats in
+                  (match get_sp_opt m_sp_opt with
+                  | None -> ()
+                  | Some sp ->
+                      let vsd_id = StrMap.find sp env.prog.prog_var_spaces in
+                      let vsd =
+                        IntMap.find vsd_id env.prog.prog_var_spaces_idx
+                      in
+                      let iter cat cat_pos =
+                        let loc =
+                          (Com.CatVar.Map.find cat env.prog.prog_var_cats).loc
+                        in
+                        match Com.CatVar.LocMap.find_opt loc vsd.vs_cats with
+                        | Some _ -> ()
+                        | None ->
+                            Err.category_forbidden_with_space cat_pos
+                              (Pos.unmark vsd.vs_name)
+                      in
+                      Com.CatVar.Map.iter iter cats);
+                  (vcats, map_expr env' expr, m_sp_opt))
                 var_params
             in
             let prog, instrs' = check_instructions env' instrs in

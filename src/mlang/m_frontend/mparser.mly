@@ -981,7 +981,7 @@ it_param:
     `VarList al
   }
 | CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON expr_opt = it_param_with_expr? {
+  COLON params = list(with_pos(it_param_category)) {
     let vcats =
       let fold res vc =
         let vcm = Com.CatVar.Map.from_string_list vc in
@@ -989,20 +989,40 @@ it_param:
       in
       List.fold_left fold Com.CatVar.Map.empty vcat_list
     in
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (eo, spo) = function
+    | Pos.Mark (`Expr m_e, pos) -> (
+        match eo with
+        | None -> Some m_e, spo
+        | _ -> err "expression is already specified" pos
+      )
+    | Pos.Mark (`Space m_sp, pos) -> (
+        match spo with
+        | None -> eo, Some m_sp
+        | _ -> err "variable space is already specified" pos
+      )
+    in
+    let init = None, None in
+    let eo, spo = List.fold_left fold init params in
     let expr =
-      match expr_opt with
+      match eo with
       | Some expr -> expr
       | None -> Pos.without (Com.Literal (Com.Float 1.0))
     in
-    `VarCatsIt (vcats, expr)
+    let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
+    `VarCatsIt (vcats, expr, m_sp_opt)
   }
 | BETWEEN expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
   STEP step = with_pos(expression) COLON {
     `VarInterval (expr0, expr1, step)
   }
 
-it_param_with_expr:
-| WITH expr = with_pos(expression) COLON { expr }
+it_param_category:
+| WITH expr = with_pos(expression) COLON { `Expr expr }
+| SPACE sp = symbol_with_pos COLON {
+    let sp_name = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    `Space sp_name
+  }
 
 rest_param:
 | al = separated_nonempty_list(COMMA, with_pos(var_access)) COLON {

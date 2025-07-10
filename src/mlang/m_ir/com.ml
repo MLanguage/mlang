@@ -619,7 +619,7 @@ type ('v, 'e) instruction =
   | Iterate of
       'v
       * 'v m_access list
-      * (Pos.t CatVar.Map.t * 'v m_expression) list
+      * (Pos.t CatVar.Map.t * 'v m_expression * var_space) list
       * ('v, 'e) m_instruction list
   | Iterate_values of
       'v
@@ -806,7 +806,7 @@ and instr_map_var f g = function
       let v' = f v in
       let al' = List.map (m_access_map_var f) al in
       let cvml' =
-        let map (cvm, m_e) = (cvm, m_expr_map_var f m_e) in
+        let map (cvm, m_e, m_sp_opt) = (cvm, m_expr_map_var f m_e, m_sp_opt) in
         List.map map cvml
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
@@ -1003,7 +1003,9 @@ and instr_fold_var f instr acc =
   | Iterate (v, al, cvml, m_il) ->
       acc |> f DeclRef None (Some v)
       |> fold_list (m_access_fold_var ArgRef f) al
-      |> (let fold (_, m_e) accu = m_expr_fold_var f m_e accu in
+      |> (let fold (_, m_e, m_sp_opt) accu =
+            accu |> f DeclRef m_sp_opt (Some v) |> m_expr_fold_var f m_e
+          in
           fold_list fold cvml)
       |> fold_list (m_instr_fold_var f) m_il
   | Iterate_values (v, e3l, m_il) ->
@@ -1375,9 +1377,14 @@ let rec format_instruction form_var form_err =
               let form = Pp.list_comma @@ Pp.unmark form_access in
               Format.fprintf fmt "@;: %a" form al
         in
-        let format_var_param fmt (vcs, expr) =
-          Format.fprintf fmt ": categorie %a : avec %a@\n"
-            (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
+        let format_var_param fmt (vcs, expr, m_sp_opt) =
+          let sp_str =
+            match m_sp_opt with
+            | None -> ""
+            | Some (m_sp, _) -> " : espace " ^ get_var_name (Pos.unmark m_sp)
+          in
+          Format.fprintf fmt ": categorie %a : avec %a%s@\n"
+            (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr) sp_str
         in
         Format.fprintf fmt "iterate variable %a@;: %a@;: %a@;: dans (" form_var
           var form_alist al

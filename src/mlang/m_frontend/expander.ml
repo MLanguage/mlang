@@ -792,9 +792,9 @@ let rec expand_instruction (const_map : const_context)
   | Com.Iterate (name, vars, var_params, instrs) ->
       let var_params' =
         List.map
-          (fun (cats, expr) ->
+          (fun (cats, expr, m_sp_opt) ->
             let expr' = expand_expression const_map ParamsMap.empty expr in
-            (cats, expr'))
+            (cats, expr', m_sp_opt))
           var_params
       in
       let instrs' = expand_instructions const_map instrs in

@@ -385,7 +385,7 @@ type ('v, 'e) instruction =
   | Iterate of
       'v
       * 'v m_access list
-      * (Pos.t CatVar.Map.t * 'v m_expression) list
+      * (Pos.t CatVar.Map.t * 'v m_expression * var_space) list
       * ('v, 'e) m_instruction list
   | Iterate_values of
       'v

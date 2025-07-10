@@ -1012,10 +1012,10 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                 idx_tab idx_def idx_val;
               let space_ptr = VID.gen_var_space_id m_sp_opt var in
               pr "@;%s = %s;" ref_space space_ptr;
-              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, info);" ref_def
-                space_ptr;
-              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, info);" ref_val
-                space_ptr;
+              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, %s);" ref_def space_ptr
+                ref_info;
+              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, %s);" ref_val space_ptr
+                ref_info;
               pr "%a" (generate_stmts dgfip_flags p) stmts;
               pr "@]@;}";
               pr "@]@;}"
@@ -1031,20 +1031,20 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                 idx_def idx idx;
               pr "@;%s= irdata->events[%s]->field_%s_var;" ref_info idx f;
               let space_ptr = VID.gen_var_space_id_opt m_sp_opt in
-              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, info)," ref_def
-                space_ptr;
-              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, info)," ref_val
-                space_ptr;
+              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, %s);" ref_def space_ptr
+                ref_info;
+              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, %s);" ref_val space_ptr
+                ref_info;
               pr "%a" (generate_stmts dgfip_flags p) stmts;
               pr "@]@;}";
               pr "@]@;}")
         al;
       List.iter
-        (fun (vcs, expr) ->
+        (fun (vcs, expr, m_sp_opt) ->
           Com.CatVar.Map.iter
             (fun vc _ ->
               let vcd = Com.CatVar.Map.find vc p.program_var_categories in
-              let ref_sp = Pos.unmark p.program_var_space_def.vs_name in
+              let ref_sp = VID.gen_var_space_id_opt m_sp_opt in
               let ref_tab = VID.gen_tab vcd.loc in
               let cond = fresh_c_local "cond" in
               let cond_def = cond ^ "_def" in
@@ -1057,10 +1057,12 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
               pr "@;char %s;@;double %s;" cond_def cond_val;
               pr "@;%s = (T_varinfo *)tab_%s;" ref_info it_name;
               pr "@;@[<hov 2>if (%s->tab_idx < 0) {" ref_info;
-              pr "@;%s = &(irdata->def_%s_%s[%s->idx]);" ref_def ref_tab ref_sp
-                ref_info;
-              pr "@;%s = &(irdata->%s_%s[%s->idx]);" ref_val ref_tab ref_sp
-                ref_info;
+              let space_ptr = VID.gen_var_space_id_opt m_sp_opt in
+              pr "@;%s = %s;" ref_space space_ptr;
+              pr "@;%s = &(irdata->var_spaces[%s].def_%s[%s->idx]);" ref_def
+                ref_sp ref_tab ref_info;
+              pr "@;%s = &(irdata->var_spaces[%s].%s[%s->idx]);" ref_val ref_sp
+                ref_tab ref_info;
               generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
               pr "@;@[<hov 2>if (%s && %s != 0.0) {" cond_def cond_val;
               pr "%a" (generate_stmts dgfip_flags p) stmts;
