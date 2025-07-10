@@ -118,6 +118,12 @@ let gen_ref_name_ptr (v : Com.Var.t) =
   | LocRef (_, i) -> Printf.sprintf "NR_((%d)/*%s*/)" i vn
   | _ -> assert false
 
+let gen_ref_var_space_ptr (v : Com.Var.t) =
+  let vn = Pos.unmark v.name in
+  match v.loc with
+  | LocRef (_, i) -> Printf.sprintf "SR_((%d)/*%s*/)" i vn
+  | _ -> assert false
+
 let gen_pos_from_start (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with

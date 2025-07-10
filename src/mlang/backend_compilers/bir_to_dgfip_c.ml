@@ -977,26 +977,68 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       | None -> ()
       | Some _ -> pr "@;irdata->var_space = var_space_sav;");
       pr "@]@;}@;"
-  | Iterate (var, vars, var_params, stmts) ->
+  | Iterate (var, al, var_params, stmts) ->
       let it_name = fresh_c_local "iterate" in
       let ref_name = VID.gen_ref_name_ptr var in
       let ref_info = VID.gen_info_ptr var in
+      let ref_space = VID.gen_ref_var_space_ptr var in
       let ref_def = VID.gen_def_ptr None var in
-      (* !!! *)
       let ref_val = VID.gen_val_ptr None var in
-      (* !!! *)
       pr "@;%s = \"%s\";" ref_name (Com.Var.name_str var);
       List.iter
-        (fun v ->
-          pr "@;@[<v 2>{";
-          pr "@;%s = %s;" ref_info (VID.gen_info_ptr v);
-          pr "@;%s = %s;" ref_def (VID.gen_def_ptr None v);
-          (* !!! *)
-          pr "@;%s = %s;" ref_val (VID.gen_val_ptr None v);
-          (* !!! *)
-          pr "%a" (generate_stmts dgfip_flags p) stmts;
-          pr "@]@;}")
-        vars;
+        (fun m_a ->
+          match Pos.unmark m_a with
+          | Com.VarAccess (m_sp_opt, v) ->
+              pr "@;@[<v 2>{";
+              pr "@;%s = %s;" ref_info (VID.gen_info_ptr v);
+              pr "@;%s = %s;" ref_space (VID.gen_var_space_id m_sp_opt v);
+              pr "@;%s = %s;" ref_def (VID.gen_def_ptr m_sp_opt v);
+              pr "@;%s = %s;" ref_val (VID.gen_val_ptr m_sp_opt v);
+              pr "%a" (generate_stmts dgfip_flags p) stmts;
+              pr "@]@;}"
+          | Com.TabAccess (m_sp_opt, var, vidx) ->
+              pr "@;@[<v 2>{";
+              let idx_tab = Com.Var.loc_tab_idx var in
+              pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
+              let idx = fresh_c_local "idx" in
+              let idx_def = idx ^ "_def" in
+              let idx_val = idx ^ "_val" in
+              pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+              generate_expr_with_res_in p dgfip_flags oc idx_def idx_val vidx;
+              pr "@;%s = (int)%s;" idx idx_val;
+              pr "@;@[<v 2>if (%s && 0 <= %s && %s < info->size) {" idx_def idx
+                idx;
+              pr "@;%s = lis_tabaccess_varinfo(irdata, %d, %s, %s);" ref_info
+                idx_tab idx_def idx_val;
+              let space_ptr = VID.gen_var_space_id m_sp_opt var in
+              pr "@;%s = %s;" ref_space space_ptr;
+              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, info);" ref_def
+                space_ptr;
+              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, info);" ref_val
+                space_ptr;
+              pr "%a" (generate_stmts dgfip_flags p) stmts;
+              pr "@]@;}";
+              pr "@]@;}"
+          | Com.FieldAccess (m_sp_opt, e, Pos.Mark (f, _), _) ->
+              pr "@;@[<v 2>{";
+              let idx = fresh_c_local "idx" in
+              let idx_def = idx ^ "_def" in
+              let idx_val = idx ^ "_val" in
+              pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
+              generate_expr_with_res_in p dgfip_flags oc idx_def idx_val e;
+              pr "@;%s = (int)%s;" idx idx_val;
+              pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {"
+                idx_def idx idx;
+              pr "@;%s= irdata->events[%s]->field_%s_var;" ref_info idx f;
+              let space_ptr = VID.gen_var_space_id_opt m_sp_opt in
+              pr "@;%s = lis_varinfo_def_ptr(irdata, %s, info)," ref_def
+                space_ptr;
+              pr "@;%s = lis_varinfo_val_ptr(irdata, %s, info)," ref_val
+                space_ptr;
+              pr "%a" (generate_stmts dgfip_flags p) stmts;
+              pr "@]@;}";
+              pr "@]@;}")
+        al;
       List.iter
         (fun (vcs, expr) ->
           Com.CatVar.Map.iter

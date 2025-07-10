@@ -406,18 +406,28 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
           in
           List.fold_left fold (0, 0, 0, tdata) pal
-      | Com.Iterate (_, _, mel, instrs) ->
-          let fold (nb, sz, nbRef, tdata) (_, me) =
-            let nb', sz', nbRef', tdata = aux_expr tdata me in
-            (max nb nb', max sz sz', max nbRef nbRef', tdata)
+      | Com.Iterate (_, al, mel, instrs) ->
+          let nb0, sz0, nbRef0, tdata =
+            let fold (nb, sz, nbRef, tdata) m_a =
+              let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
+              let nb = max nb nbA in
+              let sz = max sz szA in
+              let nbRef = max nbRef nbRefA in
+              (nb, sz, nbRef, tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) al
           in
-          let nb', sz', nbRef', tdata =
+          let nb1, sz1, nbRef1, tdata =
+            let fold (nb, sz, nbRef, tdata) (_, me) =
+              let nbE, szE, nbRefE, tdata = aux_expr tdata me in
+              (max nb nbE, max sz szE, max nbRef nbRefE, tdata)
+            in
             List.fold_left fold (0, 0, 0, tdata) mel
           in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb nb' in
-          let sz = max sz sz' in
-          let nbRef = 1 + max nbRef nbRef' in
+          let nb2, sz2, nbRef2, tdata = aux_instrs tdata instrs in
+          let nb = max nb0 @@ max nb1 nb2 in
+          let sz = max sz0 @@ max sz1 sz2 in
+          let nbRef = 1 + (max nbRef0 @@ max nbRef1 nbRef2) in
           (nb, sz, nbRef, tdata)
       | Com.Iterate_values (_, me2l, instrs) ->
           let fold (nb, sz, nbRef, tdata) (me0, me1, mstep) =
@@ -820,11 +830,11 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
                [] args)
         in
         aux (Pos.mark (Com.Print (std, mir_args)) pos :: res, dict) il
-    | Pos.Mark (Com.Iterate (m_id, vars, var_params, instrs), pos) :: il ->
+    | Pos.Mark (Com.Iterate (m_id, al, var_params, instrs), pos) :: il ->
         let var = get_var dict m_id in
         let var = Com.Var.set_loc_idx var it_depth in
         let dict = IntMap.add var.id var dict in
-        let vars' = List.map (get_var dict) vars in
+        let al' = List.map (Pos.map (translate_access p dict)) al in
         let var_params' =
           List.map
             (fun (vcats, expr) ->
@@ -836,7 +846,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let prog_it, dict =
           translate_prog p dict (it_depth + 1) itval_depth instrs
         in
-        let instr = Com.Iterate (var, vars', var_params', prog_it) in
+        let instr = Com.Iterate (var, al', var_params', prog_it) in
         aux (Pos.mark instr pos :: res, dict) il
     | Pos.Mark (Com.Iterate_values (m_id, var_intervals, instrs), pos) :: il ->
         let var = get_var dict m_id in

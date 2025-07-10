@@ -87,6 +87,7 @@ rule token = parse
     | "discordance" -> DISCORDANCE
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
+    | "entre" -> BETWEEN
     | "erreur" -> ERROR
     | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE

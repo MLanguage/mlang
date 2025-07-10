@@ -858,14 +858,16 @@ struct
                 pr_flush ())
           args;
         pr_flush ()
-    | Com.Iterate ((var : Com.Var.t), vars, var_params, stmts) ->
+    | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) ->
         List.iter
-          (fun v ->
-            let vsd = get_var_space_from ctx None in
-            let vsd, v, org = get_var ctx vsd v in
-            set_var_ref ctx var vsd v org;
-            evaluate_stmts canBlock ctx stmts)
-          vars;
+          (fun m_a ->
+            match get_access_var ctx @@ Pos.unmark m_a with
+            | Some (vsd, v) ->
+                let vsd, v, vorg = get_var ctx vsd v in
+                set_var_ref ctx var vsd v vorg;
+                evaluate_stmts canBlock ctx stmts
+            | None -> ())
+          al;
         List.iter
           (fun (vcs, expr) ->
             let eval vc _ =

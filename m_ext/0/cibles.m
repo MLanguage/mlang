@@ -154,19 +154,21 @@ ESP.V_ARG = 13;
 V_TAB[2] = 14;
 ESP.V_TAB[2] = 15;
 V_CODE = 16;
+ESP.V_CODE = 17;
 champ_evenement(3, code) reference V_CODE;
-V_BLA = 17;
-ESP.V_BLA = 18;
+V_BLA = 18;
+ESP.V_BLA = 19;
 afficher_erreur
   nom(V_ARG) " = " (V_ARG) ", " 
   nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
   nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
   nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
   nom(V_CODE) " = " (V_CODE) ", "
+  nom(ESP.V_CODE) " = " (ESP.V_CODE) ", "
   nom(V_BLA) " = " (V_BLA) ", "
   nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 restaurer
-: V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code)
+: V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code), ESP.champ_evenement(3, code)
 : variable V : categorie saisie contexte : avec attribut(V, primrest) = 10
 : variable V : categorie saisie contexte : avec attribut(V, primrest) = 10 : espace ESP
 : apres (
@@ -175,14 +177,16 @@ restaurer
   V_TAB[2] = 4;
   ESP.V_TAB[2] = 5;
   champ_evenement(3, code) = 6;
-  V_BLA = 7;
-  ESP.V_BLA = 8;
+  ESP.champ_evenement(3, code) = 7;
+  V_BLA = 8;
+  ESP.V_BLA = 9;
   afficher_erreur
     nom(V_ARG) " = " (V_ARG) ", " 
     nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
     nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
     nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
     nom(V_CODE) " = " (V_CODE) ", "
+    nom(ESP.V_CODE) " = " (ESP.V_CODE) ", "
     nom(V_BLA) " = " (V_BLA) ", "
     nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 )
@@ -192,8 +196,14 @@ afficher_erreur
   nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
   nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
   nom(V_CODE) " = " (V_CODE) ", "
+  nom(ESP.V_CODE) " = " (ESP.V_CODE) ", "
   nom(V_BLA) " = " (V_BLA) ", "
   nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
+iterer : variable V
+: V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code), ESP.champ_evenement(3, code)
+: dans (
+  afficher_erreur "it -- " nom(V) " = " (V) "\n"; 
+)
 afficher_erreur indenter(-2) "sortie test_cible_avec_args\n";
 
 fonction toto_fonction:
@@ -218,7 +228,7 @@ cible test_args:
 application: iliad;
 variables_temporaires: A0, A1, A2, A3, AA tableau[3], A4, A5, A6, R;
 afficher_erreur "entree test_args\n" indenter(2);
-iterer : variable I : 0..6 increment 1 : dans (
+iterer : variable I : entre 0..6 increment 1 : dans (
   A0 = 0;
   A1 = 1;
   A2 = 2;
@@ -317,19 +327,19 @@ cible test_tab:
 application: iliad;
 variables_temporaires: A0, A1, A2, AA tableau [5], A3, A4, A5, A6, R;
 afficher_erreur "entree test_tab\n" indenter(2);
-iterer : variable I : 0..4 increment 1 : dans (
+iterer : variable I : entre 0..4 increment 1 : dans (
   AA[I] = 1000 + I;
 )
 afficher_erreur nom(AA) "[-2] = " (AA[-2]) "\n";
-iterer : variable I : 0..4 increment 1 : dans (
+iterer : variable I : entre 0..4 increment 1 : dans (
   afficher_erreur nom(AA) "[" (I) "] = " (AA[I]) "\n";
 )
 afficher_erreur nom(AA) "[7] = " (AA[7]) "\n";
-iterer : variable I : 0..4 increment 1 : dans (
+iterer : variable I : entre 0..4 increment 1 : dans (
   TUTU[I] = 1000 + I;
 )
 afficher_erreur nom(TUTU) "[-2] = " (TUTU[-2]) "\n";
-iterer : variable I : 0..4 increment 1 : dans (
+iterer : variable I : entre 0..4 increment 1 : dans (
   afficher_erreur nom(TUTU) "[" (I) "] = " (TUTU[I]) "\n";
 )
 afficher_erreur nom(TUTU) "[7] = " (TUTU[7]) "\n";

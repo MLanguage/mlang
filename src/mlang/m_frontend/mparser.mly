@@ -53,7 +53,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token COMPUTE VERIFY WITH VERIF_NUMBER COMPL_NUMBER NB_CATEGORY
 %token NB_ANOMALIES NB_DISCORDANCES NB_INFORMATIVES NB_BLOCKING
 %token RAISE_ERROR EXPORT_ERRORS CLEAN_ERRORS FINALIZE_ERRORS
-%token ITERATE CATEGORY RESTORE AFTER
+%token ITERATE CATEGORY RESTORE AFTER BETWEEN
 %token ERROR ANOMALY DISCORDANCE
 %token INFORMATIVE OUTPUT FONCTION VARIABLE ATTRIBUT
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
@@ -798,7 +798,7 @@ instruction:
     | _ ->
         let var_list, var_cats =
           let fold (var_list, var_cats) = function
-          | Pos.Mark (`VarList vl, _) -> (List.rev vl) @ var_list, var_cats
+          | Pos.Mark (`VarList al, _) -> (List.rev al) @ var_list, var_cats
           | Pos.Mark (`VarCatsIt vc, _) -> var_list, vc :: var_cats
           | Pos.Mark (`VarInterval _, pos) ->
               Errors.raise_spanned_error "interval forbidden in variable iteration" pos
@@ -977,11 +977,8 @@ print_precision:
     }
 
 it_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
-    let vl =
-      List.map (fun vn -> Pos.same (Com.Normal (Pos.unmark vn)) vn) vars
-    in
-    `VarList vl
+| al = separated_nonempty_list(COMMA, with_pos(var_access)) COLON {
+    `VarList al
   }
 | CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
   COLON expr_opt = it_param_with_expr? {
@@ -999,7 +996,7 @@ it_param:
     in
     `VarCatsIt (vcats, expr)
   }
-| expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
+| BETWEEN expr0 = with_pos(expression) RANGE expr1 = with_pos(expression)
   STEP step = with_pos(expression) COLON {
     `VarInterval (expr0, expr1, step)
   }

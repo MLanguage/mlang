@@ -384,7 +384,7 @@ type ('v, 'e) instruction =
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
       'v
-      * 'v list
+      * 'v m_access list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Iterate_values of

@@ -618,7 +618,7 @@ type ('v, 'e) instruction =
   | Print of print_std * 'v print_arg Pos.marked list
   | Iterate of
       'v
-      * 'v list
+      * 'v m_access list
       * (Pos.t CatVar.Map.t * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Iterate_values of
@@ -802,15 +802,15 @@ and instr_map_var f g = function
   | Print (pr_std, pr_args) ->
       let pr_args' = List.map (Pos.map (print_arg_map_var f)) pr_args in
       Print (pr_std, pr_args')
-  | Iterate (v, vl, cvml, m_il) ->
+  | Iterate (v, al, cvml, m_il) ->
       let v' = f v in
-      let vl' = List.map f vl in
+      let al' = List.map (m_access_map_var f) al in
       let cvml' =
         let map (cvm, m_e) = (cvm, m_expr_map_var f m_e) in
         List.map map cvml
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
-      Iterate (v', vl', cvml', m_il')
+      Iterate (v', al', cvml', m_il')
   | Iterate_values (v, e3l, m_il) ->
       let v' = f v in
       let e3l' =
@@ -981,7 +981,6 @@ and formula_fold_var f fm acc =
       acc |> formula_loop_fold_var f fl |> formula_decl_fold_var f fd
 
 and instr_fold_var f instr acc =
-  let listFoldF usage v acc = f usage None (Some v) acc in
   match instr with
   | Affectation m_f -> formula_fold_var f (Pos.unmark m_f) acc
   | IfThenElse (m_e0, m_il0, m_il1) ->
@@ -1001,9 +1000,9 @@ and instr_fold_var f instr acc =
       fold_list (m_access_fold_var ArgRef f) args acc
   | VerifBlock m_il0 -> fold_list (m_instr_fold_var f) m_il0 acc
   | Print (_, pr_args) -> fold_list (m_print_arg_fold_var f) pr_args acc
-  | Iterate (v, vl, cvml, m_il) ->
+  | Iterate (v, al, cvml, m_il) ->
       acc |> f DeclRef None (Some v)
-      |> fold_list (listFoldF ArgRef) vl
+      |> fold_list (m_access_fold_var ArgRef f) al
       |> (let fold (_, m_e) accu = m_expr_fold_var f m_e accu in
           fold_list fold cvml)
       |> fold_list (m_instr_fold_var f) m_il
@@ -1369,19 +1368,25 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "%s %a;" print_cmd
           (Pp.list_space (Pp.unmark (format_print_arg form_var)))
           args
-    | Iterate (var, vars, var_params, itb) ->
+    | Iterate (var, al, var_params, itb) ->
+        let form_alist fmt = function
+          | [] -> ()
+          | al ->
+              let form = Pp.list_comma @@ Pp.unmark form_access in
+              Format.fprintf fmt "@;: %a" form al
+        in
         let format_var_param fmt (vcs, expr) =
           Format.fprintf fmt ": categorie %a : avec %a@\n"
             (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
         in
         Format.fprintf fmt "iterate variable %a@;: %a@;: %a@;: dans (" form_var
-          var (Pp.list_comma form_var) vars
+          var form_alist al
           (Pp.list_space format_var_param)
           var_params;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
     | Iterate_values (var, var_intervals, itb) ->
         let format_var_intervals fmt (e0, e1, step) =
-          Format.fprintf fmt ": %a .. %a increment %a@\n" form_expr
+          Format.fprintf fmt ": entre %a .. %a increment %a@\n" form_expr
             (Pos.unmark e0) form_expr (Pos.unmark e1) form_expr
             (Pos.unmark step)
         in

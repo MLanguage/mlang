@@ -543,6 +543,7 @@ typedef struct S_irdata T_irdata;
 #define DR_(idx) (irdata->refs[irdata->refs_org + (idx)].def)
 #define R_(idx) (irdata->refs[irdata->refs_org + (idx)].val)
 #define NR_(idx) (irdata->refs[irdata->refs_org + (idx)].name)
+#define SR_(idx) (irdata->refs[irdata->refs_org + (idx)].var_space)
 #define IR_(idx) (irdata->refs[irdata->refs_org + (idx)].info)
 
 extern T_event *event(T_irdata *irdata, char idx_def, double idx_val);

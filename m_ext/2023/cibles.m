@@ -783,7 +783,7 @@ afficher_erreur "truc\n" indenter(2);
 TOTO = 1;
 iterer
 : variable I
-: A0 .. A1 increment 1
+: entre A0 .. A1 increment 1
 : dans (
   si I = A0 alors
     RES = 1;
@@ -801,13 +801,13 @@ variables_temporaires: TOTO;
 TOTO = 0;
 iterer
 : variable I
-: I0 .. I1 increment 0.7
-: 2 .. 1 increment -1
+: entre I0 .. I1 increment 0.7
+: entre 2 .. 1 increment -1
 : dans (
   iterer
   : variable J
-  : -3 .. -1 increment 1
-  : 1 .. 0 increment -1
+  : entre -3 .. -1 increment 1
+  : entre 1 .. 0 increment -1
   : dans (
     afficher_erreur nom(I) " = " (I) ", " nom(J) " = " (J) "\n";
   )
@@ -849,7 +849,7 @@ cible afficher_evenements:
 application: iliad;
 iterer
 : variable I
-: 0 .. (nb_evenements() - 1) increment 1
+: entre 0 .. (nb_evenements() - 1) increment 1
 : dans (
   calculer cible afficher_evenement : avec I;
   afficher_erreur "\n";
@@ -901,7 +901,7 @@ arranger_evenements
   afficher_erreur "0: ";
   calculer cible afficher_evenement : avec EVT;
   afficher_erreur "\n";
-  iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+  iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
     si inf(champ_evenement(I, rappel) % 2) = 0 alors
       afficher_erreur "0: ";
       calculer cible afficher_evenement : avec I;
@@ -917,7 +917,7 @@ arranger_evenements
     afficher_erreur "1: ";
     calculer cible afficher_evenement : avec EVT;
     afficher_erreur "\n";
-    iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+    iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
       si inf(champ_evenement(I, rappel) % 2) = 0 alors
         champ_evenement(I, montant) = 111111.111111;
         afficher_erreur "1: ";
@@ -930,7 +930,7 @@ arranger_evenements
   afficher_erreur "2: ";
   calculer cible afficher_evenement : avec EVT;
   afficher_erreur "\n";
-  iterer : variable I : 0 .. nb_evenements() increment 1 : dans (
+  iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
     si inf(champ_evenement(I, rappel) % 2) = 0 alors
       afficher_erreur "2: ";
       calculer cible afficher_evenement : avec I;
@@ -975,21 +975,21 @@ variables_temporaires: TOTO tableau[TAILLE_TOTO], NB;
 NB = TAILLE_TOTO - 1;
 afficher_erreur "test_tableaux\n" indenter(2);
 TOTO[0] = 1;
-iterer : variable I : 1..NB increment 1 : dans (
+iterer : variable I : entre 1..NB increment 1 : dans (
   TOTO[I] = 1 + TOTO[I - 1];
 )
-iterer : variable I : 0..NB increment 1 : dans (
+iterer : variable I : entre 0..NB increment 1 : dans (
   afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
 )
 afficher_erreur "\n";
 restaurer : TOTO : apres (
-  iterer : variable I : 0..NB increment 1 : dans (
+  iterer : variable I : entre 0..NB increment 1 : dans (
     TOTO[I] = indefini;
     afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
   )
 )
 afficher_erreur "\n";
-iterer : variable I : 0..NB increment 1 : dans (
+iterer : variable I : entre 0..NB increment 1 : dans (
   afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
 )
 afficher_erreur indenter(-2) "test_tableaux\n\n";

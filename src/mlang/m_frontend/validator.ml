@@ -284,14 +284,6 @@ module Err = struct
     let msg = Format.sprintf "variable with forbidden category in verif" in
     Errors.raise_spanned_error msg pos
 
-  let variable_already_specified name old_pos pos =
-    let msg =
-      Format.asprintf
-        "variable \"%s\" specified more than once: already specified %a" name
-        Pos.format old_pos
-    in
-    Errors.raise_spanned_error msg pos
-
   let main_target_not_found main_target =
     Errors.raise_error
       (Format.sprintf "main target \"%s\" not found" main_target)
@@ -1762,7 +1754,7 @@ let rec check_instructions (env : var_env)
             in
             let instr' = Com.Print (std, args') in
             aux (env, Pos.mark instr' instr_pos :: res) il
-        | Com.Iterate (var, vars, var_params, instrs) ->
+        | Com.Iterate (var, al, var_params, instrs) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             let m_name = check_it_var env var in
@@ -1771,21 +1763,7 @@ let rec check_instructions (env : var_env)
               add_var_env v env
             in
             let var' = map_var env' var in
-            let vars' =
-              let fold (vars', seen) var =
-                let var_pos = Pos.get var in
-                let var_name = Com.get_normal_var (Pos.unmark var) in
-                check_variable None var Num env;
-                match StrMap.find_opt var_name seen with
-                | None ->
-                    let vars' = map_var env var :: vars' in
-                    let seen = StrMap.add var_name var_pos seen in
-                    (vars', seen)
-                | Some old_pos ->
-                    Err.variable_already_specified var_name old_pos var_pos
-              in
-              List.rev @@ fst @@ List.fold_left fold ([], StrMap.empty) vars
-            in
+            let al' = List.map (check_m_access ~onlyVar:true Num env) al in
             let var_params' =
               List.map
                 (fun (vcats, expr) ->
@@ -1795,7 +1773,7 @@ let rec check_instructions (env : var_env)
             in
             let prog, instrs' = check_instructions env' instrs in
             let env = { env with prog } in
-            let instr' = Com.Iterate (var', vars', var_params', instrs') in
+            let instr' = Com.Iterate (var', al', var_params', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Iterate_values (var, var_intervals, instrs) ->
             let m_name = check_it_var env var in
