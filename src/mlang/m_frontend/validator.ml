@@ -1526,12 +1526,12 @@ let rec check_instructions (env : var_env)
             CallMap.add cc (called_map, cc_pos) env.prog.prog_call_map)
     | _ -> env.prog.prog_call_map
   in
-  let check_m_access ~onlyVar env m_a =
+  let check_m_access ~onlyVar mem_var env m_a =
     let access, apos = Pos.to_couple m_a in
     match access with
     | Com.VarAccess (m_sp_opt, m_v) ->
         check_var_space m_sp_opt env;
-        check_variable m_sp_opt m_v Num env;
+        check_variable m_sp_opt m_v mem_var env;
         let m_v' = map_var env m_v in
         Pos.mark (Com.VarAccess (m_sp_opt, m_v')) apos
     | Com.TabAccess (m_sp_opt, m_v, m_i) ->
@@ -1567,7 +1567,7 @@ let rec check_instructions (env : var_env)
         | Com.Affectation (Pos.Mark (f, fpos)) -> (
             match f with
             | Com.SingleFormula (VarDecl (m_a, e)) ->
-                let m_a' = check_m_access ~onlyVar:false env m_a in
+                let m_a' = check_m_access ~onlyVar:false Num env m_a in
                 let e' = map_expr env e in
                 let f' = Com.SingleFormula (VarDecl (m_a', e')) in
                 let instr' = Com.Affectation (Pos.mark f' fpos) in
@@ -1700,7 +1700,9 @@ let rec check_instructions (env : var_env)
             in
             let prog = { env.prog with prog_call_map } in
             let env = { env with prog } in
-            let targs' = List.map (check_m_access ~onlyVar:true env) targs in
+            let targs' =
+              List.map (check_m_access ~onlyVar:true Num env) targs
+            in
             let instr' =
               Com.ComputeTarget (Pos.mark tn tpos, targs', m_sp_opt)
             in
@@ -1809,24 +1811,10 @@ let rec check_instructions (env : var_env)
             let env = { env with prog } in
             let instr' = Com.Iterate_values (var', var_intervals', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
-        | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
+        | Com.Restore (al, var_params, evts, evtfs, instrs) ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
-            let vars' =
-              let fold (vars', seen) var =
-                let var_pos = Pos.get var in
-                let var_name = Com.get_normal_var (Pos.unmark var) in
-                check_variable None var Both env;
-                match StrMap.find_opt var_name seen with
-                | None ->
-                    let vars' = map_var env var :: vars' in
-                    let seen = StrMap.add var_name var_pos seen in
-                    (vars', seen)
-                | Some old_pos ->
-                    Err.variable_already_specified var_name old_pos var_pos
-              in
-              List.rev @@ fst @@ List.fold_left fold ([], StrMap.empty) vars
-            in
+            let al' = List.map (check_m_access ~onlyVar:true Both env) al in
             let env, var_params' =
               let fold (env, var_params') (var, vcats, expr) =
                 let m_name = check_it_var env var in
@@ -1864,7 +1852,7 @@ let rec check_instructions (env : var_env)
             let prog, instrs' = check_instructions env instrs in
             let env = { env with prog } in
             let instr' =
-              Com.Restore (vars', var_params', evts', evtfs', instrs')
+              Com.Restore (al', var_params', evts', evtfs', instrs')
             in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.ArrangeEvents (sort, filter, add, instrs) ->

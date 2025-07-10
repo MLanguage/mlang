@@ -348,7 +348,7 @@ type print_info = Name | Alias
 
 type 'v print_arg =
   | PrintString of string
-  | PrintAccess of print_info * 'v access Pos.marked
+  | PrintAccess of print_info * 'v m_access
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
@@ -392,7 +392,7 @@ type ('v, 'e) instruction =
       * ('v m_expression * 'v m_expression * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
-      'v list
+      'v m_access list
       * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
       * ('v * 'v m_expression) list

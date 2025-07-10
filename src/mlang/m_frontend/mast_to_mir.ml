@@ -353,7 +353,19 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
               (max nbA nb, max szA sz, max nbRefA nbRef, tdata)
           | SingleFormula (EventFieldRef (mei, _, _, _)) -> aux_expr tdata mei
           | MultipleFormulaes _ -> assert false)
-      | Com.ComputeTarget (tn, _, _) -> aux_call tdata (Pos.unmark tn)
+      | Com.ComputeTarget (tn, al, _) ->
+          let nbA, szA, nbRefA, tdata =
+            let fold (nb, sz, nbRef, tdata) m_a =
+              let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
+              let nb = max nb nbA in
+              let sz = max sz szA in
+              let nbRef = max nbRef nbRefA in
+              (nb, sz, nbRef, tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) al
+          in
+          let nbC, szC, nbRefC, tdata = aux_call tdata (Pos.unmark tn) in
+          (max nbA nbC, max szA szC, max nbRefA nbRefC, tdata)
       | Com.IfThenElse (meI, ilT, ilE) ->
           let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
           let nbT, szT, nbRefT, tdata = aux_instrs tdata ilT in
@@ -425,33 +437,45 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let sz = 1 + max sz sz' in
           let nbRef = max nbRef nbRef' in
           (nb, sz, nbRef, tdata)
-      | Com.Restore (_, var_params, evts, evtfs, instrs) ->
-          let nb', sz', nbRef', tdata =
+      | Com.Restore (al, var_params, evts, evtfs, instrs) ->
+          let nb0, sz0, nbRef0, tdata =
+            let fold (nb, sz, nbRef, tdata) m_a =
+              let nbA, szA, nbRefA, tdata = aux_access tdata m_a in
+              let nb = max nb nbA in
+              let sz = max sz szA in
+              let nbRef = max nbRef nbRefA in
+              (nb, sz, nbRef, tdata)
+            in
+            List.fold_left fold (0, 0, 0, tdata) al
+          in
+          let nb1, sz1, nbRef1, tdata =
             let fold (nb, sz, nbRef, tdata) (_, _, me) =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+              let nbE, szE, nbRefE, tdata = aux_expr tdata me in
+              (max nb nbE, max sz szE, max nbRef nbRefE, tdata)
             in
             List.fold_left fold (0, 0, 0, tdata) var_params
           in
-          let nb'', sz'', nbRef'', tdata =
+          let nb2, sz2, nbRef2, tdata =
             let fold (nb, sz, nbRef, tdata) me =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+              let nbE, szE, nbRefE, tdata = aux_expr tdata me in
+              (max nb nbE, max sz szE, max nbRef nbRefE, tdata)
             in
             List.fold_left fold (0, 0, 0, tdata) evts
           in
-          let nb''', sz''', nbRef''', tdata =
+          let nb3, sz3, nbRef3, tdata =
             let fold (nb, sz, nbRef, tdata) (_, me) =
-              let nb', sz', nbRef', tdata = aux_expr tdata me in
-              (max nb nb', max sz sz', max nbRef nbRef', tdata)
+              let nbE, szE, nbRefE, tdata = aux_expr tdata me in
+              (max nb nbE, max sz szE, max nbRef nbRefE, tdata)
             in
             List.fold_left fold (0, 0, 0, tdata) evtfs
           in
-          let nb, sz, nbRef, tdata = aux_instrs tdata instrs in
-          let nb = max nb @@ max nb' @@ max nb'' nb''' in
-          let sz = max sz @@ max sz' @@ max sz'' sz''' in
+          let nb4, sz4, nbRef4, tdata = aux_instrs tdata instrs in
+          let nb = max nb0 @@ max nb1 @@ max nb2 @@ max nb3 nb4 in
+          let sz = max sz0 @@ max sz1 @@ max sz2 @@ max sz3 sz4 in
           (* ??? *)
-          let nbRef = 1 + (max nbRef @@ max nbRef' @@ max nbRef'' nbRef''') in
+          let nbRef =
+            1 + (max nbRef0 @@ max nbRef1 @@ max nbRef2 @@ max nbRef3 nbRef4)
+          in
           (nb, sz, nbRef, tdata)
       | Com.ArrangeEvents (sort, filter, add, instrs) ->
           let n', (nb', sz', nbRef', tdata) =
@@ -832,9 +856,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         in
         let instr = Com.Iterate_values (var, var_intervals', prog_it) in
         aux (Pos.mark instr pos :: res, dict) il
-    | Pos.Mark (Com.Restore (vars, var_params, evts, evtfs, instrs), pos) :: il
-      ->
-        let vars' = List.map (get_var dict) vars in
+    | Pos.Mark (Com.Restore (al, var_params, evts, evtfs, instrs), pos) :: il ->
+        let al' = List.map (Pos.map (translate_access p dict)) al in
         let var_params', dict =
           let var_params', dict =
             List.fold_left
@@ -864,9 +887,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let prog_rest, dict =
           translate_prog p dict it_depth itval_depth instrs
         in
-        let instr =
-          Com.Restore (vars', var_params', evts', evtfs', prog_rest)
-        in
+        let instr = Com.Restore (al', var_params', evts', evtfs', prog_rest) in
         aux (Pos.mark instr pos :: res, dict) il
     | Pos.Mark (Com.ArrangeEvents (sort, filter, add, instrs), pos) :: il ->
         let sort', itval_depth', dict =

@@ -809,18 +809,18 @@ instruction:
   }
 | RESTORE COLON rest_params = nonempty_list(rest_param)
   AFTER LPAREN instrs = instruction_list_rev RPAREN {
-    let var_list, var_cats, event_list, event_filter =
-      let fold (var_list, var_cats, event_list, event_filter) = function
-      | `VarList vl -> (List.rev vl) @ var_list, var_cats, event_list, event_filter
-      | `VarCatsRest vc -> var_list, vc @ var_cats, event_list, event_filter
-      | `EventList el -> var_list, var_cats, el @ event_list, event_filter
-      | `EventFilter ef -> var_list, var_cats, event_list, ef :: event_filter
+    let a_list, var_cats, event_list, event_filter =
+      let fold (a_list, var_cats, event_list, event_filter) = function
+      | `AccessList al -> (List.rev al) @ a_list, var_cats, event_list, event_filter
+      | `VarCatsRest vc -> a_list, vc @ var_cats, event_list, event_filter
+      | `EventList el -> a_list, var_cats, el @ event_list, event_filter
+      | `EventFilter ef -> a_list, var_cats, event_list, ef :: event_filter
       in
       List.fold_left fold ([], [], [], []) rest_params
     in
     Some (
       Restore (
-        List.rev var_list,
+        List.rev a_list,
         List.rev var_cats,
         List.rev event_list,
         List.rev event_filter,
@@ -1008,11 +1008,8 @@ it_param_with_expr:
 | WITH expr = with_pos(expression) COLON { expr }
 
 rest_param:
-| vars = separated_nonempty_list(COMMA, symbol_with_pos) COLON {
-    let vl =
-      List.map (fun vn -> Pos.same (Com.Normal (Pos.unmark vn)) vn) vars
-    in
-    `VarList vl
+| al = separated_nonempty_list(COMMA, with_pos(var_access)) COLON {
+    `AccessList al
   }
 | VARIABLE vn = symbol_with_pos COLON
   vparams = nonempty_list(rest_param_category) {

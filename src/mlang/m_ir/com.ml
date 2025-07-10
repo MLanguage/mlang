@@ -586,7 +586,7 @@ type print_info = Name | Alias
 
 type 'v print_arg =
   | PrintString of string
-  | PrintAccess of print_info * 'v access Pos.marked
+  | PrintAccess of print_info * 'v m_access
   | PrintIndent of 'v m_expression
   | PrintExpr of 'v m_expression * int * int
 
@@ -626,7 +626,7 @@ type ('v, 'e) instruction =
       * ('v m_expression * 'v m_expression * 'v m_expression) list
       * ('v, 'e) m_instruction list
   | Restore of
-      'v list
+      'v m_access list
       * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
       * 'v m_expression list
       * ('v * 'v m_expression) list
@@ -824,8 +824,8 @@ and instr_map_var f g = function
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
       Iterate_values (v', e3l', m_il')
-  | Restore (vl, cvml, el, vel, m_il) ->
-      let vl' = List.map f vl in
+  | Restore (al, cvml, el, vel, m_il) ->
+      let al' = List.map (m_access_map_var f) al in
       let cvml' =
         let map (v, cvm, m_e0) =
           let v' = f v in
@@ -844,7 +844,7 @@ and instr_map_var f g = function
         List.map map vel
       in
       let m_il' = List.map (m_instr_map_var f g) m_il in
-      Restore (vl', cvml', el', vel', m_il')
+      Restore (al', cvml', el', vel', m_il')
   | ArrangeEvents (vve_opt, ve_opt, e_opt, m_il) ->
       let vve_opt' =
         let map (v0, v1, m_e0) =
@@ -1015,9 +1015,9 @@ and instr_fold_var f instr acc =
           in
           fold_list fold e3l)
       |> fold_list (m_instr_fold_var f) m_il
-  | Restore (vl, cvml, el, vel, m_il) ->
+  | Restore (al, cvml, el, vel, m_il) ->
       acc
-      |> fold_list (listFoldF ArgRef) vl
+      |> fold_list (m_access_fold_var ArgRef f) al
       |> (let fold (v, _, m_e0) accu =
             accu |> f DeclRef None (Some v) |> m_expr_fold_var f m_e0
           in
@@ -1283,6 +1283,7 @@ let format_formula form_var fmt f =
 
 let rec format_instruction form_var form_err =
   let form_expr = format_expression form_var in
+  let form_access = format_access form_var form_expr in
   let form_instrs = format_instructions form_var form_err in
   fun fmt instr ->
     match instr with
@@ -1388,12 +1389,12 @@ let rec format_instruction form_var form_err =
           (Pp.list_space format_var_intervals)
           var_intervals;
         Format.fprintf fmt "@[<h 2>  %a@]@\n)@\n" form_instrs itb
-    | Restore (vars, var_params, evts, evtfs, rb) ->
-        let format_vars fmt = function
+    | Restore (al, var_params, evts, evtfs, rb) ->
+        let form_alist fmt = function
           | [] -> ()
-          | vars ->
-              Format.fprintf fmt "@;: variables %a" (Pp.list_comma form_var)
-                vars
+          | al ->
+              let form = Pp.list_comma @@ Pp.unmark form_access in
+              Format.fprintf fmt "@;: variables %a" form al
         in
         let format_var_param fmt (var, vcs, expr) =
           Format.fprintf fmt "@;: variable %a : categorie %a : avec %a" form_var
@@ -1419,7 +1420,7 @@ let rec format_instruction form_var form_err =
                     (Pp.unmark form_expr) e)
                 evtfs
         in
-        Format.fprintf fmt "restaure%a%a%a%a@;: apres (" format_vars vars
+        Format.fprintf fmt "restaure%a%a%a%a@;: apres (" form_alist al
           format_var_params var_params format_evts evts format_evtfs evtfs;
         Format.fprintf fmt "@[<h 2>  %a@]@;)@;" form_instrs rb
     | ArrangeEvents (s, f, a, itb) ->

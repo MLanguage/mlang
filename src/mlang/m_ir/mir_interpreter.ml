@@ -910,27 +910,28 @@ struct
                 | Undefined -> ())
             | Undefined -> ())
           var_intervals
-    | Com.Restore (vars, var_params, evts, evtfs, stmts) ->
+    | Com.Restore (al, var_params, evts, evtfs, stmts) ->
         let vsd_def = get_var_space ctx in
-        let backup backup_vars (vsd, var) =
-          let vsd, var, vorg = get_var ctx vsd var in
-          if Com.Var.is_table var then
-            let sz = Com.Var.size var in
-            let rec loop backup_vars i =
-              if i = sz then backup_vars
+        let backup backup_vars access =
+          match get_access_var ctx access with
+          | Some (vsd, var) ->
+              let vsd, var, vorg = get_var ctx vsd var in
+              if Com.Var.is_table var then
+                let sz = Com.Var.size var in
+                let rec loop backup_vars i =
+                  if i = sz then backup_vars
+                  else
+                    let v = get_var_tab ctx vsd var i in
+                    let value = get_var_value_org ctx vsd v vorg in
+                    loop ((vsd, v, vorg, value) :: backup_vars) (i + 1)
+                in
+                loop backup_vars 0
               else
-                let v = get_var_tab ctx vsd var i in
-                let value = get_var_value_org ctx vsd v vorg in
-                loop ((vsd, v, vorg, value) :: backup_vars) (i + 1)
-            in
-            loop backup_vars 0
-          else
-            let value = get_var_value ctx vsd var in
-            (vsd, var, vorg, value) :: backup_vars
+                let value = get_var_value ctx vsd var in
+                (vsd, var, vorg, value) :: backup_vars
+          | None -> backup_vars
         in
-        let backup_vars =
-          List.fold_left backup [] (List.map (fun v -> (vsd_def, v)) vars)
-        in
+        let backup_vars = List.fold_left backup [] (List.map Pos.unmark al) in
         let backup_vars =
           List.fold_left
             (fun backup_vars ((var : Com.Var.t), vcs, expr) ->
@@ -944,7 +945,9 @@ struct
                         set_var_ref ctx var vsd v' org;
                         match evaluate_expr ctx expr with
                         | Number z when N.(z =. one ()) ->
-                            backup backup_vars (vsd, v)
+                            let dummy_name = Pos.without (Com.Normal "") in
+                            let m_sp_opt = Some (dummy_name, vsd.vs_id) in
+                            backup backup_vars (Com.VarAccess (m_sp_opt, v))
                         | _ -> backup_vars)
                       else backup_vars)
                     ctx.ctx_prog.program_vars backup_vars)

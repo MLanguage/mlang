@@ -24,6 +24,14 @@ V_ARG : saisie contexte
   alias ARG
   : "argument";
 
+V_CODE : saisie contexte
+  classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 0
+  restituee
+  alias CODE
+  : "argument code";
+
+V_TAB : tableau[5] calculee base primrest = 0 : "argument tableau";
+
 RESULTAT : calculee primrest = 0 restituee : "resultat du traitement" ;
 TOTO01 : calculee primrest = 0 restituee : "" ;
 TOTO02 : calculee primrest = 0 restituee : "" ;
@@ -135,6 +143,39 @@ afficher_erreur
 afficher_erreur "cible_sp_args sans exec ?\n";
 calculer cible cible_sp_args : avec TUTU[-2], TMP;
 afficher_erreur "cible_sp_args sans exec !\n";
+V_ARG = 12;
+ESP.V_ARG = 13;
+V_TAB[2] = 14;
+ESP.V_TAB[2] = 15;
+V_CODE = 16;
+champ_evenement(3, code) reference V_CODE;
+afficher_erreur
+  nom(V_ARG) " = " (V_ARG) ", " 
+  nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
+  nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
+  nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
+  nom(V_CODE) " = " (V_CODE) "\n";
+restaurer
+: V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code)
+: apres (
+  V_ARG = 100012;
+  ESP.V_ARG = 100013;
+  V_TAB[2] = 100014;
+  ESP.V_TAB[2] = 100015;
+  champ_evenement(3, code) = 100016;
+  afficher_erreur
+    nom(V_ARG) " = " (V_ARG) ", " 
+    nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
+    nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
+    nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
+    nom(V_CODE) " = " (V_CODE) "\n";
+)
+afficher_erreur
+  nom(V_ARG) " = " (V_ARG) ", " 
+  nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
+  nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
+  nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
+  nom(V_CODE) " = " (V_CODE) "\n";
 afficher_erreur indenter(-2) "sortie test_cible_avec_args\n";
 
 fonction toto_fonction:
