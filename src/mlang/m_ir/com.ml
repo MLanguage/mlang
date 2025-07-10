@@ -627,7 +627,7 @@ type ('v, 'e) instruction =
       * ('v, 'e) m_instruction list
   | Restore of
       'v m_access list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression * var_space) list
       * 'v m_expression list
       * ('v * 'v m_expression) list
       * ('v, 'e) m_instruction list
@@ -827,10 +827,10 @@ and instr_map_var f g = function
   | Restore (al, cvml, el, vel, m_il) ->
       let al' = List.map (m_access_map_var f) al in
       let cvml' =
-        let map (v, cvm, m_e0) =
+        let map (v, cvm, m_e0, m_sp_opt) =
           let v' = f v in
           let m_e0' = m_expr_map_var f m_e0 in
-          (v', cvm, m_e0')
+          (v', cvm, m_e0', m_sp_opt)
         in
         List.map map cvml
       in
@@ -998,7 +998,7 @@ and instr_fold_var f instr acc =
   | ComputeChaining _ -> acc
   | ComputeVerifs (_, m_e0, _) -> m_expr_fold_var f m_e0 acc
   | ComputeTarget (_, args, _) ->
-      fold_list (m_access_fold_var DeclRef f) args acc
+      fold_list (m_access_fold_var ArgRef f) args acc
   | VerifBlock m_il0 -> fold_list (m_instr_fold_var f) m_il0 acc
   | Print (_, pr_args) -> fold_list (m_print_arg_fold_var f) pr_args acc
   | Iterate (v, vl, cvml, m_il) ->
@@ -1018,13 +1018,13 @@ and instr_fold_var f instr acc =
   | Restore (al, cvml, el, vel, m_il) ->
       acc
       |> fold_list (m_access_fold_var ArgRef f) al
-      |> (let fold (v, _, m_e0) accu =
-            accu |> f DeclRef None (Some v) |> m_expr_fold_var f m_e0
+      |> (let fold (v, _, m_e0, m_sp_opt) accu =
+            accu |> f DeclRef m_sp_opt (Some v) |> m_expr_fold_var f m_e0
           in
           fold_list fold cvml)
       |> fold_list (m_expr_fold_var f) el
       |> (let fold (v, m_e0) accu =
-            accu |> f DeclRef None (Some v) |> m_expr_fold_var f m_e0
+            accu |> f DeclLocal None (Some v) |> m_expr_fold_var f m_e0
           in
           fold_list fold vel)
       |> fold_list (m_instr_fold_var f) m_il
@@ -1396,9 +1396,15 @@ let rec format_instruction form_var form_err =
               let form = Pp.list_comma @@ Pp.unmark form_access in
               Format.fprintf fmt "@;: variables %a" form al
         in
-        let format_var_param fmt (var, vcs, expr) =
-          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a" form_var
-            var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
+        let format_var_param fmt (var, vcs, expr, m_sp_opt) =
+          let sp_str =
+            match m_sp_opt with
+            | None -> ""
+            | Some (m_sp, _) -> " : espace " ^ get_var_name (Pos.unmark m_sp)
+          in
+          Format.fprintf fmt "@;: variable %a : categorie %a : avec %a%s"
+            form_var var (CatVar.Map.pp_keys ()) vcs form_expr (Pos.unmark expr)
+            sp_str
         in
         let format_var_params fmt = function
           | [] -> ()

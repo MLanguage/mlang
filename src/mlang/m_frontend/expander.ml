@@ -815,9 +815,9 @@ let rec expand_instruction (const_map : const_context)
   | Com.Restore (vars, var_params, evts, evtfs, instrs) ->
       let var_params' =
         List.map
-          (fun (v, c, e) ->
+          (fun (v, c, e, s) ->
             let e' = expand_expression const_map ParamsMap.empty e in
-            (v, c, e'))
+            (v, c, e', s))
           var_params
       in
       let evts' = List.map (expand_expression const_map ParamsMap.empty) evts in

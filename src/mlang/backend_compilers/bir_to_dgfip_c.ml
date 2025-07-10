@@ -1254,8 +1254,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
               pr "@;lis_varinfo_def_ptr(irdata, %s, info)," space_ptr;
               pr "@;lis_varinfo_val_ptr(irdata, %s, info)," space_ptr;
               pr "@;1";
-              pr "@]@;@[<v 2>);";
-              pr "@]@;@[<v 2>}";
+              pr "@]@;);";
+              pr "@]@;}";
               pr "@]@;}"
           | Com.FieldAccess (m_sp_opt, e, Pos.Mark (f, _), _) ->
               pr "@;@[<v 2>{";
@@ -1273,24 +1273,22 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
               pr "@;lis_varinfo_def_ptr(irdata, %s, info)," space_ptr;
               pr "@;lis_varinfo_val_ptr(irdata, %s, info)," space_ptr;
               pr "@;1";
-              pr "@]@;@[<v 2>);";
-              pr "@]@;@[<v 2>}";
+              pr "@]@;);";
+              pr "@]@;}";
               pr "@]@;}")
         al;
       List.iter
-        (fun (var, vcs, expr) ->
+        (fun (var, vcs, expr, m_sp_opt) ->
           let it_name = fresh_c_local "iterate" in
           Com.CatVar.Map.iter
             (fun vc _ ->
               let vcd = Com.CatVar.Map.find vc p.program_var_categories in
-              let ref_sp = Pos.unmark p.program_var_space_def.vs_name in
+              let ref_sp = VID.gen_var_space_id_opt m_sp_opt in
               let ref_tab = VID.gen_tab vcd.loc in
               let ref_name = VID.gen_ref_name_ptr var in
               let ref_info = VID.gen_info_ptr var in
-              let ref_def = VID.gen_def_ptr None var in
-              (* !!! *)
-              let ref_val = VID.gen_val_ptr None var in
-              (* !!! *)
+              let ref_def = VID.gen_def_ptr m_sp_opt var in
+              let ref_val = VID.gen_val_ptr m_sp_opt var in
               let cond = fresh_c_local "cond" in
               let cond_def = cond ^ "_def" in
               let cond_val = cond ^ "_val" in
@@ -1302,15 +1300,13 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
               pr "@;@[<v 2>while (nb_%s < NB_%s) {" it_name vcd.id_str;
               pr "@;char %s;@;double %s;" cond_def cond_val;
               pr "@;%s = (T_varinfo *)tab_%s;" ref_info it_name;
-              pr "@;%s = &(irdata->def_%s_%s[%s->idx]);" ref_def ref_tab ref_sp
-                ref_info;
-              pr "@;%s = &(irdata->%s_%s[%s->idx]);" ref_val ref_tab ref_sp
-                ref_info;
+              pr "@;%s = &(irdata->var_spaces[%s].def_%s[%s->idx]);" ref_def
+                ref_sp ref_tab ref_info;
+              pr "@;%s = &(irdata->var_spaces[%s].%s[%s->idx]);" ref_val ref_sp
+                ref_tab ref_info;
               generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
               pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
-              pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name
-                (VID.gen_def_ptr None var) (* !!! *)
-                (VID.gen_val_ptr None var) (* !!! *)
+              pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name ref_def ref_val
                 (VID.gen_size var);
               pr "@]@;}";
               pr "@;tab_%s++;" it_name;

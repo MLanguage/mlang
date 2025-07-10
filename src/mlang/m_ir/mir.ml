@@ -302,7 +302,7 @@ let expand_functions (p : program) : program =
           Pos.same (Iterate_values (v_id, var_intervals', instrs')) m_instr
       | Restore (vars, var_params, evts, evtfs, instrs) ->
           let var_params' =
-            let map (v, cs, e) = (v, cs, expand_functions_expr e) in
+            let map (v, cs, e, s) = (v, cs, expand_functions_expr e, s) in
             List.map map var_params
           in
           let evts' = List.map expand_functions_expr evts in

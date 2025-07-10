@@ -381,6 +381,12 @@ module Err = struct
       Pp.spr "variable \"%s\" does not belong to space \"%s\"" var_name sp_name
     in
     Errors.raise_spanned_error msg pos
+
+  let category_forbidden_with_space cat_pos sp_name =
+    let msg =
+      Pp.spr "variable category forbidden with variable space \"%s\"" sp_name
+    in
+    Errors.raise_spanned_error msg cat_pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1816,9 +1822,25 @@ let rec check_instructions (env : var_env)
               Err.insruction_forbidden_in_rules instr_pos;
             let al' = List.map (check_m_access ~onlyVar:true Both env) al in
             let env, var_params' =
-              let fold (env, var_params') (var, vcats, expr) =
+              let fold (env, var_params') (var, vcats, expr, m_sp_opt) =
                 let m_name = check_it_var env var in
-                ignore (mast_to_catvars vcats env.prog.prog_var_cats);
+                let cats = mast_to_catvars vcats env.prog.prog_var_cats in
+                (match get_sp_opt m_sp_opt with
+                | None -> ()
+                | Some sp ->
+                    let vsd_id = StrMap.find sp env.prog.prog_var_spaces in
+                    let vsd = IntMap.find vsd_id env.prog.prog_var_spaces_idx in
+                    let iter cat cat_pos =
+                      let loc =
+                        (Com.CatVar.Map.find cat env.prog.prog_var_cats).loc
+                      in
+                      match Com.CatVar.LocMap.find_opt loc vsd.vs_cats with
+                      | Some _ -> ()
+                      | None ->
+                          Err.category_forbidden_with_space cat_pos
+                            (Pos.unmark vsd.vs_name)
+                    in
+                    Com.CatVar.Map.iter iter cats);
                 let env' =
                   let v = Com.Var.new_ref ~name:m_name in
                   add_var_env v env
@@ -1826,7 +1848,9 @@ let rec check_instructions (env : var_env)
                 let var' = map_var env' var in
                 let expr' = map_expr env' expr in
                 let env = { env with prog = env'.prog } in
-                let var_params' = (var', vcats, expr') :: var_params' in
+                let var_params' =
+                  (var', vcats, expr', m_sp_opt) :: var_params'
+                in
                 (env, var_params')
               in
               let env, var_params' = List.fold_left fold (env, []) var_params in

@@ -393,7 +393,7 @@ type ('v, 'e) instruction =
       * ('v, 'e) m_instruction list
   | Restore of
       'v m_access list
-      * ('v * Pos.t CatVar.Map.t * 'v m_expression) list
+      * ('v * Pos.t CatVar.Map.t * 'v m_expression * var_space) list
       * 'v m_expression list
       * ('v * 'v m_expression) list
       * ('v, 'e) m_instruction list

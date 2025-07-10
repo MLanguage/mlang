@@ -30,6 +30,12 @@ V_CODE : saisie contexte
   alias CODE
   : "argument code";
 
+V_BLA : saisie contexte
+  classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 10
+  restituee
+  alias BLA
+  : "bla";
+
 V_TAB : tableau[5] calculee base primrest = 0 : "argument tableau";
 
 RESULTAT : calculee primrest = 0 restituee : "resultat du traitement" ;
@@ -149,33 +155,45 @@ V_TAB[2] = 14;
 ESP.V_TAB[2] = 15;
 V_CODE = 16;
 champ_evenement(3, code) reference V_CODE;
+V_BLA = 17;
+ESP.V_BLA = 18;
 afficher_erreur
   nom(V_ARG) " = " (V_ARG) ", " 
   nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
   nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
   nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
-  nom(V_CODE) " = " (V_CODE) "\n";
+  nom(V_CODE) " = " (V_CODE) ", "
+  nom(V_BLA) " = " (V_BLA) ", "
+  nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 restaurer
 : V_ARG, ESP.V_ARG, V_TAB[2], ESP.V_TAB[2], champ_evenement(3, code)
+: variable V : categorie saisie contexte : avec attribut(V, primrest) = 10
+: variable V : categorie saisie contexte : avec attribut(V, primrest) = 10 : espace ESP
 : apres (
-  V_ARG = 100012;
-  ESP.V_ARG = 100013;
-  V_TAB[2] = 100014;
-  ESP.V_TAB[2] = 100015;
-  champ_evenement(3, code) = 100016;
+  V_ARG = 2;
+  ESP.V_ARG = 3;
+  V_TAB[2] = 4;
+  ESP.V_TAB[2] = 5;
+  champ_evenement(3, code) = 6;
+  V_BLA = 7;
+  ESP.V_BLA = 8;
   afficher_erreur
     nom(V_ARG) " = " (V_ARG) ", " 
     nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
     nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
     nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
-    nom(V_CODE) " = " (V_CODE) "\n";
+    nom(V_CODE) " = " (V_CODE) ", "
+    nom(V_BLA) " = " (V_BLA) ", "
+    nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 )
 afficher_erreur
   nom(V_ARG) " = " (V_ARG) ", " 
   nom(ESP.V_ARG) " = " (ESP.V_ARG) ", "
   nom(V_TAB[2]) " = " (V_TAB[2]) ", " 
   nom(ESP.V_TAB[2]) " = " (ESP.V_TAB[2]) ", "
-  nom(V_CODE) " = " (V_CODE) "\n";
+  nom(V_CODE) " = " (V_CODE) ", "
+  nom(V_BLA) " = " (V_BLA) ", "
+  nom(ESP.V_BLA) " = " (ESP.V_BLA) "\n";
 afficher_erreur indenter(-2) "sortie test_cible_avec_args\n";
 
 fonction toto_fonction:

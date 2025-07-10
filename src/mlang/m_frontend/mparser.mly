@@ -812,7 +812,7 @@ instruction:
     let a_list, var_cats, event_list, event_filter =
       let fold (a_list, var_cats, event_list, event_filter) = function
       | `AccessList al -> (List.rev al) @ a_list, var_cats, event_list, event_filter
-      | `VarCatsRest vc -> a_list, vc @ var_cats, event_list, event_filter
+      | `VarCatsRest vc -> a_list, vc :: var_cats, event_list, event_filter
       | `EventList el -> a_list, var_cats, el @ event_list, event_filter
       | `EventFilter ef -> a_list, var_cats, event_list, ef :: event_filter
       in
@@ -1011,11 +1011,41 @@ rest_param:
 | al = separated_nonempty_list(COMMA, with_pos(var_access)) COLON {
     `AccessList al
   }
-| VARIABLE vn = symbol_with_pos COLON
-  vparams = nonempty_list(rest_param_category) {
+| VARIABLE vn = symbol_with_pos
+  COLON params = nonempty_list(with_pos(rest_param_category)) {
     let var = Pos.same (Com.Normal (Pos.unmark vn)) vn in
-    let filters = List.map (fun (vcats, expr) -> (var, vcats, expr)) vparams in
-    `VarCatsRest filters
+    let err msg pos = Errors.raise_spanned_error msg pos in
+    let fold (co, eo, spo) = function
+    | Pos.Mark (`Vcats vcats, pos) -> (
+        match co with
+        | None -> Some vcats, eo, spo
+        | _ -> err "variable categories are already specified" pos
+      )
+    | Pos.Mark (`Expr m_e, pos) -> (
+        match eo with
+        | None -> co, Some m_e, spo
+        | _ -> err "expression is already specified" pos
+      )
+    | Pos.Mark (`Space m_sp, pos) -> (
+        match spo with
+        | None -> co, eo, Some m_sp
+        | _ -> err "variable space is already specified" pos
+      )
+    in
+    let init = None, None, None in
+    let co, eo, spo = List.fold_left fold init params in
+    let vcats =
+      match co with
+      | Some vcats -> vcats
+      | None -> err "categories must be specified for this variable" (Pos.get vn)
+    in
+    let expr =
+      match eo with
+      | Some expr -> expr
+      | None -> Pos.without (Com.Literal (Com.Float 1.0))
+    in
+    let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
+    `VarCatsRest (var, vcats, expr, m_sp_opt)
   }
 | EVENTS expr_list = separated_nonempty_list(COMMA, with_pos(expression)) COLON {
     `EventList expr_list
@@ -1026,8 +1056,7 @@ rest_param:
   }
 
 rest_param_category:
-| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id))
-  COLON expr_opt = rest_param_with_expr? {
+| CATEGORY vcat_list = separated_nonempty_list(COMMA, with_pos(var_category_id)) COLON {
     let vcats =
       let fold res vc =
         let vcm = Com.CatVar.Map.from_string_list vc in
@@ -1035,16 +1064,13 @@ rest_param_category:
       in
       List.fold_left fold Com.CatVar.Map.empty vcat_list
     in
-    let expr =
-      match expr_opt with
-      | Some expr -> expr
-      | None -> Pos.without (Com.Literal (Com.Float 1.0))
-    in
-    (vcats, expr)
+    `Vcats vcats
   }
-
-rest_param_with_expr:
-| WITH expr = with_pos(expression) COLON { expr }
+| WITH expr = with_pos(expression) COLON { `Expr expr }
+| SPACE sp = symbol_with_pos COLON {
+    let sp_name = Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
+    `Space sp_name
+  }
 
 arrange_events_param:
 | SORT v0 = symbol_with_pos COMMA v1 = symbol_with_pos

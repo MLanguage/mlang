@@ -449,7 +449,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
             List.fold_left fold (0, 0, 0, tdata) al
           in
           let nb1, sz1, nbRef1, tdata =
-            let fold (nb, sz, nbRef, tdata) (_, _, me) =
+            let fold (nb, sz, nbRef, tdata) (_, _, me, _) =
               let nbE, szE, nbRefE, tdata = aux_expr tdata me in
               (max nb nbE, max sz szE, max nbRef nbRefE, tdata)
             in
@@ -861,13 +861,21 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let var_params', dict =
           let var_params', dict =
             List.fold_left
-              (fun (res, dict) (m_id, vcats, expr) ->
+              (fun (res, dict) (m_id, vcats, expr, m_sp_opt) ->
                 let var = get_var dict m_id in
                 let var = Com.Var.set_loc_idx var it_depth in
                 let dict = IntMap.add var.id var dict in
                 let catSet = Validator.mast_to_catvars vcats p.prog_var_cats in
                 let mir_expr = translate_expression p dict expr in
-                ((var, catSet, mir_expr) :: res, dict))
+                let m_sp_opt' =
+                  Option.map
+                    (fun (m_sp, _) ->
+                      let sp_name = Com.get_normal_var @@ Pos.unmark m_sp in
+                      let i_sp = StrMap.find sp_name p.prog_var_spaces in
+                      (m_sp, i_sp))
+                    m_sp_opt
+                in
+                ((var, catSet, mir_expr, m_sp_opt') :: res, dict))
               ([], dict) var_params
           in
           (List.rev var_params', dict)

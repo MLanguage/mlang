@@ -934,13 +934,13 @@ struct
         let backup_vars = List.fold_left backup [] (List.map Pos.unmark al) in
         let backup_vars =
           List.fold_left
-            (fun backup_vars ((var : Com.Var.t), vcs, expr) ->
+            (fun backup_vars ((var : Com.Var.t), vcs, expr, m_sp_opt) ->
               Com.CatVar.Map.fold
                 (fun vc _ backup_vars ->
                   StrMap.fold
                     (fun _ v backup_vars ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                        let vsd = get_var_space_from ctx None in
+                        let vsd = get_var_space_from ctx m_sp_opt in
                         let vsd, v', org = get_var ctx vsd v in
                         set_var_ref ctx var vsd v' org;
                         match evaluate_expr ctx expr with
