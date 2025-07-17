@@ -36,7 +36,7 @@ let applications =
 let without_dgfip_m =
   Arg.(
     value & flag
-    & info [ "without_dfgip_m" ]
+    & info [ "without_dgfip_m" ]
         ~doc:"Don't parse M definitions of DGFiP idiosyncratic datas")
 
 let debug =
