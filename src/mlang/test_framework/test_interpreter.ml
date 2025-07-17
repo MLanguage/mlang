@@ -204,8 +204,7 @@ let check_test (program : Mir.program) (test_name : string)
   Cli.warning_flag := dbg_warning;
   Cli.display_time := dbg_time
 
-type process_acc = int StrMap.t
-(* Number of errors encounters in each file *)
+type process_acc = string list * int StrMap.t
 
 let check_all_tests (p : Mir.program) (test_dir : string)
     (value_sort : Cli.value_sort) (round_ops : Cli.round_ops)
@@ -226,7 +225,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Cli.warning_flag := false;
   Cli.display_time := false;
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
-  let process (name : string) (failures : process_acc) : process_acc =
+  let process (name : string) ((successes, failures) : process_acc) :
+      process_acc =
     let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
                            : Mir_interpreter.S)
     in
@@ -235,14 +235,14 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       check_test p (test_dir ^ name) value_sort round_ops;
       Cli.debug_flag := true;
       Cli.result_print "%s" name;
-      failures
+      (name :: successes, failures)
     with
-    | InterpError nbErr -> StrMap.add name nbErr failures
+    | InterpError nbErr -> (successes, StrMap.add name nbErr failures)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
-        failures
+        (successes, failures)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
         | Interp.StructuredError (msg, pos, kont) ->
@@ -271,9 +271,9 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Cli.display_time := dbg_time;
   Cli.result_print "Test results: %d successes" (List.length s);
 
-  let failing = StrMap.cardinal f in
-  if failing = 0 then Cli.result_print "No failures!"
+  if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
   else (
+    Cli.warning_print "Failures:";
     StrMap.iter
       (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
       f)
