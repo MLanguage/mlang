@@ -25,6 +25,7 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
   let oc, fmt = open_file (Pp.spr "varinfo_%d.c" id_int) in
   Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
+
 #include "mlang.h"
 
 |};
