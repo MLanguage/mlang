@@ -456,6 +456,8 @@ typedef struct S_ref_var T_ref_var;
 |};
   Pp.fpr fmt "#define NB_ESPACES_VARIABLES %d@\n@\n"
     (IntMap.cardinal cprog.program_var_spaces_idx);
+  Pp.fpr fmt "#define ESPACE_PAR_DEFAUT %d@\n@\n"
+    cprog.program_var_space_def.vs_id;
   Pp.fpr fmt
     {|
 struct S_irdata {
@@ -1423,7 +1425,7 @@ T_irdata *cree_irdata(void) {
         id sp;
       Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
     cprog.program_var_spaces_idx;
-  Pp.fpr fmt "  irdata->var_space = %d;\n" cprog.program_var_space_def.vs_id;
+  Pp.fpr fmt "  irdata->var_space = ESPACE_PAR_DEFAUT;\n";
   Pp.fpr fmt "%s"
     {|  irdata->tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
