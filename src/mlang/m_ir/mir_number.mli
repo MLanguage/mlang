@@ -59,6 +59,8 @@ module type NumberInterface = sig
 
   val ( *. ) : t -> t -> t
 
+  val ( %. ) : t -> t -> t
+
   val min : t -> t -> t
 
   val max : t -> t -> t
@@ -79,7 +81,7 @@ module IntervalNumber : NumberInterface
 module RationalNumber : NumberInterface
 
 module BigIntFixedPointNumber : functor
-  (_ : sig
+  (P : sig
      val scaling_factor_bits : int ref
    end)
   -> NumberInterface

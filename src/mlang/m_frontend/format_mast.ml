@@ -22,15 +22,15 @@ let format_application fmt (app : application) = Format.fprintf fmt "%s" app
 
 let format_chaining fmt (c : chaining) = Format.fprintf fmt "%s" c
 
-let format_variable_name fmt (v : variable_name) = Format.fprintf fmt "%s" v
+let format_variable_name fmt (v : string) = Format.fprintf fmt "%s" v
 
-let format_variable_generic_name fmt (v : variable_generic_name) =
+let format_variable_generic_name fmt (v : Com.var_name_generic) =
   Format.fprintf fmt "%s" v.base
 
-let format_variable fmt (v : variable) =
-  match v with
-  | Normal v -> format_variable_name fmt v
-  | Generic v -> format_variable_generic_name fmt v
+let format_variable fmt (v : Com.m_var_name) =
+  match Pos.unmark v with
+  | Com.Normal v -> format_variable_name fmt v
+  | Com.Generic v -> format_variable_generic_name fmt v
 
 let format_error_name fmt (e : error_name) = Format.fprintf fmt "%s" e
 
@@ -38,12 +38,19 @@ let format_expression = Com.format_expression format_variable
 
 let format_var_category_id fmt (vd : var_category_id) =
   match Pos.unmark vd with
-  | ("saisie", _) :: l ->
+  | Pos.Mark ("saisie", _) :: l ->
       Format.fprintf fmt "saisie %a" (Pp.list_space (Pp.unmark Pp.string)) l
-  | ("calculee", _) :: l ->
+  | Pos.Mark ("calculee", _) :: l ->
       Format.fprintf fmt "calculee %a" (Pp.list_space (Pp.unmark Pp.string)) l
-  | [ ("*", _) ] -> Format.fprintf fmt "*"
+  | [ Pos.Mark ("*", _) ] -> Format.fprintf fmt "*"
   | _ -> assert false
+
+let format_event_decl fmt el =
+  let pp_field fmt (ef : Com.event_field) =
+    let ef_type = if ef.is_var then "variable" else "valeur" in
+    Format.fprintf fmt "%s %s" ef_type (Pos.unmark ef.name)
+  in
+  Format.fprintf fmt "evenement : %a;" (Pp.list " : " pp_field) el
 
 let format_instruction fmt i =
   Com.format_instruction format_variable Pp.string fmt i
@@ -58,21 +65,20 @@ let format_rule fmt (r : rule) =
     r.rule_apps format_instruction_list r.rule_formulaes
 
 let format_table_size fmt = function
-  | Some (Mast.LiteralSize i, _) -> Format.fprintf fmt "[%d]" i
-  | Some (Mast.SymbolSize s, _) -> Format.fprintf fmt "[%s]" s
+  | Some (Pos.Mark (Mast.LiteralSize i, _)) -> Format.fprintf fmt "[%d]" i
+  | Some (Pos.Mark (Mast.SymbolSize s, _)) -> Format.fprintf fmt "[%s]" s
   | None -> ()
 
 let format_target fmt (t : target) =
   let format_tmp_var fmt (name, size) =
-    let name = Pos.unmark name in
-    Format.fprintf fmt "%s%a" name format_table_size size
+    Format.fprintf fmt "%s%a" (Pos.unmark name) format_table_size size
   in
   Format.fprintf fmt
     "cible %s:\napplication %a\n: variables temporaires %a;\n%a;\n"
     (Pos.unmark t.target_name)
     (StrMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Pp.string))
     t.target_apps
-    (StrMap.pp ~pp_key:Pp.nil ~sep:"," format_tmp_var)
+    (Pp.list "," format_tmp_var)
     t.target_tmp_vars format_instruction_list t.target_prog
 
 let format_input_attribute fmt ((n, v) : variable_attribute) =
@@ -182,6 +188,12 @@ let format_verif_domain fmt (vd : verif_domain_decl) =
   in
   format_domain pp_data fmt vd
 
+let format_variable_space fmt (vsd : Com.variable_space) =
+  Format.fprintf fmt "%s : categorie %a%s;\n" (Pos.unmark vsd.vs_name)
+    (Com.CatVar.LocMap.pp ~pp_key:Pp.nil ~sep:"," (Pp.unmark Com.CatVar.pp_loc))
+    vsd.vs_cats
+    (if vsd.vs_by_default then " : par_defaut" else "")
+
 let format_source_file_item fmt (i : source_file_item) =
   match i with
   | Application app ->
@@ -191,6 +203,7 @@ let format_source_file_item fmt (i : source_file_item) =
         (Pp.list_space (Pp.unmark format_application))
         apps
   | VariableDecl vd -> format_variable_decl fmt vd
+  | EventDecl el -> format_event_decl fmt el
   | Function t -> format_target fmt t
   | Rule r -> format_rule fmt r
   | Target t -> format_target fmt t
@@ -205,6 +218,8 @@ let format_source_file_item fmt (i : source_file_item) =
   | RuleDomDecl rd -> Format.fprintf fmt "rule domain %a;" format_rule_domain rd
   | VerifDomDecl vd ->
       Format.fprintf fmt "verif domain %a;" format_verif_domain vd
+  | VariableSpaceDecl vsd ->
+      Format.fprintf fmt "espace_variables %a;" format_variable_space vsd
 
 let format_source_file fmt (f : source_file) =
   Pp.list_endline (Pp.unmark format_source_file_item) fmt f

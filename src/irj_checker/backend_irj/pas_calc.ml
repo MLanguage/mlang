@@ -1,3 +1,4 @@
+open Mlang
 open Mlang.Irj_ast
 
 type avis_type = Texte | Gavlir
@@ -14,7 +15,8 @@ let format_value fmt (value : literal) =
   | I i -> Format.fprintf fmt "%d" i
   | F f -> Format.fprintf fmt "%f" f
 
-let format_code_revenu fmt (((var, _), (value, _)) : var_value) =
+let format_code_revenu fmt
+    ((Pos.Mark (var, _), Pos.Mark (value, _)) : var_value) =
   Format.fprintf fmt
     {|@;<0 2>{@;<0 4>"code": "%s",@;<0 4>"valeur": "%a"@;<0 2>}|} var
     format_value value

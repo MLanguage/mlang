@@ -14,6 +14,15 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+let concat_int str f i =
+  let is = Pp.spr "%d" (abs i) in
+  let lis = String.length is in
+  let lf = String.length f in
+  if lis >= lf then str ^ is
+  else
+    let f' = String.sub f 0 (lf - lis) in
+    str ^ f' ^ is
+
 (* let sanitize_str (s, p) =
    String.map
      (fun c ->
@@ -25,6 +34,27 @@
          ' '
        else c)
      s *)
+
+let sanitize_c_str s =
+  let len = String.length s in
+  let buf = Buffer.create len in
+  for i = 0 to len - 1 do
+    match s.[i] with
+    | '\b' -> Buffer.add_string buf "\\b"
+    | '\n' -> Buffer.add_string buf "\\n"
+    | '\r' -> Buffer.add_string buf "\\r"
+    | '\t' -> Buffer.add_string buf "\\t"
+    | '\007' -> Buffer.add_string buf "\\a"
+    | '\027' -> Buffer.add_string buf "\\e"
+    | '\012' -> Buffer.add_string buf "\\f"
+    | '\011' -> Buffer.add_string buf "\\v"
+    | ('\\' | '\'' | '"' | '?') as c -> Buffer.add_string buf (Pp.spr "\\%c" c)
+    | c when c <= '\031' || '\127' <= c ->
+        let code_str = Pp.spr "\\%03o" (Char.code c) in
+        Buffer.add_string buf code_str
+    | c -> Buffer.add_char buf c
+  done;
+  Buffer.contents buf
 
 let compare_default = String.compare
 
@@ -53,3 +83,15 @@ let compare_ebcdic str1 str2 =
       if r <> 0 then r else ebcdic_compare_aux (i + 1)
   in
   ebcdic_compare_aux 0
+
+let starts_with ~prefix s =
+  let lp = String.length prefix in
+  let ls = String.length s in
+  let rec aux i = i = lp || (prefix.[i] = s.[i] && aux (i + 1)) in
+  lp <= ls && aux 0
+
+let ends_with ~suffix s =
+  let fp = String.length suffix - 1 in
+  let fs = String.length s - 1 in
+  let rec aux i = i = fp + 1 || (suffix.[fs - i] = s.[fp - i] && aux (i + 1)) in
+  fp <= fs && aux 0

@@ -14,72 +14,115 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+(* TGV variables accessors *)
+
 let gen_tab = function
-  | Com.CatVar.LocComputed -> "C_"
-  | Com.CatVar.LocBase -> "B_"
-  | Com.CatVar.LocInput -> "S_"
+  | Com.CatVar.LocInput -> "saisie"
+  | Com.CatVar.LocComputed -> "calculee"
+  | Com.CatVar.LocBase -> "base"
 
-let gen_tgv pre (l : Com.loc_tgv) vn off =
-  Printf.sprintf "%s%s[%d/*%s*/%s]" pre (gen_tab l.loc_cat) l.loc_idx vn off
+let gen_tgv_def (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
+  let tab = gen_tab l.loc_cat in
+  match m_sp_opt with
+  | Some (m_sp, _) ->
+      let sp = Com.get_normal_var @@ Pos.unmark m_sp in
+      Pp.spr "(irdata->def_%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
+  | None ->
+      Pp.spr "(irdata->var_spaces[irdata->var_space].def_%s[%d/*%s*/])" tab
+        l.loc_idx vn
 
-let gen_tgv_ptr pre (l : Com.loc_tgv) vn =
-  Printf.sprintf "(%s%s + (%d)/*%s*/)" pre (gen_tab l.loc_cat) l.loc_idx vn
+let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
+  let tab = gen_tab l.loc_cat in
+  match m_sp_opt with
+  | Some (m_sp, _) ->
+      let sp = Com.get_normal_var @@ Pos.unmark m_sp in
+      Pp.spr "(irdata->%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
+  | None ->
+      Pp.spr "(irdata->var_spaces[irdata->var_space].%s[%d/*%s*/])" tab
+        l.loc_idx vn
 
-let gen_tmp pre i vn off =
-  Printf.sprintf "irdata->%stmps[irdata->tmps_org + (%d)/*%s*/%s]" pre i vn off
+let gen_tgv_def_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
+  Pp.spr "&%s" (gen_tgv_def m_sp_opt l vn)
 
-let gen_tmp_ptr pre i vn = Printf.sprintf "&(%s)" (gen_tmp pre i vn "")
+let gen_tgv_val_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
+  Pp.spr "&%s" (gen_tgv_val m_sp_opt l vn)
 
-let gen_ref_ptr pre i vn =
-  Printf.sprintf "irdata->%sref[irdata->ref_org + (%d)/*%s*/]" pre i vn
+let gen_tgv_info_ptr (l : Com.loc_tgv) vn =
+  Pp.spr "I_(%s,%d/*%s*/)" l.loc_cat_str l.loc_cat_idx vn
 
-let gen_ref pre i vn off = Printf.sprintf "*(%s%s)" (gen_ref_ptr pre i vn) off
+(* temporary variables accessors *)
 
-let gen_def (v : Com.Var.t) offset =
+let gen_tmp_def (l : Com.loc_tmp) vn = Pp.spr "DT_((%d)/*%s*/)" l.loc_idx vn
+
+let gen_tmp_val (l : Com.loc_tmp) vn = Pp.spr "T_((%d)/*%s*/)" l.loc_idx vn
+
+let gen_tmp_def_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_def l vn)
+
+let gen_tmp_val_ptr (l : Com.loc_tmp) vn = Pp.spr "&(%s)" (gen_tmp_val l vn)
+
+let gen_tmp_info_ptr (l : Com.loc_tmp) vn =
+  Pp.spr "IT_((%d)/*%s*/)" l.loc_idx vn
+
+(* reference accessors *)
+
+let gen_ref_def_ptr i vn = Printf.sprintf "DR_((%d)/*%s*/)" i vn
+
+let gen_ref_val_ptr i vn = Printf.sprintf "R_((%d)/*%s*/)" i vn
+
+let gen_ref_info_ptr i vn = Printf.sprintf "IR_((%d)/*%s*/)" i vn
+
+let gen_ref_def i vn = Pp.spr "*(%s)" (gen_ref_def_ptr i vn)
+
+let gen_ref_val i vn = Pp.spr "*(%s)" (gen_ref_val_ptr i vn)
+
+(* generic accessors *)
+
+let gen_def (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv "D" l vn offset
-  | LocTmp (_, i) -> gen_tmp "def_" i vn offset
-  | LocRef (_, i) -> gen_ref "def_" i vn offset
-  | LocArg (_, i) -> Pp.spr "def_arg%d" i
-  | LocRes _ -> Pp.spr "(*def_res)"
+  | LocTgv (_, l) -> gen_tgv_def m_sp_opt l vn
+  | LocTmp (_, l) -> gen_tmp_def l vn
+  | LocRef (_, i) -> gen_ref_def i vn
 
-let gen_val (v : Com.Var.t) offset =
+let gen_val (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv "" l vn offset
-  | LocTmp (_, i) -> gen_tmp "" i vn offset
-  | LocRef (_, i) -> gen_ref "" i vn offset
-  | LocArg (_, i) -> Pp.spr "val_arg%d" i
-  | LocRes _ -> Pp.spr "(*val_res)"
+  | LocTgv (_, l) -> gen_tgv_val m_sp_opt l vn
+  | LocTmp (_, l) -> gen_tmp_val l vn
+  | LocRef (_, i) -> gen_ref_val i vn
 
 let gen_info_ptr (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) ->
-      Printf.sprintf "((T_varinfo *)&(varinfo_%s[%d]/*%s*/))" l.loc_cat_str
-        l.loc_cat_idx vn
-  | LocTmp (_, i) -> gen_tmp_ptr "info_" i vn
-  | LocRef (_, i) -> gen_ref_ptr "info_" i vn
-  | LocArg _ | LocRes _ -> "NULL"
+  | LocTgv (_, l) -> gen_tgv_info_ptr l vn
+  | LocTmp (_, l) -> gen_tmp_info_ptr l vn
+  | LocRef (_, i) -> gen_ref_info_ptr i vn
 
-let gen_def_ptr (v : Com.Var.t) =
+let gen_def_ptr (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv_ptr "D" l vn
-  | LocTmp (_, i) -> gen_tmp_ptr "def_" i vn
-  | LocRef (_, i) -> gen_ref_ptr "def_" i vn
-  | LocArg (_, i) -> Pp.spr "(&def_arg%d)" i
-  | LocRes _ -> Pp.spr "def_res"
+  | LocTgv (_, l) -> gen_tgv_def_ptr m_sp_opt l vn
+  | LocTmp (_, l) -> gen_tmp_def_ptr l vn
+  | LocRef (_, i) -> gen_ref_def_ptr i vn
 
-let gen_val_ptr (v : Com.Var.t) =
+let gen_val_ptr (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv (_, l) -> gen_tgv_ptr "" l vn
-  | LocTmp (_, i) -> gen_tmp_ptr "" i vn
-  | LocRef (_, i) -> gen_ref_ptr "" i vn
-  | LocArg (_, i) -> Pp.spr "(&val_arg%d)" i
-  | LocRes _ -> Pp.spr "val_res"
+  | LocTgv (_, l) -> gen_tgv_val_ptr m_sp_opt l vn
+  | LocTmp (_, l) -> gen_tmp_val_ptr l vn
+  | LocRef (_, i) -> gen_ref_val_ptr i vn
+
+let gen_ref_name_ptr (v : Com.Var.t) =
+  let vn = Pos.unmark v.name in
+  match v.loc with
+  | LocRef (_, i) -> Printf.sprintf "NR_((%d)/*%s*/)" i vn
+  | _ -> assert false
+
+let gen_ref_var_space_ptr (v : Com.Var.t) =
+  let vn = Pos.unmark v.name in
+  match v.loc with
+  | LocRef (_, i) -> Printf.sprintf "SR_((%d)/*%s*/)" i vn
+  | _ -> assert false
 
 let gen_pos_from_start (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
@@ -92,16 +135,22 @@ let gen_pos_from_start (v : Com.Var.t) =
         | Com.CatVar.LocInput -> "EST_SAISIE"
       in
       Printf.sprintf "%s | %d" loc_tab l.loc_idx
-  | LocTmp (_, i) -> Printf.sprintf "EST_TEMPORAIRE | %d" i
+  | LocTmp (_, l) -> Pp.spr "EST_TEMPORAIRE | %d" l.loc_idx
   | LocRef (_, i) ->
-      let info = gen_ref_ptr "info_" i vn in
+      let info = gen_ref_info_ptr i vn in
       Printf.sprintf "%s->loc_cat | %s->idx" info info
-  | LocArg (_, i) -> Printf.sprintf "EST_ARGUMENT | %d" i
-  | LocRes _ -> Printf.sprintf "EST_RESULTAT | 0"
 
 let gen_size (v : Com.Var.t) =
   let vn = Pos.unmark v.name in
   match v.loc with
-  | LocTgv _ | LocTmp _ -> Format.sprintf "%d" (Com.Var.size v)
-  | LocRef (_, i) -> Format.sprintf "(%s->size)" (gen_ref_ptr "info_" i vn)
-  | LocArg _ | LocRes _ -> "1"
+  | LocTgv _ | LocTmp _ -> Pp.spr "%d" (Com.Var.size v)
+  | LocRef (_, i) -> Pp.spr "(%s->size)" (gen_ref_info_ptr i vn)
+
+let gen_var_space_id_opt = function
+  | None -> "(irdata->var_space)"
+  | Some (_, i_sp) -> Pp.spr "%d" i_sp
+
+let gen_var_space_id (m_sp_opt : Com.var_space) (v : Com.Var.t) =
+  match v.loc with
+  | LocTgv _ | LocTmp _ -> gen_var_space_id_opt m_sp_opt
+  | LocRef (_, i) -> Pp.spr "(irdata->refs[irdata->refs_org + %d].var_space)" i

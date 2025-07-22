@@ -19,10 +19,10 @@ type t = { pos_filename : string; pos_loc : Lexing.position * Lexing.position }
 (** A position in the source code is a file, as well as begin and end location
     of the form col:line *)
 
-let make_position (f : string) (loc : Lexing.position * Lexing.position) =
+let make (f : string) (loc : Lexing.position * Lexing.position) =
   { pos_filename = f; pos_loc = loc }
 
-let make_position_between (p1 : t) (p2 : t) : t =
+let make_between (p1 : t) (p2 : t) : t =
   if p1.pos_filename <> p2.pos_filename then begin
     Cli.error_print "Conflicting position filenames: %s <> %s" p1.pos_filename
       p2.pos_filename;
@@ -36,7 +36,7 @@ let make_position_between (p1 : t) (p2 : t) : t =
     let pos_loc = (b, e) in
     { p1 with pos_loc }
 
-let format_position_gnu fmt pos =
+let format_gnu fmt pos =
   let s, e = pos.pos_loc in
   if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
     Format.fprintf fmt "%s:%d.%d-%d"
@@ -52,7 +52,7 @@ let format_position_gnu fmt pos =
       e.Lexing.pos_lnum
       (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
-let format_position_short fmt pos =
+let format_short fmt pos =
   let s, e = pos.pos_loc in
   if s.Lexing.pos_lnum = e.Lexing.pos_lnum then
     Format.fprintf fmt "in file %s:%d:%d-%d"
@@ -68,7 +68,7 @@ let format_position_short fmt pos =
       e.Lexing.pos_lnum
       (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
-let format_position fmt (pos : t) =
+let format fmt (pos : t) =
   let s, e = pos.pos_loc in
   Format.fprintf fmt "in file %s, from %d:%d to %d:%d" pos.pos_filename
     s.Lexing.pos_lnum
@@ -76,12 +76,13 @@ let format_position fmt (pos : t) =
     e.Lexing.pos_lnum
     (e.Lexing.pos_cnum - e.Lexing.pos_bol + 1)
 
-type 'a marked = 'a * t
-(** Everything related to the source code should keep its t stored, to improve
+type 'a marked =
+  | Mark of 'a * t
+      (** Everything related to the source code should keep its t stored, to improve
     error messages *)
 
 (** Placeholder t *)
-let no_pos : t =
+let none : t =
   let zero_pos =
     {
       Lexing.pos_fname = "";
@@ -92,15 +93,19 @@ let no_pos : t =
   in
   { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
-let mark pos value = (value, pos)
+let without (x : 'a) : 'a marked = Mark (x, none)
 
-let unmark ((x, _) : 'a marked) : 'a = x
+let mark value pos = Mark (value, pos)
 
-let get_position ((_, x) : 'a marked) : t = x
+let unmark (Mark (x, _) : 'a marked) : 'a = x
 
-let map_under_mark (f : 'a -> 'b) ((x, y) : 'a marked) : 'b marked = (f x, y)
+let get (Mark (_, x) : 'a marked) : t = x
 
-let same_pos_as (x : 'a) ((_, y) : 'b marked) : 'a marked = (x, y)
+let to_couple (Mark (x, p) : 'a marked) : 'a * t = (x, p)
+
+let map (f : 'a -> 'b) (Mark (x, y) : 'a marked) : 'b marked = Mark (f x, y)
+
+let same (x : 'a) (Mark (_, y) : 'b marked) : 'a marked = Mark (x, y)
 
 let unmark_option (x : 'a marked option) : 'a option =
   match x with Some x -> Some (unmark x) | None -> None

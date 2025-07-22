@@ -20,67 +20,95 @@ let open_file filename =
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
 
-let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ }
-    (stats, var_map) =
+let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
+    =
   let oc, fmt = open_file (Pp.spr "varinfo_%d.c" id_int) in
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
+
 
 #include "mlang.h"
 
 |};
-  Format.fprintf fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str
-    id_str;
-  let nb, var_map =
-    StrMap.fold
-      (fun _ var (nb, var_map) ->
-        if Com.CatVar.compare (Com.Var.cat var) cat = 0 then (
-          let loc_tgv = Com.Var.loc_tgv var in
-          let name = Com.Var.name_str var in
-          let alias = Com.Var.alias_str var in
-          let idx = loc_tgv.loc_idx in
-          let size = Com.Var.size var in
-          let loc_cat =
-            match loc_tgv.loc_cat with
-            | Com.CatVar.LocComputed -> "EST_CALCULEE"
-            | Com.CatVar.LocBase -> "EST_BASE"
-            | Com.CatVar.LocInput -> "EST_SAISIE"
-          in
-          let attrs = Com.Var.attrs var in
-          Format.fprintf fmt "  { \"%s\", \"%s\", %d, %d, %d, %s" name alias idx
-            size id_int loc_cat;
-          StrMap.iter
-            (fun _ av -> Format.fprintf fmt ", %d" (Pos.unmark av))
-            attrs;
-          Format.fprintf fmt " },\n";
-          let var_addr =
-            Format.sprintf "(T_varinfo *)&(varinfo_%s[%d])" id_str nb
-          in
-          let var_map = StrMap.add (Com.Var.name_str var) var_addr var_map in
-          let var_map =
-            match Com.Var.alias var with
-            | None -> var_map
-            | Some m_alias -> StrMap.add (Pos.unmark m_alias) var_addr var_map
-          in
-          (nb + 1, var_map))
-        else (nb, var_map))
-      vars (0, var_map)
-  in
-  Format.fprintf fmt "  NULL\n};\n\n";
+  Pp.fpr fmt "T_varinfo_%s varinfo_%s[NB_%s + 1] = {\n" id_str id_str id_str;
+  IntMap.iter
+    (fun _ var ->
+      let loc_tgv = Com.Var.loc_tgv var in
+      let name = Com.Var.name_str var in
+      let alias = Com.Var.alias_str var in
+      let idx = loc_tgv.loc_idx in
+      let size = Com.Var.size var in
+      let loc_cat =
+        match loc_tgv.loc_cat with
+        | Com.CatVar.LocComputed -> "EST_CALCULEE"
+        | Com.CatVar.LocBase -> "EST_BASE"
+        | Com.CatVar.LocInput -> "EST_SAISIE"
+      in
+      let attrs = Com.Var.attrs var in
+      let tab_idx =
+        if Com.Var.is_table var then Com.Var.loc_tab_idx var else -1
+      in
+      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s" name alias idx tab_idx
+        size id_int loc_cat;
+      StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
+      Pp.fpr fmt " },\n")
+    vars;
+  Pp.fpr fmt "  NULL\n};\n\n";
   close_out oc;
+  let nb = IntMap.cardinal vars in
   let attr_set =
     StrMap.fold (fun an _ res -> StrSet.add an res) attributs StrSet.empty
   in
-  (Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats, var_map)
+  Com.CatVar.Map.add cat (id_str, id_int, nb, attr_set) stats
+
+let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
+  let vars = IntMap.filter (fun _ v -> Com.Var.is_temp v) cprog.program_dict in
+  Pp.fpr fmt "T_varinfo tmp_varinfo[%d] = {\n" (IntMap.cardinal vars + 1);
+  IntMap.iter
+    (fun _ var ->
+      let name = Com.Var.name_str var in
+      let idx = Com.Var.loc_idx var in
+      let tab_idx =
+        if Com.Var.is_table var then Com.Var.loc_tab_idx var else -1
+      in
+      let size = Com.Var.size var in
+      Pp.fpr fmt
+        "  { \"%s\", \"\", %d, %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n" name
+        idx tab_idx size)
+    vars;
+  Pp.fpr fmt "  NULL\n};\n\n"
+
+let gen_table_tab_varinfo (cprog : Mir.program) fmt =
+  let table_map = cprog.program_stats.table_map in
+  Pp.fpr fmt "T_varinfo *tab_varinfo[TAILLE_TAB_VARINFO + 1] = {\n";
+  IntMap.iter
+    (fun _ var ->
+      let idx = Com.Var.loc_cat_idx var in
+      let name = Com.Var.name_str var in
+      if Com.Var.is_tgv var then
+        let loc = Com.Var.loc_tgv var in
+        Pp.fpr fmt "  (T_varinfo *)&(varinfo_%s[%d]), /* %s */\n"
+          loc.loc_cat_str idx name
+      else Pp.fpr fmt "  &(tmp_varinfo[%d]), /* %s */\n" idx name)
+    table_map;
+  Pp.fpr fmt "  NULL\n};\n\n"
 
 let gen_table_varinfos (cprog : Mir.program) flags =
-  let stats_varinfos, var_map =
-    Com.CatVar.Map.fold
-      (gen_table_varinfo cprog.program_vars)
-      cprog.program_var_categories
-      (Com.CatVar.Map.empty, StrMap.empty)
+  let stats_varinfos =
+    let fold cv data res =
+      let vars =
+        let foldVars _ var vars =
+          if Com.CatVar.compare (Com.Var.cat var) cv = 0 then
+            IntMap.add (Com.Var.loc_cat_idx var) var vars
+          else vars
+        in
+        StrMap.fold foldVars cprog.program_vars IntMap.empty
+      in
+      gen_table_varinfo vars cv data res
+    in
+    Com.CatVar.Map.fold fold cprog.program_var_categories Com.CatVar.Map.empty
   in
   let oc, fmt = open_file "varinfos.c" in
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
@@ -93,45 +121,67 @@ let gen_table_varinfos (cprog : Mir.program) flags =
   in
   StrSet.iter
     (fun attr ->
-      Format.fprintf fmt "char attribut_%s_def(T_varinfo *vi) {\n" attr;
-      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Pp.fpr fmt "char attribut_%s_def(T_varinfo *vi) {\n" attr;
+      Pp.fpr fmt "  if (vi == NULL) return 0;\n";
+      Pp.fpr fmt "  switch (vi->cat) {\n";
       Com.CatVar.Map.iter
         (fun _ Com.CatVar.{ id_str; attributs; _ } ->
           if StrMap.mem attr attributs then
-            Format.fprintf fmt "    case ID_%s: return 1;\n" id_str)
+            Pp.fpr fmt "    case ID_%s: return 1;\n" id_str)
         cprog.program_var_categories;
-      Format.fprintf fmt "  }\n";
-      Format.fprintf fmt "  return 0;\n";
-      Format.fprintf fmt "}\n\n";
-      Format.fprintf fmt "double attribut_%s(T_varinfo *vi) {\n" attr;
-      Format.fprintf fmt "  switch (vi->cat) {\n";
+      Pp.fpr fmt "  }\n";
+      Pp.fpr fmt "  return 0;\n";
+      Pp.fpr fmt "}\n\n";
+      Pp.fpr fmt "double attribut_%s(T_varinfo *vi) {\n" attr;
+      Pp.fpr fmt "  if (vi == NULL) return 0.0;\n";
+      Pp.fpr fmt "  switch (vi->cat) {\n";
       Com.CatVar.Map.iter
         (fun _ Com.CatVar.{ id_str; attributs; _ } ->
           if StrMap.mem attr attributs then (
-            Format.fprintf fmt "    case ID_%s:\n" id_str;
-            Format.fprintf fmt "      return ((T_varinfo_%s *)vi)->attr_%s;\n"
-              id_str attr))
+            Pp.fpr fmt "    case ID_%s:\n" id_str;
+            Pp.fpr fmt "      return ((T_varinfo_%s *)vi)->attr_%s;\n" id_str
+              attr))
         cprog.program_var_categories;
-      Format.fprintf fmt "  }\n";
-      Format.fprintf fmt "  return 0.0;\n";
-      Format.fprintf fmt "}\n\n")
+      Pp.fpr fmt "  }\n";
+      Pp.fpr fmt "  return 0.0;\n";
+      Pp.fpr fmt "}\n\n")
     attrs;
   if flags.Dgfip_options.flg_gcos then
-    Format.fprintf fmt "T_varinfo_map varinfo[1] = {NULL};\n\n"
+    Pp.fpr fmt "T_varinfo_map varinfo[1] = {NULL};\n\n"
   else (
-    Format.fprintf fmt
-      "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
-    StrMap.iter (Format.fprintf fmt "  { \"%s\", %s },\n") var_map;
-    Format.fprintf fmt "  NULL\n};\n\n");
+    Pp.fpr fmt "T_varinfo_map varinfo[NB_variable + NB_saisie + 1] = {\n";
+    let var_map =
+      let fold name var var_map =
+        let var_map = StrMap.add name var var_map in
+        match Com.Var.alias var with
+        | Some m_alias -> StrMap.add (Pos.unmark m_alias) var var_map
+        | None -> var_map
+      in
+      StrMap.fold fold cprog.program_vars StrMap.empty
+    in
+    let iter name var =
+      let id_str =
+        let cv = Com.Var.cat var in
+        Com.CatVar.((Map.find cv cprog.program_var_categories).id_str)
+      in
+      let idx = Com.Var.loc_cat_idx var in
+      let var_addr = Pp.spr "(T_varinfo *)&(varinfo_%s[%d])" id_str idx in
+      Pp.fpr fmt "  { \"%s\", %s },\n" name var_addr
+    in
+    StrMap.iter iter var_map;
+    Pp.fpr fmt "  NULL\n};\n\n");
+  gen_table_tmp_varinfo cprog fmt;
+  gen_table_tab_varinfo cprog fmt;
   close_out oc;
   stats_varinfos
 
 let gen_decl_varinfos fmt (cprog : Mir.program) stats =
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|typedef struct S_varinfo {
   char *name;
   char *alias;
   int idx;
+  int tab_idx;
   int size;
   int cat;
   int loc_cat;
@@ -145,29 +195,31 @@ typedef struct S_varinfo_map {
 |};
   Com.CatVar.Map.iter
     (fun _ (id_str, _, _, attr_set) ->
-      Format.fprintf fmt
+      Pp.fpr fmt
         {|typedef struct S_varinfo_%s {
   char *name;
   char *alias;
   int idx;
+  int tab_idx;
   int size;
   int cat;
   int loc_cat;
 |}
         id_str;
-      StrSet.iter (fun an -> Format.fprintf fmt "  int attr_%s;\n" an) attr_set;
-      Format.fprintf fmt "} T_varinfo_%s;\n\n" id_str)
+      StrSet.iter (fun an -> Pp.fpr fmt "  int attr_%s;\n" an) attr_set;
+      Pp.fpr fmt "} T_varinfo_%s;\n\n" id_str)
     stats;
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "\n";
   Com.CatVar.Map.iter
     (fun _ (id_str, _, _, _) ->
-      Format.fprintf fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
+      Pp.fpr fmt "extern T_varinfo_%s varinfo_%s[];\n" id_str id_str)
     stats;
-  Format.fprintf fmt "extern T_varinfo_map varinfo[];\n";
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "extern T_varinfo_map varinfo[];\n";
+  Pp.fpr fmt "extern T_varinfo tmp_varinfo[];\n";
+  Pp.fpr fmt "extern T_varinfo *tab_varinfo[];\n";
+  Pp.fpr fmt "\n";
   Com.CatVar.Map.iter
-    (fun _ (id_str, _, nb, _) ->
-      Format.fprintf fmt "#define NB_%s %d\n" id_str nb)
+    (fun _ (id_str, _, nb, _) -> Pp.fpr fmt "#define NB_%s %d\n" id_str nb)
     stats;
   let nb_saisie, nb_variable =
     Com.CatVar.Map.fold
@@ -178,17 +230,17 @@ typedef struct S_varinfo_map {
         | _ -> (nb_saisie, nb_variable))
       stats (0, 0)
   in
-  Format.fprintf fmt "#define NB_saisie %d\n" nb_saisie;
-  Format.fprintf fmt "#define NB_variable %d\n" nb_variable;
-  Format.fprintf fmt "\n";
+  Pp.fpr fmt "#define NB_saisie %d\n" nb_saisie;
+  Pp.fpr fmt "#define NB_variable %d\n" nb_variable;
+  Pp.fpr fmt "\n";
   let id_tmp =
     Com.CatVar.Map.fold
       (fun _ (id_str, id_int, _, _) id_tmp ->
-        Format.fprintf fmt "#define ID_%s %d\n" id_str id_int;
+        Pp.fpr fmt "#define ID_%s %d\n" id_str id_int;
         max (id_int + 1) id_tmp)
       stats (-1)
   in
-  Format.fprintf fmt "#define ID_TMP_VARS %d\n" id_tmp;
+  Pp.fpr fmt "#define ID_TMP_VARS %d\n" id_tmp;
 
   let attrs =
     Com.CatVar.Map.fold
@@ -198,15 +250,15 @@ typedef struct S_varinfo_map {
   in
   StrSet.iter
     (fun attr ->
-      Format.fprintf fmt "\nextern char attribut_%s_def(T_varinfo *vi);\n" attr;
-      Format.fprintf fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
+      Pp.fpr fmt "\nextern char attribut_%s_def(T_varinfo *vi);\n" attr;
+      Pp.fpr fmt "extern double attribut_%s(T_varinfo *vi);\n" attr)
     attrs
 
 let is_valid_app apps =
   StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
 
 let gen_erreurs_c fmt flags (cprog : Mir.program) =
-  Format.fprintf fmt {|/****** LICENCE CECIL *****/
+  Pp.fpr fmt {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
 
@@ -221,83 +273,83 @@ let gen_erreurs_c fmt flags (cprog : Mir.program) =
         if String.equal (Pos.unmark e.sous_code) "00" then ""
         else "-" ^ Pos.unmark e.sous_code
       in
-      Format.fprintf fmt
+      Pp.fpr fmt
         "T_erreur erreur_%s = { \"%s%s%s / %s\", \"%s\", \"%s\", \"%s\", \
          \"%s\", %d };\n"
         (Pos.unmark e.name) (Pos.unmark e.famille) (Pos.unmark e.code_bo)
-        sous_code_suffix (Pos.unmark e.libelle) (Pos.unmark e.code_bo)
-        (Pos.unmark e.sous_code) (Pos.unmark e.is_isf) (Pos.unmark e.name) terr)
+        sous_code_suffix
+        (Strings.sanitize_c_str (Pos.unmark e.libelle))
+        (Pos.unmark e.code_bo) (Pos.unmark e.sous_code) (Pos.unmark e.is_isf)
+        (Pos.unmark e.name) terr)
     cprog.program_errors;
 
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then begin
-    Format.fprintf fmt "T_erreur *tabErreurs[] = {\n";
+    Pp.fpr fmt "T_erreur *tabErreurs[] = {\n";
 
     StrMap.iter
       (fun _ (e : Com.Error.t) ->
-        Format.fprintf fmt "    &erreur_%s,\n" (Pos.unmark e.name))
+        Pp.fpr fmt "    &erreur_%s,\n" (Pos.unmark e.name))
       cprog.program_errors;
 
-    Format.fprintf fmt "    NULL\n};\n"
+    Pp.fpr fmt "    NULL\n};\n"
   end
 
 (* Print #defines corresponding to generation options *)
 let gen_conf_h fmt (cprog : Mir.program) flags =
   let open Dgfip_options in
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|/****** LICENCE CECIL *****/
 
 #ifndef _CONF_H_
 #define _CONF_H_
 
 |};
-  if flags.flg_correctif then Format.fprintf fmt "#define FLG_CORRECTIF\n";
-  if flags.flg_iliad then Format.fprintf fmt "#define FLG_ILIAD\n";
-  if flags.flg_pro then Format.fprintf fmt "#define FLG_PRO\n";
-  if flags.flg_cfir then Format.fprintf fmt "#define FLG_CFIR\n";
-  if flags.flg_gcos then Format.fprintf fmt "#define FLG_GCOS\n";
-  if flags.flg_tri_ebcdic then Format.fprintf fmt "#define FLG_TRI_EBCDIC\n";
+  if flags.flg_correctif then Pp.fpr fmt "#define FLG_CORRECTIF\n";
+  if flags.flg_iliad then Pp.fpr fmt "#define FLG_ILIAD\n";
+  if flags.flg_pro then Pp.fpr fmt "#define FLG_PRO\n";
+  if flags.flg_cfir then Pp.fpr fmt "#define FLG_CFIR\n";
+  if flags.flg_gcos then Pp.fpr fmt "#define FLG_GCOS\n";
+  if flags.flg_tri_ebcdic then Pp.fpr fmt "#define FLG_TRI_EBCDIC\n";
   (* flag is not used *)
-  if flags.flg_short then
-    Format.fprintf fmt "#define FLG_SHORT /* inutile ? */\n";
-  if flags.flg_register then Format.fprintf fmt "#define FLG_REGISTER\n";
+  if flags.flg_short then Pp.fpr fmt "#define FLG_SHORT /* inutile ? */\n";
+  if flags.flg_register then Pp.fpr fmt "#define FLG_REGISTER\n";
   (* flag is not used *)
   if flags.flg_optim_min_max then
-    Format.fprintf fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
-  if flags.flg_extraction then Format.fprintf fmt "#define FLG_EXTRACTION\n";
+    Pp.fpr fmt "#define FLG_OPTIM_MIN_MAX /* inutile ? */\n";
+  if flags.flg_extraction then Pp.fpr fmt "#define FLG_EXTRACTION\n";
   if flags.flg_genere_libelle_restituee then
-    Format.fprintf fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
-  if flags.flg_controle_separe then
-    Format.fprintf fmt "#define FLG_CONTROLE_SEPARE\n";
+    Pp.fpr fmt "#define FLG_GENERE_LIBELLE_RESTITUEE\n";
+  if flags.flg_controle_separe then Pp.fpr fmt "#define FLG_CONTROLE_SEPARE\n";
   if flags.flg_controle_immediat then
-    Format.fprintf fmt "#define FLG_CONTROLE_IMMEDIAT\n";
+    Pp.fpr fmt "#define FLG_CONTROLE_IMMEDIAT\n";
   (* does not need to be printed *)
-  (*if flags.flg_overlays then Format.fprintf fmt "#define FLG_OVERLAYS\n"; *)
-  if flags.flg_colors then Format.fprintf fmt "#define FLG_COLORS\n";
-  if flags.flg_ticket then Format.fprintf fmt "#define FLG_TICKET\n";
-  if flags.flg_trace then Format.fprintf fmt "#define FLG_TRACE\n";
+  (*if flags.flg_overlays then Pp.fpr fmt "#define FLG_OVERLAYS\n"; *)
+  if flags.flg_colors then Pp.fpr fmt "#define FLG_COLORS\n";
+  if flags.flg_ticket then Pp.fpr fmt "#define FLG_TICKET\n";
+  if flags.flg_trace then Pp.fpr fmt "#define FLG_TRACE\n";
   (* flag is not used *)
-  (*if flags.flg_trace_irdata then Format.fprintf fmt "#define
+  (*if flags.flg_trace_irdata then Pp.fpr fmt "#define
     FLG_TRACE_IRDATA\n"; *)
-  if flags.flg_debug then Format.fprintf fmt "#define FLG_DEBUG\n";
-  Format.fprintf fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
-  Format.fprintf fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
+  if flags.flg_debug then Pp.fpr fmt "#define FLG_DEBUG\n";
+  Pp.fpr fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
+  Pp.fpr fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
   let count loc =
     StrMap.fold
       (fun _ var nb ->
-        nb + if Com.Var.cat_var_loc var = Some loc then Com.Var.size var else 0)
+        nb + if Com.Var.cat_var_loc var = loc then Com.Var.size var else 0)
       cprog.program_vars 0
   in
   let nb_saisie = count Com.CatVar.LocInput in
   let nb_calculee = count Com.CatVar.LocComputed in
   let nb_base = count Com.CatVar.LocBase in
   let nb_vars = nb_saisie + nb_calculee + nb_base in
-  Format.fprintf fmt "#define NB_VARS  %d\n" nb_vars;
-  Format.fprintf fmt {|
+  Pp.fpr fmt "#define NB_VARS  %d\n" nb_vars;
+  Pp.fpr fmt {|
 #endif /* _CONF_H_ */
 |}
 
 let gen_dbg fmt =
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|int change_couleur(int couleur, int typographie);
 int get_couleur();
 int get_typo();
@@ -315,8 +367,8 @@ extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv
 #endif /* FLG_TRACE */
 |}
 
-let gen_const fmt =
-  Format.fprintf fmt
+let gen_const fmt (cprog : Mir.program) =
+  Pp.fpr fmt
     {|#define FALSE 0
 #define TRUE 1
 
@@ -355,21 +407,87 @@ struct S_keep_discord {
   T_keep_discord *suivant;
 };
 
-struct S_irdata {
-  double *saisie;
-  double *calculee;
-  double *base;
-  double *tmps;
-  double **ref;
+struct S_event {
+|};
+  IntMap.iter
+    (fun _idx fname ->
+      let field = StrMap.find fname cprog.program_event_fields in
+      if field.is_var then Pp.fpr fmt "  T_varinfo *field_%s_var;\n" fname
+      else (
+        Pp.fpr fmt "  char field_%s_def;\n" fname;
+        Pp.fpr fmt "  double field_%s_val;\n" fname))
+    cprog.program_event_field_idxs;
+  Pp.fpr fmt
+    {|};
+
+typedef struct S_event T_event;
+
+struct S_var_space {
+  int id;
+  char *name;
+  char is_default;
   char *def_saisie;
+  double *saisie;
   char *def_calculee;
+  double *calculee;
   char *def_base;
-  char *def_tmps;
-  char **def_ref;
-  T_varinfo *info_tmps;
-  T_varinfo **info_ref;
+  double *base;
+};
+
+typedef struct S_var_space T_var_space;
+
+struct S_tmp_var {
+  char def;
+  double val;
+  T_varinfo *info;
+};
+
+typedef struct S_tmp_var T_tmp_var;
+
+struct S_ref_var {
+  char *name;
+  int var_space;
+  char *def;
+  double *val;
+  T_varinfo *info;
+};
+
+typedef struct S_ref_var T_ref_var;
+
+|};
+  Pp.fpr fmt "#define NB_ESPACES_VARIABLES %d@\n@\n"
+    (IntMap.cardinal cprog.program_var_spaces_idx);
+  Pp.fpr fmt "#define ESPACE_PAR_DEFAUT %d@\n@\n"
+    cprog.program_var_space_def.vs_id;
+  Pp.fpr fmt
+    {|
+struct S_irdata {
+  char *def_saisie;
+  double *saisie;
+  char *def_calculee;
+  double *calculee;
+  char *def_base;
+  double *base;
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
+      Pp.fpr fmt "  double *saisie_%s;@\n" sp;
+      Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
+      Pp.fpr fmt "  double *calculee_%s;@\n" sp;
+      Pp.fpr fmt "  char *def_base_%s;@\n" sp;
+      Pp.fpr fmt "  double *base_%s;@\n" sp)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt
+    {|  T_var_space var_spaces[NB_ESPACES_VARIABLES + 1];
+  int var_space;
+  T_tmp_var *tmps;
   int tmps_org;
-  int ref_org;
+  int nb_tmps_target;
+  T_ref_var *refs;
+  int refs_org;
+  int nb_refs_target;
   T_keep_discord *keep_discords;
   T_discord *discords;
   int nb_anos;
@@ -387,31 +505,57 @@ struct S_irdata {
   int sz_err_archive;
   char **err_archive;
   int nb_err_archive;
+  T_event **events;
+  int nb_events;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
 };
 
 typedef struct S_irdata T_irdata;
 
-#define S_ irdata->saisie
-#define C_ irdata->calculee
-#define B_ irdata->base
-/*#define T_ irdata->tmps*/
-/*#define R_ irdata->ref*/
-#define DS_ irdata->def_saisie
-#define DC_ irdata->def_calculee
-#define DB_ irdata->def_base
-/*#define DT_ irdata->def_tmps*/
-/*#define DR_ irdata->def_ref*/
-/*#define IT_ irdata->info_tmps*/
-/*#define IR_ irdata->info_ref*/
+|};
+  StrMap.iter
+    (fun f (ef : Com.event_field) ->
+      if ef.is_var then
+        Pp.fpr fmt
+          "extern T_varinfo *event_field_%s_var(T_irdata *irdata, char \
+           idx_def, double idx_val);\n"
+          f;
+      Pp.fpr fmt
+        "extern char event_field_%s(T_irdata *irdata, int var_space, char \
+         *res_def, double *res_val, char idx_def, double idx_val);\n"
+        f)
+    cprog.program_event_fields;
+  Pp.fpr fmt
+    {|
+#define DS_(sp,idx) irdata->def_saisie_##sp[idx]
+#define S_(sp,idx) irdata->saisie_##sp[idx]
+
+#define DC_(sp,idx) irdata->def_calculee_##sp[idx]
+#define C_(sp,idx) irdata->calculee_##sp[idx]
+
+#define DB_(sp,idx) irdata->def_base_##sp[idx]
+#define B_(sp,idx) irdata->base_##sp[idx]
+
+#define I_(cat,idx) ((T_varinfo *)&(varinfo_##cat[idx]))
+
+#define DT_(idx) (irdata->tmps[irdata->tmps_org + (idx)].def)
+#define T_(idx) (irdata->tmps[irdata->tmps_org + (idx)].val)
+#define IT_(idx) (irdata->tmps[irdata->tmps_org + (idx)].info)
+
+#define DR_(idx) (irdata->refs[irdata->refs_org + (idx)].def)
+#define R_(idx) (irdata->refs[irdata->refs_org + (idx)].val)
+#define NR_(idx) (irdata->refs[irdata->refs_org + (idx)].name)
+#define SR_(idx) (irdata->refs[irdata->refs_org + (idx)].var_space)
+#define IR_(idx) (irdata->refs[irdata->refs_org + (idx)].info)
+
+extern T_event *event(T_irdata *irdata, char idx_def, double idx_val);
+extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 
 #define EST_SAISIE     0x00000
 #define EST_CALCULEE   0x04000
 #define EST_BASE       0x08000
 #define EST_TEMPORAIRE 0x10000
-#define EST_ARGUMENT   0x20000
-#define EST_RESULTAT   0x40000
 #define EST_MASQUE     0x3c000
 #define INDICE_VAL     0x03fff
 
@@ -426,9 +570,8 @@ extern void free_erreur();
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
 |};
-  Format.fprintf fmt "#define EPSILON %f" !Cli.comparison_error_margin;
-
-  Format.fprintf fmt
+  Pp.fpr fmt "#define EPSILON %f" !Cli.comparison_error_margin;
+  Pp.fpr fmt
     {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)
 #define LT_E(a,b) ((a) + EPSILON < (b))
@@ -443,8 +586,13 @@ extern void free_erreur();
 
 extern double floor_g(double);
 extern double ceil_g(double);
-extern int multimax_def(int, char *);
-extern double multimax(double, double *);
+
+extern int multimax_varinfo(
+  T_irdata *irdata, int var_space, T_varinfo *info,
+  char nb_def, double nb_val,
+  char *res_def, double *res_val
+);
+
 extern int modulo_def(int, int);
 extern double modulo(double, double);
 |}
@@ -453,33 +601,34 @@ let gen_lib fmt (cprog : Mir.program) flags =
   let count loc =
     StrMap.fold
       (fun _ var nb ->
-        nb + if Com.Var.cat_var_loc var = Some loc then Com.Var.size var else 0)
+        nb + if Com.Var.cat_var_loc var = loc then Com.Var.size var else 0)
       cprog.program_vars 0
   in
   let taille_saisie = count Com.CatVar.LocInput in
   let taille_calculee = count Com.CatVar.LocComputed in
   let taille_base = count Com.CatVar.LocBase in
+  let taille_totale = taille_saisie + taille_calculee + taille_base in
   let nb_ench = StrMap.cardinal cprog.program_chainings in
   let nb_err = StrMap.cardinal cprog.program_errors in
   let nb_call = IntMap.cardinal cprog.program_rules in
   let nb_verif = IntMap.cardinal cprog.program_verifs in
 
-  Format.fprintf fmt
-    {|#define NB_SAISIE %d
-#define NB_CALCULEE %d
-#define NB_BASE %d
+  Pp.fpr fmt
+    {|#define TAILLE_SAISIE %d
+#define TAILLE_CALCULEE %d
+#define TAILLE_BASE %d
+#define TAILLE_TOTALE %d
 #define NB_ENCH %d
 
 |}
-    taille_saisie taille_calculee taille_base nb_ench;
+    taille_saisie taille_calculee taille_base taille_totale nb_ench;
 
-  Format.fprintf fmt {|#define TAILLE_TMP_VARS %d
-#define TAILLE_REFS %d
+  Pp.fpr fmt "#define TAILLE_TMP_VARS %d\n" cprog.program_stats.sz_all_tmps;
+  Pp.fpr fmt "#define TAILLE_REFS %d\n" cprog.program_stats.nb_all_refs;
+  Pp.fpr fmt "#define TAILLE_TAB_VARINFO %d\n"
+    (IntMap.cardinal cprog.program_stats.table_map);
 
-|}
-    cprog.program_stats.sz_all_tmps cprog.program_stats.nb_all_refs;
-
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|#define ANOMALIE     1
 #define DISCORDANCE  2
 #define INFORMATIVE  4
@@ -500,24 +649,24 @@ let gen_lib fmt (cprog : Mir.program) flags =
 
 |};
 
-  Format.fprintf fmt "#define NB_ERR %d\n" nb_err;
-  Format.fprintf fmt "#define NB_CALL %d\n" nb_call;
-  Format.fprintf fmt "#define NB_VERIF %d\n\n" nb_verif;
+  Pp.fpr fmt "#define NB_ERR %d\n" nb_err;
+  Pp.fpr fmt "#define NB_CALL %d\n" nb_call;
+  Pp.fpr fmt "#define NB_VERIF %d\n\n" nb_verif;
 
   (* TODO external declaration of individual control rules (seems to be no
      longer used) *)
   StrMap.iter
     (fun _ (e : Com.Error.t) ->
       let en = Pos.unmark e.name in
-      Format.fprintf fmt "extern T_erreur erreur_%s;\n" en)
+      Pp.fpr fmt "extern T_erreur erreur_%s;\n" en)
     cprog.program_errors;
 
   (* TODO function declarations (seems to be no longer used) *)
   if flags.Dgfip_options.flg_pro then
-    Format.fprintf fmt "extern struct S_erreur *tabErreurs[];\n\n"
-  else Format.fprintf fmt "\n";
+    Pp.fpr fmt "extern struct S_erreur *tabErreurs[];\n\n"
+  else Pp.fpr fmt "\n";
 
-  Format.fprintf fmt
+  Pp.fpr fmt
     {|extern void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff);
 extern void print_indent(FILE *std, T_print_context *pr_ctx);
 extern void print_string(FILE *std, T_print_context *pr_ctx, char *str);
@@ -531,15 +680,23 @@ typedef struct S_env_sauvegarde {
   struct S_env_sauvegarde *suite;
 } T_env_sauvegarde;
 
+typedef struct S_env_sauvegarde_evt {
+  T_event sauv_evt;
+  T_event *orig_evt;
+  struct S_env_sauvegarde_evt *suite;
+} T_env_sauvegarde_evt;
+
 extern void env_sauvegarder(T_env_sauvegarde **liste, char *oDef, double *oVal, int sz);
 extern void env_restaurer(T_env_sauvegarde **liste);
+extern void env_sauvegarder_evt(T_env_sauvegarde_evt **liste, T_event *evt);
+extern void env_restaurer_evt(T_env_sauvegarde_evt **liste);
 extern int nb_informatives(T_irdata *irdata);
 extern int nb_discordances(T_irdata *irdata);
 extern int nb_anomalies(T_irdata *irdata);
 extern int nb_bloquantes(T_irdata *irdata);
-extern void nettoie_erreur (T_irdata *irdata);
-extern void finalise_erreur (T_irdata *irdata);
-extern void exporte_erreur (T_irdata *irdata);
+extern void nettoie_erreur _PROTS((T_irdata *irdata ));
+extern void finalise_erreur _PROTS((T_irdata *irdata ));
+extern void exporte_erreur _PROTS((T_irdata *irdata ));
 
 extern T_irdata *cree_irdata(void);
 extern void init_saisie(T_irdata *irdata);
@@ -575,43 +732,103 @@ extern char *lis_erreur_sous_code(T_erreur *err);
 extern char *lis_erreur_is_isf(T_erreur *err);
 extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
+extern int nb_evenements(T_irdata *irdata);
 
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
-extern char lis_varinfo_def(T_irdata *irdata, T_varinfo *info);
-extern double lis_varinfo_val(T_irdata *irdata, T_varinfo *info);
-extern char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx);
-extern double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx);
-extern void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val);
-extern void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val);
-extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom);
-extern void pr_out_var(T_irdata *irdata, char *nom);
-extern void pr_err_var(T_irdata *irdata, char *nom);
+
+extern char lis_varinfo(
+  T_irdata *irdata,
+  int var_space,
+  T_varinfo *info,
+  char *res_def, double *res_val
+);
+
+extern char *lis_varinfo_def_ptr(T_irdata *irdata, int var_space, T_varinfo *info);
+extern double *lis_varinfo_val_ptr(T_irdata *irdata, int var_space, T_varinfo *info);
+
+extern char lis_varinfo_tab(
+  T_irdata *irdata, int var_space,
+  int idx_tab, char idx_def, double idx_val,
+  char *res_def, double *res_val
+);
+
+extern void ecris_varinfo(
+  T_irdata *irdata, int var_space,
+  T_varinfo *info, char def, double val
+);
+
+extern void ecris_varinfo_tab(
+  T_irdata *irdata, int var_space,
+  int idx_tab, int idx_def, double idx_val,
+  char def, double val
+);
+
+extern T_varinfo *lis_tabaccess_varinfo(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val
+);
+
+extern char *lis_tabaccess_def_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+);
+
+extern double *lis_tabaccess_val_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+);
+
+extern char lis_tabaccess(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val,
+  char *res_def, double *res_val
+);
+
+extern void ecris_tabaccess(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val,
+  char def, double val
+);
+
+extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom);
+extern void pr_out_var(T_irdata *irdata, int var_space, char *nom);
+extern void pr_err_var(T_irdata *irdata, int var_space, char *nom);
+
+extern char est_variable(
+  T_varinfo *info, char *nomCmp, char *res_def, double *res_val
+);
+
+extern char est_variable_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+);
+
 |}
 
 let gen_decl_functions fmt (cprog : Mir.program) =
-  let functions = Com.TargetMap.bindings cprog.program_functions in
+  let functions = StrMap.bindings cprog.program_functions in
   let pp_args fmt args =
     List.iteri
-      (fun i _ -> Pp.fpr fmt ", char def_arg%d, double val_arg%d" i i)
+      (fun i _ -> Pp.fpr fmt ", char arg_def%d, double arg_val%d" i i)
       args
   in
-  Format.fprintf fmt "@[<v 0>%a@]@,"
-    (Format.pp_print_list (fun fmt (fn, fd) ->
-         Format.fprintf fmt
-           "extern int %s(T_irdata* irdata, char *def_res, double *val_res%a);"
-           fn pp_args fd.Mir.target_args))
+  Pp.fpr fmt "@[<v 0>%a@]@,"
+    (Format.pp_print_list (fun fmt (fn, (fd : Mir.target)) ->
+         Pp.fpr fmt
+           "extern int %s(T_irdata* irdata, char *res_def, double *res_val%a);"
+           fn pp_args fd.target_args))
     functions
 
 let gen_decl_targets fmt (cprog : Mir.program) =
-  let targets = Com.TargetMap.bindings cprog.program_targets in
-  Format.fprintf fmt "@[<v 0>%a@]@,"
+  let targets = StrMap.bindings cprog.program_targets in
+  Pp.fpr fmt "@[<v 0>%a@]@,"
     (Format.pp_print_list (fun fmt (name, _) ->
-         Format.fprintf fmt "extern struct S_discord *%s(T_irdata* irdata);"
-           name))
+         Pp.fpr fmt "extern struct S_discord *%s(T_irdata* irdata);" name))
     targets
 
 let gen_mlang_h fmt cprog flags stats_varinfos =
-  let pr form = Format.fprintf fmt form in
+  let pr form = Pp.fpr fmt form in
   pr "/****** LICENCE CECIL *****/\n\n";
   pr "#ifndef _MLANG_H_\n";
   pr "#define _MLANG_H_\n";
@@ -625,11 +842,13 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   pr "\n";
   pr "#include \"conf.h\"\n";
   pr "\n";
+  pr "#define _PROTS(X) X\n";
+  pr "\n";
   pr "#define ANNEE_REVENU %04d\n" flags.Dgfip_options.annee_revenu;
   pr "\n";
   gen_decl_varinfos fmt cprog stats_varinfos;
   pr "\n";
-  gen_const fmt;
+  gen_const fmt cprog;
   pr "\n";
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
@@ -641,8 +860,8 @@ let gen_mlang_h fmt cprog flags stats_varinfos =
   gen_decl_targets fmt cprog;
   pr "#endif /* _MLANG_H_ */\n\n"
 
-let gen_mlang_c fmt flags =
-  Format.fprintf fmt "%s"
+let gen_mlang_c fmt (cprog : Mir.program) flags =
+  Pp.fpr fmt "%s"
     {|/****** LICENCE CECIL *****/
 
 #include "mlang.h"
@@ -803,12 +1022,12 @@ void add_erreur(T_irdata *irdata, T_erreur *ref_erreur, char *code) {
   if (ref_erreur->type == INFORMATIVE) irdata->nb_infos++;
 |};
   if flags.Dgfip_options.flg_pro || flags.flg_iliad then
-    Format.fprintf fmt "%s"
+    Pp.fpr fmt "%s"
       {|if (strcmp(ref_erreur->isisf, "O") != 0 && ref_erreur->type == ANOMALIE) {
 |}
-  else Format.fprintf fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
+  else Pp.fpr fmt "%s" {|if (ref_erreur->type == ANOMALIE) {
 |};
-  Format.fprintf fmt "%s"
+  Pp.fpr fmt "%s"
     {|irdata->nb_bloqs++;
     if (irdata->nb_bloqs >= irdata->max_bloqs) {
       longjmp(irdata->jmp_bloq, 1);
@@ -832,156 +1051,47 @@ int nb_bloquantes(T_irdata *irdata) {
   return irdata->nb_bloqs;
 }
 
-#ifdef FLG_TRACE
-
-/* int niv_trace = 3; */
-
-#ifdef FLG_API
-#define TRACE_FILE fd_trace_dialog
-#else
-#define TRACE_FILE stderr
-#endif /* FLG_API */
-
-void aff1(nom)
-char *nom ;
-{
-#ifdef FLG_COLORS
-if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
-#else
-if (niv_trace >= 1) fprintf(stderr, "%s \n", nom) ;
-#endif
+T_event *event(T_irdata *irdata, char idx_def, double idx_val) {
+  int idx;
+  if (idx_def == 0) return NULL;
+  idx = (int)idx_val;
+  if (idx < 0 || irdata->nb_events <= idx) return NULL;
+  return irdata->events[idx];
 }
 
-void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi) {
-  double valeur;
-  int def;
-  if (expr < 0) {
-    if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
-              color, typo, nom, expr, chaine);
-#else
-      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
-#endif /* FLG_COLORS */
-    }
-    return;
-  } else if (expr >= maxi) {
-#ifdef FLG_COLORS
-    fprintf(TRACE_FILE,
-            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
-            color, typo, expr, maxi);
-#else
-    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
-            expr, maxi);
-#endif /* FLG_COLORS */
-    expr = 0;
+int size_varinfo(T_varinfo *info, char *res_def, double *res_val) {
+  *res_def = 0;
+  *res_val = 0.0;
+  if (info == NULL) {
+    return *res_def;
   }
-  switch (indice & EST_MASQUE) {
-    case EST_SAISIE:
-      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
-      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_CALCULEE:
-      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
-      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_BASE:
-      valeur = irdata->base[(indice & INDICE_VAL) + expr];
-      def = irdata->def_base[(indice & INDICE_VAL) + expr];
-      break;
-    case EST_TEMPORAIRE:
-      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
-      def = irdata->def_tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr];
-      break;
-  }
-  if (is_tab) {
-    if (def == 0) {
-      if (valeur != 0) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
-                color, typo, nom, expr, valeur);
-#else
-        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
-#endif /* FLG_COLORS */
-      } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
-                color, typo, nom, expr, chaine);
-#else
-        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
-#endif /* FLG_COLORS */
-      }
-    } else if (def != 1) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
-              color, typo, nom, expr, def);
-#else
-      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
-#endif /* FLG_COLORS */
-    } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
-              color, typo, nom, expr, chaine, valeur);
-#else
-      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
-#endif /* FLG_COLORS */
-    }
-  } else {
-    if (def == 0) {
-      if (valeur != 0) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
-                color, typo, nom, valeur);
-#else
-        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
-#endif /* FLG_COLORS */
-      } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
-                color, typo, nom, chaine);
-#else
-        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
-#endif /* FLG_COLORS */
-      }
-    } else if (def != 1) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
-              color, typo, nom, def);
-#else
-      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
-#endif /* FLG_COLORS */
-    } else if (niv_trace >= niv) {
-#ifdef FLG_COLORS
-      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
-              color, typo, nom, chaine, valeur);
-#else
-      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
-#endif /* FLG_COLORS */
-    }
-  }
+  *res_def = 1;
+  *res_val = (double)info->size;
+  return *res_def;
 }
-
-#endif /* FLG_TRACE */
 
 T_discord *no_error(T_irdata *irdata) {
   return NULL;
 }
 
-int multimax_def(int nbopd, char *var) {
-  int i = 0;
-  for (i = 0; i < nbopd; i++) {
-    if (var[i] == 1) return 1;
+int multimax_varinfo(
+  T_irdata *irdata, int var_space, T_varinfo *info,
+  char nb_def, double nb_val,
+  char *res_def, double *res_val
+) {
+  int i;
+  int nb = (int)nb_val;
+  char def;
+  double val;
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || info == NULL || info->tab_idx < 0 || nb_def == 0) return *res_def;
+  for (i = 0; i < nb && i < info->size; i++) {
+    lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
+    if (def == 1) *res_def = 1;
+    if (val >= *res_val) *res_val = val;
   }
-  return 0;
-}
-
-double multimax(double nbopd, double *var) {
-  int i = 0;
-  double s = 0.0;
-  for (i = 0; i < (int)nbopd; i++) {
-    if (var[i] >= s) s = var[i];
-  }
-  return s;
+  return *res_def;
 }
 
 int modulo_def(int a, int b) {
@@ -1014,9 +1124,42 @@ void env_restaurer(T_env_sauvegarde **liste) {
 
   while (*liste != NULL) {
     courant = *liste;
-    *liste = courant-> suite;
+    *liste = courant->suite;
     *(courant->orig_def) = courant->sauv_def;
     *(courant->orig_val) = courant->sauv_val;
+    free(courant);
+  }
+}
+
+static void copy_evt(T_event *src, T_event *dst) {
+|};
+  StrMap.iter
+    (fun f (ef : Com.event_field) ->
+      if ef.is_var then
+        Pp.fpr fmt "  dst->field_%s_var = src->field_%s_var;\n" f f
+      else (
+        Pp.fpr fmt "  dst->field_%s_def = src->field_%s_def;\n" f f;
+        Pp.fpr fmt "  dst->field_%s_val = src->field_%s_val;\n" f f))
+    cprog.program_event_fields;
+  Pp.fpr fmt "%s"
+    {|
+    }
+
+void env_sauvegarder_evt(T_env_sauvegarde_evt **liste, T_event *evt) {
+  T_env_sauvegarde_evt *nouveau = (T_env_sauvegarde_evt *)malloc(sizeof (T_env_sauvegarde_evt));
+  copy_evt(evt, &(nouveau->sauv_evt));
+  nouveau->orig_evt = evt;
+  nouveau->suite = *liste;
+  *liste = nouveau;
+}
+
+void env_restaurer_evt(T_env_sauvegarde_evt **liste) {
+  T_env_sauvegarde_evt *courant;
+
+  while (*liste != NULL) {
+    courant = *liste;
+    *liste = courant->suite;
+    copy_evt(&(courant->sauv_evt), courant->orig_evt);
     free(courant);
   }
 }
@@ -1029,7 +1172,7 @@ void set_print_indent(FILE *std, T_print_context *pr_ctx, double diff) {
 void print_indent(FILE *std, T_print_context *pr_ctx) {
   if (pr_ctx->is_newline) {
     int i;
-    for (i = 1; i < pr_ctx->indent; i++) {
+    for (i = 0; i < pr_ctx->indent; i++) {
       fprintf(pr_ctx->std, " ");
     }
     pr_ctx->is_newline = 0;
@@ -1122,17 +1265,32 @@ static void init_tab(char *p_def, double *p_val, int nb) {
 
 void init_saisie(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_saisie, irdata->saisie, NB_SAISIE);
+  init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
+}
+
+void init_saisie_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_SAISIE);
 }
 
 void init_calculee(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_calculee, irdata->calculee, NB_CALCULEE);
+  init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
+}
+
+void init_calculee_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_CALCULEE);
 }
 
 void init_base(T_irdata *irdata) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_base, irdata->base, NB_BASE);
+  init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+}
+
+void init_base_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_BASE);
 }
 
 void init_erreur(T_irdata *irdata) {
@@ -1147,22 +1305,67 @@ void init_erreur(T_irdata *irdata) {
 
 void detruis_irdata(T_irdata *irdata) {
   if (irdata == NULL) return;
-  if (irdata->saisie != NULL) free(irdata->saisie);
-  if (irdata->def_saisie != NULL) free(irdata->def_saisie);
-  if (irdata->calculee != NULL) free(irdata->calculee);
-  if (irdata->def_calculee != NULL) free(irdata->def_calculee);
-  if (irdata->base != NULL) free(irdata->base);
-  if (irdata->def_base != NULL) free(irdata->def_base);
+  irdata->def_saisie = NULL;
+  irdata->saisie = NULL;
+  irdata->def_calculee = NULL;
+  irdata->calculee = NULL;
+  irdata->def_base = NULL;
+  irdata->base = NULL;
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Com.CatVar.LocMap.iter
+        (fun loc _ ->
+          match loc with
+          | Com.CatVar.LocInput ->
+              Pp.fpr fmt
+                "  if (irdata->def_saisie_%s != NULL) \
+                 free(irdata->def_saisie_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->saisie_%s != NULL) free(irdata->saisie_%s);@\n"
+                sp sp
+          | Com.CatVar.LocComputed ->
+              Pp.fpr fmt
+                "  if (irdata->def_calculee_%s != NULL) \
+                 free(irdata->def_calculee_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->calculee_%s != NULL) free(irdata->calculee_%s);@\n"
+                sp sp
+          | Com.CatVar.LocBase ->
+              Pp.fpr fmt
+                "  if (irdata->def_base_%s != NULL) free(irdata->def_base_%s);@\n"
+                sp sp;
+              Pp.fpr fmt
+                "  if (irdata->base_%s != NULL) free(irdata->base_%s);@\n" sp sp)
+        vsd.vs_cats)
+    cprog.program_var_spaces_idx;
+  IntMap.iter
+    (fun id _ ->
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_saisie = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].saisie = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_calculee = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].calculee = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_base = NULL;@\n" id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].base = NULL;@\n" id)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt
+    {|
   if (irdata->tmps != NULL) free(irdata->tmps);
-  if (irdata->def_tmps != NULL) free(irdata->def_tmps);
-  if (irdata->info_tmps != NULL) free(irdata->info_tmps);
-  if (irdata->ref != NULL) free(irdata->ref);
-  if (irdata->def_ref != NULL) free(irdata->def_ref);
-  if (irdata->info_ref != NULL) free(irdata->info_ref);
+  if (irdata->refs != NULL) free(irdata->refs);
   init_erreur(irdata);
   if (irdata->err_finalise != NULL) free(irdata->err_finalise);
   if (irdata->err_sortie != NULL) free(irdata->err_sortie);
   if (irdata->err_archive != NULL) free(irdata->err_archive);
+  if (irdata->events != NULL) {
+    int i = 0;
+    for (i = 0; i < irdata->nb_events; i++) {
+      if (irdata->events[i] != NULL) free(irdata->events[i]);
+    }
+    free(irdata->events);
+  }
   free(irdata);
 }
 
@@ -1171,57 +1374,74 @@ T_irdata *cree_irdata(void) {
   
   irdata = (T_irdata *)malloc(sizeof (T_irdata));
   if (irdata == NULL) return NULL;
-  irdata->saisie = NULL;
-  irdata->def_saisie = NULL;
-  if (NB_SAISIE > 0) {
-    irdata->saisie = (double *)malloc(NB_SAISIE * sizeof (double));
-    if (irdata->saisie == NULL) goto erreur_cree_irdata;
-    irdata->def_saisie = (char *)malloc(NB_SAISIE * sizeof (char));
-    if (irdata->def_saisie == NULL) goto erreur_cree_irdata;
-  }
-  init_saisie(irdata);
-  irdata->calculee = NULL;
-  irdata->def_calculee = NULL;
-  if (NB_CALCULEE > 0) {
-    irdata->calculee = (double *)malloc(NB_CALCULEE * sizeof (double));
-    if (irdata->calculee == NULL) goto erreur_cree_irdata;
-    irdata->def_calculee = (char *)malloc(NB_CALCULEE * sizeof (char));
-    if (irdata->def_calculee == NULL) goto erreur_cree_irdata;
-  }
-  init_calculee(irdata);
-  irdata->base = NULL;
-  irdata->def_base = NULL;
-  if (NB_BASE > 0) {
-    irdata->base = (double *)malloc(NB_BASE * sizeof (double));
-    if (irdata->base == NULL) goto erreur_cree_irdata;
-    irdata->def_base = (char *)malloc(NB_BASE * sizeof (char));
-    if (irdata->def_base == NULL) goto erreur_cree_irdata;
-  }
-  init_base(irdata);
-  irdata->tmps = NULL;
-  irdata->def_tmps = NULL;
-  irdata->info_tmps = NULL;
+|};
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      let init_loc loc loc_str nb_str =
+        Pp.fpr fmt "  irdata->def_%s_%s = NULL;@\n" loc_str sp;
+        Pp.fpr fmt "  irdata->%s_%s = NULL;@\n" loc_str sp;
+        if Com.CatVar.LocMap.mem loc vsd.vs_cats then (
+          Pp.fpr fmt "  if (TAILLE_%s > 0) {@\n" nb_str;
+          Pp.fpr fmt
+            "    irdata->def_%s_%s = (char *)malloc(TAILLE_%s * sizeof (char));@\n"
+            loc_str sp nb_str;
+          Pp.fpr fmt
+            "    if (irdata->def_%s_%s == NULL) goto erreur_cree_irdata;@\n"
+            loc_str sp;
+          Pp.fpr fmt
+            "    irdata->%s_%s = (double *)malloc(TAILLE_%s * sizeof (double));@\n"
+            loc_str sp nb_str;
+          Pp.fpr fmt
+            "    if (irdata->%s_%s == NULL) goto erreur_cree_irdata;@\n" loc_str
+            sp;
+          Pp.fpr fmt "    init_%s_espace(irdata->def_%s_%s, irdata->%s_%s);@\n"
+            loc_str loc_str sp loc_str sp;
+          Pp.fpr fmt "  }@\n");
+        if vsd.vs_by_default then (
+          Pp.fpr fmt "  irdata->def_%s = irdata->def_%s_%s;@\n" loc_str loc_str
+            sp;
+          Pp.fpr fmt "  irdata->%s = irdata->%s_%s;@\n" loc_str loc_str sp)
+      in
+      init_loc Com.CatVar.LocInput "saisie" "SAISIE";
+      init_loc Com.CatVar.LocComputed "calculee" "CALCULEE";
+      init_loc Com.CatVar.LocBase "base" "BASE")
+    cprog.program_var_spaces_idx;
+  IntMap.iter
+    (fun id (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "  irdata->var_spaces[%d].id = %d;@\n" id id;
+      Pp.fpr fmt "  irdata->var_spaces[%d].name = \"%s\";@\n" id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].is_default = %d;@\n" id
+        (if vsd.vs_by_default then 1 else 0);
+      Pp.fpr fmt
+        "  irdata->var_spaces[%d].def_saisie = irdata->def_saisie_%s;@\n" id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].saisie = irdata->saisie_%s;@\n" id sp;
+      Pp.fpr fmt
+        "  irdata->var_spaces[%d].def_calculee = irdata->def_calculee_%s;@\n" id
+        sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].calculee = irdata->calculee_%s;@\n"
+        id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].def_base = irdata->def_base_%s;@\n"
+        id sp;
+      Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt "  irdata->var_space = ESPACE_PAR_DEFAUT;\n";
+  Pp.fpr fmt "%s"
+    {|  irdata->tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
-    irdata->tmps = (double *)malloc(TAILLE_TMP_VARS * sizeof (double));
+    irdata->tmps = (T_tmp_var *)malloc(TAILLE_TMP_VARS * sizeof (T_tmp_var));
     if (irdata->tmps == NULL) goto erreur_cree_irdata;
-    irdata->def_tmps = (char *)malloc(TAILLE_TMP_VARS * sizeof (char));
-    if (irdata->def_tmps == NULL) goto erreur_cree_irdata;
-    irdata->info_tmps = (T_varinfo *)malloc(TAILLE_TMP_VARS * sizeof (T_varinfo));    
-    if (irdata->info_tmps == NULL) goto erreur_cree_irdata;
   }
-  irdata->ref = NULL;
-  irdata->def_ref = NULL;
-  irdata->info_ref = NULL;
+  irdata->refs = NULL;
   if (TAILLE_REFS > 0) {
-    irdata->ref = (double **)malloc(TAILLE_REFS * (sizeof (double *)));
-    if (irdata->ref == NULL) goto erreur_cree_irdata;
-    irdata->def_ref = (char **)malloc(TAILLE_REFS * (sizeof (char *)));
-    if (irdata->def_ref == NULL) goto erreur_cree_irdata;
-    irdata->info_ref = (T_varinfo **)malloc(TAILLE_REFS * (sizeof (T_varinfo *)));
-    if (irdata->info_ref == NULL) goto erreur_cree_irdata;
+    irdata->refs = (T_ref_var *)malloc(TAILLE_REFS * (sizeof (T_ref_var)));
+    if (irdata->refs == NULL) goto erreur_cree_irdata;
   }
   irdata->tmps_org = 0;
-  irdata->ref_org = 0;
+  irdata->nb_tmps_target = 0;
+  irdata->refs_org = 0;
+  irdata->nb_refs_target = 0;
   irdata->keep_discords = NULL;
   irdata->discords = NULL;
   irdata->sz_err_finalise = 0;
@@ -1234,6 +1454,8 @@ T_irdata *cree_irdata(void) {
   irdata->err_archive = NULL;
   irdata->nb_err_archive = 0;
   init_erreur(irdata);
+  irdata->events = NULL;
+  irdata->nb_events = 0;
   irdata->ctx_pr_out.std = stdout;
   irdata->ctx_pr_out.indent = 0;
   irdata->ctx_pr_out.is_newline = 1;
@@ -1258,20 +1480,20 @@ void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
 
 void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->saisie, irdata_src->saisie, NB_SAISIE * sizeof(double));
-  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, NB_SAISIE);
+  memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double));
+  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE);
 }
 
 void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->calculee, irdata_src->calculee, NB_CALCULEE * sizeof(double));
-  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, NB_CALCULEE);
+  memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double));
+  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE);
 }
 
 void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->base, irdata_src->base, NB_BASE * sizeof(double));
-  memcpy(irdata_dst->def_base, irdata_src->def_base, NB_BASE);
+  memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double));
+  memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE);
 }
 
 static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
@@ -1283,17 +1505,17 @@ static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, d
 
 void ecris_saisie(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_saisie, irdata->saisie, NB_SAISIE, idx, def, val);
+  ecris_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE, idx, def, val);
 }
 
 void ecris_calculee(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_calculee, irdata->calculee, NB_CALCULEE, idx, def, val);
+  ecris_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE, idx, def, val);
 }
 
 void ecris_base(T_irdata *irdata, int idx, char def, double val) {
   if (irdata == NULL) return;
-  ecris_tab(irdata->def_base, irdata->base, NB_BASE, idx, def, val);
+  ecris_tab(irdata->def_base, irdata->base, TAILLE_BASE, idx, def, val);
 }
 
 static char lis_tab_def(char *t_def, int t_nb, int idx) {
@@ -1303,17 +1525,17 @@ static char lis_tab_def(char *t_def, int t_nb, int idx) {
 
 char lis_saisie_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_saisie, NB_SAISIE, idx);
+  return lis_tab_def(irdata->def_saisie, TAILLE_SAISIE, idx);
 }
 
 char lis_calculee_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_calculee, NB_CALCULEE, idx);
+  return lis_tab_def(irdata->def_calculee, TAILLE_CALCULEE, idx);
 }
 
 char lis_base_def(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0;
-  return lis_tab_def(irdata->def_base, NB_BASE, idx);
+  return lis_tab_def(irdata->def_base, TAILLE_BASE, idx);
 }
 
 static double lis_tab_val(double *t_val, int t_nb, int idx) {
@@ -1323,17 +1545,17 @@ static double lis_tab_val(double *t_val, int t_nb, int idx) {
 
 double lis_saisie_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->saisie, NB_SAISIE, idx);
+  return lis_tab_val(irdata->saisie, TAILLE_SAISIE, idx);
 }
 
 double lis_calculee_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->calculee, NB_CALCULEE, idx);
+  return lis_tab_val(irdata->calculee, TAILLE_CALCULEE, idx);
 }
 
 double lis_base_val(T_irdata *irdata, int idx) {
   if (irdata == NULL) return 0.0;
-  return lis_tab_val(irdata->base, NB_BASE, idx);
+  return lis_tab_val(irdata->base, TAILLE_BASE, idx);
 }
 
 static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
@@ -1343,17 +1565,17 @@ static char *lis_tab_def_ref(char *t_def, int t_nb, int idx) {
 
 char *lis_saisie_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_saisie, NB_SAISIE, idx);
+  return lis_tab_def_ref(irdata->def_saisie, TAILLE_SAISIE, idx);
 }
 
 char *lis_calculee_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_calculee, NB_CALCULEE, idx);
+  return lis_tab_def_ref(irdata->def_calculee, TAILLE_CALCULEE, idx);
 }
 
 char *lis_base_def_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_def_ref(irdata->def_base, NB_BASE, idx);
+  return lis_tab_def_ref(irdata->def_base, TAILLE_BASE, idx);
 }
 
 static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
@@ -1363,17 +1585,17 @@ static double *lis_tab_val_ref(double *t_val, int t_nb, int idx) {
 
 double *lis_saisie_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->saisie, NB_SAISIE, idx);
+  return lis_tab_val_ref(irdata->saisie, TAILLE_SAISIE, idx);
 }
 
 double *lis_calculee_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->calculee, NB_CALCULEE, idx);
+  return lis_tab_val_ref(irdata->calculee, TAILLE_CALCULEE, idx);
 }
 
 double *lis_base_val_ref(T_irdata *irdata, int idx) {
   if (irdata == NULL) return NULL;
-  return lis_tab_val_ref(irdata->base, NB_BASE, idx);
+  return lis_tab_val_ref(irdata->base, TAILLE_BASE, idx);
 }
 
 T_discord *lis_discords(T_irdata *irdata) {
@@ -1421,12 +1643,18 @@ int lis_erreur_type(T_erreur *err) {
   return err->type;
 }
 
+int nb_evenements(T_irdata *irdata) {
+  if (irdata == NULL) return 0;
+  return irdata->nb_events;
+}
+
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   T_varinfo_map *map = NULL;
   int res = -1;
   int inf = 0;
   int sup = NB_variable + NB_saisie;
   int millieu = 0;
+  int i;
 
   if (irdata == NULL || nom == NULL) return NULL;
   while ((res != 0) && (inf < sup)) {
@@ -1442,146 +1670,557 @@ T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
   if (res == 0) {
     return map->info;
   }
+  for (i = 1; i <= irdata->nb_tmps_target; i++) {
+    T_varinfo *info = irdata->tmps[irdata->tmps_org - i].info;
+    if (info != NULL && strcmp(nom, info->name) == 0) {
+      return info;
+    }
+  }
+  for (i = 1; i <= irdata->nb_refs_target; i++) {
+    char *ref_name = irdata->refs[irdata->refs_org - i].name;
+    if (strcmp(nom, ref_name) == 0) {
+      return irdata->refs[irdata->refs_org - i].info;
+    }
+  }
   return NULL;
 }
 
-char lis_varinfo_def(T_irdata *irdata, T_varinfo *info) {
-  if (irdata == NULL || info == NULL) return 0;
+static T_var_space *get_var_space(T_irdata *irdata, int var_space) {
+  if (irdata == NULL) return NULL;
+  if (0 <= var_space || var_space < NB_ESPACES_VARIABLES) {
+    return &(irdata->var_spaces[var_space]);
+  } else {
+    return &(irdata->var_spaces[irdata->var_space]);
+  }
+
+}
+
+char lis_varinfo(
+  T_irdata *irdata,
+  int var_space,
+  T_varinfo *info,
+  char *res_def, double *res_val
+) {
+  T_var_space *vsp;
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || info == NULL) return *res_def;
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      return irdata->def_saisie[info->idx];
+      if (vsp->def_saisie != NULL) {
+        *res_def = vsp->def_saisie[info->idx];
+        *res_val = vsp->saisie[info->idx];
+      }
+      return *res_def;
     case EST_CALCULEE:
-      return irdata->def_calculee[info->idx];
+      if (vsp->def_calculee != NULL) {
+        *res_def = vsp->def_calculee[info->idx];
+        *res_val = vsp->calculee[info->idx];
+      }
+      return *res_def;
     case EST_BASE:
-      return irdata->def_base[info->idx];
+      if (vsp->def_base != NULL) {
+        *res_def = vsp->def_base[info->idx];
+        *res_val = vsp->base[info->idx];
+      }
+      return *res_def;
+    case EST_TEMPORAIRE:
+      *res_def = irdata->tmps[irdata->tmps_org + info->idx].def;
+      *res_val = irdata->tmps[irdata->tmps_org + info->idx].val;
+      return *res_def;
     default:
-      return 0;
+      return *res_def;
   }
 }
 
-double lis_varinfo_val(T_irdata *irdata, T_varinfo *info) {
-  if (irdata == NULL || info == NULL) return 0.0;
+char *lis_varinfo_def_ptr(T_irdata *irdata, int var_space, T_varinfo *info) {
+  T_var_space *vsp;
+  if (irdata == NULL || info == NULL) return NULL;
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      return irdata->saisie[info->idx];
+      if (vsp->def_saisie == NULL) return NULL;
+      return &(vsp->def_saisie[info->idx]);
     case EST_CALCULEE:
-      return irdata->calculee[info->idx];
+      if (vsp->def_calculee == NULL) return NULL;
+      return &(vsp->def_calculee[info->idx]);
     case EST_BASE:
-      return irdata->base[info->idx];
+      if (vsp->def_base == NULL) return NULL;
+      return &(vsp->def_base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->tmps[irdata->tmps_org + info->idx].def);
     default:
-      return 0.0;
+      return NULL;
   }
 }
 
-char lis_varinfo_tab_def(T_irdata *irdata, T_varinfo *info, int idx) {
+double *lis_varinfo_val_ptr(T_irdata *irdata, int var_space, T_varinfo *info) {
+  T_var_space *vsp;
+  if (irdata == NULL || info == NULL) return NULL;
+  vsp = get_var_space(irdata, var_space);
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      if (vsp->saisie == NULL) return NULL;
+      return &(vsp->saisie[info->idx]);
+    case EST_CALCULEE:
+      if (vsp->calculee == NULL) return NULL;
+      return &(vsp->calculee[info->idx]);
+    case EST_BASE:
+      if (vsp->base == NULL) return NULL;
+      return &(vsp->base[info->idx]);
+    case EST_TEMPORAIRE:
+      return &(irdata->tmps[irdata->tmps_org + info->idx].val);
+    default:
+      return NULL;
+  }
+}
+
+char lis_varinfo_tab(
+  T_irdata *irdata, int var_space,
+  int idx_tab, char idx_def, double idx_val,
+  char *res_def, double *res_val
+) {
+  int idx = (int)idx_val;
+  T_varinfo *info = NULL;
+  T_var_space *vsp;
+  *res_def = 0;
+  *res_val = 0.0;
+  if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return *res_def;
+  info = tab_varinfo[idx_tab];
+  if (info == NULL || idx_def == 0 || info->size <= idx) return *res_def;
+  if (idx <= 0) {
+    *res_def = 1;
+    return *res_def;
+  }
+  vsp = get_var_space(irdata, var_space);
+  switch (info->loc_cat) {
+    case EST_SAISIE:
+      if (vsp->def_saisie == NULL) return *res_def;
+      *res_def = vsp->def_saisie[info->idx + idx];
+      *res_val = vsp->saisie[info->idx + idx];
+      return *res_def;
+    case EST_CALCULEE:
+      if (vsp->def_calculee == NULL) return *res_def;
+      *res_def = vsp->def_calculee[info->idx + idx];
+      *res_val = vsp->calculee[info->idx + idx];
+      return *res_def;
+    case EST_BASE:
+      if (vsp->def_base == NULL) return *res_def;
+      *res_def = vsp->def_base[info->idx + idx];
+      *res_val = vsp->base[info->idx + idx];
+      return *res_def;
+    case EST_TEMPORAIRE:
+      *res_def = irdata->tmps[irdata->tmps_org + info->idx + idx].def;
+      *res_val = irdata->tmps[irdata->tmps_org + info->idx + idx].val;
+      return *res_def;
+    default:
+      return *res_def;
+  }
+}
+
+char lis_varinfo_tab_def(T_irdata *irdata, int var_space, T_varinfo *info, int idx) {
+  T_var_space *vsp;
   if (irdata == NULL || info == NULL || info->size <= idx) return 0;
   if (idx < 0) return 1;
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      return irdata->def_saisie[info->idx + idx];
+      if (vsp->def_saisie == NULL) return 0;
+      return vsp->def_saisie[info->idx + idx];
     case EST_CALCULEE:
-      return irdata->def_calculee[info->idx + idx];
+      if (vsp->def_calculee == NULL) return 0;
+      return vsp->def_calculee[info->idx + idx];
     case EST_BASE:
-      return irdata->def_base[info->idx + idx];
+      if (vsp->def_base == NULL) return 0;
+      return vsp->def_base[info->idx + idx];
+    case EST_TEMPORAIRE:
+      return irdata->tmps[irdata->tmps_org + info->idx + idx].def;
     default:
       return 0;
   }
 }
 
-double lis_varinfo_tab_val(T_irdata *irdata, T_varinfo *info, int idx) {
-  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return 0.0;
-  switch (info->loc_cat) {
-    case EST_SAISIE:
-      return irdata->saisie[info->idx + idx];
-    case EST_CALCULEE:
-      return irdata->calculee[info->idx + idx];
-    case EST_BASE:
-      return irdata->base[info->idx + idx];
-    default:
-      return 0.0;
-  }
-}
-
-void ecris_varinfo(T_irdata *irdata, T_varinfo *info, char def, double val) {
+void ecris_varinfo(T_irdata *irdata, int var_space, T_varinfo *info, char def, double val) {
+  T_var_space *vsp;
   if (irdata == NULL || info == NULL) return;
   if (def == 0) {
     val = 0.0;
   } else {
     def = 1;
   }
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      irdata->def_saisie[info->idx] = def;
-      irdata->saisie[info->idx] = val;
+      if (vsp->def_saisie == NULL) return;
+      vsp->def_saisie[info->idx] = def;
+      vsp->saisie[info->idx] = val;
       return;
     case EST_CALCULEE:
-      irdata->def_calculee[info->idx] = def;
-      irdata->calculee[info->idx] = val;
+      if (vsp->def_calculee == NULL) return;
+      vsp->def_calculee[info->idx] = def;
+      vsp->calculee[info->idx] = val;
       return;
     case EST_BASE:
-      irdata->def_base[info->idx] = def;
-      irdata->base[info->idx] = val;
+      if (vsp->def_base == NULL) return;
+      vsp->def_base[info->idx] = def;
+      vsp->base[info->idx] = val;
+      return;
+    case EST_TEMPORAIRE:
+      irdata->tmps[irdata->tmps_org + info->idx].def = def;
+      irdata->tmps[irdata->tmps_org + info->idx].val = val;
       return;
     default:
       return;
   }
 }
 
-void ecris_varinfo_tab(T_irdata *irdata, T_varinfo *info, int idx, char def, double val) {
-  int var_idx = 0;
-
-  if (irdata == NULL || info == NULL || idx < 0 || info->size <= idx) return;
-  var_idx = info->idx + idx;
+void ecris_varinfo_tab(
+  T_irdata *irdata, int var_space,
+  int idx_tab, int idx_def, double idx_val,
+  char def, double val
+) {
+  int idx = (int)idx_val;
+  T_varinfo *info = NULL;
+  T_var_space *vsp;
+  if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return;
+  info = tab_varinfo[idx_tab];
+  if (info == NULL || idx_def == 0 || idx < 0 || info->size <= idx) return;
   if (def == 0) {
     val = 0.0;
   } else {
     def = 1;
   }
+  vsp = get_var_space(irdata, var_space);
   switch (info->loc_cat) {
     case EST_SAISIE:
-      irdata->def_saisie[var_idx] = def;
-      irdata->saisie[var_idx] = val;
+      if (vsp->def_saisie == NULL) return;
+      vsp->def_saisie[info->idx + idx] = def;
+      vsp->saisie[info->idx + idx] = val;
       return;
     case EST_CALCULEE:
-      irdata->def_calculee[var_idx] = def;
-      irdata->calculee[var_idx] = val;
+      if (vsp->def_calculee == NULL) return;
+      vsp->def_calculee[info->idx + idx] = def;
+      vsp->calculee[info->idx + idx] = val;
       return;
     case EST_BASE:
-      irdata->def_base[var_idx] = def;
-      irdata->base[var_idx] = val;
+      if (vsp->def_base == NULL) return;
+      vsp->def_base[info->idx + idx] = def;
+      vsp->base[info->idx + idx] = val;
+      return;
+    case EST_TEMPORAIRE:
+      irdata->tmps[irdata->tmps_org + info->idx + idx].def = def;
+      irdata->tmps[irdata->tmps_org + info->idx + idx].val = val;
       return;
     default:
       return;
   }
 }
 
-/* !!! */
-void pr_var(T_print_context *pr_ctx, T_irdata *irdata, char *nom) {
+T_varinfo *lis_tabaccess_varinfo(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val
+) {
   T_varinfo *info = NULL;
+  int idx = (int)idx_val;
+  if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return NULL;
+  info = tab_varinfo[idx_tab];
+  if (idx_def == 0 || idx < 0 || info->size <= idx) return NULL;
+  return tab_varinfo[idx_tab + idx + 1];
+}
+
+char *lis_tabaccess_def_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  if (info == NULL) return NULL;
+  return lis_varinfo_def_ptr(irdata, var_space, info);
+}
+
+double *lis_tabaccess_val_ptr(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  if (info == NULL) return NULL;
+  return lis_varinfo_val_ptr(irdata, var_space, info);
+}
+
+char lis_tabaccess(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val,
+  char *res_def, double *res_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  int idx = 0;
+  if (info == NULL) {
+    *res_val = 0.0;
+    if (
+      irdata != NULL && 0 <= idx_tab && idx_tab < TAILLE_TAB_VARINFO
+      && idx_def == 1 && ((int)idx_val) < 0
+    ) {
+      *res_def = 1;
+    } else {
+      *res_def = 0;
+    }
+    return *res_def;
+  }
+  lis_varinfo(irdata, var_space, info, res_def, res_val);
+  /* tableau originel */
+  /*{
+    char res2_def;
+    double res2_val;
+    lis_varinfo_tab(irdata, var_space, idx_tab, idx_def, idx_val, &res2_def, &res2_val);
+    if (*res_def != res2_def || *res_val != res2_val) {
+      *res_def = res2_def;
+      *res_val = res2_val;
+      ecris_varinfo(irdata, var_space, info, *res_def, *res_val);
+    }
+  }*/  
+  return *res_def;
+}
+
+void ecris_tabaccess(
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val,
+  char def, double val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  ecris_varinfo(irdata, var_space, info, def, val);
+  /* tableau originel */
+  /*ecris_varinfo_tab(irdata, var_space, idx_tab, idx_def, idx_val, def, val);*/
+}
+
+/* !!! */
+void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom) {
+  T_varinfo *info = NULL;
+  T_var_space *vsp;
+  char res_def = 0;
+  double res_val = 0.0;
 
   if (pr_ctx == NULL) return;
   info = cherche_varinfo(irdata, nom);
   if (info == NULL) {
     fprintf(pr_ctx->std, "inconnu");
   } else {
-    if (lis_varinfo_def(irdata, info) == 0) {
+    vsp = get_var_space(irdata, var_space);
+    lis_varinfo(irdata, var_space, info, &res_def, &res_val);
+    if (res_def == 0) {
       fprintf(pr_ctx->std, "indefini");
     } else {
-      print_double(NULL, pr_ctx, lis_varinfo_val(irdata, info), 0, 30);
+      print_double(NULL, pr_ctx, res_val, 0, 30);
     }
   }
 }
 
-void pr_out_var(T_irdata *irdata, char *nom) {
+void pr_out_var(T_irdata *irdata, int var_space, char *nom) {
   if (irdata == NULL) return;
-  pr_var(&(irdata->ctx_pr_out), irdata, nom);
+  pr_var(&(irdata->ctx_pr_out), irdata, var_space, nom);
 }
 
-void pr_err_var(T_irdata *irdata, char *nom) {
+void pr_err_var(T_irdata *irdata, int var_space, char *nom) {
   if (irdata == NULL) return;
-  pr_var(&(irdata->ctx_pr_err), irdata, nom);
+  pr_var(&(irdata->ctx_pr_err), irdata, var_space, nom);
 }
-|}
+
+char est_variable(T_varinfo *info, char *nomCmp, char *res_def, double *res_val) {
+  *res_def = 1;
+  if (info == NULL || nomCmp == NULL) {
+    *res_val = 0.0;
+    return *res_def;
+  }
+  if (
+    strcmp(info->name, nomCmp) == 0
+    || (info->alias != NULL && strcmp(info->alias, nomCmp) == 0)
+  ) {
+    *res_val = 1.0;
+    return *res_def;
+  }
+  *res_val = 0.0;
+  return *res_def;
+}
+
+char est_variable_tabaccess(
+  T_irdata *irdata, int idx_tab,
+  char idx_def, double idx_val,
+  char *nomCmp, char *res_def, double *res_val
+) {
+  T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+  return est_variable(info, nomCmp, res_def, res_val);
+}
+
+#ifdef FLG_TRACE
+
+/* int niv_trace = 3; */
+
+#ifdef FLG_API
+#define TRACE_FILE fd_trace_dialog
+#else
+#define TRACE_FILE stderr
+#endif /* FLG_API */
+
+void aff1(nom)
+char *nom ;
+{
+#ifdef FLG_COLORS
+if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
+#else
+if (niv_trace >= 1) fprintf(stderr, "%s \n", nom) ;
+#endif
+}
+
+void aff_val(
+  const char *nom, const T_irdata *irdata, int indice, int niv,
+  const char *chaine, int is_tab, int expr, int maxi
+) {
+  double valeur;
+  int def;
+  if (expr < 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
+              color, typo, nom, expr, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, expr, chaine);
+#endif /* FLG_COLORS */
+    }
+    return;
+  } else if (expr >= maxi) {
+#ifdef FLG_COLORS
+    fprintf(TRACE_FILE,
+            "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
+            color, typo, expr, maxi);
+#else
+    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
+            expr, maxi);
+#endif /* FLG_COLORS */
+    expr = 0;
+  }
+  switch (indice & EST_MASQUE) {
+    case EST_SAISIE:
+      valeur = irdata->saisie[(indice & INDICE_VAL) + expr];
+      def = irdata->def_saisie[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_CALCULEE:
+      valeur = irdata->calculee[(indice & INDICE_VAL) + expr];
+      def = irdata->def_calculee[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_BASE:
+      valeur = irdata->base[(indice & INDICE_VAL) + expr];
+      def = irdata->def_base[(indice & INDICE_VAL) + expr];
+      break;
+    case EST_TEMPORAIRE:
+      valeur = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr].val;
+      def = irdata->tmps[irdata->tmps_org - (indice & INDICE_VAL) + expr].def;
+      break;
+  }
+  if (is_tab) {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
+                color, typo, nom, expr, valeur);
+#else
+        fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, expr, valeur);
+#endif /* FLG_COLORS */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
+                color, typo, nom, expr, chaine);
+#else
+        fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, expr, chaine);
+#endif /* FLG_COLORS */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
+              color, typo, nom, expr, def);
+#else
+      fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, expr, def);
+#endif /* FLG_COLORS */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
+              color, typo, nom, expr, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, expr, chaine, valeur);
+#endif /* FLG_COLORS */
+    }
+  } else {
+    if (def == 0) {
+      if (valeur != 0) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur undef = %lf\033[0m\n",
+                color, typo, nom, valeur);
+#else
+        fprintf(TRACE_FILE, "%s : erreur undef = %lf\n", nom, valeur);
+#endif /* FLG_COLORS */
+      } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+        fprintf(TRACE_FILE, "\033[%d;%dm%s %s undef\033[0m\n",
+                color, typo, nom, chaine);
+#else
+        fprintf(TRACE_FILE, "%s %s undef\n", nom, chaine);
+#endif /* FLG_COLORS */
+      }
+    } else if (def != 1) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s : erreur flag def = %d\033[0m\n",
+              color, typo, nom, def);
+#else
+      fprintf(TRACE_FILE, "%s : erreur flag def = %d\n", nom, def);
+#endif /* FLG_COLORS */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s %s %lf\033[0m\n",
+              color, typo, nom, chaine, valeur);
+#else
+      fprintf(TRACE_FILE, "%s %s %lf\n", nom, chaine, valeur);
+#endif /* FLG_COLORS */
+    }
+  }
+}
+
+#endif /* FLG_TRACE */
+
+|};
+  StrMap.iter
+    (fun f (ef : Com.event_field) ->
+      let pr form = Pp.fpr fmt form in
+      pr
+        "char event_field_%s(T_irdata *irdata, int var_space, char *res_def, \
+         double *res_val, char idx_def, double idx_val) {\n"
+        f;
+      if ef.is_var then pr "  T_varinfo *info = NULL;\n";
+      pr "  int idx = (int)floor(idx_val);\n";
+      pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
+      pr "    *res_def = 0;\n";
+      pr "    *res_val = 0.0;\n";
+      pr "    return 0;\n";
+      pr "  }\n";
+      if ef.is_var then (
+        pr "  info = irdata->events[idx]->field_%s_var;\n" f;
+        pr "  lis_varinfo(irdata, var_space, info, res_def, res_val);\n")
+      else (
+        pr "  *res_def = irdata->events[idx]->field_%s_def;\n" f;
+        pr "  *res_val = irdata->events[idx]->field_%s_val;\n" f);
+      pr "  return *res_def;\n";
+      pr "}\n\n";
+
+      if ef.is_var then (
+        pr
+          "T_varinfo *event_field_%s_var(T_irdata *irdata, char idx_def, \
+           double idx_val) {\n"
+          f;
+        pr "  T_varinfo *info = NULL;\n";
+        pr "  int idx = (int)floor(idx_val);\n";
+        pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
+        pr "    return NULL;\n";
+        pr "  }\n";
+        pr "  return irdata->events[idx]->field_%s_var;\n" f;
+        pr "}\n\n"))
+    cprog.program_event_fields
 
 let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   Dgfip_compir_files.generate_compir_files flags cprog;
@@ -1601,5 +2240,5 @@ let generate_auxiliary_files flags (cprog : Mir.program) : unit =
   close_out oc;
 
   let oc, fmt = open_file "mlang.c" in
-  gen_mlang_c fmt flags;
+  gen_mlang_c fmt cprog flags;
   close_out oc

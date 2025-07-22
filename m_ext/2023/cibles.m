@@ -261,13 +261,13 @@ verifier domaine corrective
 
 cible trace_in:
 application: iliad;
-variable temporaire: TOTO;
+variables_temporaires: TOTO;
 TOTO = 0;
 #afficher_erreur indenter(2);
 
 cible trace_out:
 application: iliad;
-variable temporaire: TOTO;
+variables_temporaires: TOTO;
 TOTO = 0;
 #afficher_erreur indenter(-2);
 
@@ -311,7 +311,7 @@ calculer cible trace_out;
 
 cible calcule_acomptes:
 application: iliad;
-variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_acomptes[\n";
 calculer cible trace_in;
 FLAG_ACO = 1;
@@ -346,7 +346,7 @@ calculer cible trace_out;
 
 cible est_code_supp_avfisc:
 application: iliad;
-argument: EXISTE_CODE_SUPP;
+arguments: EXISTE_CODE_SUPP;
 #afficher_erreur "est_code_supp_avfisc[\n";
 calculer cible trace_in;
 EXISTE_CODE_SUPP = 0;
@@ -374,7 +374,7 @@ calculer cible trace_out;
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire:
+variables_temporaires:
   EXISTE_AVFISC, EXISTE_CODE_SUPP,
   SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_avfiscal[\n";
@@ -440,7 +440,7 @@ calculer cible trace_out;
 
 cible calcule_acomptes_avfisc:
 application: iliad;
-variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
 #afficher_erreur "calcule_acomptes_avfisc[\n";
 calculer cible trace_in;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
@@ -463,7 +463,7 @@ calculer cible trace_out;
 
 cible est_calcul_acomptes:
 application: iliad;
-argument: EXISTE_ACOMPTES;
+arguments: EXISTE_ACOMPTES;
 #afficher_erreur "est_calcul_acomptes[\n";
 calculer cible trace_in;
 EXISTE_ACOMPTES = 0;
@@ -479,7 +479,7 @@ calculer cible trace_out;
 
 cible est_calcul_avfisc:
 application: iliad;
-argument: EXISTE_AVFISC;
+arguments: EXISTE_AVFISC;
 #afficher_erreur "est_calcul_avfisc[\n";
 calculer cible trace_in;
 EXISTE_AVFISC = 0;
@@ -498,8 +498,8 @@ calculer cible trace_out;
 
 cible traite_double_liquidation3:
 application: iliad;
-argument: P_EST_CALCUL_ACOMPTES;
-variable temporaire: CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+arguments: P_EST_CALCUL_ACOMPTES;
+variables_temporaires: CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 #afficher_erreur "traite_double_liquidation3[\n";
 calculer cible trace_in;
 FLAG_ACO = 0;
@@ -567,7 +567,7 @@ calculer cible trace_out;
 
 cible abs_flag:
 application: iliad;
-argument: VAR, ABS, FLAG;
+arguments: VAR, ABS, FLAG;
 si present(VAR) alors
   FLAG = (VAR < 0);
   ABS = abs(VAR);
@@ -576,7 +576,7 @@ finsi
 
 cible traite_double_liquidation_exit_taxe:
 application: iliad;
-variable temporaire: CALCULER_ACOMPTES;
+variables_temporaires: CALCULER_ACOMPTES;
 #afficher_erreur "traite_double_liquidation_exit_taxe[\n";
 calculer cible trace_in;
 si present(PVIMPOS) ou present(CODRWB) alors
@@ -750,7 +750,7 @@ calculer cible traite_double_liquidation_pvro;
 
 cible enchaine_calcul:
 application: iliad;
-# variable temporaire: CALCULER_ACOMPTES;
+# variables_temporaires: CALCULER_ACOMPTES;
 si V_IND_TRAIT = 4 alors # primitif
   calculer cible effacer_base_etc;
   calculer cible traite_double_liquidation_2;
@@ -773,9 +773,235 @@ si nb_discordances() + nb_informatives() > 0 alors
   exporte_erreurs;
 finsi
 
+fonction truc:
+application: iliad;
+arguments: A0, A1;
+resultat: RES;
+variables_temporaires: TOTO;
+#V_IND_TRAIT = 4;
+afficher_erreur "truc\n" indenter(2);
+TOTO = 1;
+iterer
+: variable I
+: entre A0 .. A1 increment 1
+: dans (
+  si I = A0 alors
+    RES = 1;
+  sinon
+    RES = 2 * RES + TOTO;
+  finsi
+  afficher_erreur (I) ": " (RES) "\n";
+)
+afficher_erreur indenter(-2);
+
+cible test_boucle:
+application: iliad;
+arguments: I0, I1;
+variables_temporaires: TOTO;
+TOTO = 0;
+iterer
+: variable I
+: entre I0 .. I1 increment 0.7
+: entre 2 .. 1 increment -1
+: dans (
+  iterer
+  : variable J
+  : entre -3 .. -1 increment 1
+  : entre 1 .. 0 increment -1
+  : dans (
+    afficher_erreur nom(I) " = " (I) ", " nom(J) " = " (J) "\n";
+  )
+)
+TOTO = truc(TOTO, truc(4, truc(7, 9)));
+afficher_erreur "truc: " (TOTO) "\n";
+
+cible afficher_evenement:
+application: iliad;
+arguments: I;
+afficher_erreur (I) ": ";
+si (present(champ_evenement(I, numero))) alors afficher_erreur (champ_evenement(I, numero)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, rappel))) alors afficher_erreur (champ_evenement(I, rappel)); finsi
+afficher_erreur "/" alias(champ_evenement(I, code)) "," nom(champ_evenement(I, code)) "/";
+si (present(champ_evenement(I, montant))) alors afficher_erreur (champ_evenement(I, montant)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, sens))) alors
+  si (champ_evenement(I, sens) = 0) alors
+    afficher_erreur "R";
+  sinon_si (champ_evenement(I, sens) = 1) alors
+      afficher_erreur "C";
+  sinon_si (champ_evenement(I, sens) = 2) alors
+    afficher_erreur "M";
+  sinon_si (champ_evenement(I, sens) = 3) alors
+    afficher_erreur "P";
+  finsi
+finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, penalite))) alors afficher_erreur (champ_evenement(I, penalite)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, base_tl))) alors afficher_erreur (champ_evenement(I, base_tl)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, date))) alors afficher_erreur (champ_evenement(I, date)); finsi
+afficher_erreur "/";
+si (present(champ_evenement(I, 2042_rect))) alors afficher_erreur (champ_evenement(I, 2042_rect)); finsi
+
+cible afficher_evenements:
+application: iliad;
+iterer
+: variable I
+: entre 0 .. (nb_evenements() - 1) increment 1
+: dans (
+  calculer cible afficher_evenement : avec I;
+  afficher_erreur "\n";
+)
+
+cible test_evenements:
+application: iliad;
+variables_temporaires: A0, A1, EVT;
+A0 = 1.6;
+A1 = 3.6;
+calculer cible test_boucle : avec A0, A1;
+afficher_erreur "\n";
+afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
+afficher_erreur "\n";
+calculer cible afficher_evenements;
+afficher_erreur "\n";
+si nb_evenements() > 0 alors
+  afficher_erreur "0: " nom(champ_evenement(0, code)) " = " (champ_evenement(0, code)) "\n";
+  champ_evenement(0, code) = 456;
+  afficher_erreur "1: " nom(champ_evenement(0, code)) " = " (champ_evenement(0, code)) "\n";
+  afficher_erreur "0: montant " (champ_evenement(0, montant)) "\n";
+  champ_evenement(0, montant) = 123.456;
+  afficher_erreur "1: montant " (champ_evenement(0, montant)) "\n";
+sinon
+  afficher_erreur "!!! AUCUN EVENEMENT !!!\n";
+finsi
+afficher_erreur "\n";
+arranger_evenements
+: trier I, J : avec
+  champ_evenement(I, rappel) <= champ_evenement(J, rappel)
+  ou (
+    champ_evenement(I, rappel) = champ_evenement(J, rappel)
+    et champ_evenement(I, montant) <= champ_evenement(J, montant)
+  )
+: filtrer I : avec 32 <= champ_evenement(I, rappel) et champ_evenement(I, rappel) <= 55
+: ajouter 3
+: dans (
+  champ_evenement(0, code) reference COD1AM;
+  champ_evenement(1, code) reference COD1AR;
+  champ_evenement(2, code) reference COD1AV;
+  calculer cible afficher_evenements;
+)
+afficher_erreur "\n";
+arranger_evenements
+: trier I, J : avec champ_evenement(I, rappel) <= champ_evenement(J, rappel)
+: dans (
+  EVT = 25;
+  afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
+  afficher_erreur "0: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+  iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
+    si inf(champ_evenement(I, rappel) % 2) = 0 alors
+      afficher_erreur "0: ";
+      calculer cible afficher_evenement : avec I;
+      afficher_erreur "\n";
+    finsi
+  )
+  afficher_erreur "\n";
+  restaurer
+  : evenements EVT
+  : evenement I : avec inf(champ_evenement(I, rappel) % 2) = 0
+  : apres (
+    champ_evenement(EVT, montant) = 111111.111111;
+    afficher_erreur "1: ";
+    calculer cible afficher_evenement : avec EVT;
+    afficher_erreur "\n";
+    iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
+      si inf(champ_evenement(I, rappel) % 2) = 0 alors
+        champ_evenement(I, montant) = 111111.111111;
+        afficher_erreur "1: ";
+        calculer cible afficher_evenement : avec I;
+        afficher_erreur "\n";
+      finsi
+    )
+  )
+  afficher_erreur "\n";
+  afficher_erreur "2: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+  iterer : variable I : entre 0 .. nb_evenements() increment 1 : dans (
+    si inf(champ_evenement(I, rappel) % 2) = 0 alors
+      afficher_erreur "2: ";
+      calculer cible afficher_evenement : avec I;
+      afficher_erreur "\n";
+    finsi
+  )
+)
+afficher_erreur "\n";
+EVT = 25;
+afficher_erreur "0: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
+restaurer
+: evenements EVT
+: apres (
+  champ_evenement(EVT, code) reference COD1AV;
+  afficher_erreur "1: ";
+  calculer cible afficher_evenement : avec EVT;
+  afficher_erreur "\n";
+)
+afficher_erreur "2: ";
+calculer cible afficher_evenement : avec EVT;
+afficher_erreur "\n";
+afficher_erreur "taille(" nom(champ_evenement(EVT, code)) ") = " (taille(champ_evenement(EVT, code))) "\n";
+afficher_erreur "taille(" nom(champ_evenement(1000, code)) ") = " (taille(champ_evenement(1000, code))) "\n";
+afficher_erreur "\n";
+champ_evenement(EVT, code) reference COD1AV;
+afficher_erreur "attribut(" nom(COD1AV) ") = " (attribut(COD1AV, primrest)) "\n";
+afficher_erreur
+  "attribut(" nom(champ_evenement(EVT, code)) ", primrest) = "
+  (attribut(champ_evenement(EVT, code), primrest)) "\n";
+afficher_erreur
+  "attribut(" nom(champ_evenement(1000, code)) ", primrest) = "
+  (attribut(champ_evenement(1000, code), primrest)) "\n";
+afficher_erreur "\n";
+
+TAILLE_TOTO : const = 3;
+
+cible test_tableaux:
+application : iliad;
+variables_temporaires: TOTO tableau[TAILLE_TOTO], NB;
+NB = TAILLE_TOTO - 1;
+afficher_erreur "test_tableaux\n" indenter(2);
+TOTO[0] = 1;
+iterer : variable I : entre 1..NB increment 1 : dans (
+  TOTO[I] = 1 + TOTO[I - 1];
+)
+iterer : variable I : entre 0..NB increment 1 : dans (
+  afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+)
+afficher_erreur "\n";
+restaurer : TOTO : apres (
+  iterer : variable I : entre 0..NB increment 1 : dans (
+    TOTO[I] = indefini;
+    afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+  )
+)
+afficher_erreur "\n";
+iterer : variable I : entre 0..NB increment 1 : dans (
+  afficher_erreur "TOTO[" (I) "] = " (TOTO[I]) "\n";
+)
+afficher_erreur indenter(-2) "test_tableaux\n\n";
+
+cible test:
+application: iliad;
+calculer cible test_evenements;
+calculer cible test_tableaux;
+
 cible enchainement_primitif:
 application: iliad;
-variable temporaire: EXPORTE_ERREUR;
+variables_temporaires: EXPORTE_ERREUR;
 #afficher_erreur "traite_double_liquidation2[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
@@ -811,10 +1037,86 @@ finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
 
-# primitif iterpréteur
+# correctif
+
+cible enchainement_correctif:
+application: iliad;
+neant;
+
+# iterpréteur
 
 cible enchainement_primitif_interpreteur:
 application: iliad;
-V_IND_TRAIT = 4; # primitif
-calculer cible enchainement_primitif;
+si V_IND_TRAIT = 4 alors # primitif
+  calculer cible enchainement_primitif;
+sinon_si V_IND_TRAIT = 5 alors # correctif
+  calculer cible enchainement_correctif;
+finsi
+#calculer cible test;
+
+#{
+
+# debug
+
+cible toto:
+application: iliad;
+afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
+afficher_erreur "toto " nom(FLAG_PVRO) " " alias(FLAG_PVRO) "+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
+afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
+
+cible tutu:
+application: iliad;
+iterer
+: variable ITC
+: categorie saisie revenu
+: avec attribut(ITC, acompte) = 0
+: dans (
+  afficher_erreur "tutu0 " nom(ITC) " (" alias(ITC) ") = " (ITC) : 0..2 "\n";
+  afficher_erreur "tutu1 attribut(" nom(ITC) ", acompte) = " (attribut(ITC, acompte)) : 0 "\n";
+  afficher_erreur "tutu1 attribut(" nom(V_VAR7WZ) ", acompte) = " (attribut(V_VAR7WZ, acompte)) : 0 "\n";
+)
+
+cible titi:
+application : iliad;
+variables_temporaires: TOTO tableau[3];
+TOTO[0] = 0;
+TOTO[1] = 1 + TOTO[0];
+TOTO[2] = 2 + TOTO[1];
+afficher_erreur "titi debut\n";
+afficher_erreur "titi0 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+afficher_erreur "titi0 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+iterer
+: variable ITC : categorie saisie contexte : avec present(ITC)
+: dans (
+  afficher_erreur "titi0 " nom(ITC) " = " (ITC) "\n";
+)
+afficher_erreur "\n";
+restaurer
+: variables FLAG_PVRO, TOTO
+: variable RESTREV : categorie saisie contexte : avec present(RESTREV)
+: apres (
+  FLAG_PVRO = indefini;
+  afficher_erreur "titi1 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+  TOTO[0] = indefini;
+  TOTO[1] = indefini;
+  TOTO[2] = indefini;
+  afficher_erreur "titi1 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+  iterer
+  : variable ITC : categorie saisie contexte : avec present(ITC)
+  : dans (
+    ITC = indefini;
+    afficher_erreur "titi1 " nom(ITC) " = " (ITC) "\n";
+  )
+)
+afficher_erreur "\n";
+afficher_erreur "toiti2 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
+afficher_erreur "titi2 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
+iterer
+: variable ITC : categorie saisie contexte : avec present(ITC)
+: dans (
+  afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
+)
+afficher_erreur "titi fin\n\n";
+
+}#
 

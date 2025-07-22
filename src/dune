@@ -1,7 +1,7 @@
 (env
  (dev
   (flags
-   (:standard -warn-error -a)))
+   (:standard -warn-error -a -g)))
  ;; fail on warnings in CI mode
  (ci
   (flags

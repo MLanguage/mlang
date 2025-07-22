@@ -16,37 +16,36 @@
 
 type set_value = Com.Var.t Com.set_value
 
+type access = Com.Var.t Com.access
+
+type m_access = access Pos.marked
+
 type expression = Com.Var.t Com.expression
+
+type m_expression = expression Pos.marked
 
 type instruction = (Com.Var.t, Com.Error.t) Com.instruction
 
 type m_instruction = instruction Pos.marked
 
-type target_data = {
-  target_name : string Pos.marked;
-  target_file : string option;
-  target_apps : string Pos.marked StrMap.t;
-  target_args : (Com.Var.t * Pos.t) list;
-  target_result : (Com.Var.t * Pos.t) option;
-  target_tmp_vars : (Com.Var.t * Pos.t * int option) StrMap.t;
-  target_nb_tmps : int;
-  target_sz_tmps : int;
-  target_nb_refs : int;
-  target_prog : m_instruction list;
-}
+type target = (Com.Var.t, Com.Error.t) Com.target
 
 type stats = {
-  nb_calculated : int;
+  nb_computed : int;
   nb_base : int;
   nb_input : int;
   nb_vars : int;
   nb_all_tmps : int;
   nb_all_refs : int;
-  sz_calculated : int;
+  sz_computed : int;
   sz_base : int;
   sz_input : int;
   sz_vars : int;
   sz_all_tmps : int;
+  nb_all_tables : int;
+  sz_all_tables : int;
+  max_nb_args : int;
+  table_map : Com.Var.t IntMap.t;
 }
 
 type program = {
@@ -55,13 +54,20 @@ type program = {
   program_var_categories : Com.CatVar.data Com.CatVar.Map.t;
   program_rule_domains : Com.rule_domain Com.DomainIdMap.t;
   program_verif_domains : Com.verif_domain Com.DomainIdMap.t;
+  program_dict : Com.Var.t IntMap.t;
   program_vars : Com.Var.t StrMap.t;
+  program_alias : Com.Var.t StrMap.t;
+  program_var_spaces : int StrMap.t;
+  program_var_spaces_idx : Com.variable_space IntMap.t;
+  program_var_space_def : Com.variable_space;
+  program_event_fields : Com.event_field StrMap.t;
+  program_event_field_idxs : string IntMap.t;
   program_rules : string IntMap.t;
   program_verifs : string IntMap.t;
   program_chainings : string StrMap.t;
   program_errors : Com.Error.t StrMap.t;
-  program_functions : target_data Com.TargetMap.t;
-  program_targets : target_data Com.TargetMap.t;
+  program_functions : target StrMap.t;
+  program_targets : target StrMap.t;
   program_main_target : string;
   program_stats : stats;
 }

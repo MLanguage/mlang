@@ -7,6 +7,10 @@ module type T = sig
 
   val from_assoc_list : (key * 'a) list -> 'a t
 
+  val union_fst : 'a t -> 'a t -> 'a t
+
+  val union_snd : 'a t -> 'a t -> 'a t
+
   val pp :
     ?sep:string ->
     ?pp_key:(Pp.t -> key -> unit) ->
@@ -34,6 +38,17 @@ functor
     let from_assoc_list (l : (key * 'a) list) : 'a t =
       let fold map (k, v) = add k v map in
       List.fold_left fold empty l
+
+    let union_fst map0 map1 =
+      let merge_fun _ vo0 vo1 =
+        match (vo0, vo1) with
+        | None, None -> None
+        | None, Some v | Some v, None -> Some v
+        | Some v0, Some _v1 -> Some v0
+      in
+      merge merge_fun map0 map1
+
+    let union_snd map0 map1 = union_fst map1 map0
 
     let pp ?(sep = "; ") ?(pp_key = Pp.nil) ?(assoc = " => ")
         (pp_val : Pp.t -> 'a -> unit) (fmt : Pp.t) (map : 'a t) : unit =

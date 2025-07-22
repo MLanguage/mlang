@@ -16,11 +16,11 @@
 
 module E = Errors
 
-let mk_position sloc = Pos.make_position (fst sloc).Lexing.pos_fname sloc
+let mk_position sloc = Pos.make (fst sloc).Lexing.pos_fname sloc
 
 (** {1 Frontend variable names}*)
 
-let parse_variable_name sloc (s : string) : Mast.variable_name =
+let parse_variable_name sloc (s : string) : string =
   if not (String.equal (String.uppercase_ascii s) s) then
     E.raise_spanned_error "invalid variable name" (mk_position sloc)
   else s
@@ -44,7 +44,7 @@ let dup_exists l =
   dup_consecutive (List.sort sort_on_third l)
 
 (** Parse variable with parameters, parameters have to be lowercase letters *)
-let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
+let parse_variable_generic_name sloc (s : string) : Com.var_name_generic =
   let parameters = ref [] in
   for i = String.length s - 1 downto 0 do
     let p = s.[i] in
@@ -58,23 +58,23 @@ let parse_variable_generic_name sloc (s : string) : Mast.variable_generic_name =
   if dup_exists !parameters then
     E.raise_spanned_error "variable parameters should have distinct names"
       (mk_position sloc);
-  { Mast.parameters = !parameters; Mast.base = s }
+  { Com.parameters = !parameters; Com.base = s }
 
 let parse_variable sloc (s : string) =
-  try Mast.Normal (parse_variable_name sloc s)
+  try Com.Normal (parse_variable_name sloc s)
   with E.StructuredError _ -> (
-    try Mast.Generic (parse_variable_generic_name sloc s)
+    try Com.Generic (parse_variable_generic_name sloc s)
     with E.StructuredError _ ->
       E.raise_spanned_error "invalid variable name" (mk_position sloc))
 
-type parse_val = ParseVar of Mast.variable | ParseInt of int
+type parse_val = ParseVar of Com.var_name | ParseInt of int
 
 let parse_variable_or_int sloc (s : string) : parse_val =
   try ParseInt (int_of_string s)
   with Failure _ -> (
-    try ParseVar (Mast.Normal (parse_variable_name sloc s))
+    try ParseVar (Com.Normal (parse_variable_name sloc s))
     with E.StructuredError _ -> (
-      try ParseVar (Mast.Generic (parse_variable_generic_name sloc s))
+      try ParseVar (Com.Generic (parse_variable_generic_name sloc s))
       with E.StructuredError _ ->
         E.raise_spanned_error "invalid variable name" (mk_position sloc)))
 
@@ -87,9 +87,10 @@ let parse_literal sloc (s : string) : Com.literal =
   try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
-let parse_atom sloc (s : string) : Mast.variable Com.atom =
+let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
-  with Failure _ -> Com.AtomVar (parse_variable sloc s)
+  with Failure _ ->
+    Com.AtomVar (Pos.mark (parse_variable sloc s) (mk_position sloc))
 
 let parse_func_name _ (s : string) : Mast.func_name = s
 
@@ -116,9 +117,10 @@ let parse_function_name f_name =
     | "supzero" -> Supzero
     | "numero_verif" -> VerifNumber
     | "numero_compl" -> ComplNumber
+    | "nb_evenements" -> NbEvents
     | fn -> Func fn
   in
-  Pos.map_under_mark map f_name
+  Pos.map map f_name
 
 (* # parse_string #
  * Takes a litteral string and produces a String.t of the corresponding chars
@@ -178,14 +180,21 @@ let parse_string (s : string) : string =
   in
   aux 0
 
+let parse_index_format (m_s : string Pos.marked) : string Pos.marked =
+  let s = Pos.unmark m_s in
+  if not (String.equal (String.uppercase_ascii s) s) then
+    Errors.raise_spanned_error "bad index format" (Pos.get m_s);
+  m_s
+
 let parse_if_then_etc l =
   let rec aux = function
-    | [ (Some e, ilt, pos) ] -> [ (Com.IfThenElse (e, ilt, []), pos) ]
+    | [ (Some e, ilt, pos) ] -> [ Pos.mark (Com.IfThenElse (e, ilt, [])) pos ]
     | [ (None, ile, _pos) ] -> ile
-    | (Some e, ilt, pos) :: le -> [ (Com.IfThenElse (e, ilt, aux le), pos) ]
+    | (Some e, ilt, pos) :: le ->
+        [ Pos.mark (Com.IfThenElse (e, ilt, aux le)) pos ]
     | _ -> assert false
   in
-  match aux l with [ (i, _pos) ] -> i | _ -> assert false
+  match aux l with [ Pos.Mark (i, _pos) ] -> i | _ -> assert false
 
 let parse_when_do_etc (twl, ed) = Com.WhenDoElse (twl, ed)
 
@@ -198,40 +207,40 @@ type target_header =
 
 let parse_target_or_function_header name is_function header =
   let rec aux apps_opt args_opt vars_opt res_opt = function
-    | (Target_apps apps', pos) :: h ->
+    | Pos.Mark (Target_apps apps', pos) :: h ->
         let apps_opt' =
           match apps_opt with
           | None -> Some (apps', pos)
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
                 (Format.asprintf "application list already declared %a"
-                   Pos.format_position old_pos)
+                   Pos.format old_pos)
                 pos
         in
         aux apps_opt' args_opt vars_opt res_opt h
-    | (Target_input_arg vars', pos) :: h ->
+    | Pos.Mark (Target_input_arg vars', pos) :: h ->
         let args_opt =
           match args_opt with
           | None -> Some (vars', pos)
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
-                (Format.asprintf "argument list already declared %a"
-                   Pos.format_position old_pos)
+                (Format.asprintf "argument list already declared %a" Pos.format
+                   old_pos)
                 pos
         in
         aux apps_opt args_opt vars_opt res_opt h
-    | (Target_tmp_vars vars', pos) :: h ->
+    | Pos.Mark (Target_tmp_vars vars', pos) :: h ->
         let vars_opt' =
           match vars_opt with
           | None -> Some (vars', pos)
           | Some (_, old_pos) ->
               Errors.raise_spanned_error
                 (Format.asprintf "temporary variable list already declared %a"
-                   Pos.format_position old_pos)
+                   Pos.format old_pos)
                 pos
         in
         aux apps_opt args_opt vars_opt' res_opt h
-    | (Function_result res', pos) :: h ->
+    | Pos.Mark (Function_result res', pos) :: h ->
         if is_function then
           let res_opt' =
             match res_opt with
@@ -239,7 +248,7 @@ let parse_target_or_function_header name is_function header =
             | Some (_, old_pos) ->
                 Errors.raise_spanned_error
                   (Format.asprintf "result variable already declared %a"
-                     Pos.format_position old_pos)
+                     Pos.format old_pos)
                   pos
           in
           aux apps_opt args_opt vars_opt res_opt' h
@@ -249,44 +258,30 @@ let parse_target_or_function_header name is_function header =
           match apps_opt with
           | Some (apps, _) ->
               List.fold_left
-                (fun res (app, pos) ->
+                (fun res (Pos.Mark (app, pos)) ->
                   match StrMap.find_opt app res with
-                  | Some (_, old_pos) ->
+                  | Some (Pos.Mark (_, old_pos)) ->
                       let msg =
                         Format.asprintf "application %s already declared %a" app
-                          Pos.format_position old_pos
+                          Pos.format old_pos
                       in
                       Errors.raise_spanned_error msg pos
-                  | None -> StrMap.add app (app, pos) res)
+                  | None -> StrMap.add app (Pos.mark app pos) res)
                 StrMap.empty apps
           | None ->
               let ty = if is_function then "function" else "target" in
               Errors.raise_spanned_error
                 (Format.sprintf "this %s doesn't belong to an application" ty)
-                (Pos.get_position name)
+                (Pos.get name)
         in
         let args = match args_opt with None -> [] | Some (l, _) -> l in
-        let vars =
-          List.fold_left
-            (fun res (vnm, vt) ->
-              let vn, pos = vnm in
-              match StrMap.find_opt vn res with
-              | Some ((_, old_pos), _) ->
-                  let msg =
-                    Format.asprintf "temporary variable %s already declared %a"
-                      vn Pos.format_position old_pos
-                  in
-                  Errors.raise_spanned_error msg pos
-              | None -> StrMap.add vn (vnm, vt) res)
-            StrMap.empty
-            (match vars_opt with None -> [] | Some (l, _) -> l)
-        in
+        let vars = match vars_opt with None -> [] | Some (l, _) -> l in
         let res =
           match res_opt with
           | None ->
               if is_function then
                 Errors.raise_spanned_error "this function doesn't have a result"
-                  (Pos.get_position name)
+                  (Pos.get name)
               else None
           | Some (rvar, _) -> Some rvar
         in

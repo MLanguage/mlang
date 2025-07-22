@@ -19,12 +19,11 @@
 (** {1 Frontend variable names}*)
 
 (** A parsed variable can be a regular variable or an integer literal *)
-type parse_val = ParseVar of Mast.variable | ParseInt of int
+type parse_val = ParseVar of Com.var_name | ParseInt of int
 
 val mk_position : Lexing.position * Lexing.position -> Pos.t
 
-val parse_variable :
-  Lexing.position * Lexing.position -> string -> Mast.variable
+val parse_variable : Lexing.position * Lexing.position -> string -> Com.var_name
 (** Checks whether the variable contains parameters *)
 
 val parse_variable_name : Lexing.position * Lexing.position -> string -> string
@@ -50,9 +49,11 @@ val parse_int : Lexing.position * Lexing.position -> string -> int
 val parse_literal : Lexing.position * Lexing.position -> string -> Com.literal
 
 val parse_atom :
-  Lexing.position * Lexing.position -> string -> Mast.variable Com.atom
+  Lexing.position * Lexing.position -> string -> Com.m_var_name Com.atom
 
 val parse_function_name : string Pos.marked -> Com.func Pos.marked
+
+val parse_index_format : string Pos.marked -> string Pos.marked
 
 val parse_if_then_etc :
   (Mast.expression Pos.marked option * Mast.instruction Pos.marked list * Pos.t)
@@ -77,5 +78,5 @@ val parse_target_or_function_header :
   target_header Pos.marked list ->
   Mast.application Pos.marked StrMap.t
   * string Pos.marked list
-  * (string Pos.marked * Mast.table_size Pos.marked option) StrMap.t
+  * (string Pos.marked * Mast.table_size Pos.marked option) list
   * string Pos.marked option

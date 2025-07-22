@@ -259,7 +259,7 @@ iterer
 
 cible calcule_acomptes:
 application: iliad;
-variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: SAUV_ART1731BIS, SAUV_PREM8_11;
 FLAG_ACO = 1;
 V_CALCUL_ACO = 1;
 calculer cible calcul_prim_corr;
@@ -286,7 +286,7 @@ iterer
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
@@ -338,7 +338,7 @@ finsi
 
 cible calcule_acomptes_avfisc:
 application: iliad;
-variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
 FLAG_ACO = 1;
 calculer cible calcule_avfiscal;
@@ -370,13 +370,24 @@ cible est_code_supp_avfisc:
 application: iliad;
 VARTMP1 = 0;
 si
-     present(COD7QD)  ou present(COD7QB)  ou present(COD7QC)
-  ou present(RFORDI)  ou present(RFROBOR) ou present(RFDORD)
-  ou present(RFDHIS)  ou present(REPSNO3_A)
-  ou present(COD7QF)  ou present(COD7QH)  ou present(CELRREDLG_A)
-  ou present(PINELQM_A) ou present(RCMABD)  ou present(COD7KM)
-  ou present(PINELQP_A) ou present(COD7QS_A)  ou present(PINELQN_A)
-  ou present(PINELQO_A)
+     present(COD7QD)
+  ou present(COD7QB)
+  ou present(COD7QC)
+  ou present(RFORDI)
+  ou present(RFROBOR)
+  ou present(RFDORD)
+  ou present(RFDHIS)
+  # ou present(REPSNO3_A)
+  ou present(COD7QF)
+  ou present(COD7QH)
+  # ou present(CELRREDLG_A)
+  # ou present(PINELQM_A)
+  ou present(RCMABD)
+  ou present(COD7KM)
+  # ou present(PINELQP_A)
+  # ou present(COD7QS_A)
+  # ou present(PINELQN_A)
+  # ou present(PINELQO_A)
 alors
   VARTMP1 = 1;
 sinon
@@ -404,7 +415,7 @@ finsi
 
 cible traite_double_liquidation3:
 application: iliad;
-variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+variables_temporaires: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 P_EST_CALCUL_ACOMPTES = VARTMP1;
 FLAG_ACO = 0;
 V_NEGACO = 0;
@@ -593,86 +604,4 @@ V_NEGACO = 0;
 calculer cible calcul_primitif_isf;
 calculer cible calcul_primitif;
 calculer cible calcul_primitif_taux;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# debug
-
-cible toto:
-application: iliad;
-afficher "toto " "FLAG_PVRO=" (FLAG_PVRO) " tutu" "\n";
-afficher_erreur "toto " nom(FLAG_PVRO) " " alias(FLAG_PVRO) "+27.745=" (FLAG_PVRO + 27.745) " tutu " (indefini) "\n";
-afficher_erreur "toto " "27.745=" (0 + 27.745) : 0 .. 2 " tutu " (3 * indefini) "\n";
-
-cible tutu:
-application: iliad;
-iterer
-: variable ITC
-: categorie saisie revenu
-: avec attribut(ITC, acompte) = 0
-: dans (
-  afficher_erreur "tutu0 " nom(ITC) " (" alias(ITC) ") = " (ITC) : 0..2 "\n";
-  afficher_erreur "tutu1 attribut(" nom(ITC) ", acompte) = " (attribut(ITC, acompte)) : 0 "\n";
-  afficher_erreur "tutu1 attribut(" nom(V_VAR7WZ) ", acompte) = " (attribut(V_VAR7WZ, acompte)) : 0 "\n";
-)
-
-cible titi:
-application : iliad;
-variable temporaire: TOTO tableau[3];
-TOTO[0] = 0;
-TOTO[1] = 1 + TOTO[0];
-TOTO[2] = 2 + TOTO[1];
-afficher_erreur "titi debut\n";
-afficher_erreur "titi0 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-afficher_erreur "titi0 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-iterer
-: variable ITC : categorie saisie contexte : avec present(ITC)
-: dans (
-  afficher_erreur "titi0 " nom(ITC) " = " (ITC) "\n";
-)
-afficher_erreur "\n";
-restaurer
-: FLAG_PVRO
-: TOTO
-: variable RESTREV : categorie saisie contexte : avec present(RESTREV)
-: apres (
-  FLAG_PVRO = indefini;
-  afficher_erreur "titi1 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-  TOTO[0] = indefini;
-  TOTO[1] = indefini;
-  TOTO[2] = indefini;
-  afficher_erreur "titi1 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-  iterer
-  : variable ITC : categorie saisie contexte : avec present(ITC)
-  : dans (
-    ITC = indefini;
-    afficher_erreur "titi1 " nom(ITC) " = " (ITC) "\n";
-  )
-)
-afficher_erreur "\n";
-afficher_erreur "toiti2 TOTO[0] = " (TOTO[0]) " TOTO[1] = " (TOTO[1]) " TOTO[2] = " (TOTO[2]) "\n";
-afficher_erreur "titi2 " nom(FLAG_PVRO) " = " (FLAG_PVRO) "\n";
-iterer
-: variable ITC : categorie saisie contexte : avec present(ITC)
-: dans (
-  afficher_erreur "titi2 " nom(ITC) " = " (ITC) "\n";
-)
-afficher_erreur "titi fin\n\n";
-
 

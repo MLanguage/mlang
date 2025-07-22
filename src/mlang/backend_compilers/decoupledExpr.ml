@@ -1,38 +1,18 @@
 module VID = Dgfip_varid
 
-type offset =
-  | GetValueConst of int
-  | GetValueExpr of string
-  | GetValueVar of Com.Var.t
-  | PassPointer
-  | None
-
-let rec generate_variable (offset : offset) ?(def_flag = false)
-    ?(trace_flag = false) (var : Com.Var.t) : string =
+let generate_variable ?(def_flag = false) ?(trace_flag = false)
+    (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
   try
-    match offset with
-    | PassPointer ->
-        if def_flag then VID.gen_def_ptr var else VID.gen_val_ptr var
-    | _ ->
-        let offset =
-          match offset with
-          | None -> ""
-          | GetValueVar offset -> " + (int)" ^ generate_variable None offset
-          | GetValueConst offset -> " + " ^ string_of_int offset
-          | GetValueExpr offset -> Format.sprintf " + (%s)" offset
-          | PassPointer -> assert false
-        in
-        if def_flag then VID.gen_def var offset
-        else
-          let access_val = VID.gen_val var offset in
-          (* When the trace flag is present, we print the value of the
-             non-temporary variable being used *)
-          if trace_flag && not (Com.Var.is_temp var) then
-            let vn = Pos.unmark var.Com.Var.name in
-            let pos_tgv = VID.gen_pos_from_start var in
-            Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv
-              access_val
-          else access_val
+    if def_flag then VID.gen_def m_sp_opt var
+    else
+      let access_val = VID.gen_val m_sp_opt var in
+      (* When the trace flag is present, we print the value of the
+         non-temporary variable being used *)
+      if trace_flag && not (Com.Var.is_temp var) then
+        let vn = Pos.unmark var.Com.Var.name in
+        let pos_tgv = VID.gen_pos_from_start var in
+        Format.asprintf "(aff3(\"%s\",irdata, %s), %s)" vn pos_tgv access_val
+      else access_val
   with Not_found ->
     Errors.raise_error
       (Format.asprintf "Variable %s not found in TGV"
@@ -68,12 +48,11 @@ and expr =
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
-  | Daccess of Com.Var.t * dflag * expr
   | Dite of expr * expr * expr
   | Dinstr of string
-  | DlowLevel of string
+  | Ddirect of expr
 
-and expr_var = Local of stack_slot | M of Com.Var.t * offset * dflag
+and expr_var = Local of stack_slot | M of Com.var_space * Com.Var.t * dflag
 
 and t = expr * dflag * local_vars
 
@@ -136,7 +115,7 @@ let rec expr_position (expr : expr) (st : local_stacks) =
           (* Needed to bumb the stack to avoid erasing subexpressions *)
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
-  | DlowLevel _ -> Not_to_stack
+  | Ddirect _ -> Not_to_stack
   | _ -> Must_be_pushed
 
 (* allocate to local variable if necessary *)
@@ -212,8 +191,9 @@ let dfalse _stacks _lv : t = (Dfalse, Def, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
-let m_var (v : Com.Var.t) (offset : offset) (df : dflag) _stacks _lv : t =
-  (Dvar (M (v, offset, df)), df, [])
+let m_var (m_sp_opt : Com.var_space) (v : Com.Var.t) (df : dflag) _stacks _lv :
+    t =
+  (Dvar (M (m_sp_opt, v, df)), df, [])
 
 let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
     =
@@ -315,6 +295,17 @@ let div (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
       (Dlit f, Val, [])
   | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
 
+let modulo (e1 : constr) (e2 : constr) (stacks : local_stacks)
+    (ctx : local_vars) : t =
+  let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
+  let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
+  match (e1, e2) with
+  | _, Dlit 1. -> (e1, Val, lv1)
+  | Dlit f1, Dlit f2 ->
+      let f = mod_float f1 f2 in
+      (Dlit f, Val, [])
+  | _ -> (Dfun ("fmod", [ e1; e2 ]), Val, lv2 @ lv1)
+
 let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
@@ -359,13 +350,9 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
-let dlow_level (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
-  (DlowLevel i, Val, [])
-
-let access (var : Com.Var.t) (df : dflag) (e : constr) (stacks : local_stacks)
-    (ctx : local_vars) : t =
-  let _, lv, e = push_with_kind stacks ctx Val e in
-  (Daccess (var, df, e), df, lv)
+let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
+  let expr, flags, ctx = c stacks ctx in
+  (Ddirect expr, flags, ctx)
 
 let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
@@ -452,10 +439,10 @@ let format_slot fmt ({ kind; depth } : stack_slot) =
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
   match ev with
   | Local slot -> format_slot fmt slot
-  | M (var, offset, df) ->
+  | M (m_sp_opt, var, df) ->
       let def_flag = df = Def in
       Format.fprintf fmt "%s"
-        (generate_variable ~trace_flag:dgfip_flags.flg_trace offset ~def_flag
+        (generate_variable ~trace_flag:dgfip_flags.flg_trace ~def_flag m_sp_opt
            var)
 
 let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
@@ -509,12 +496,8 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
-  | Dinstr instr | DlowLevel instr -> Format.fprintf fmt "%s" instr
-  | Daccess (var, dflag, de) ->
-      Format.fprintf fmt "(%s[(int)%a])"
-        (generate_variable ~def_flag:(dflag = Def)
-           ~trace_flag:dgfip_flags.flg_trace PassPointer var)
-        format_dexpr de
+  | Dinstr instr -> Format.fprintf fmt "%s" instr
+  | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
@@ -522,10 +505,10 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
 let rec format_local_declarations fmt
     ((def_stk_size, val_stk_size) : local_decls) =
   if def_stk_size >= 0 then (
-    Format.fprintf fmt "@[<hov 2>register int int%d;@]@," def_stk_size;
+    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" def_stk_size;
     format_local_declarations fmt (def_stk_size - 1, val_stk_size))
   else if val_stk_size >= 0 then (
-    Format.fprintf fmt "@[<hov 2>register double real%d;@]@," val_stk_size;
+    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" val_stk_size;
     format_local_declarations fmt (def_stk_size, val_stk_size - 1))
   else ()
 
@@ -533,14 +516,14 @@ let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
     (lv : local_vars) =
   let lv = List.rev lv in
   let format_one_assign fmt (_, { slot; subexpr }) =
-    Format.fprintf fmt "@[<hov 2>%a =@ %a;@]@," format_slot slot
+    Format.fprintf fmt "@;@[<hov 2>%a =@ %a;@]" format_slot slot
       (format_dexpr dgfip_flags) subexpr
   in
   List.iter (format_one_assign fmt) lv
 
 let format_assign (dgfip_flags : Dgfip_options.flags) (var : string) fmt
     ((e, _kind, lv) : t) =
-  Format.fprintf fmt "%a@[<hov 2>%s =@ %a;@]"
+  Format.fprintf fmt "%a@;@[<hov 2>%s =@ %a;@]"
     (format_local_vars_defs dgfip_flags)
     lv var (format_dexpr dgfip_flags) e
 
@@ -548,9 +531,9 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
   List.iter
     (fun ((kd, vn, _expr) : dflag * string * t) ->
-      Pp.fpr fmt "%s %s;@;" (match kd with Def -> "char" | Val -> "double") vn)
+      Pp.fpr fmt "@;%s %s;" (match kd with Def -> "char" | Val -> "double") vn)
     set_vars;
   List.iter
     (fun ((_kd, vn, expr) : dflag * string * t) ->
-      Pp.fpr fmt "%a@;" (format_assign dgfip_flags vn) expr)
+      format_assign dgfip_flags vn fmt expr)
     set_vars

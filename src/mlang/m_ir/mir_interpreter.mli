@@ -48,16 +48,33 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
+  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
+
+  type ctx_ref_var = {
+    mutable var : Com.Var.t;
+    mutable var_space : Com.variable_space;
+    mutable ref_var : Com.Var.t;
+    mutable org : int;
+  }
+
   type print_ctx = { mutable indent : int; mutable is_newline : bool }
 
+  type ctx_var_space = {
+    input : value Array.t;
+    computed : value Array.t;
+    base : value Array.t;
+  }
+
   type ctx = {
-    ctx_tgv : value Array.t;
-    ctx_tmps : value Array.t;
+    ctx_prog : Mir.program;
+    mutable ctx_target : Mir.target;
+    mutable ctx_var_space : int;
+    ctx_var_spaces : ctx_var_space Array.t;
+    ctx_tmps : ctx_tmp_var Array.t;
     mutable ctx_tmps_org : int;
-    ctx_ref : (Com.Var.t * int) Array.t;
+    ctx_ref : ctx_ref_var Array.t;
     mutable ctx_ref_org : int;
-    mutable ctx_args : value Array.t list;
-    mutable ctx_res : value list;
+    ctx_tab_map : Com.Var.t Array.t;
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
@@ -68,6 +85,7 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
+    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
   }
   (** Interpretation context *)
 
@@ -78,6 +96,9 @@ module type S = sig
   val value_to_literal : value -> Com.literal
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
+
+  val update_ctx_with_events :
+    ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
 
   (** Interpreter runtime errors *)
   type run_error =
@@ -94,9 +115,9 @@ module type S = sig
   (** Returns the comparison between two numbers in the rounding and precision
       context of the interpreter. *)
 
-  val evaluate_expr : ctx -> Mir.program -> Mir.expression Pos.marked -> value
+  val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 
-  val evaluate_program : Mir.program -> ctx -> unit
+  val evaluate_program : ctx -> unit
 end
 
 module FloatDefInterp :
@@ -156,9 +177,10 @@ val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
+  (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
   Cli.value_sort ->
   Cli.round_ops ->
-  Com.literal StrMap.t * StrSet.t
+  Com.literal Com.Var.Map.t * Com.Error.Set.t
 (** Main interpreter function *)
 
 val evaluate_expr :

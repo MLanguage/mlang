@@ -14,6 +14,10 @@ let nil _ _ = ()
 
 let string = Format.pp_print_string
 
+let int = Format.pp_print_int
+
+let float = Format.pp_print_float
+
 let option pp_elt fmt opt = Format.pp_print_option pp_elt fmt opt
 
 let list sep pp_elt fmt l =

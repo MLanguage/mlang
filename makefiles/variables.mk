@@ -17,13 +17,16 @@ MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 # Add a TESTS_DIR for 2023 when available
-ifeq ($(YEAR), 2023)
+ifeq ($(filter $(YEAR), 2023 2024), $(YEAR))
 	#$(warning WARNING: the source M files and fuzzer tests have not yet been published for year: $(YEAR). Should you choose to provide your own source files, you can create a directory ir-calcul/M_SVN/$(YEAR) and put them in there)
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
 else ifeq ($(filter $(YEAR), 2019 2020 2021 2022), $(YEAR))
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 0), $(YEAR))
+	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
     $(warning WARNING: there is no default configuration for year: $(YEAR))
     $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))

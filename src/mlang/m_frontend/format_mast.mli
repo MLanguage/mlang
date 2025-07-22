@@ -16,7 +16,7 @@
 
 val format_var_type : Mast.var_type -> string
 
-val format_variable : Pp.t -> Mast.variable -> unit
+val format_variable : Pp.t -> Com.m_var_name -> unit
 
 val format_rule_domain : Pp.t -> Mast.rule_domain_decl -> unit
 

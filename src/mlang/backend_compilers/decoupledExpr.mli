@@ -1,12 +1,5 @@
-type offset =
-  | GetValueConst of int
-  | GetValueExpr of string
-  | GetValueVar of Com.Var.t
-  | PassPointer
-  | None
-
 val generate_variable :
-  offset -> ?def_flag:bool -> ?trace_flag:bool -> Com.Var.t -> string
+  ?def_flag:bool -> ?trace_flag:bool -> Com.var_space -> Com.Var.t -> string
 
 type dflag = Def | Val
 
@@ -62,7 +55,7 @@ val dfalse : constr
 val lit : float -> constr
 (** Float literal *)
 
-val m_var : Com.Var.t -> offset -> dflag -> constr
+val m_var : Com.var_space -> Com.Var.t -> dflag -> constr
 (** Value from TGV. [m_var v off df] represents an access to the TGV variable
     [v] with [df] to read defineness or valuation. [off] is the access type for
     M array, and should be [None] most of the time. For array access, see
@@ -100,6 +93,10 @@ val div : constr -> constr -> constr
 (** Float division. Care to guard for division by zero as it is not intrisectly
     guarranteed *)
 
+val modulo : constr -> constr -> constr
+(** Float modulo. Care to guard for modulo by zero as it is not intrisectly
+    guarranteed *)
+
 val comp : string -> constr -> constr -> constr
 (** Comparison operation. The operator is given as C-style string literal *)
 
@@ -109,11 +106,8 @@ val dfun : string -> constr list -> constr
 val dinstr : string -> constr
 (** Direct instruction *)
 
-val dlow_level : string -> constr
+val ddirect : constr -> constr
 (** Direct instruction, not pushed *)
-
-val access : Com.Var.t -> dflag -> constr -> constr
-(** Arbitrary access to M TGV variable. Either defineness of valuation *)
 
 val ite : constr -> constr -> constr -> constr
 (** Functionnal if-the-else construction. [ite cond_expr then_expr else_expr] is

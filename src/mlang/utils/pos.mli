@@ -20,33 +20,38 @@
 
 type t
 
-val make_position : string -> Lexing.position * Lexing.position -> t
+val make : string -> Lexing.position * Lexing.position -> t
 
-val make_position_between : t -> t -> t
+val make_between : t -> t -> t
 
-val format_position_short : Format.formatter -> t -> unit
+val format_short : Format.formatter -> t -> unit
 
-val format_position_gnu : Format.formatter -> t -> unit
+val format_gnu : Format.formatter -> t -> unit
 (** Respects https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages *)
 
-val format_position : Format.formatter -> t -> unit
+val format : Format.formatter -> t -> unit
 
-type 'a marked = 'a * t
-(** Everything related to the source code should keep its t stored, to improve
+type 'a marked =
+  | Mark of 'a * t
+      (** Everything related to the source code should keep its t stored, to improve
     error messages *)
 
-val no_pos : t
+val none : t
 (** Placeholder t *)
 
-val mark : t -> 'a -> 'a marked
+val without : 'a -> 'a marked
+
+val mark : 'a -> t -> 'a marked
 
 val unmark : 'a marked -> 'a
 
-val get_position : 'a marked -> t
+val get : 'a marked -> t
 
-val map_under_mark : ('a -> 'b) -> 'a marked -> 'b marked
+val to_couple : 'a marked -> 'a * t
 
-val same_pos_as : 'a -> 'b marked -> 'a marked
+val map : ('a -> 'b) -> 'a marked -> 'b marked
+
+val same : 'a -> 'b marked -> 'a marked
 
 val unmark_option : 'a marked option -> 'a option
 

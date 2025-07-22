@@ -252,7 +252,7 @@ iterer
 
 cible calcule_acomptes:
 application: iliad;
-variable temporaire: SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: SAUV_ART1731BIS, SAUV_PREM8_11;
 FLAG_ACO = 1;
 V_CALCUL_ACO = 1;
 calculer cible calcul_prim_corr;
@@ -279,7 +279,7 @@ iterer
 
 cible calcule_avfiscal:
 application: iliad;
-variable temporaire: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: EXISTE_AVFISC, SAUV_IAD11, SAUV_INE, SAUV_IRE, SAUV_ART1731BIS, SAUV_PREM8_11;
 EXISTE_AVFISC = 0;
 iterer
 : variable REV_AV
@@ -331,7 +331,7 @@ finsi
 
 cible calcule_acomptes_avfisc:
 application: iliad;
-variable temporaire: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
+variables_temporaires: NAP_SANS_PENA_REEL, SAUV_ART1731BIS, SAUV_PREM8_11;
 NAP_SANS_PENA_REEL = 0; # toujours 0 ?
 FLAG_ACO = 1;
 calculer cible calcule_avfiscal;
@@ -375,7 +375,7 @@ finsi
 
 cible traite_double_liquidation3:
 application: iliad;
-variable temporaire: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
+variables_temporaires: P_EST_CALCUL_ACOMPTES, CALCUL_ACOMPTES, CALCUL_AVFISC, SAUV_IRANT;
 P_EST_CALCUL_ACOMPTES = VARTMP1;
 FLAG_ACO = 0;
 V_NEGACO = 0;

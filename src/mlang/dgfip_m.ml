@@ -59,6 +59,8 @@ variable saisie penalite
 
 variable calculee
 : attribut primrest;
+
+espace_variables GLOBAL : par_defaut;
 |}
 
 let rule_domains_declaration =
@@ -228,3 +230,55 @@ domaine verif corrective horizontale
 let declarations =
   Format.sprintf "%s%s%s" variable_domains_declaration rule_domains_declaration
     verif_domains_declaration
+
+let event_declaration =
+  {|
+evenement
+: valeur numero
+: valeur rappel
+: variable code
+: valeur montant
+: valeur sens
+: valeur penalite
+: valeur base_tl
+: valeur date
+: valeur 2042_rect;
+|}
+
+let string_to_rule_domain_id : string -> string list = function
+  | "primitif" -> [ "primitive" ]
+  | "corrective" -> [ "corrective" ]
+  | "isf" -> [ "isf" ]
+  | "taux" -> [ "taux" ]
+  | "irisf" -> [ "irisf" ]
+  | "base_HR" -> [ "corrective"; "base_HR" ]
+  | "base_tl" -> [ "corrective"; "base_tl" ]
+  | "base_tl_init" -> [ "corrective"; "base_tl_init" ]
+  | "base_tl_rect" -> [ "corrective"; "base_tl_rect" ]
+  | "base_INITIAL" -> [ "corrective"; "base_INITIAL" ]
+  | "base_INR" -> [ "corrective"; "base_INR" ]
+  | "base_inr_ref" -> [ "corrective"; "base_inr_ref" ]
+  | "base_inr_tl" -> [ "corrective"; "base_inr_tl" ]
+  | "base_inr_tl22" -> [ "corrective"; "base_inr_tl22" ]
+  | "base_inr_tl24" -> [ "corrective"; "base_inr_tl24" ]
+  | "base_inr_ntl" -> [ "corrective"; "base_inr_ntl" ]
+  | "base_inr_ntl22" -> [ "corrective"; "base_inr_ntl22" ]
+  | "base_inr_ntl24" -> [ "corrective"; "base_inr_ntl24" ]
+  | "base_inr_inter22" -> [ "corrective"; "base_inr_inter22" ]
+  | "base_inr_intertl" -> [ "corrective"; "base_inr_intertl" ]
+  | "base_inr_r9901" -> [ "corrective"; "base_inr_r9901" ]
+  | "base_inr_cimr07" -> [ "corrective"; "base_inr_cimr07" ]
+  | "base_inr_cimr24" -> [ "corrective"; "base_inr_cimr24" ]
+  | "base_inr_cimr99" -> [ "corrective"; "base_inr_cimr99" ]
+  | "base_inr_tlcimr07" -> [ "corrective"; "base_inr_tlcimr07" ]
+  | "base_inr_tlcimr24" -> [ "corrective"; "base_inr_tlcimr24" ]
+  | "base_ABAT98" -> [ "corrective"; "base_ABAT98" ]
+  | "base_ABAT99" -> [ "corrective"; "base_ABAT99" ]
+  | "base_MAJO" -> [ "corrective"; "base_MAJO" ]
+  | "base_premier" -> [ "corrective"; "base_premier" ]
+  | "base_anterieure" -> [ "corrective"; "base_anterieure" ]
+  | "base_anterieure_cor" -> [ "corrective"; "base_anterieure_cor" ]
+  | "base_stratemajo" -> [ "corrective"; "base_stratemajo" ]
+  | "horizontale" -> [ "horizontale" ]
+  | "base_primitive_penalisee" -> [ "corrective"; "base_primitive_penalisee" ]
+  | _ -> raise Not_found

@@ -205,7 +205,7 @@ let get_vars (cprog : Mir.program) is_ebcdic =
         match var.scope with
         | Tgv tgv ->
             let tvar = get_cat_var tgv in
-            let size = match tgv.is_table with Some i -> i | None -> 1 in
+            let size = Com.Var.size var in
             let idx1, idx2, idxo_opt =
               next_idx idx tvar (var_is_output tgv) size
             in
@@ -216,7 +216,7 @@ let get_vars (cprog : Mir.program) is_ebcdic =
                 idxo_opt,
                 name,
                 Option.map Pos.unmark tgv.alias,
-                Pos.unmark tgv.descr,
+                Strings.sanitize_c_str (Pos.unmark tgv.descr),
                 tgv.typ,
                 tgv.attrs,
                 size )

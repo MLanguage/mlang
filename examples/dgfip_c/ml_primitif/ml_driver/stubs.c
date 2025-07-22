@@ -18,6 +18,7 @@
 #if OCAML_VERSION < 41200
 
 #define Val_none Val_int(0)
+#define Some_val(v) Field(v, 0)
 
 CAMLexport value caml_alloc_some(value v) {
   CAMLparam1(v);
@@ -120,8 +121,11 @@ CAMLprim value ml_tgv_defined(value mlTgv, value mlCode) {
   T_irdata *tgv = Tgv_val(mlTgv);
   const char *code = String_val(mlCode);
   int def = 0;
+  char res_def = 0;
+  double res_val = 0.0;
   T_varinfo *varinfo = cherche_var(tgv, code);
-  def = lis_varinfo_def(tgv, varinfo);
+  lis_varinfo(tgv, ESPACE_PAR_DEFAUT, varinfo, &res_def, &res_val);
+  def = (int)res_def;
   CAMLreturn(Val_int(def != 0));
 }
 
@@ -131,7 +135,7 @@ CAMLprim value ml_tgv_reset(value mlTgv, value mlCode) {
   T_irdata *tgv = Tgv_val(mlTgv);
   const char *code = String_val(mlCode);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  ecris_varinfo(tgv, varinfo, 0, 0.0);
+  ecris_varinfo(tgv, ESPACE_PAR_DEFAUT, varinfo, 0, 0.0);
   CAMLreturn(Val_unit);
 }
 
@@ -142,8 +146,11 @@ CAMLprim value ml_tgv_get(value mlTgv, value mlCode) {
   T_irdata *tgv = Tgv_val(mlTgv);
   const char *code = String_val(mlCode);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  if (lis_varinfo_def(tgv, varinfo)) {
-    optOut = caml_alloc_some(caml_copy_double(lis_varinfo_val(tgv, varinfo)));
+  char res_def = 0;
+  double res_val = 0.0;
+  lis_varinfo(tgv, ESPACE_PAR_DEFAUT, varinfo, &res_def, &res_val);
+  if (res_def) {
+    optOut = caml_alloc_some(caml_copy_double(res_val));
   } else {
     optOut = Val_none;
   }
@@ -158,11 +165,17 @@ CAMLprim value ml_tgv_get_array(value mlTgv, value mlCode, value mlIdx) {
   const char *code = String_val(mlCode);
   int idx = Int_val(mlIdx);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  if (lis_varinfo_tab_def(tgv, varinfo, idx)) {
-    double val = lis_varinfo_tab_val(tgv, varinfo, idx);
-    optOut = caml_alloc_some(caml_copy_double(val));
+  char res_def;
+  double res_val;
+  if (varinfo != NULL && varinfo->tab_idx >= 0) {
+    lis_tabaccess(tgv, ESPACE_PAR_DEFAUT, varinfo->tab_idx, 1, (double)idx, &res_def, &res_val);
+    if (res_def > 0) {
+      optOut = caml_alloc_some(caml_copy_double(res_val));
+    } else {
+      optOut = Val_none;
+    }
   } else {
-    optOut = Val_none;
+      optOut = Val_none;
   }
   CAMLreturn(optOut);
 }
@@ -174,7 +187,7 @@ CAMLprim value ml_tgv_set(value mlTgv, value mlCode, value mlMontant) {
   const char *code = String_val(mlCode);
   double montant = Double_val(mlMontant);
   T_varinfo *varinfo = cherche_var(tgv, code);
-  ecris_varinfo(tgv, varinfo, 1, montant);
+  ecris_varinfo(tgv, ESPACE_PAR_DEFAUT, varinfo, 1, montant);
   CAMLreturn(Val_unit);
 }
 
@@ -199,7 +212,7 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   CAMLlocal2(mlErrListTemp, mlErrListOut);
 
   T_irdata *tgv = Tgv_val(mlTgv);
-  T_discord *erreurs = enchainement_primitif(tgv);
+  T_discord *erreurs = enchainement_primitif_interpreteur(tgv);
   mlErrListOut = Val_emptylist;
   while (erreurs != NULL) {
     if (erreurs->erreur != NULL) {
@@ -212,4 +225,80 @@ CAMLprim value ml_enchainement_primitif(value mlTgv) {
   }
   CAMLreturn(mlErrListOut);
 }
+
+CAMLprim value ml_set_evt_list(value mlTgv, value mlEvtList) {
+  CAMLparam2(mlTgv, mlEvtList);
+  CAMLlocal3(mlList, mlEvt, mlField);
+
+  T_irdata *tgv = Tgv_val(mlTgv);
+  int len = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    len++;
+    mlList = Field(mlList, 1);
+  }
+  if (len > 0) {
+    tgv->events = (T_event **)malloc(len * sizeof (T_event *));
+  } else {
+    tgv->events = NULL;
+  }
+  tgv->nb_events = len;
+
+  int i = 0;
+  mlList = mlEvtList;
+  while (mlList != Val_emptylist) {
+    T_event *evt = (T_event *)malloc(sizeof (T_event));
+    tgv->events[i] = evt;
+    mlEvt = Field(mlList, 0);
+
+    evt->field_numero_def = 1;
+    evt->field_numero_val = Double_val(Field(mlEvt, 0));
+
+    evt->field_rappel_def = 1;
+    evt->field_rappel_val = Double_val(Field(mlEvt, 1));
+
+    evt->field_code_var = cherche_var(tgv, String_val(Field(mlEvt, 2)));
+
+    evt->field_montant_def = 1;
+    evt->field_montant_val = Double_val(Field(mlEvt, 3));
+
+    evt->field_sens_def = 1;
+    evt->field_sens_val = Double_val(Field(mlEvt, 4));
+
+    mlField = Field(mlEvt, 5);
+    if (mlField == Val_none) {
+      evt->field_penalite_def = 0;
+      evt->field_penalite_val = 0.0;
+    } else {
+      evt->field_penalite_def = 1;
+      evt->field_penalite_val = Double_val(Some_val(mlField));
+    }
+
+    mlField = Field(mlEvt, 6);
+    if (mlField == Val_none) {
+      evt->field_base_tl_def = 0;
+      evt->field_base_tl_val = 0.0;
+    } else {
+      evt->field_base_tl_def = 1;
+      evt->field_base_tl_val = Double_val(Some_val(mlField));
+    }
+
+    evt->field_date_def = 1;
+    evt->field_date_val = Double_val(Field(mlEvt, 7));
+
+    mlField = Field(mlEvt, 8);
+    if (mlField == Val_none) {
+      evt->field_2042_rect_def = 0;
+      evt->field_2042_rect_val = 0.0;
+    } else {
+      evt->field_2042_rect_def = 1;
+      evt->field_2042_rect_val = Double_val(Some_val(mlField));
+    }
+
+    i++;
+    mlList = Field(mlList, 1);
+  }
+  CAMLreturn(Val_unit);
+}
+
 

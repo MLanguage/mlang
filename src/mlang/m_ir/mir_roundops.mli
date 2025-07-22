@@ -38,7 +38,7 @@ module MultiRoundOps : RoundOpsFunctor
     behavior depends on the sie of the `long` type, this size must be given as
     an argument (and should be either 32 or 64). *)
 module MainframeRoundOps : functor
-  (_ : sig
+  (L : sig
      val max_long : Int64.t ref
    end)
   -> RoundOpsFunctor

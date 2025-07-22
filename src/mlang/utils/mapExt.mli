@@ -7,6 +7,10 @@ module type T = sig
 
   val from_assoc_list : (key * 'a) list -> 'a t
 
+  val union_fst : 'a t -> 'a t -> 'a t
+
+  val union_snd : 'a t -> 'a t -> 'a t
+
   val pp :
     ?sep:string ->
     ?pp_key:(Pp.t -> key -> unit) ->

@@ -28,3 +28,6 @@ val check_all_tests :
   (string -> bool) ->
   unit
 (** Similar to [check_test] but tests a whole folder full of test files *)
+
+val check_one_test :
+  Mir.program -> string -> Cli.value_sort -> Cli.round_ops -> unit

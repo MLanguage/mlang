@@ -38,6 +38,53 @@ let process_dgfip_options (backend : string option)
     end
   | _ -> Dgfip_options.default_flags
 
+let parse_m_dgfip without_dgfip_m current_progress m_program =
+  if without_dgfip_m then m_program
+  else (
+    current_progress Dgfip_m.internal_m;
+    let internal_command str =
+      let filebuf =
+        let buf = Lexing.from_string str in
+        {
+          buf with
+          lex_curr_p = { buf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
+        }
+      in
+      Mparser.source_file token filebuf
+    in
+    try
+      let tgv_decls = internal_command Dgfip_m.declarations in
+      let event_decl = internal_command Dgfip_m.event_declaration in
+      tgv_decls :: event_decl :: m_program
+    with Mparser.Error ->
+      Errors.raise_error
+        (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m))
+
+let parse_m_files current_progress source_files m_program =
+  List.fold_left
+    (fun m_program source_file ->
+      let filebuf, input =
+        if source_file <> "" then
+          let input = open_in source_file in
+          (Lexing.from_channel input, input)
+        else failwith "You have to specify at least one file!"
+      in
+      current_progress source_file;
+      let filebuf =
+        {
+          filebuf with
+          lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
+        }
+      in
+      try
+        let commands = Mparser.source_file token filebuf in
+        commands :: m_program
+      with Mparser.Error ->
+        close_in input;
+        Errors.raise_spanned_error "M syntax error"
+          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
+    m_program source_files
+
 (* The legacy compiler plays a nasty trick on us, that we have to reproduce:
    rule 1 is modified to add assignments to APPLI_XXX variables according to the
    target application (OCEANS, BATCH and ILIAD). *)
@@ -46,21 +93,23 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
   let open Mast in
   let var_exists name =
     List.exists
-      (List.exists (fun (item, _) ->
-           match item with
-           | VariableDecl (ComputedVar (cv, _)) ->
-               Pos.unmark cv.comp_name = name
-           | VariableDecl (InputVar (iv, _)) -> Pos.unmark iv.input_name = name
+      (List.exists (fun m_item ->
+           match Pos.unmark m_item with
+           | VariableDecl (ComputedVar m_cv) ->
+               Pos.unmark (Pos.unmark m_cv).comp_name = name
+           | VariableDecl (InputVar m_iv) ->
+               Pos.unmark (Pos.unmark m_iv).input_name = name
            | _ -> false))
       program
   in
   let mk_assign name value l =
     if var_exists name then
-      let no_pos x = (x, Pos.no_pos) in
-      let var = Normal name in
+      let m_access =
+        Pos.without (Com.VarAccess (None, Pos.without (Com.Normal name)))
+      in
       let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (no_pos var, None, no_pos litt) in
-      no_pos cmd :: l
+      let cmd = Com.SingleFormula (VarDecl (m_access, Pos.without litt)) in
+      Pos.without cmd :: l
     else l
   in
   let oceans, batch, iliad =
@@ -70,20 +119,20 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
     | _ -> (false, false, true)
   in
   List.map
-    (List.map (fun item ->
-         match Pos.unmark item with
+    (List.map (fun m_item ->
+         match Pos.unmark m_item with
          | Rule r when Pos.unmark r.rule_number = 1 ->
              let fl =
                List.map
-                 (fun f -> Pos.same_pos_as (Com.Affectation f) f)
+                 (fun f -> Pos.same (Com.Affectation f) f)
                  ([]
                  |> mk_assign "APPLI_OCEANS" oceans
                  |> mk_assign "APPLI_BATCH" batch
                  |> mk_assign "APPLI_ILIAD" iliad)
              in
-             ( Rule { r with rule_formulaes = r.rule_formulaes @ fl },
-               Pos.get_position item )
-         | _ -> item))
+             let r' = { r with rule_formulaes = r.rule_formulaes @ fl } in
+             Pos.same (Rule r') m_item
+         | _ -> m_item))
     program
 
 (** Entry function for the executable. Returns a negative number in case of
@@ -147,56 +196,24 @@ let driver (files : string list) (application_names : string list)
     value_sort round_ops;
   let dgfip_flags = process_dgfip_options backend dgfip_options in
   try
-    Cli.debug_print "Reading M files...";
-    let current_progress, finish = Cli.create_progress_bar "Parsing" in
-    let m_program = ref [] in
-    if not without_dgfip_m then (
-      let filebuf = Lexing.from_string Dgfip_m.declarations in
-      current_progress Dgfip_m.internal_m;
-      let filebuf =
-        {
-          filebuf with
-          lex_curr_p =
-            { filebuf.lex_curr_p with pos_fname = Dgfip_m.internal_m };
-        }
-      in
-      try
-        let commands = Mparser.source_file token filebuf in
-        m_program := commands :: !m_program
-      with Mparser.Error ->
-        Errors.raise_error
-          (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m));
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
-    List.iter
-      (fun source_file ->
-        let filebuf, input =
-          if source_file <> "" then
-            let input = open_in source_file in
-            (Lexing.from_channel input, input)
-          else failwith "You have to specify at least one file!"
-        in
-        current_progress source_file;
-        let filebuf =
-          {
-            filebuf with
-            lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
-          }
-        in
-        try
-          let commands = Mparser.source_file token filebuf in
-          m_program := commands :: !m_program
-        with Mparser.Error ->
-          close_in input;
-          Errors.raise_spanned_error "M syntax error"
-            (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
-      !Cli.source_files;
-    m_program := List.rev !m_program;
-    m_program := patch_rule_1 backend dgfip_flags !m_program;
+    Cli.debug_print "Reading M files...";
+    let current_progress, finish = Cli.create_progress_bar "Parsing" in
+    let m_program =
+      []
+      |> parse_m_dgfip without_dgfip_m current_progress
+      |> parse_m_files current_progress !Cli.source_files
+      |> List.rev
+      |> patch_rule_1 backend dgfip_flags
+    in
     finish "completed!";
     Cli.debug_print "Elaborating...";
-    let m_program = Mast_to_mir.translate !m_program mpp_function in
-    let m_program = Mir.expand_functions m_program in
+    let m_program =
+      m_program |> Expander.proceed
+      |> Validator.proceed mpp_function
+      |> Mast_to_mir.translate |> Mir.expand_functions
+    in
     Cli.debug_print "Creating combined program suitable for execution...";
     if run_all_tests <> None then
       let tests : string =
@@ -214,8 +231,7 @@ let driver (files : string list) (application_names : string list)
       let test : string =
         match run_test with Some s -> s | _ -> assert false
       in
-      ignore (Test_interpreter.check_test m_program test value_sort round_ops);
-      Cli.result_print "Test passed!"
+      Test_interpreter.check_one_test m_program test value_sort round_ops
     end
     else begin
       Cli.debug_print

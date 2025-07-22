@@ -108,10 +108,10 @@ rappels:
   { ignore (entrees_rappels, controles_attendus, resultats_attendus) ; None }
 
 variable_and_value:
-| var = SYMBOL SLASH value = value NL { ((var, mk_position $loc(var)), (value, mk_position $loc(value))) }
+| var = SYMBOL SLASH value = value NL { (Pos.mark var (mk_position $loc(var)), Pos.mark value (mk_position $loc(value))) }
 
 calc_error:
-| error = SYMBOL NL { (error, mk_position $sloc) }
+| error = SYMBOL NL { Pos.mark error (mk_position $sloc) }
 
 rappel:
 | event_nb = integer SLASH
@@ -124,11 +124,18 @@ rappel:
   month_year = integer SLASH
   decl_2042_rect = INTEGER? NL
   {
+    if String.length variable_code = 0 then
+        error $loc(variable_code) "Invalid value for 'variable_code' (must be non-empty)";
     if direction <> "R" && direction <> "C" && direction <> "M" && direction <> "P" then
       error $loc(direction) ("Unknown value for 'direction' (type of the 'rappel', should be R, C, M or P) : " ^ direction);
-    let p = match penalty_code with Some p -> p | _ -> 0 in
-    if p < 0 || p > 99 then
-      error $loc(direction) ("Invalid value for 'penalty_code' (out of range 0-99) : " ^ (string_of_int p));
+    (match penalty_code with
+    | Some p when p < 0 || 99 < p ->
+        error $loc(penalty_code) ("Invalid value for 'penalty_code' (out of range 0-99) : " ^ (string_of_int p));
+    | _ -> ());
+    (match decl_2042_rect with
+    | Some p when p < 0 || 1 < p ->
+        error $loc(decl_2042_rect) ("Invalid value for 'decl_2042_rect' (out of range 0-1) : " ^ (string_of_int p));
+    | _ -> ());
     {event_nb;
      rappel_nb;
      variable_code;
