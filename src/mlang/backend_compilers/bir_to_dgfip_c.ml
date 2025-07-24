@@ -845,7 +845,9 @@ let generate_m_assign (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
 let generate_var_def (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t)
     (vexpr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
-  generate_m_assign p dgfip_flags m_sp_opt var oc vexpr
+  match Pos.unmark vexpr with
+  | Var (VarAccess (space, v)) when space = m_sp_opt && v = var -> ()
+  | _ -> generate_m_assign p dgfip_flags m_sp_opt var oc vexpr
 
 let generate_var_def_tab (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) (vidx : Mir.m_expression)

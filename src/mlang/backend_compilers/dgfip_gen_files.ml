@@ -599,7 +599,7 @@ extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 #ifdef ANCIEN
 extern void free_erreur(void);
 #else
-extern void free_erreur(T_irdata *irdata);
+extern void free_erreur(T_irdata*);
 #endif /* ANCIEN */
 
 #define fabs(a) (((a) < 0.0) ? -(a) : (a))
