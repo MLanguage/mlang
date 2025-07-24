@@ -215,6 +215,8 @@ module Var = struct
 
   let cat v = (tgv v).cat
 
+  let typ v = (tgv v).typ
+
   let is_given_back v = (tgv v).is_given_back
 
   let loc_tgv v =

@@ -43,12 +43,23 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
         | Com.CatVar.LocBase -> "EST_BASE"
         | Com.CatVar.LocInput -> "EST_SAISIE"
       in
+      let typ =
+        match Com.Var.typ var with
+        | None -> "SANS_TYPE"
+        | Some Boolean -> "TYPE_BOOLEEN"
+        | Some DateYear -> "TYPE_DATE_AAAA"
+        | Some DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
+        | Some DateMonth -> "TYPE_DATE_MM"
+        | Some Integer -> "TYPE_ENTIER"
+        | Some Real -> "TYPE_REEL"
+      in
+      let given_back = if Com.Var.is_given_back var then 1 else 0 in
       let attrs = Com.Var.attrs var in
       let tab_idx =
         if Com.Var.is_table var then Com.Var.loc_tab_idx var else -1
       in
-      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s" name alias idx tab_idx
-        size id_int loc_cat;
+      Pp.fpr fmt "  { \"%s\", \"%s\", %d, %d, %d, %d, %s, %s, %d" name alias idx
+        tab_idx size id_int loc_cat typ given_back;
       StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
       Pp.fpr fmt " },\n")
     vars;
@@ -185,6 +196,8 @@ let gen_decl_varinfos fmt (cprog : Mir.program) stats =
   int size;
   int cat;
   int loc_cat;
+  int type;
+  int est_restituee;
 } T_varinfo;
 
 typedef struct S_varinfo_map {
@@ -204,6 +217,8 @@ typedef struct S_varinfo_map {
   int size;
   int cat;
   int loc_cat;
+  int type;
+  int est_restituee;
 |}
         id_str;
       StrSet.iter (fun an -> Pp.fpr fmt "  int attr_%s;\n" an) attr_set;
@@ -562,6 +577,14 @@ extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 #define RESTITUEE    5
 #define RESTITUEE_P  6
 #define RESTITUEE_C  7
+
+#define SANS_TYPE 0
+#define TYPE_BOOLEEN 1
+#define TYPE_DATE_AAAA 2
+#define TYPE_DATE_JJMMAAAA 3
+#define TYPE_DATE_MM 4
+#define TYPE_ENTIER 5
+#define TYPE_REEL 6
 
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
 extern void free_erreur();

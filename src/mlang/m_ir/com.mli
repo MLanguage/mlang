@@ -108,6 +108,8 @@ module Var : sig
 
   val cat : t -> CatVar.t
 
+  val typ : t -> value_typ option
+
   val is_given_back : t -> bool
 
   val loc_tgv : t -> loc_tgv
