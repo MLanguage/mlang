@@ -545,7 +545,7 @@ let get_target_file (pos : Pos.t) : string =
   let file =
     try Filename.chop_extension file with Invalid_argument _ -> file
   in
-  Format.sprintf "m_%s" file
+  File_versioning.target_file_from_m_file file
 
 let safe_prefix (p : Mast.program) : string =
   let target_names =

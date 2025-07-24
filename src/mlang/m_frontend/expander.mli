@@ -11,4 +11,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val proceed : Mast.program -> Mast.program
+type const_data = private {
+  v : float Pos.marked;
+  mutable used_by_file : StrSet.t;
+}
+
+val proceed : Mast.program -> const_data StrMap.t * Mast.program

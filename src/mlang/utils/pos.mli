@@ -27,14 +27,16 @@ val make_between : t -> t -> t
 val format_short : Format.formatter -> t -> unit
 
 val format_gnu : Format.formatter -> t -> unit
-(** Respects https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages *)
+(** Respects
+    https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages
+*)
 
 val format : Format.formatter -> t -> unit
 
 type 'a marked =
   | Mark of 'a * t
-      (** Everything related to the source code should keep its t stored, to improve
-    error messages *)
+      (** Everything related to the source code should keep its t stored, to
+          improve error messages *)
 
 val none : t
 (** Placeholder t *)

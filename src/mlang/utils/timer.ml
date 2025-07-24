@@ -1,5 +1,5 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
+(* Copyright (C) 2025 Contributor: Steven de Oliveira
+   <steven.de-oliveira@ocamlpro.com>
 
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
@@ -14,15 +14,26 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(** This module with a single entry point generates C files from a
-    {!Bir.program}. *)
+type t = { mutable start : float option; mutable total : float }
 
-(** The optimized code generation for M code, which represents the vast majority
-    of the output, is built in {!DecoupledExpr}. *)
+let start ?(run = true) () : t =
+  { start = (if run then Some (Sys.time ()) else None); total = 0. }
 
-val generate_c_program :
-  files_need_no_regen:string list ->
-  Dgfip_options.flags ->
-  Mir.program ->
-  (* filename *) string ->
-  unit
+let restart (t : t) = t.start <- Some (Sys.time ())
+
+let curr_time t =
+  match t.start with
+  | None -> t.total
+  | Some s ->
+      let new_tot = Sys.time () -. s in
+      t.total +. new_tot
+
+let stop t =
+  t.total <- curr_time t;
+  t.start <- None
+
+let time_of f =
+  let t = start () in
+  let res = f () in
+  let time = curr_time t in
+  (time, res)
