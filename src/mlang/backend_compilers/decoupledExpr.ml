@@ -149,15 +149,19 @@ let collapse_constr (stacks : local_stacks) (ctx : local_vars) (constr : constr)
 let push_with_kind (stacks : local_stacks) (ctx : local_vars) (kind : dflag)
     (constr : constr) =
   let expr, ekind, lv = constr stacks ctx in
-  let expr = if kind = ekind then expr else cast kind expr in
-  let stacks, lv, expr = store_local stacks lv Anon kind expr in
-  (stacks, lv, expr)
+  if !Cli.no_local_var then (stacks, lv, expr)
+  else
+    let expr = if kind = ekind then expr else cast kind expr in
+    let stacks, lv, expr = store_local stacks lv Anon kind expr in
+    (stacks, lv, expr)
 
 (* eval and store without enforcing kind *)
 let push (stacks : local_stacks) (ctx : local_vars) (constr : constr) =
   let expr, kind, lv = constr stacks ctx in
-  let stacks, lv, expr = store_local stacks lv Anon kind expr in
-  (stacks, lv, expr, kind)
+  if !Cli.no_local_var then (stacks, lv, expr, kind)
+  else
+    let stacks, lv, expr = store_local stacks lv Anon kind expr in
+    (stacks, lv, expr, kind)
 
 (** smart constructors *)
 
