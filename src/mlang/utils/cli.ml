@@ -192,13 +192,22 @@ let only_compil_new =
         ~doc:
           "(experimental) Only parses & compiles files that have been changed.")
 
+let no_local_vars =
+  Arg.(
+    value & flag
+    & info [ "no-local-vars" ]
+        ~doc:
+          "(experimental) Does not generate local vars for definitions and \
+           evaluation.")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ stats
     $ var_info_debug $ display_time $ dep_graph_file $ no_print_cycles $ backend
     $ output $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
     $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options $ only_compil_new)
+    $ income_year_cli $ m_clean_calls $ dgfip_options $ only_compil_new
+    $ no_local_vars)
 
 let info =
   let doc =
@@ -288,6 +297,8 @@ let round_ops = ref RODefault
 
 let only_compile_new = ref false
 
+let no_local_var = ref false
+
 (* Default value for the epsilon slack when comparing things in the
    interpreter *)
 let comparison_error_margin = ref 0.000001
@@ -301,7 +312,7 @@ let set_all_arg_refs (files_ : string list) applications_
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
     (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) (only_compile_new_ : bool) =
+    (round_ops_ : round_ops) (only_compile_new_ : bool) (no_local_var_ : bool) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -321,6 +332,7 @@ let set_all_arg_refs (files_ : string list) applications_
   value_sort := value_sort_;
   round_ops := round_ops_;
   only_compile_new := only_compile_new_;
+  no_local_var := no_local_var_;
   match output_file_ with
   | None -> ()
   | Some o -> (

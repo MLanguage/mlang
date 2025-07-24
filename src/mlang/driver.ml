@@ -243,7 +243,7 @@ let driver (files : string list) (application_names : string list)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int option)
     (m_clean_calls : bool) (dgfip_options : string list option)
-    (only_compile_new : bool) =
+    (only_compile_new : bool) (no_local_var : bool) =
   Format.printf "Only compile new? %b@." only_compile_new;
   let value_sort =
     let precision = Option.get precision in
@@ -291,7 +291,7 @@ let driver (files : string list) (application_names : string list)
   Cli.set_all_arg_refs files application_names without_dgfip_m debug stats
     var_info_debug display_time dep_graph_file print_cycles output
     optimize_unsafe_float m_clean_calls comparison_error_margin income_year
-    value_sort round_ops only_compile_new;
+    value_sort round_ops only_compile_new no_local_var;
   let dgfip_flags = process_dgfip_options backend dgfip_options in
   (* Reading the project metadata, if any, to spare us some ĉompilation time *)
   let metadata = File_metadata.make ~output in

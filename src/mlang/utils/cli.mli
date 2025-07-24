@@ -42,6 +42,7 @@ val mlang_t :
   bool ->
   string list option ->
   bool ->
+  bool ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
@@ -124,6 +125,8 @@ val round_ops : round_ops ref
 
 val only_compile_new : bool ref
 
+val no_local_var : bool ref
+
 val set_all_arg_refs :
   (* files *) string list ->
   (* applications *) string list ->
@@ -142,6 +145,7 @@ val set_all_arg_refs :
   value_sort ->
   round_ops ->
   (* only_compile_new *) bool ->
+  (* no_local_var *) bool ->
   unit
 
 val add_prefix_to_each_line : string -> (int -> string) -> string
