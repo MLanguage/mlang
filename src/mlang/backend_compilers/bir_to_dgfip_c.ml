@@ -17,6 +17,13 @@
 module D = DecoupledExpr
 module VID = Dgfip_varid
 
+(* What to do for C file generation *)
+type writer =
+  | DoNothing (* C file already exists and is consistent with new version *)
+  | WriteIn of out_channel * Format.formatter * Timer.t
+(* Writes in the out_channel through the formatter, and keeps track
+   of the time. *)
+
 let str_escape str =
   let l = String.length str in
   let buf = Buffer.create l in
@@ -1513,13 +1520,18 @@ let generate_function (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
   pr "@]@;}@."
 
 let generate_functions (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
-    (filemap : (out_channel * Format.formatter) StrMap.t) =
+    (filemap : writer StrMap.t) =
   let functions = StrMap.bindings p.program_functions in
   List.iter
     (fun (name, ({ target_file; _ } : Mir.target)) ->
       let file_str = match target_file with Some s -> s | None -> "" in
-      let _, fmt = StrMap.find file_str filemap in
-      generate_function (dgfip_flags : Dgfip_options.flags) p fmt name)
+      match StrMap.find file_str filemap with
+      | DoNothing -> ()
+      | WriteIn (_, fmt, timer) ->
+          Timer.restart timer;
+          generate_function (dgfip_flags : Dgfip_options.flags) p fmt name;
+          Timer.stop timer;
+          ())
     functions
 
 let generate_target_prototype (add_semicolon : bool) (oc : Format.formatter)
@@ -1579,13 +1591,18 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
   pr "@]@;}@."
 
 let generate_targets (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
-    (filemap : (out_channel * Format.formatter) StrMap.t) =
+    (filemap : writer StrMap.t) =
   let targets = StrMap.bindings p.program_targets in
   List.iter
     (fun (name, ({ target_file; _ } : Mir.target)) ->
       let file_str = match target_file with Some s -> s | None -> "" in
-      let _, fmt = StrMap.find file_str filemap in
-      generate_target (dgfip_flags : Dgfip_options.flags) p fmt name)
+      match StrMap.find file_str filemap with
+      | DoNothing -> ()
+      | WriteIn (_, fmt, timer) ->
+          Timer.restart timer;
+          generate_target (dgfip_flags : Dgfip_options.flags) p fmt name;
+          Timer.stop timer;
+          ())
     targets
 
 let generate_implem_header oc msg =
@@ -1600,37 +1617,51 @@ let generate_implem_header oc msg =
 |}
     msg
 
-let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
-    (filename : string) : unit =
+let generate_c_program ~(files_need_no_regen : string list)
+    (dgfip_flags : Dgfip_options.flags) (p : Mir.program) (filename : string) :
+    unit =
   if Filename.extension filename <> ".c" then
     Errors.raise_error
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
+  let c_files_need_no_regen =
+    List.map File_versioning.target_file_from_m_file files_need_no_regen
+  in
   let folder = Filename.dirname filename in
   let _oc = open_out filename in
   let oc = Format.formatter_of_out_channel _oc in
+  let timer = Timer.start ~run:false () in
   Format.fprintf oc "%a@\n@." generate_implem_header Prelude.message;
   let filemap =
     StrMap.fold
       (fun _ (t : Mir.target) filemap ->
         let file_str = match t.target_file with Some s -> s | None -> "" in
-        let update = function
-          | Some fmt -> Some fmt
-          | None ->
-              let fn = Filename.concat folder (file_str ^ ".c") in
-              let oc = open_out fn in
-              let fmt = Format.formatter_of_out_channel oc in
-              Format.fprintf fmt "#include \"mlang.h\"@;@;";
-              Some (oc, fmt)
+        let update =
+          if List.mem (Filename.basename file_str) c_files_need_no_regen then
+            fun _ -> Some DoNothing
+          else function
+            | Some fmt -> Some fmt
+            | None ->
+                Cli.debug_print "We must generate %S" file_str;
+                let fn = Filename.concat folder (file_str ^ ".c") in
+                let oc = open_out fn in
+                let fmt = Format.formatter_of_out_channel oc in
+                let timer = Timer.start ~run:false () in
+                Format.fprintf fmt "#include \"mlang.h\"\n\n";
+                Some (WriteIn (oc, fmt, timer))
         in
         StrMap.update file_str update filemap)
       p.program_targets
-      (StrMap.one "" (_oc, oc))
+      (StrMap.one "" (WriteIn (_oc, oc, timer)))
   in
   generate_functions dgfip_flags p filemap;
   generate_targets dgfip_flags p filemap;
   StrMap.iter
-    (fun _ (oc, fmt) ->
-      Format.fprintf fmt "@;@?";
-      close_out oc)
+    (fun file -> function
+      | DoNothing -> ()
+      | WriteIn (oc, fmt, timer) ->
+          Format.fprintf fmt "@;@?";
+          close_out oc;
+          let t = Timer.curr_time timer in
+          Cli.stats_print "Total time for %S: %f" file t)
     filemap

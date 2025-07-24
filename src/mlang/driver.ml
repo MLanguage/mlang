@@ -19,6 +19,91 @@ open Mlexer
 
 exception Exit
 
+module File_metadata = struct
+  type t = { loaded : File_versioning.t; mutable new_ : File_versioning.t }
+
+  let make ~output : t =
+    let loaded =
+      match output with
+      | Some output when !Cli.only_compile_new ->
+          File_versioning.read_metadata ~output_dir:(Filename.dirname output)
+      | _ -> File_versioning.empty
+    in
+    let new_ = File_versioning.empty in
+    { loaded; new_ }
+
+  let get_loaded_file_data source_file t =
+    if !Cli.only_compile_new then
+      File_versioning.get_file_data source_file t.loaded
+    else None
+
+  let add_file_to_metadata m t =
+    if !Cli.only_compile_new then
+      t.new_ <- File_versioning.add_file_to_metadata m t.new_
+
+  let add_constant_usage ~const_map ~m_program t =
+    if !Cli.only_compile_new then
+      (* metdata with uses_const = Some, getting them ready to list
+         the constant they use *)
+      let new' =
+        List.fold_left
+          (fun new_metadata -> function
+            | [] -> (* Empty source file *) new_metadata
+            | d :: _ -> (
+                let loc = Pos.get d in
+                let file = Pos.get_file loc in
+                match File_versioning.get_file_data file new_metadata with
+                | None -> new_metadata
+                | Some mtdt ->
+                    let mtdt' = { mtdt with uses_const = Some StrMap.empty } in
+                    File_versioning.add_file_to_metadata mtdt' new_metadata))
+          t.new_ m_program
+      in
+      (* Constant definition *)
+      let new'' =
+        StrMap.fold
+          (fun cst Expander.{ v; used_by_file } acc ->
+            StrSet.fold
+              (fun file acc ->
+                File_versioning.file_uses_const ~file ~const:cst
+                  ~value:(Pos.unmark v) acc)
+              used_by_file acc)
+          const_map new'
+      in
+      t.new_ <- new''
+
+  let add_variable_usage ~(mir : Mir.program) t =
+    if !Cli.only_compile_new then
+      t.new_ <-
+        File_versioning.add_variable_map_to_metadata mir.program_vars t.new_
+
+  let get_files_that_need_no_regen t =
+    if
+      (not !Cli.only_compile_new)
+      || File_versioning.all_files_need_regeneration ~loaded_metadata:t.loaded
+           ~new_metadata:t.new_
+    then []
+    else
+      List.filter
+        (fun file ->
+          not
+          @@ File_versioning.file_needs_regeneration ~file
+               ~loaded_metadata:t.loaded ~new_metadata:t.new_)
+        !Cli.source_files
+
+  let write ~output t =
+    if !Cli.only_compile_new then
+      File_versioning.write_metadata ~output_dir:(Filename.dirname output)
+        t.new_
+end
+
+let run_w_stats ~text f =
+  if !Cli.stats_flag then (
+    let time, res = Timer.time_of f in
+    Cli.stats_print "%s: %f" text time;
+    res)
+  else f ()
+
 let process_dgfip_options (backend : string option)
     (dgfip_options : string list option) =
   match backend with
@@ -60,29 +145,40 @@ let parse_m_dgfip without_dgfip_m current_progress m_program =
       Errors.raise_error
         (Format.sprintf "M\n       syntax error in %s" Dgfip_m.internal_m))
 
-let parse_m_files current_progress source_files m_program =
+let parse_m_files ~metadata current_progress source_files m_program =
   List.fold_left
     (fun m_program source_file ->
-      let filebuf, input =
-        if source_file <> "" then
-          let input = open_in source_file in
-          (Lexing.from_channel input, input)
-        else failwith "You have to specify at least one file!"
-      in
-      current_progress source_file;
-      let filebuf =
-        {
-          filebuf with
-          lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
-        }
-      in
-      try
-        let commands = Mparser.source_file token filebuf in
-        commands :: m_program
-      with Mparser.Error ->
-        close_in input;
-        Errors.raise_spanned_error "M syntax error"
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)))
+      match File_metadata.get_loaded_file_data source_file metadata with
+      | Some m ->
+          File_metadata.add_file_to_metadata m metadata;
+          m.mast :: m_program (* Adding the loaded metadata to the new map. *)
+      | None -> (
+          let filebuf, input =
+            if source_file <> "" then
+              let input = open_in source_file in
+              (Lexing.from_channel input, input)
+            else failwith "You have to specify at least one file!"
+          in
+          current_progress source_file;
+          let filebuf =
+            {
+              filebuf with
+              lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file };
+            }
+          in
+          try
+            let commands = Mparser.source_file token filebuf in
+            let m =
+              File_versioning.
+                { mast = commands; m_file = source_file; uses_const = None }
+            in
+            File_metadata.add_file_to_metadata m metadata;
+            commands :: m_program
+          with Mparser.Error ->
+            close_in input;
+            Errors.raise_spanned_error "M syntax error"
+              (Parse_utils.mk_position
+                 (filebuf.lex_start_p, filebuf.lex_curr_p))))
     m_program source_files
 
 (* The legacy compiler plays a nasty trick on us, that we have to reproduce:
@@ -138,15 +234,17 @@ let patch_rule_1 (backend : string option) (dgfip_flags : Dgfip_options.flags)
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
 let driver (files : string list) (application_names : string list)
-    (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
-    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
-    (backend : string option) (output : string option)
-    (run_all_tests : string option) (dgfip_test_filter : bool)
-    (run_test : string option) (mpp_function : string)
-    (optimize_unsafe_float : bool) (precision : string option)
-    (roundops : string option) (comparison_error_margin : float option)
-    (income_year : int option) (m_clean_calls : bool)
-    (dgfip_options : string list option) =
+    (without_dgfip_m : bool) (debug : bool) (stats : bool)
+    (var_info_debug : string list) (display_time : bool)
+    (dep_graph_file : string) (print_cycles : bool) (backend : string option)
+    (output : string option) (run_all_tests : string option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string) (optimize_unsafe_float : bool)
+    (precision : string option) (roundops : string option)
+    (comparison_error_margin : float option) (income_year : int option)
+    (m_clean_calls : bool) (dgfip_options : string list option)
+    (only_compile_new : bool) (no_local_var : bool) =
+  Format.printf "Only compile new? %b@." only_compile_new;
   let value_sort =
     let precision = Option.get precision in
     if precision = "double" then Cli.RegularFloat
@@ -190,11 +288,13 @@ let driver (files : string list) (application_names : string list)
         Errors.raise_error
           (Format.asprintf "Unkown roundops option: %s" roundops)
   in
-  Cli.set_all_arg_refs files application_names without_dgfip_m debug
+  Cli.set_all_arg_refs files application_names without_dgfip_m debug stats
     var_info_debug display_time dep_graph_file print_cycles output
     optimize_unsafe_float m_clean_calls comparison_error_margin income_year
-    value_sort round_ops;
+    value_sort round_ops only_compile_new no_local_var;
   let dgfip_flags = process_dgfip_options backend dgfip_options in
+  (* Reading the project metadata, if any, to spare us some ĉompilation time *)
+  let metadata = File_metadata.make ~output in
   try
     if List.length !Cli.source_files = 0 then
       Errors.raise_error "please provide at least one M source file";
@@ -203,17 +303,36 @@ let driver (files : string list) (application_names : string list)
     let m_program =
       []
       |> parse_m_dgfip without_dgfip_m current_progress
-      |> parse_m_files current_progress !Cli.source_files
+      |> parse_m_files ~metadata current_progress !Cli.source_files
       |> List.rev
       |> patch_rule_1 backend dgfip_flags
     in
     finish "completed!";
-    Cli.debug_print "Elaborating...";
-    let m_program =
-      m_program |> Expander.proceed
-      |> Validator.proceed mpp_function
-      |> Mast_to_mir.translate |> Mir.expand_functions
+    (* Writing metadata file here *)
+    let () =
+      Option.iter (fun output -> File_metadata.write ~output metadata) output
     in
+    Cli.debug_print "Expanding...";
+    let const_map, m_program =
+      run_w_stats ~text:"Expanding" (fun () -> Expander.proceed m_program)
+    in
+    (* Updating metadata *)
+    let () = File_metadata.add_constant_usage ~const_map ~m_program metadata in
+    (* We don't write the metadata now. We will wait the translation,
+       function inlining & checks to be done. *)
+    let m_program =
+      run_w_stats ~text:"Validating" (fun () ->
+          Validator.proceed mpp_function m_program)
+    in
+    let m_program =
+      run_w_stats ~text:"Translating" (fun () ->
+          Mast_to_mir.translate m_program)
+    in
+    let m_program =
+      run_w_stats ~text:"Function expansion" (fun () ->
+          Mir.expand_functions m_program)
+    in
+    let () = File_metadata.add_variable_usage ~mir:m_program metadata in
     Cli.debug_print "Creating combined program suitable for execution...";
     if run_all_tests <> None then
       let tests : string =
@@ -239,13 +358,27 @@ let driver (files : string list) (application_names : string list)
       match backend with
       | Some backend ->
           if String.lowercase_ascii backend = "dgfip_c" then begin
+            let compil_timer = Timer.start () in
+            let files_need_no_regen =
+              File_metadata.get_files_that_need_no_regen metadata
+            in
+            Cli.debug_print "Files that need no regeneration; %i"
+              (List.length files_need_no_regen);
             Cli.debug_print "Compiling the codebase to DGFiP C...";
             if !Cli.output_file = "" then
               Errors.raise_error "an output file must be defined with --output";
-            Dgfip_gen_files.generate_auxiliary_files dgfip_flags m_program;
-            Bir_to_dgfip_c.generate_c_program dgfip_flags m_program
-              !Cli.output_file;
-            Cli.debug_print "Result written to %s" !Cli.output_file
+            run_w_stats ~text:"Aux generation" (fun () ->
+                Dgfip_gen_files.generate_auxiliary_files dgfip_flags m_program);
+            run_w_stats ~text:"C generation time" (fun () ->
+                Bir_to_dgfip_c.generate_c_program ~files_need_no_regen
+                  dgfip_flags m_program !Cli.output_file);
+            Cli.debug_print "Result written to %s" !Cli.output_file;
+            let compil_time = Timer.curr_time compil_timer in
+            Cli.stats_print "Compilation time: %f" compil_time;
+            (* Now compilation has finished, writing metadata. *)
+            Option.iter
+              (fun output -> File_metadata.write ~output metadata)
+              output
           end
           else
             Errors.raise_error (Format.asprintf "Unknown backend: %s" backend)

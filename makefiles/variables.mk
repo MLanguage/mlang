@@ -55,15 +55,20 @@ ifeq ($(origin CC),default)
   CC=clang
 endif
 
+ifndef OV
+  ifeq ($(CC), clang)
+    OV=2
+  else ifeq ($(CC), gcc)
+    OV=1
+  endif
+endif
+
+COMMON_CFLAGS?=-std=c89 -pedantic
+
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
-COMMON_CFLAGS?=-std=c89 -pedantic
-ifeq ($(CC), clang)
-  COMPILER_SPECIFIC_CFLAGS=-O2
-#  COMPILER_SPECIFIC_CFLAGS=
-else ifeq ($(CC), gcc)
-  COMPILER_SPECIFIC_CFLAGS=-O1
-endif
+COMPILER_SPECIFIC_CFLAGS=-O$(OV)
+
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
