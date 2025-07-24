@@ -59,7 +59,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token IS_VARIABLE VARIABLE_SPACE SPACE
+%token IS_VARIABLE VARIABLE_SPACE SPACE STOP
 
 %token EOF
 
@@ -880,6 +880,8 @@ instruction:
 | CLEAN_ERRORS SEMICOLON { Some CleanErrors }
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
+| STOP SEMICOLON { Some (Stop None) }
+| STOP s = SYMBOL SEMICOLON { Some (Stop (Some s)) }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {
