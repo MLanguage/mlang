@@ -1148,7 +1148,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}")
             vcs)
         var_params;
-      pr "@;@]%s: ;} // End of local scope %s" label id
+      pr "@;@]%s: ;} /* End of local scope %s */" label id
       (* End of local label scope *)
   | Iterate_values (var, var_intervals, stmts) ->
       let itval_def = VID.gen_def None var in
@@ -1189,7 +1189,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}")
         var_intervals;
-      pr "@;@]%s:;} // End of local scope %s" label id
+      pr "@;@]%s:;} /* End of local scope %s */" label id
       (* End of local label scope *)
   | ArrangeEvents (sort, filter, add, stmts) ->
       let events_sav = fresh_c_local "events_sav" in
