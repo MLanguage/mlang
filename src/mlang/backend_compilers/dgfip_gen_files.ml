@@ -351,8 +351,8 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
 let gen_dbg fmt =
   Pp.fpr fmt
     {|int change_couleur(int couleur, int typographie);
-int get_couleur();
-int get_typo();
+int get_couleur(void);
+int get_typo(void);
     
 #ifdef FLG_TRACE
 extern int niv_trace;
@@ -564,7 +564,11 @@ extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 #define RESTITUEE_C  7
 
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
-extern void free_erreur();
+#ifdef ANCIEN
+void free_erreur(void);
+#else
+void free_erreur(T_irdata*);
+#endif /* ANCIEN */
 
 #define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
