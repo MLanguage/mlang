@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+exception Stop_instruction of string option
+
 let exit_on_rte = ref true
 
 let repl_debug = ref false
@@ -858,60 +860,71 @@ struct
                 pr_flush ())
           args;
         pr_flush ()
-    | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) ->
-        List.iter
-          (fun m_a ->
-            match get_access_var ctx @@ Pos.unmark m_a with
-            | Some (vsd, v) ->
-                let vsd, v, vorg = get_var ctx vsd v in
-                set_var_ref ctx var vsd v vorg;
-                evaluate_stmts canBlock ctx stmts
-            | None -> ())
-          al;
-        List.iter
-          (fun (vcs, expr, m_sp_opt) ->
-            let eval vc _ =
-              StrMap.iter
-                (fun _ v ->
-                  if
-                    Com.CatVar.compare (Com.Var.cat v) vc = 0
-                    && not (Com.Var.is_table v)
-                  then (
-                    let vsd = get_var_space_from ctx m_sp_opt in
-                    let vsd, v, org = get_var ctx vsd v in
-                    set_var_ref ctx var vsd v org;
-                    match evaluate_expr ctx expr with
-                    | Number z when N.(z =. one ()) ->
-                        evaluate_stmts canBlock ctx stmts
-                    | _ -> ()))
-                ctx.ctx_prog.program_vars
-            in
-            Com.CatVar.Map.iter eval vcs)
-          var_params
-    | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) ->
-        List.iter
-          (fun (e0, e1, step) ->
-            match evaluate_expr ctx e0 with
-            | Number z0 -> (
-                match evaluate_expr ctx e1 with
-                | Number z1 -> (
-                    match evaluate_expr ctx step with
-                    | Number zStep when not N.(is_zero zStep) ->
-                        let cmp =
-                          if N.(zStep > zero ()) then N.( <=. ) else N.( >=. )
-                        in
-                        let rec loop i =
-                          if cmp i z1 then (
-                            let vsd = ctx.ctx_prog.program_var_space_def in
-                            set_var_value ctx vsd var (Number i);
-                            evaluate_stmts canBlock ctx stmts;
-                            loop N.(i +. zStep))
-                        in
-                        loop z0
-                    | _ -> ())
-                | Undefined -> ())
-            | Undefined -> ())
-          var_intervals
+    | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) -> (
+        try
+          List.iter
+            (fun m_a ->
+              match get_access_var ctx @@ Pos.unmark m_a with
+              | Some (vsd, v) ->
+                  let vsd, v, vorg = get_var ctx vsd v in
+                  set_var_ref ctx var vsd v vorg;
+                  evaluate_stmts canBlock ctx stmts
+              | None -> ())
+            al;
+          List.iter
+            (fun (vcs, expr, m_sp_opt) ->
+              let eval vc _ =
+                StrMap.iter
+                  (fun _ v ->
+                    if
+                      Com.CatVar.compare (Com.Var.cat v) vc = 0
+                      && not (Com.Var.is_table v)
+                    then (
+                      let vsd = get_var_space_from ctx m_sp_opt in
+                      let vsd, v, org = get_var ctx vsd v in
+                      set_var_ref ctx var vsd v org;
+                      match evaluate_expr ctx expr with
+                      | Number z when N.(z =. one ()) ->
+                          evaluate_stmts canBlock ctx stmts
+                      | _ -> ()))
+                  ctx.ctx_prog.program_vars
+              in
+              Com.CatVar.Map.iter eval vcs)
+            var_params
+        with
+        | Stop_instruction None -> ()
+        | Stop_instruction (Some scope) as exn ->
+            if scope = Pos.unmark var.name then () else raise exn)
+    | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) -> (
+        try
+          List.iter
+            (fun (e0, e1, step) ->
+              match evaluate_expr ctx e0 with
+              | Number z0 -> (
+                  match evaluate_expr ctx e1 with
+                  | Number z1 -> (
+                      match evaluate_expr ctx step with
+                      | Number zStep when not N.(is_zero zStep) ->
+                          let cmp =
+                            if N.(zStep > zero ()) then N.( <=. ) else N.( >=. )
+                          in
+                          let rec loop i =
+                            if cmp i z1 then (
+                              let vsd = ctx.ctx_prog.program_var_space_def in
+                              set_var_value ctx vsd var (Number i);
+                              evaluate_stmts canBlock ctx stmts;
+                              loop N.(i +. zStep))
+                          in
+                          loop z0
+                      | _ -> ())
+                  | Undefined -> ())
+              | Undefined -> ())
+            var_intervals
+        with
+        | Stop_instruction None -> ()
+        | Stop_instruction (Some scope) as exn ->
+            if scope = Pos.unmark var.name then () else raise exn)
+    | Com.Stop scope -> raise (Stop_instruction scope)
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
         let vsd_def = get_var_space ctx in
         let backup backup_vars access =
@@ -990,12 +1003,15 @@ struct
               aux backup_evts 0)
             backup_evts evtfs
         in
-        evaluate_stmts canBlock ctx stmts;
-        List.iter
-          (fun (vsd, v, vorg, value) -> set_var_value_org ctx vsd v vorg value)
-          backup_vars;
-        let events0 = List.hd ctx.ctx_events in
-        List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
+        let then_ () =
+          List.iter
+            (fun (vsd, v, vorg, value) ->
+              set_var_value_org ctx vsd v vorg value)
+            backup_vars;
+          let events0 = List.hd ctx.ctx_events in
+          List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
+        in
+        evaluate_stmts ~then_ canBlock ctx stmts
     | Com.ArrangeEvents (sort, filter, add, stmts) ->
         let event_list, nbAdd =
           match add with
@@ -1078,8 +1094,8 @@ struct
             in
             Sorting.mergeSort sort_fun nbAdd (Array.length events) events
         | None -> ());
-        evaluate_stmts canBlock ctx stmts;
-        ctx.ctx_events <- List.tl ctx.ctx_events
+        let then_ () = ctx.ctx_events <- List.tl ctx.ctx_events in
+        evaluate_stmts ~then_ canBlock ctx stmts
     | Com.RaiseError (m_err, var_opt) ->
         let err = Pos.unmark m_err in
         (match err.typ with
@@ -1124,10 +1140,16 @@ struct
     | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
         assert false
 
-  and evaluate_stmts canBlock (ctx : ctx) (stmts : Mir.m_instruction list) :
-      unit =
-    try List.iter (evaluate_stmt canBlock ctx) stmts
-    with BlockingError as b_err -> if canBlock then raise b_err
+  and evaluate_stmts ?(then_ = ignore) canBlock (ctx : ctx)
+      (stmts : Mir.m_instruction list) : unit =
+    let () =
+      try List.iter (evaluate_stmt canBlock ctx) stmts with
+      | BlockingError as b_err -> if canBlock then raise b_err
+      | Stop_instruction _ as exn ->
+          then_ ();
+          raise exn
+    in
+    then_ ()
 
   and evaluate_function (ctx : ctx) (target : Mir.target)
       (args : Mir.m_expression list) : value =
