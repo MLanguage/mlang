@@ -23,6 +23,7 @@ val mlang_t :
   string list ->
   bool ->
   bool ->
+  bool ->
   string list ->
   bool ->
   string ->
@@ -40,6 +41,7 @@ val mlang_t :
   int option ->
   bool ->
   string list option ->
+  bool ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
@@ -84,11 +86,15 @@ val verify_flag : bool ref
 val debug_flag : bool ref
 (** Prints debug information *)
 
+val stats_flag : bool ref
+(** Prints stat information *)
+
 val var_info_flag : bool ref
 (** Print infomation about variables declared, defined ou used incorrectly *)
 
 val var_info_debug : string list ref
-(** Prints even more information but only about some variables members of a list *)
+(** Prints even more information but only about some variables members of a list
+*)
 
 val warning_flag : bool ref
 (** Print warning info *)
@@ -116,11 +122,14 @@ val value_sort : value_sort ref
 
 val round_ops : round_ops ref
 
+val only_compile_new : bool ref
+
 val set_all_arg_refs :
   (* files *) string list ->
   (* applications *) string list ->
   (* without_dgfip_m *) bool ->
   (* debug *) bool ->
+  (* stats *) bool ->
   (* var_info_debug *) string list ->
   (* display_time *) bool ->
   (* dep_graph_file *) string ->
@@ -132,6 +141,7 @@ val set_all_arg_refs :
   (* income_year *) int option ->
   value_sort ->
   round_ops ->
+  (* only_compile_new *) bool ->
   unit
 
 val add_prefix_to_each_line : string -> (int -> string) -> string
@@ -155,6 +165,8 @@ val warning_print : ('a, Format.formatter, unit, unit) format4 -> 'a
 val error_print : ('a, Format.formatter, unit, unit) format4 -> 'a
 
 val result_print : ('a, Format.formatter, unit, unit) format4 -> 'a
+
+val stats_print : ('a, Format.formatter, unit, unit) format4 -> 'a
 
 val create_progress_bar : string -> (string -> unit) * (string -> unit)
 (** Returns two functions: the first one, [current_progress], has to be called
