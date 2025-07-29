@@ -39,49 +39,62 @@ type env = {
 (* Returns an empty initial environment. *)
 let empty_env = { scopes = [] }
 
+let label_id_of_var_name vname = Format.sprintf "label_%s" vname
+
+let label_id_of_var (v : Com.Var.t) = label_id_of_var_name (Pos.unmark v.name)
+
 (* Given an iterator variable, returns a unique scope identifier.
    Simply uses the variable name given we can't have nested iterators with
    the same variable name. This scope identifier also is the M identifier
    that can be used to reference nested scopes. *)
-let scope_of_var (v : Com.Var.t) : string = Pos.unmark v.name
+(* let scope_of_var (v : Com.Var.t) : string = Pos.unmark v.name *)
+
+(* Creates a fresh scope label from an iterator variable and adds it to
+   the environment. *)
+let fresh_scope =
+  let cpt = ref 0 in
+  fun ~(var : Com.Var.t) env ->
+    let id = Format.sprintf "%s_%i" (label_id_of_var var) !cpt in
+    incr cpt;
+    (id, { scopes = Id id :: env.scopes })
+
+let get_current_label env =
+  List.find_map (function Id i -> Some i | _ -> None) env.scopes
 
 (* Given a scope identifier, returns its C label name. *)
-let label_of_scope_id scope_id = Format.sprintf "label_%s" scope_id
-
-(* Creates a fresh scope identifier from an iterator variable and adds it to
-   the environment. *)
-let fresh_iter_id ~var env =
-  let id = scope_of_var var in
-  (id, { scopes = Id id :: env.scopes })
+let get_label_from ~scope_id env =
+  List.find_map
+    (function
+      | Id i when Strings.starts_with ~prefix:(label_id_of_var_name scope_id) i
+        ->
+          Some i
+      | _ -> None)
+    env.scopes
 
 (* Adds a sanitizer to the stack of scopes. *)
 let add_sanitizer ~f env = { scopes = Sanitize f :: env.scopes }
-
-let we_are_in_scope ~id env =
-  List.exists (function Id i -> i = id | _ -> false) env.scopes
 
 (* Sanitize the current scope, i.e. calls all the sanitizers stored
    in the scope stack. If an id is given [up_to], sanitize up to
    the given scope. *)
 let sanitize ?up_to env =
   let stop_at_id =
-    match up_to with None -> fun _ -> true | Some i -> fun i' -> i = i'
+    match up_to with
+    | None -> fun _ -> true
+    | Some i ->
+        let prefix = label_id_of_var_name i in
+        fun i' -> Strings.starts_with ~prefix i'
   in
   let rec loop = function
-    | [] -> failwith "Sanitizing outside scope"
+    | [] -> (
+        match up_to with
+        | None -> failwith "Sanitizing outside scope"
+        | Some u ->
+            Format.ksprintf failwith "Sanitizing outside scope up to %s" u)
     | Sanitize f :: tl ->
         f ();
         loop tl
     | Id i :: tl -> if not (stop_at_id i) then loop tl
-  in
-  loop env.scopes
-
-(* Returns the identifier of the current scope. *)
-let current_scope env =
-  let rec loop = function
-    | [] -> failwith "cannot fetch last scope from compiration env"
-    | Id i :: _ -> i
-    | Sanitize _ :: tl -> loop tl
   in
   loop env.scopes
 
@@ -1052,12 +1065,9 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let ref_space = VID.gen_ref_var_space_ptr var in
       let ref_def = VID.gen_def_ptr None var in
       let ref_val = VID.gen_val_ptr None var in
-      let id, env = fresh_iter_id ~var env in
-      let label = label_of_scope_id id in
+      let scope, env = fresh_scope ~var env in
       (* !!! *)
       pr "@;@[<v 2>{";
-      (* New block for local label definition *)
-      pr "@;__label__ %s;" label;
       pr "@;%s = \"%s\";" ref_name (Com.Var.name_str var);
       List.iter
         (fun m_a ->
@@ -1148,8 +1158,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}")
             vcs)
         var_params;
-      pr "@;@]%s: ;} /* End of local scope %s */" label id
-      (* End of local label scope *)
+      pr "@;@]%s: ;} /* End of scope %s */" scope scope
   | Iterate_values (var, var_intervals, stmts) ->
       let itval_def = VID.gen_def None var in
       (* !!! *)
@@ -1162,11 +1171,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let e1_val = Format.sprintf "e1_val%s" postfix in
       let step_def = Format.sprintf "step_def%s" postfix in
       let step_val = Format.sprintf "step_val%s" postfix in
-      let id, env = fresh_iter_id ~var env in
-      let label = label_of_scope_id id in
+      let id, env = fresh_scope ~var env in
       pr "@;@[<v 2>{";
-      pr "@;__label__ %s;" label;
-      (* New block for local label definition *)
       List.iter
         (fun (e0, e1, step) ->
           pr "@;@[<v 2>{";
@@ -1189,8 +1195,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}";
           pr "@]@;}")
         var_intervals;
-      pr "@;@]%s:;} /* End of local scope %s */" label id
-      (* End of local label scope *)
+      pr "@;@]%s:;} /* End of scope %s */" id id
   | ArrangeEvents (sort, filter, add, stmts) ->
       let events_sav = fresh_c_local "events_sav" in
       let events_tmp = fresh_c_local "events_tmp" in
@@ -1508,13 +1513,18 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
   | CleanErrors -> Format.fprintf oc "@;nettoie_erreur(irdata);"
   | ExportErrors -> Format.fprintf oc "@;exporte_erreur(irdata);"
   | FinalizeErrors -> Format.fprintf oc "@;finalise_erreur(irdata);"
-  | Stop None ->
-      sanitize env;
-      Format.fprintf oc "@;goto %s;" (label_of_scope_id @@ current_scope env)
-  | Stop (Some id) ->
-      assert (we_are_in_scope ~id env);
-      sanitize ~up_to:id env;
-      Format.fprintf oc "@;goto %s;" (label_of_scope_id id)
+  | Stop None -> (
+      match get_current_label env with
+      | None -> Format.ksprintf failwith "Stop instruction with no scope"
+      | Some lbl ->
+          sanitize env;
+          Format.fprintf oc "@;goto %s;" lbl)
+  | Stop (Some id) -> (
+      match get_label_from ~scope_id:id env with
+      | None -> Format.ksprintf failwith "Stop %s instruction with no scope" id
+      | Some lbl ->
+          sanitize ~up_to:id env;
+          Format.fprintf oc "@;goto %s;" lbl)
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (env : env) (dgfip_flags : Dgfip_options.flags)
