@@ -227,8 +227,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
-    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
-                           : Mir_interpreter.S)
+    let module Interp =
+      (val Mir_interpreter.get_interp value_sort round_ops : Mir_interpreter.S)
     in
     try
       Cli.debug_flag := false;
@@ -288,8 +288,8 @@ let check_one_test (p : Mir.program) (name : string)
   Cli.display_time := false;
   (* let _, finish = Cli.create_progress_bar "Testing files" in*)
   let is_ok =
-    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
-                           : Mir_interpreter.S)
+    let module Interp =
+      (val Mir_interpreter.get_interp value_sort round_ops : Mir_interpreter.S)
     in
     try
       Cli.debug_flag := false;
