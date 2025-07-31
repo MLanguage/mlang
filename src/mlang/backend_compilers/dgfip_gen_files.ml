@@ -63,7 +63,7 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
       StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
       Pp.fpr fmt " },\n")
     vars;
-  Pp.fpr fmt "  NULL\n};\n\n";
+  Pp.fpr fmt "  {NULL}\n};\n\n";
   close_out oc;
   let nb = IntMap.cardinal vars in
   let attr_set =
@@ -86,7 +86,7 @@ let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
         "  { \"%s\", \"\", %d, %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n" name
         idx tab_idx size)
     vars;
-  Pp.fpr fmt "  NULL\n};\n\n"
+  Pp.fpr fmt "  {NULL}\n};\n\n"
 
 let gen_table_tab_varinfo (cprog : Mir.program) fmt =
   let table_map = cprog.program_stats.table_map in
@@ -187,7 +187,7 @@ let gen_table_varinfos (cprog : Mir.program) flags =
       Pp.fpr fmt "  { \"%s\", %s },\n" name var_addr
     in
     StrMap.iter iter var_map;
-    Pp.fpr fmt "  NULL\n};\n\n");
+    Pp.fpr fmt "  {NULL}\n};\n\n");
   gen_table_tmp_varinfo cprog fmt;
   gen_table_tab_varinfo cprog fmt;
   close_out oc;
