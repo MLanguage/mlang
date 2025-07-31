@@ -1218,6 +1218,9 @@ void print_string(FILE *std, T_print_context *pr_ctx, char *str) {
   }
 }
 
+char isnan(double);
+char isinf(double);    
+
 void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax) {
   print_indent(NULL, pr_ctx);
   if (pmin < 0) {
