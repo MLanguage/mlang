@@ -2067,7 +2067,6 @@ char lis_tabaccess(
   char *res_def, double *res_val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
-  int idx = 0;
   if (info == NULL) {
     *res_val = 0.0;
     if (
@@ -2109,7 +2108,6 @@ void ecris_tabaccess(
 /* !!! */
 void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom) {
   T_varinfo *info = NULL;
-  T_var_space *vsp;
   char res_def = 0;
   double res_val = 0.0;
 
@@ -2118,7 +2116,6 @@ void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom)
   if (info == NULL) {
     fprintf(pr_ctx->std, "inconnu");
   } else {
-    vsp = get_var_space(irdata, var_space);
     lis_varinfo(irdata, var_space, info, &res_def, &res_val);
     if (res_def == 0) {
       fprintf(pr_ctx->std, "indefini");
@@ -2360,7 +2357,6 @@ void aff_val(
           "T_varinfo *event_field_%s_var(T_irdata *irdata, char idx_def, \
            double idx_val) {\n"
           f;
-        pr "  T_varinfo *info = NULL;\n";
         pr "  int idx = (int)floor(idx_val);\n";
         pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
         pr "    return NULL;\n";
