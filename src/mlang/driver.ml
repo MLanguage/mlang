@@ -99,20 +99,23 @@ let parse () =
     current_progress source_file;
     let lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } in
     let filebuf = { filebuf with lex_curr_p } in
-    let commands = Mparser.source_file token filebuf in
-    m_program := commands :: !m_program
+    try
+      let commands = Mparser.source_file token filebuf in
+      m_program := commands :: !m_program
+    with Mparser.Error ->
+        Errors.raise_spanned_error "M syntax error"
+          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
   in
 
   let parse_file source_file =
     let input = open_in source_file in
     let filebuf = Lexing.from_channel input in
-    try parse filebuf source_file
-    with Mparser.Error ->
+    try
+      parse filebuf source_file
+    (* We're catching exceptions to properly close the input channel *)
+    with Errors.StructuredError _ as e ->
       close_in input;
-      let pos =
-        Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)
-      in
-      Errors.raise_spanned_error "M syntax error" pos
+      raise e
   in
 
   let parse_m_dgfip () =
