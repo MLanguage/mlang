@@ -93,16 +93,14 @@ let patch_rule_1 (backend : Cli.backend) (dgfip_flags : Dgfip_options.flags)
 
 let parse () =
   let current_progress, finish = Cli.create_progress_bar "Parsing" in
-  let m_program = ref [] in
 
   let parse filebuf source_file =
     current_progress source_file;
     let lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } in
     let filebuf = { filebuf with lex_curr_p } in
-    try
-      let commands = Mparser.source_file token filebuf in
-      m_program := commands :: !m_program
-    with Mparser.Error ->
+    match Mparser.source_file token filebuf with
+    | commands -> commands
+    | exception Mparser.Error ->
         Errors.raise_spanned_error "M syntax error"
           (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
   in
@@ -112,34 +110,39 @@ let parse () =
     let filebuf = Lexing.from_channel input in
     try
       parse filebuf source_file
-    (* We're catching exceptions to properly close the input channel *)
+      (* We're catching exceptions to properly close the input channel *)
     with Errors.StructuredError _ as e ->
       close_in input;
       raise e
   in
 
-  let parse_m_dgfip () =
+  let parse_m_dgfip m_program =
     let parse_internal str =
       let filebuf = Lexing.from_string str in
       let source_file = Dgfip_m.internal_m in
       parse filebuf source_file
     in
-    parse_internal Dgfip_m.declarations;
-    parse_internal Dgfip_m.event_declaration
+    let decs = parse_internal Dgfip_m.declarations in
+    let events = parse_internal Dgfip_m.event_declaration in
+    events :: decs :: m_program
   in
 
-  let parse_m_files () =
+  let parse_m_files m_program =
     let parse_file_progress source_file =
       current_progress source_file;
       parse_file source_file
     in
-    List.iter parse_file_progress @@ Cli.get_files !Cli.source_files
+    (*FIXME: use a fold here *)
+    let prog =
+      List.map parse_file_progress @@ Cli.get_files !Cli.source_files
+    in
+    List.rev prog @ m_program
   in
-  parse_m_dgfip ();
-  parse_m_files ();
 
-  m_program := List.rev !m_program;
-  m_program := patch_rule_1 !Cli.backend !Cli.dgfip_flags !m_program;
+  let m_program =
+    [] |> parse_m_dgfip |> parse_m_files |> List.rev
+    |> patch_rule_1 !Cli.backend !Cli.dgfip_flags
+  in
   finish "completed!";
   m_program
 
@@ -261,7 +264,7 @@ let driver () =
     Cli.debug_print "Reading M files...";
     let m_program = parse () in
     Cli.debug_print "Elaborating...";
-    let m_program = Expander.proceed !m_program in
+    let m_program = Expander.proceed m_program in
     let m_program = Validator.proceed !Cli.mpp_function m_program in
     let m_program = Mast_to_mir.translate m_program in
     let m_program = Mir.expand_functions m_program in
