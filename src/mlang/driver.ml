@@ -40,7 +40,6 @@ let process_dgfip_options (backend : Cli.backend)
     end
   | UnknownBackend -> Dgfip_options.default_flags
 
-
 (* The legacy compiler plays a nasty trick on us, that we have to reproduce:
    rule 1 is modified to add assignments to APPLI_XXX variables according to the
    target application (OCEANS, BATCH and ILIAD). *)
@@ -146,8 +145,6 @@ let parse () =
   finish "completed!";
   m_program
 
-
-
 (** Entry function for the executable. Returns a negative number in case of
     error. *)
 
@@ -231,10 +228,9 @@ let set_opts (files : string list) (application_names : string list)
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;
   ignore
-    (Test_interpreter.check_one_test m_program test 
-    !Cli.value_sort !Cli.round_ops);
     (Test_interpreter.check_one_test m_program test !Cli.value_sort
        !Cli.round_ops);
+  Test_interpreter.check_one_test m_program test !Cli.value_sort !Cli.round_ops;
   Cli.result_print "Test passed!"
 
 let run_multiple_tests m_program tests =
