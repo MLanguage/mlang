@@ -330,7 +330,8 @@ let expand_functions (p : program) : program =
           let add' = Option.map expand_functions_expr add in
           let instrs' = List.map map_instr instrs in
           Pos.same (ArrangeEvents (sort', filter', add', instrs')) m_instr
-      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors | Stop _ ->
+          m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in
     StrMap.map
