@@ -116,14 +116,16 @@ let parse () =
   in
 
   let parse_m_dgfip m_program =
-    let parse_internal str =
-      let filebuf = Lexing.from_string str in
-      let source_file = Dgfip_m.internal_m in
-      parse filebuf source_file
-    in
-    let decs = parse_internal Dgfip_m.declarations in
-    let events = parse_internal Dgfip_m.event_declaration in
-    events :: decs :: m_program
+    if !Cli.without_dgfip_m then m_program
+    else
+      let parse_internal str =
+        let filebuf = Lexing.from_string str in
+        let source_file = Dgfip_m.internal_m in
+        parse filebuf source_file
+      in
+      let decs = parse_internal Dgfip_m.declarations in
+      let events = parse_internal Dgfip_m.event_declaration in
+      events :: decs :: m_program
   in
 
   let parse_m_files m_program =
