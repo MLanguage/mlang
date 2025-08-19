@@ -27,7 +27,7 @@ type calc_error = string Pos.marked
 (* type calc_errors = calc_error list *)
 
 (* type rappel = string * string * var_value * string * string * string * string
-   * string *)
+ * string *)
 type rappel = {
   event_nb : int;
   rappel_nb : int;

@@ -242,7 +242,19 @@ type value_sort =
 type round_ops = RODefault | ROMulti | ROMainframe of int
 (* size of type long, either 32 or 64 *)
 
-let source_files : string list ref = ref []
+type backend = Dgfip_c | UnknownBackend
+
+type execution_mode =
+  | SingleTest of string
+  | MultipleTests of string
+  | Extraction
+
+type files = NonEmpty of string list
+
+let get_files = function NonEmpty l -> l
+
+(* This feels weird to put here, but by construction it should not happen.*)
+let source_files : files ref = ref (NonEmpty [])
 
 let application_names : string list ref = ref []
 
@@ -274,19 +286,31 @@ let value_sort = ref RegularFloat
 
 let round_ops = ref RODefault
 
+let backend = ref UnknownBackend
+
+let dgfip_test_filter = ref false
+
+let mpp_function = ref ""
+
+let dgfip_flags = ref Dgfip_options.default_flags
+
+let execution_mode = ref Extraction
+
 (* Default value for the epsilon slack when comparing things in the
    interpreter *)
 let comparison_error_margin = ref 0.000001
 
 let income_year = ref 0
 
-let set_all_arg_refs (files_ : string list) applications_
-    (without_dgfip_m_ : bool) (debug_ : bool) (var_info_debug_ : string list)
-    (display_time_ : bool) (dep_graph_file_ : string) (no_print_cycles_ : bool)
+let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
+    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
+    (dep_graph_file_ : string) (no_print_cycles_ : bool)
     (output_file_ : string option) (optimize_unsafe_float_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
     (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) =
+    (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
+    (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
+    (execution_mode_ : execution_mode) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -298,12 +322,17 @@ let set_all_arg_refs (files_ : string list) applications_
   no_print_cycles_flag := no_print_cycles_;
   optimize_unsafe_float := optimize_unsafe_float_;
   m_clean_calls := m_clean_calls_;
+  execution_mode := execution_mode_;
   (income_year :=
      match income_year_ with
      | Some y -> y
      | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
   value_sort := value_sort_;
   round_ops := round_ops_;
+  backend := backend_;
+  dgfip_test_filter := dgfip_test_filter_;
+  mpp_function := mpp_function_;
+  dgfip_flags := dgfip_flags_;
   match output_file_ with
   | None -> ()
   | Some o -> (
