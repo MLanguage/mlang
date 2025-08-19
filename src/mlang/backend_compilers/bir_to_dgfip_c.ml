@@ -1607,8 +1607,8 @@ let tmp_file_name filename = filename ^ ".tmp"
 let check_if_tmp_equals_existing filename =
   let tmp_filename = tmp_file_name filename in
   if not (Sys.file_exists tmp_filename) then begin
-    Format.printf "%S does not exist!" tmp_filename;
-    assert false
+    Cli.error_print "Le fichier %S n'existe pas" tmp_filename;
+    Errors.raise_error "Fichier introuvable"
   end
   else if
     Sys.file_exists filename && Digest.file tmp_filename = Digest.file filename
