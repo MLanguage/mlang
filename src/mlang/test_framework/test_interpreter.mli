@@ -13,13 +13,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val check_test :
-  Mir.program ->
-  (* test file name *) string ->
-  Cli.value_sort ->
-  Cli.round_ops ->
-  unit
-
 val check_all_tests :
   Mir.program ->
   string ->
@@ -27,7 +20,9 @@ val check_all_tests :
   Cli.round_ops ->
   (string -> bool) ->
   unit
-(** Similar to [check_test] but tests a whole folder full of test files *)
+(** [check_all_tests p folder vs ro filter]
+    Executes [p] with all tests in [folder] whose name satisfy [filter]. *)
 
 val check_one_test :
   Mir.program -> string -> Cli.value_sort -> Cli.round_ops -> unit
+(** Same as [check_all_tests], but for one test. *)
