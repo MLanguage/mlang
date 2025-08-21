@@ -15,7 +15,7 @@ license: "GPL-3.0-or-later"
 homepage: "https://github.com/MLanguage/mlang"
 bug-reports: "https://github.com/MLanguage/mlang/issues"
 depends: [
-  "ocaml" {>= "4.11.2"}
+  "ocaml" {>= "4.13.0"}
   "dune" {build}
   "ANSITerminal" {= "0.8.2"}
   "cmdliner" {= "1.3.0"}

@@ -29,7 +29,7 @@
  (depends
   (ocaml
    (and
-    (>= "4.11.2")))
+    (>= "4.13.0")))
   (dune
    (and :build))
   (ANSITerminal
