@@ -9,6 +9,12 @@ type instance = {
   expectedAnos : StrSet.t;
 }
 
+type options = {
+    files: string list;
+    year: int;
+    recursive: bool
+  }
+
 let new_instance nom = {
   nom;
   label = "";
@@ -116,69 +122,96 @@ let var_addr () =
   in
   Lazy.force vars
 
-let run_test test_file annee_exec =
-  Printf.printf "Testing %s...\n%!" test_file;
-  let annee_calc = M.annee_calc () in
-  let insts = read_test test_file in
-  let rec run_insts res = function
-  | [] -> res
-  | inst :: insts ->
-      Printf.printf "  Running %s:%s...\n%!" inst.nom inst.label;
-      let tgv = M.TGV.alloc_tgv () in
-      StrMap.iter (M.TGV.set tgv) inst.vars;
-      M.set_evt_list tgv inst.events;
-      let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
-      if annee_revenu <> annee_calc then (
-        Printf.eprintf
-          "Attention, année calculette (%d) <> année revenu (%d)\n%!"
-          annee_calc
-          annee_revenu
-      );
-      (match inst.label with
-      | "primitif" -> M.TGV.set_int tgv "IND_TRAIT" 4
-      | "correctif" -> M.TGV.set_int tgv "IND_TRAIT" 5
-      | _ -> M.TGV.set_int tgv "IND_TRAIT" 0);
-      M.TGV.set_int tgv "ANCSDED" annee_exec;
-      M.init_errs tgv;
-      let _err = M.enchainement_primitif tgv in
-      M.export_errs tgv;
-      let err_set =
-        let add res e = StrSet.add e res in
-        List.fold_left add StrSet.empty (M.get_err_list tgv)
-      in
-      res && check_result tgv err_set inst.expectedVars inst.expectedAnos
+let rec run_test ~options test_file =
+  if Sys.is_directory test_file then
+    if options.recursive then (
+      Printf.printf "Reading folder %s...\n%!" test_file;
+      run_tests 
+        ~options
+        (Sys.readdir test_file |> Array.to_list |> List.map (Filename.concat test_file))
+    )
+    else (
+      Printf.printf "Ignoring folder %s (add --rec to explore subfolders).\n%!" test_file;
+      true
+    )
+  else if Read_test.is_empty test_file then (
+      Printf.printf "Warning: skipping empty file %s.\n%!" test_file;
+      true
+  ) else (
+    Printf.printf "Testing %s...\n%!" test_file;
+    let annee_calc = M.annee_calc () in
+    let insts = read_test test_file in
+    let rec run_insts res = function
+      | [] -> res
+      | inst :: insts ->
+         Printf.printf "  Running %s:%s...\n%!" inst.nom inst.label;
+         let tgv = M.TGV.alloc_tgv () in
+         StrMap.iter (M.TGV.set tgv) inst.vars;
+         M.set_evt_list tgv inst.events;
+         let annee_revenu = M.TGV.get_int_def tgv "ANREV" annee_calc in
+         if annee_revenu <> annee_calc then (
+           Printf.eprintf
+             "Attention, année calculette (%d) <> année revenu (%d)\n%!"
+             annee_calc
+             annee_revenu
+         );
+         (match inst.label with
+          | "primitif" -> M.TGV.set_int tgv "IND_TRAIT" 4
+          | "correctif" -> M.TGV.set_int tgv "IND_TRAIT" 5
+          | _ -> M.TGV.set_int tgv "IND_TRAIT" 0);
+         M.TGV.set_int tgv "ANCSDED" options.year;
+         M.init_errs tgv;
+         let _err = M.enchainement_primitif tgv in
+         M.export_errs tgv;
+         let err_set =
+           let add res e = StrSet.add e res in
+           List.fold_left add StrSet.empty (M.get_err_list tgv)
+         in
+         res && check_result tgv err_set inst.expectedVars inst.expectedAnos
+    in
+    run_insts true insts
+  )
+
+and run_tests ~options = function
+  | [] -> true
+  | test_file :: files ->
+     run_test ~options test_file && (Gc.minor (); run_tests ~options files)
+
+let read_args () =
+  let rec loop acc = function
+    | [] -> {acc with files = List.rev acc.files}
+    (* Année *)
+    | "--annee" :: ann :: tl -> (
+       match int_of_string ann with
+       | year -> loop {acc with year} tl
+       | exception (Failure _) -> 
+          Printf.eprintf "--annee accepte un entier comme argument (%s)\n" ann;
+          exit 31
+    )
+    | ["--annee"] -> 
+       Printf.eprintf "argument manquant pour --annee\n";
+       exit 31
+    (* Recursive *)
+    | "--rec" :: tl -> loop {acc with recursive = true} tl
+    | file :: tl -> loop {acc with files = file :: acc.files} tl
   in
-  run_insts true insts
+    loop
+      {files = []; year = M.annee_calc () + 1; recursive = false}
+      (List.tl (Array.to_list Sys.argv))
+
 
 let main () =
   if Array.length Sys.argv < 2 then (
     Printf.printf "Syntaxe :\n%s fichier_test\n" Sys.argv.(0);
     exit 31
   );
-  let args = List.tl (Array.to_list Sys.argv) in
-  let annee_exec, test_files =
-    match args with
-    | "--annee" :: ann :: files ->
-        let annee =
-          try int_of_string ann with
-          | _ ->
-              Printf.eprintf "--annee accepte un entier comme argument (%s)\n" ann;
-              exit 31
-        in
-        annee, files
-    | "--annee" :: []->
-        Printf.eprintf "argument manquant pour --annee\n";
-        exit 31
-    | files ->
-        let annee = M.annee_calc () + 1 in
-        annee, files
-  in
+  let options = read_args () in
   let rec loop = function
   | [] -> true
   | test_file :: files ->
-      run_test test_file annee_exec && (Gc.minor (); loop files)
+      run_test ~options test_file && (Gc.minor (); loop files)
   in
-  match loop test_files with
+  match loop options.files with
   | true -> exit 0
   | false -> exit 1
 
