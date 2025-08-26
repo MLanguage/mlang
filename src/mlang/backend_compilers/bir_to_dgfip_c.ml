@@ -1622,8 +1622,12 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
   let folder = Filename.dirname filename in
-  let tmp_filename = tmp_file_name filename in
-  let _oc = open_out tmp_filename in
+  let _oc =
+    if !Cli.lazy_c_generation then
+      let tmp_filename = tmp_file_name filename in
+      open_out tmp_filename
+    else open_out filename
+  in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a@\n@." generate_implem_header Prelude.message;
   let filemap =
@@ -1633,10 +1637,11 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
         let update = function
           | Some fmt -> Some fmt
           | None ->
-              let fn =
-                Filename.concat folder (file_str ^ ".c") |> tmp_file_name
+              let fn = Filename.concat folder (file_str ^ ".c") in
+              let fn' =
+                if !Cli.lazy_c_generation then tmp_file_name fn else fn
               in
-              let oc = open_out fn in
+              let oc = open_out fn' in
               let fmt = Format.formatter_of_out_channel oc in
               Format.fprintf fmt "#include \"mlang.h\"@;@;";
               Some (oc, fmt)
@@ -1651,8 +1656,9 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
     (fun file (oc, fmt) ->
       Format.fprintf fmt "@;@?";
       close_out oc;
-      let file =
-        if file = "" then filename else Filename.concat folder (file ^ ".c")
-      in
-      check_if_tmp_equals_existing file)
+      if !Cli.lazy_c_generation then
+        let file =
+          if file = "" then filename else Filename.concat folder (file ^ ".c")
+        in
+        check_if_tmp_equals_existing file)
     filemap

@@ -158,7 +158,7 @@ let set_opts (files : string list) (application_names : string list)
     (run_test : string option) (mpp_function : string)
     (optimize_unsafe_float : bool) (precision : string option)
     (roundops : string option) (comparison_error_margin : float option)
-    (income_year : int option) (m_clean_calls : bool)
+    (income_year : int option) (m_clean_calls : bool) (lazy_c_generation : bool)
     (dgfip_options : string list option) =
   let value_sort =
     let precision = Option.get precision in
@@ -224,8 +224,8 @@ let set_opts (files : string list) (application_names : string list)
   Cli.set_all_arg_refs files application_names without_dgfip_m debug
     var_info_debug display_time dep_graph_file print_cycles output
     optimize_unsafe_float m_clean_calls comparison_error_margin income_year
-    value_sort round_ops backend dgfip_test_filter mpp_function dgfip_flags
-    execution_mode
+    value_sort round_ops backend dgfip_test_filter mpp_function
+    lazy_c_generation dgfip_flags execution_mode
 
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;

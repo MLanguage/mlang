@@ -589,7 +589,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
   in
   (prog, { stats with nb_all_tmps; sz_all_tmps; nb_all_refs })
 
-(** {1 Translation } *)
+(** {1 Translation} *)
 
 (** {2 General translation context} *)
 

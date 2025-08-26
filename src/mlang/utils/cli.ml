@@ -173,6 +173,14 @@ let m_clean_calls =
           "Clean the value of computed variables between two m calls (to check \
            that there is no hidden state kept between two calls)")
 
+let lazy_c_gen =
+  Arg.(
+    value & flag
+    & info [ "lazy-c-generation" ]
+        ~doc:
+          "When set, does not regenerate C files that have not changed, \
+           preserving their metadata.")
+
 let dgfip_options =
   Arg.(
     value
@@ -188,7 +196,7 @@ let mlang_t f =
     $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
     $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
     $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ income_year_cli $ m_clean_calls $ lazy_c_gen $ dgfip_options)
 
 let info =
   let doc =
@@ -292,6 +300,8 @@ let dgfip_test_filter = ref false
 
 let mpp_function = ref ""
 
+let lazy_c_generation = ref false
+
 let dgfip_flags = ref Dgfip_options.default_flags
 
 let execution_mode = ref Extraction
@@ -309,8 +319,8 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
     (income_year_ : int option) (value_sort_ : value_sort)
     (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
-    (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
-    (execution_mode_ : execution_mode) =
+    (mpp_function_ : string) (lazy_c_generation_ : bool)
+    (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -332,6 +342,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   backend := backend_;
   dgfip_test_filter := dgfip_test_filter_;
   mpp_function := mpp_function_;
+  lazy_c_generation := lazy_c_generation_;
   dgfip_flags := dgfip_flags_;
   match output_file_ with
   | None -> ()
@@ -367,7 +378,7 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
 
 (**{2 Markers}*)
 
-(** Prints [\[INFO\]] in blue on the terminal standard output *)
+(** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
 
@@ -390,28 +401,28 @@ let format_with_style (styles : ANSITerminal.style list)
   if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
   else Printf.sprintf str
 
-(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
-    timing since last debug *)
+(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
+    since last debug *)
 let debug_marker (f_time : bool) =
   if f_time then time_marker ();
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
 
-(** Prints [\[ERROR\]] in red on the terminal error output *)
+(** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () =
   ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
 
-(** Prints [\[WARNING\]] in yellow on the terminal standard output *)
+(** Prints [[WARNING]] in yellow on the terminal standard output *)
 let warning_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
 
-(** Prints [\[RESULT\]] in green on the terminal standard output *)
+(** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
 
 let clocks =
   Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
-(** Prints [\[🕛\]] in blue on the terminal standard output *)
+(** Prints [[🕛]] in blue on the terminal standard output *)
 let clock_marker i =
   let new_time = Unix.gettimeofday () in
   let initial_time = !initial_time in

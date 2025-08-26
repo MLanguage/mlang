@@ -514,9 +514,11 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
     iterated values.
 
     In OCaml terms, if you want [translate_loop_variables lvs f ctx], then you
-    should define [f] by [let f = fun lc i ctx -> ...] and use {!val:
-    merge_loop_ctx} inside [...] before translating the loop body. [lc] is the
-    loop context, [i] the loop sequence index and [ctx] the translation context. *)
+    should define [f] by [let f = fun lc i ctx -> ...] and use
+    {!val:
+    merge_loop_ctx} inside [...] before translating the loop body.
+    [lc] is the loop context, [i] the loop sequence index and [ctx] the
+    translation context. *)
 
 let expand_loop_variables (lvs : Com.m_var_name Com.loop_variables Pos.marked)
     (const_map : const_context) : (loop_context -> 'a) -> 'a list =

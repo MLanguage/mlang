@@ -39,6 +39,7 @@ val mlang_t :
   float option ->
   int option ->
   bool ->
+  bool ->
   string list option ->
   'a) ->
   'a Cmdliner.Term.t
@@ -136,6 +137,8 @@ val dgfip_test_filter : bool ref
 
 val mpp_function : string ref
 
+val lazy_c_generation : bool ref
+
 val dgfip_flags : Dgfip_options.flags ref
 
 val execution_mode : execution_mode ref
@@ -159,6 +162,7 @@ val set_all_arg_refs :
   backend ->
   (* dgfip_test_filter *) bool ->
   (* mpp_function *) string ->
+  (* lazy_c_generation *) bool ->
   (* dgfip_flags *) Dgfip_options.flags ->
   (* execution_mode *) execution_mode ->
   unit
