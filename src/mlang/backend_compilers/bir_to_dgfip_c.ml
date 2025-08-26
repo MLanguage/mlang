@@ -1600,6 +1600,21 @@ let generate_implem_header oc msg =
 |}
     msg
 
+let tmp_file_name filename = filename ^ ".tmp"
+
+(* let file_name_of_tmp tmp = String.sub tmp 0 (String.length tmp - 4) *)
+
+let check_if_tmp_equals_existing filename =
+  let tmp_filename = tmp_file_name filename in
+  if not (Sys.file_exists tmp_filename) then begin
+    Cli.error_print "Le fichier %S n'existe pas" tmp_filename;
+    Errors.raise_error "Fichier introuvable"
+  end
+  else if
+    Sys.file_exists filename && Digest.file tmp_filename = Digest.file filename
+  then Sys.remove tmp_filename
+  else Sys.rename tmp_filename filename
+
 let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
     (filename : string) : unit =
   if Filename.extension filename <> ".c" then
@@ -1607,7 +1622,12 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       (Format.asprintf "Output file should have a .c extension (currently %s)"
          filename);
   let folder = Filename.dirname filename in
-  let _oc = open_out filename in
+  let _oc =
+    if !Cli.lazy_c_generation then
+      let tmp_filename = tmp_file_name filename in
+      open_out tmp_filename
+    else open_out filename
+  in
   let oc = Format.formatter_of_out_channel _oc in
   Format.fprintf oc "%a@\n@." generate_implem_header Prelude.message;
   let filemap =
@@ -1618,7 +1638,10 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
           | Some fmt -> Some fmt
           | None ->
               let fn = Filename.concat folder (file_str ^ ".c") in
-              let oc = open_out fn in
+              let fn' =
+                if !Cli.lazy_c_generation then tmp_file_name fn else fn
+              in
+              let oc = open_out fn' in
               let fmt = Format.formatter_of_out_channel oc in
               Format.fprintf fmt "#include \"mlang.h\"@;@;";
               Some (oc, fmt)
@@ -1630,7 +1653,12 @@ let generate_c_program (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
   generate_functions dgfip_flags p filemap;
   generate_targets dgfip_flags p filemap;
   StrMap.iter
-    (fun _ (oc, fmt) ->
+    (fun file (oc, fmt) ->
       Format.fprintf fmt "@;@?";
-      close_out oc)
+      close_out oc;
+      if !Cli.lazy_c_generation then
+        let file =
+          if file = "" then filename else Filename.concat folder (file ^ ".c")
+        in
+        check_if_tmp_equals_existing file)
     filemap

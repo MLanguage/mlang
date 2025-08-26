@@ -78,8 +78,8 @@ let format fmt (pos : t) =
 
 type 'a marked =
   | Mark of 'a * t
-      (** Everything related to the source code should keep its t stored, to improve
-    error messages *)
+      (** Everything related to the source code should keep its t stored, to
+          improve error messages *)
 
 (** Placeholder t *)
 let none : t =
