@@ -19,6 +19,19 @@ val check_test :
   Cli.value_sort ->
   Cli.round_ops ->
   unit
+(** [check_test program test_file value_sort round_ops] runs a single test case.
+
+    It parses the [test_file], executes the [program] with the inputs specified
+    in the file, and compares the final variable states and generated errors
+    against the expected outcomes. It prints "OK!" on success or "KO!" with
+    details on failure.
+
+    @param program The `Mir` program to be tested.
+    @param test_file The path to the `.irj` test file.
+    @param value_sort The interpretation mode (e.g., symbolic or concrete).
+    @param round_ops The rounding operations to use for floating-point arithmetic.
+    @raise InterpError if the test fails with a specific number of errors.
+    @raise Errors.StructuredError for parsing or setup errors in the test file. *)
 
 val check_all_tests :
   Mir.program ->
@@ -27,7 +40,29 @@ val check_all_tests :
   Cli.round_ops ->
   (string -> bool) ->
   unit
-(** Similar to [check_test] but tests a whole folder full of test files *)
+(** [check_all_tests program test_dir value_sort round_ops filter] runs all
+    test files in a given directory.
+
+    It reads all files in [test_dir], applies the [filter] function to select
+    which files to run, and then executes each one in parallel. It aggregates
+    and prints a summary of successes and failures.
+
+    @param program The `Mir` program to be tested.
+    @param test_dir The directory containing the `.irj` test files.
+    @param value_sort The interpretation mode.
+    @param round_ops The rounding operations to use.
+    @param filter A function that returns [true] for filenames that should be
+                  included in the test run. *)
 
 val check_one_test :
   Mir.program -> string -> Cli.value_sort -> Cli.round_ops -> unit
+(** [check_one_test program test_file value_sort round_ops] runs a single
+    test file and reports its success or failure.
+
+    This is a wrapper around [check_test] intended for running a specific test
+    case individually. It catches exceptions and prints a summary of the outcome.
+
+    @param program The `Mir` program to be tested.
+    @param test_file The path to the `.irj` test file.
+    @param value_sort The interpretation mode.
+    @param round_ops The rounding operations to use. *)
