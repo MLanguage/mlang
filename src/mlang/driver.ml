@@ -219,7 +219,7 @@ let set_opts (files : string list) (application_names : string list)
     | _ -> Cli.NonEmpty files
   in
   let dgfip_flags =
-    process_dgfip_options !Cli.backend ~application_names dgfip_options
+    process_dgfip_options backend ~application_names dgfip_options
   in
   Cli.set_all_arg_refs files application_names without_dgfip_m debug
     var_info_debug display_time dep_graph_file print_cycles output
