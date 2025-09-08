@@ -325,6 +325,10 @@ type verif_domain = verif_domain_data domain
 (** A literal can either be a float value or undefined. *)
 type literal = Float of float | Undefined
 
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -397,7 +401,7 @@ and 'v m_access = 'v access Pos.marked
 and 'v case = CDefault | CValue of literal | CVar of 'v m_access
 
 (** Values that can be substituted for loop parameters *)
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -432,7 +436,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -458,6 +462,20 @@ type 'v dep =
   | Const of const
 
 val get_used_variables : 'v expression -> 'v dep list
+
+val mk_atomlit : literal -> 'v atom
+(** [mk_atomtit lit] makes a Literal expression with no origin *)
+
+val mk_atomlit_from_const : literal -> string Pos.marked -> 'v atom
+(** [mk_atomlit_from_const] makes a Literal expression with
+    the name of the const as origin *)
+
+val mk_lit : literal -> 'v expression
+(** [mk_lit lit] makes a Literal expression with no origin *)
+
+val mk_lit_from_const : literal -> string Pos.marked -> 'v expression
+(** [mk_lit_from_const] makes a Literal expression with
+    the name of the const as origin *)
 
 (** Handling of errors. *)
 module Error : sig
