@@ -863,8 +863,8 @@ struct
                 | Some e3 -> evaluate_expr ctx e3)
             | Number _ -> evaluate_expr ctx e2
             | Undefined -> Undefined)
-        | Literal Undefined -> Undefined
-        | Literal (Float f) -> Number (N.of_float f)
+        | Literal { lit = Undefined; _ } -> Undefined
+        | Literal { lit = Float f; _ } -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
         | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with

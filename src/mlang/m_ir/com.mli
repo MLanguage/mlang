@@ -337,6 +337,13 @@ type verif_domain = verif_domain_data domain
 (** A literal can either be a float value or undefined. *)
 type literal = Float of float | Undefined
 
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
+(** As constants are replaced by their literal value at some point in the code
+    expansion, this allows to track whether the literal was written as-if, or if
+    it originated from a constant. *)
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -409,7 +416,7 @@ and 'v m_access = 'v access Pos.marked
 and 'v case = CDefault | CValue of literal | CVar of 'v m_access
 
 (** Values that can be substituted for loop parameters *)
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -444,7 +451,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -474,6 +481,14 @@ type 'v dep =
 val get_used_variables : 'v expression -> 'v dep list
 (** [get_used_variables expr] returs the list of dependencies contained in the
     expression. *)
+
+val mk_atomlit : ?from_const:string Pos.marked -> literal -> 'v atom
+(** [mk_atomtit ?constname lit] makes a Literal atom with the name of the const
+    as origin if provided. *)
+
+val mk_lit : ?from_const:string Pos.marked -> literal -> 'v expression
+(** [mk_atomtit ?constname lit] makes a Literal expression with the name of the
+    const as origin if provided. *)
 
 (** Handling of errors. *)
 module Error : sig
