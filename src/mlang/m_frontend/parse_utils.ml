@@ -90,10 +90,10 @@ let parse_literal sloc (s : string) : Com.literal =
 let parse_to_atom (v : parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
   match v with
   | ParseVar v -> AtomVar (Pos.mark v pos)
-  | ParseInt v -> AtomLiteral (Float (float_of_int v))
+  | ParseInt v -> Com.mk_atomlit (Float (float_of_int v))
 
 let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
-  try Com.AtomLiteral (Com.Float (float_of_string s))
+  try Com.mk_atomlit (Com.Float (float_of_string s))
   with Failure _ ->
     Com.AtomVar (Pos.mark (parse_variable sloc s) (mk_position sloc))
 

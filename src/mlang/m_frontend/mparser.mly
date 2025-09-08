@@ -25,6 +25,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
+ let parse_to_atom (v: parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
+   match v with
+   | ParseVar v -> AtomVar (Pos.mark v pos)
+   | ParseInt v -> Com.mk_atomlit (Float (float_of_int v))
+
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -766,7 +771,7 @@ instruction:
     let expr =
       match eo with
       | Some expr -> expr
-      | None -> Pos.without (Com.Literal (Com.Float 1.0))
+      | None -> Pos.without (Com.mk_lit (Com.Float 1.0))
     in
     Some (ComputeVerifs (dom, expr, m_sp_opt))
   }
@@ -1025,7 +1030,7 @@ it_param:
     let expr =
       match eo with
       | Some expr -> expr
-      | None -> Pos.without (Com.Literal (Com.Float 1.0))
+      | None -> Pos.without (Com.mk_lit (Com.Float 1.0))
     in
     let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
     `VarCatsIt (vcats, expr, m_sp_opt)
@@ -1077,7 +1082,7 @@ rest_param:
     let expr =
       match eo with
       | Some expr -> expr
-      | None -> Pos.without (Com.Literal (Com.Float 1.0))
+      | None -> Pos.without (Com.mk_lit (Com.Float 1.0))
     in
     let m_sp_opt = match spo with Some m_sp -> Some (m_sp, -1) | None -> None in
     `VarCatsRest (var, vcats, expr, m_sp_opt)
@@ -1452,7 +1457,7 @@ factor:
     | Com.AtomVar v -> Com.Var (VarAccess (None, v))
     | Com.AtomLiteral l -> Com.Literal l
   }
-| UNDEFINED { Com.Literal Undefined }
+| UNDEFINED { Com.mk_lit Undefined }
 | LPAREN e = expression RPAREN { e }
 
 loop_expression:

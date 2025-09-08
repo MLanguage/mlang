@@ -67,7 +67,7 @@ let patch_rule_1 (backend : Config.backend)
       let m_access =
         Pos.without (Com.VarAccess (None, Pos.without (Com.Normal name)))
       in
-      let litt = Com.Literal (Com.Float (if value then 1.0 else 0.0)) in
+      let litt = Com.mk_lit (Com.Float (if value then 1.0 else 0.0)) in
       let cmd = Com.SingleFormula (VarDecl (m_access, Pos.without litt)) in
       Pos.without cmd :: l
     else l

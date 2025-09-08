@@ -3040,8 +3040,8 @@ let eval_expr_verif (prog : program) (verif : verif)
   in
   let rec aux expr =
     match Pos.unmark expr with
-    | Com.Literal (Com.Float f) -> Some f
-    | Literal Com.Undefined -> None
+    | Com.Literal { lit = Com.Float f; _ } -> Some f
+    | Literal { lit = Com.Undefined; _ } -> None
     | Var _ -> Err.variable_forbidden_in_filter (Pos.get expr)
     | Attribut (Pos.Mark (VarAccess (_, m_v), _), m_attr) ->
         let var_name = Com.get_normal_var @@ Pos.unmark m_v in

@@ -440,6 +440,10 @@ type literal = Float of float | Undefined
 
 type case = Default | Value of literal
 
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -484,7 +488,7 @@ type 'v access =
 
 and 'v m_access = 'v access Pos.marked
 
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -513,7 +517,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -568,7 +572,9 @@ let get_used_variables (e : 'v expression) : 'v dep list =
     | InDomain (Mark (var, _), _)
     | Type (Mark (var, _), _) ->
         get_used_variables_access var acc
-    | Literal lit -> LiteralDep lit :: acc
+    | Literal { lit; origin = Some (Mark (id, pos)) } ->
+        Const { id; value = lit; pos } :: acc
+    | Literal { lit; origin = None } -> LiteralDep lit :: acc
     | SameVariable (Mark (l, _), Mark (r, _)) ->
         let acc = get_used_variables_access l acc in
         get_used_variables_access r acc
@@ -581,6 +587,18 @@ let get_used_variables (e : 'v expression) : 'v dep list =
     | FieldAccess (_, Mark (v, _), _, _) -> get_used_variables_ v acc
   in
   get_used_variables_ e []
+
+let mk_lit_with_orig lit origin = { lit; origin }
+
+let mk_lit lit = Literal (mk_lit_with_orig lit None)
+
+let mk_lit_from_const lit constname =
+  Literal (mk_lit_with_orig lit (Some constname))
+
+let mk_atomlit lit = AtomLiteral (mk_lit_with_orig lit None)
+
+let mk_atomlit_from_const lit constname =
+  AtomLiteral (mk_lit_with_orig lit (Some constname))
 
 module Error = struct
   type typ = Anomaly | Discordance | Information
@@ -1172,7 +1190,7 @@ let format_case fmt = function
 let format_atom form_var fmt vl =
   match vl with
   | AtomVar v -> form_var fmt v
-  | AtomLiteral l -> format_literal fmt l
+  | AtomLiteral l -> format_literal fmt l.lit
 
 let format_set_value_loop form_var fmt sv =
   let form_atom = format_atom form_var in
@@ -1313,7 +1331,7 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "%a(%a%a)" format_func (Pos.unmark f)
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
-  | Literal l -> format_literal fmt l
+  | Literal { lit; _ } -> format_literal fmt lit
   | Var acc -> format_access form_var form_expr fmt acc
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"

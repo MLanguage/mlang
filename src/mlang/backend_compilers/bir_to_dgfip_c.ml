@@ -484,9 +484,9 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
       let value_comp = D.dinstr res_val in
       D.build_transitive_composition { set_vars; def_test; value_comp }
   | FuncCall _ -> assert false (* should not happen *)
-  | Literal (Float f) ->
+  | Literal { lit = Float f; _ } ->
       { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
-  | Literal Undefined ->
+  | Literal { lit = Undefined; _ } ->
       { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
   | Var (VarAccess (m_sp_opt, var)) ->
       let def_test = D.m_var m_sp_opt var Def in
