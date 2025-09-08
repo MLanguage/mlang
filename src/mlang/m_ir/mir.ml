@@ -164,7 +164,7 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
           None args
       in
       let expr =
-        match expr_opt with None -> Literal (Float 0.0) | Some expr -> expr
+        match expr_opt with None -> Com.mk_lit (Float 0.0) | Some expr -> expr
       in
       Pos.same expr e
   | FuncCall (Pos.Mark (GtzFunc, _), [ arg ]) ->
@@ -172,14 +172,14 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
         (Comparison
            ( Pos.same Com.Gt e,
              expand_functions_expr arg,
-             Pos.same (Literal (Float 0.0)) e ))
+             Pos.same (Com.mk_lit (Float 0.0)) e ))
         e
   | FuncCall (Pos.Mark (GtezFunc, _), [ arg ]) ->
       Pos.same
         (Comparison
            ( Pos.same Com.Gte e,
              expand_functions_expr arg,
-             Pos.same (Literal (Float 0.0)) e ))
+             Pos.same (Com.mk_lit (Float 0.0)) e ))
         e
   | FuncCall ((Pos.Mark ((MinFunc | MaxFunc), _) as fn), [ arg1; arg2 ]) ->
       let earg1 = expand_functions_expr arg1 in
@@ -192,7 +192,7 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
         (Comparison
            ( Pos.same Com.Eq e,
              expand_functions_expr arg,
-             Pos.same (Literal (Float 0.0)) e ))
+             Pos.same (Com.mk_lit (Float 0.0)) e ))
         e
   | FuncCall (fn, args) ->
       Pos.same (FuncCall (fn, List.map expand_functions_expr args)) e

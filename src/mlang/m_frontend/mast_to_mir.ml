@@ -658,13 +658,13 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               Attribut (Pos.mark access' pos, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-              | Some l -> Literal (Float (float (Pos.unmark l)))
-              | None -> Literal Undefined)
+              | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+              | None -> Com.mk_lit Undefined)
         | TabAccess (_, m_id, _) -> (
             let var = get_var dict m_id in
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-            | Some l -> Literal (Float (float (Pos.unmark l)))
-            | None -> Literal Undefined)
+            | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+            | None -> Com.mk_lit Undefined)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -684,8 +684,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             if Com.Var.is_ref var then
               let access' = translate_access p dict access in
               Size (Pos.mark access' pos)
-            else Literal (Float (float @@ Com.Var.size var))
-        | TabAccess _ -> Literal (Float 1.0)
+            else Com.mk_lit (Float (float @@ Com.Var.size var))
+        | TabAccess _ -> Com.mk_lit (Float 1.0)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -707,11 +707,11 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               IsVariable (Pos.mark access' pos, m_name)
             else
               let name = Pos.unmark m_name in
-              if Com.Var.name_str var = name then Literal (Float 1.0)
+              if Com.Var.name_str var = name then Com.mk_lit (Float 1.0)
               else
                 match Com.Var.alias var with
-                | Some m_a when Pos.unmark m_a = name -> Literal (Float 1.0)
-                | _ -> Literal (Float 0.0))
+                | Some m_a when Pos.unmark m_a = name -> Com.mk_lit (Float 1.0)
+                | _ -> Com.mk_lit (Float 0.0))
         | _ ->
             let access' = translate_access p dict access in
             IsVariable (Pos.mark access' pos, m_name))
