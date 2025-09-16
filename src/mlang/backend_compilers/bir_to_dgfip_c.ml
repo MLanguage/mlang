@@ -16,6 +16,7 @@
 
 module D = DecoupledExpr
 module VID = Dgfip_varid
+module Dgfip_options = Config.Dgfip_options
 
 type scope =
   | Id of string (* The identifier of a given scope *)
