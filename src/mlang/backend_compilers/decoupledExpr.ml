@@ -523,9 +523,11 @@ let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
 
 let format_assign (dgfip_flags : Dgfip_options.flags) (var : string) fmt
     ((e, _kind, lv) : t) =
-  Format.fprintf fmt "%a@;@[<hov 2>%s =@ %a;@]"
-    (format_local_vars_defs dgfip_flags)
-    lv var (format_dexpr dgfip_flags) e
+  Format.fprintf fmt "%a@;" (format_local_vars_defs dgfip_flags) lv;
+  match e with
+  | (Ddirect (Dinstr v) | Dinstr v) when v = var -> () (* var = var *)
+  | _ ->
+      Format.fprintf fmt "@[<hov 2>%s =@ %a;@]" var (format_dexpr dgfip_flags) e
 
 let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
