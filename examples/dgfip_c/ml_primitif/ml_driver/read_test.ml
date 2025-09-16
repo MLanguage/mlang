@@ -152,3 +152,11 @@ let read_test filename =
   | Failure s -> failwith (Printf.sprintf "%s: %s" filename s)
   | e -> raise e
 
+let is_empty filename =
+  let c = open_in filename in
+  try
+    let _ : string = input_line c in
+    close_in c;
+    false
+  with
+  | End_of_file -> close_in c; true
