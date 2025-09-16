@@ -155,7 +155,11 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal ${TEST_FILES}
+    ifdef OUTPUT_TEST_TIME_IN_DIR
+	time -f "%U" --append -o $(OUTPUT_TEST_TIME_IN_DIR)/$(CC)$(OV)_time ./cal $(TEST_FILES)
+    else
+	./cal $(TEST_FILES)
+    endif
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

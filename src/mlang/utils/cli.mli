@@ -40,6 +40,7 @@ val mlang_t :
   int option ->
   bool ->
   string list option ->
+  bool ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
@@ -140,6 +141,8 @@ val dgfip_flags : Dgfip_options.flags ref
 
 val execution_mode : execution_mode ref
 
+val no_local_var : bool ref
+
 val set_all_arg_refs :
   (* files *) files ->
   (* applications *) string list ->
@@ -161,6 +164,7 @@ val set_all_arg_refs :
   (* mpp_function *) string ->
   (* dgfip_flags *) Dgfip_options.flags ->
   (* execution_mode *) execution_mode ->
+  (* no_local_var *) bool ->
   unit
 
 val add_prefix_to_each_line : string -> (int -> string) -> string
