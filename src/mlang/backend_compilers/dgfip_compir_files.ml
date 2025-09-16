@@ -14,8 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+module Dgfip_options = Config.Dgfip_options
+
 let open_file filename =
-  let folder = Filename.dirname !Cli.output_file in
+  let folder = Filename.dirname !Config.output_file in
   let oc = open_out (Filename.concat folder filename) in
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)

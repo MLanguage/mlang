@@ -97,106 +97,41 @@ let info =
   in
   Cmd.info "mlang --dgfip_options" ~doc ~man
 
-(* Flags inherited from the old compiler *)
-type flags = {
-  (* -m *) annee_revenu : int;
-  (* -P *) flg_correctif : bool;
-  (* flg_correctif true by default, -P makes it false *)
-  (* -R *) flg_iliad : bool;
-  (* also implied by "iliad" in !Cli.application_names; disabled by -U *)
-  (* -R *) flg_pro : bool;
-  (* also implied by "pro" in !Cli.application_names; disabled by -U *)
-  (* -U *) flg_cfir : bool;
-  (* disabled by -R *)
-  (* -b *) flg_gcos : bool;
-  (* -b0 and -b1 ; disabled by -U and -R *)
-  (* -b *) flg_tri_ebcdic : bool;
-  (* -b1 only *)
-  (* -s *) flg_short : bool;
-  (* -r *) flg_register : bool;
-  (* -O *) flg_optim_min_max : bool;
-  (* -X *) flg_extraction : bool;
-  (* -D *) flg_genere_libelle_restituee : bool;
-  (* -S *) flg_controle_separe : bool;
-  (* -I *) flg_controle_immediat : bool;
-  (* unused *)
-  (* -o *) flg_overlays : bool;
-  (* -Z *) flg_colors : bool;
-  (* -L *) flg_ticket : bool;
-  (* -t *) flg_trace : bool;
-  (* -g *) flg_debug : bool;
-  (* also implied by -t *)
-  (* -k *) nb_debug_c : int;
-  (* -x *)
-  xflg : bool;
-      (* Flags to deal with in a particular way : -c compilation mode -l link
-         mode -v specify the variable file (tgv.m) -e specify the error file
-         (err.m) *)
-      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident
-         -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
-         flag_phase -f flg_ench_init -E cvt_file -g flg_debug -a flg_api -T
-         flg_trace_irdata *)
-}
-
-let default_flags =
-  {
-    annee_revenu = 1991;
-    flg_correctif = true;
-    flg_iliad = false;
-    flg_pro = false;
-    flg_cfir = false;
-    flg_gcos = false;
-    flg_tri_ebcdic = false;
-    flg_short = false;
-    flg_register = false;
-    flg_optim_min_max = false;
-    flg_extraction = false;
-    flg_genere_libelle_restituee = false;
-    flg_controle_separe = false;
-    flg_controle_immediat = false;
-    flg_overlays = false;
-    flg_colors = false;
-    flg_ticket = false;
-    flg_trace = false;
-    flg_debug = false;
-    nb_debug_c = 0;
-    xflg = false;
-  }
-
 let handler ~(application_names : string list) (income_year : int)
     (iliad_pro : bool) (cfir : bool) (batch : int option)
     (primitive_only : bool) (extraction : bool) (separate_controls : bool)
     (immediate_controls : bool) (overlays : bool) (optim_min_max : bool)
     (register : bool) (short : bool) (output_labels : bool) (debug : bool)
     (nb_debug_c : int) (trace : bool) (ticket : bool) (colored_output : bool)
-    (cross_references : bool) : flags =
+    (cross_references : bool) : Config.Dgfip_options.flags =
   let has_iliad = List.mem "iliad" application_names in
   let has_pro = List.mem "pro" application_names in
-  {
-    (* iliad, pro, (GP) *)
-    annee_revenu = income_year;
-    flg_correctif = not primitive_only;
-    flg_iliad =
-      ((iliad_pro && not cfir) || has_iliad) && not (Option.is_some batch);
-    flg_pro = (has_pro || iliad_pro) && not cfir;
-    flg_cfir = cfir && not iliad_pro;
-    flg_gcos = Option.is_some batch && (not iliad_pro) && not cfir;
-    flg_tri_ebcdic = (match batch with Some 1 -> true | _ -> false);
-    flg_short = short;
-    flg_register = register;
-    flg_optim_min_max = optim_min_max;
-    flg_extraction = extraction;
-    flg_genere_libelle_restituee = output_labels;
-    flg_controle_separe = separate_controls;
-    flg_controle_immediat = immediate_controls;
-    flg_overlays = overlays;
-    flg_colors = colored_output;
-    flg_ticket = ticket;
-    flg_trace = trace;
-    flg_debug = debug || trace;
-    nb_debug_c;
-    xflg = cross_references;
-  }
+  Config.Dgfip_options.
+    {
+      (* iliad, pro, (GP) *)
+      annee_revenu = income_year;
+      flg_correctif = not primitive_only;
+      flg_iliad =
+        ((iliad_pro && not cfir) || has_iliad) && not (Option.is_some batch);
+      flg_pro = (has_pro || iliad_pro) && not cfir;
+      flg_cfir = cfir && not iliad_pro;
+      flg_gcos = Option.is_some batch && (not iliad_pro) && not cfir;
+      flg_tri_ebcdic = (match batch with Some 1 -> true | _ -> false);
+      flg_short = short;
+      flg_register = register;
+      flg_optim_min_max = optim_min_max;
+      flg_extraction = extraction;
+      flg_genere_libelle_restituee = output_labels;
+      flg_controle_separe = separate_controls;
+      flg_controle_immediat = immediate_controls;
+      flg_overlays = overlays;
+      flg_colors = colored_output;
+      flg_ticket = ticket;
+      flg_trace = trace;
+      flg_debug = debug || trace;
+      nb_debug_c;
+      xflg = cross_references;
+    }
 
 let process_dgfip_options ~application_names options =
   let options = Array.of_list ("mlang" :: options) in

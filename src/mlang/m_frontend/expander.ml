@@ -265,7 +265,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
             (apps_env, []) source_file
         in
         (apps_env, List.rev prog_file :: prog))
-      (empty_apps_env !Cli.application_names, [])
+      (empty_apps_env !Config.application_names, [])
       p
   in
   check_apps_on_cmdline apps_env;
