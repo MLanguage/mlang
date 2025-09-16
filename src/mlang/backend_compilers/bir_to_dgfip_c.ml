@@ -816,8 +816,9 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       let print = fresh_c_local "print" in
       let print_def = print ^ "_def" in
       let print_val = print ^ "_val" in
-      (* The [print] var only is needed in a few cases. *)
+      (* The [print]* variables are needed only in a few cases. *)
       let print_var_is_needed = ref false in
+      let print_def_val_are_needed = ref false in
       (* Iterating on the arguments and saving the associated printers in a
          list to check as we build it if we will need the print_var; in which
          case, we set the previous reference to true. *)
@@ -855,6 +856,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                       pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr
                         fld
                 | TabAccess (m_sp_opt, v, m_idx) ->
+                    print_def_val_are_needed := true;
                     fun () ->
                       pr_sp m_sp_opt (Some v);
                       pr "@;@[<v 2>{";
@@ -884,7 +886,9 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                     let ef =
                       StrMap.find (Pos.unmark f) p.program_event_fields
                     in
-                    print_var_is_needed := ef.is_var;
+                    if ef.is_var then (
+                      print_var_is_needed := true;
+                      print_def_val_are_needed := true);
                     fun () ->
                       pr_sp m_sp_opt None;
                       if ef.is_var then (
@@ -903,6 +907,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                           print_std pr_ctx print (Pos.unmark f) fld;
                         pr "@]@;}"))
             | PrintIndent e ->
+                print_def_val_are_needed := true;
                 fun () ->
                   generate_expr_with_res_in p dgfip_flags oc print_def print_val
                     e;
@@ -911,6 +916,7 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
                     print_val;
                   pr "@]@;}"
             | PrintExpr (e, min, max) ->
+                print_def_val_are_needed := true;
                 fun () ->
                   generate_expr_with_res_in p dgfip_flags oc print_def print_val
                     e;
@@ -923,7 +929,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
           args
       in
       pr "@;@[<v 2>{";
-      pr "@;char %s;@;double %s;" print_def print_val;
+      if !print_def_val_are_needed then
+        pr "@;char %s;@;double %s;" print_def print_val;
       if !print_var_is_needed then pr "@;int %s;" print;
       List.iter (fun f -> f ()) printers;
       pr "@]@;}"
@@ -1150,156 +1157,179 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       let nb_events_sav = fresh_c_local "nb_events_sav" in
       let nb_add = fresh_c_local "nb_add" in
       let cpt_i = fresh_c_local "i" in
-      let cpt_j = fresh_c_local "j" in
       let evt = fresh_c_local "evt" in
-      pr "@;@[<v 2>{";
-      pr "@;T_event **%s = irdata->events;" events_sav;
-      pr "@;int %s = irdata->nb_events;" nb_events_sav;
-      pr "@;int %s = 0;" nb_add;
-      pr "@;T_event **%s = NULL;" events_tmp;
-      pr "@;int %s = 0;" cpt_i;
-      pr "@;int %s = 0;" cpt_j;
-      (match add with
-      | Some expr ->
-          pr "@;@[<v 2>{";
-          let cond = fresh_c_local "cond" in
-          let cond_def = cond ^ "_def" in
-          let cond_val = cond ^ "_val" in
-          pr "@;char %s;@;double %s;" cond_def cond_val;
-          generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
-          pr "@;%s = (int)%s;" nb_add cond_val;
-          pr "@;if (%s < 0) %s = 0;" nb_add nb_add;
-          pr "@;@[<v 2>if (%s && 0 < %s) {" cond_def nb_add;
-          let cpt_k = fresh_c_local "k" in
-          pr "@;int %s = 0;" cpt_k;
-          pr "@;%s = (T_event **)malloc((%s + %s) * (sizeof (T_event *)));"
-            events_tmp nb_events_sav nb_add;
-          pr "@;@[<v 2>for (%s = 0; %s < %s; %s++) {" cpt_k cpt_k nb_add cpt_k;
-          pr "@;T_event *%s = (T_event *)malloc(sizeof (T_event));" evt;
-          StrMap.iter
-            (fun f (ef : Com.event_field) ->
-              if ef.is_var then
-                let _, var = StrMap.min_binding p.program_vars in
-                pr "@;%s->field_%s_var = %s;" evt f (VID.gen_info_ptr var)
-              else (
-                pr "@;%s->field_%s_def = 0;" evt f;
-                pr "@;%s->field_%s_val = 0.0;" evt f))
-            p.program_event_fields;
-          pr "@;%s[%s] = %s;" events_tmp cpt_k evt;
-          pr "@]@;}";
-          pr "@]@;@[<v 2>} else {";
-          pr "@;%s = 0;" nb_add;
-          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
-            nb_events_sav;
-          pr "@]@;}";
-          pr "@;%s = %s;" cpt_i nb_add;
-          pr "@]@;}"
-      | None ->
-          pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));" events_tmp
-            nb_events_sav);
-      (match filter with
-      | Some (var, expr) ->
-          pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
-          let ref_def = VID.gen_def None var in
-          (* !!! *)
-          let ref_val = VID.gen_val None var in
-          (* !!! *)
-          let cond = fresh_c_local "cond" in
-          let cond_def = cond ^ "_def" in
-          let cond_val = cond ^ "_val" in
-          pr "@;char %s;@;double %s;" cond_def cond_val;
-          pr "@;%s = 1;" ref_def;
-          pr "@;%s = (double)%s;" ref_val cpt_j;
-          generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
-          pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
-          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_j;
-          pr "@;%s++;" cpt_i;
-          pr "@]@;}";
-          pr "@;%s++;" cpt_j;
-          pr "@]@;}";
-          pr "@;irdata->events = %s;" events_tmp;
-          pr "@;irdata->nb_events = %s;" cpt_i
-      | None ->
-          pr "@;@[<v 2>while (%s < %s) {" cpt_i nb_events_sav;
-          pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_i;
-          pr "@;%s++;" cpt_i;
-          pr "@]@;}";
-          pr "@;irdata->events = %s;" events_tmp;
-          pr "@;irdata->nb_events = %s;" cpt_i);
-      (match sort with
-      | Some (var0, var1, expr) ->
-          pr "@;/* merge sort */";
-          pr "@;@[<v 2>{";
-          pr "@;int aBeg = %s;" nb_add;
-          pr "@;int aEnd = irdata->nb_events;";
-          pr
-            "@;\
-             T_event **b = (T_event **)malloc(irdata->nb_events * (sizeof \
-             (T_event *)));";
-          pr "@;int width;";
-          pr "@;int iLeft;";
-          pr "@;int i;";
-          pr
-            "@;\
-             @[<v 2>@[<hov 2>for (width = 1;@ width < aEnd;@ width = 2 * \
-             width) {@]";
-          pr
-            "@;\
-             @[<v 2>@[<hov 2>for (iLeft = aBeg;@ iLeft < aEnd;@ iLeft = iLeft \
-             + 2 * width) {@]";
-          pr "@;int iRight = iLeft + width;";
-          pr "@;int iEnd = iLeft + 2 * width;";
-          pr "@;if (iRight > aEnd) iRight = aEnd;";
-          pr "@;if (iEnd > aEnd) iEnd = aEnd;";
-          pr "@;@[<v 2>{";
-          pr "@;int i = iLeft;";
-          pr "@;int j = iRight;";
-          pr "@;int k;";
-          pr "@;@[<v 2>@[<hov 2>for (k = iLeft;@ k < iEnd;@ k++) {@]";
-          pr "@;int cpt = 0;";
-          pr "@;@[<v 2>{";
-          (* Comparaison *)
-          let ref0_def = VID.gen_def None var0 in
-          (* !!! *)
-          let ref0_val = VID.gen_val None var0 in
-          (* !!! *)
-          let ref1_def = VID.gen_def None var1 in
-          (* !!! *)
-          let ref1_val = VID.gen_val None var1 in
-          (* !!! *)
-          let cmp_def = fresh_c_local "cmp_def" in
-          let cmp_val = fresh_c_local "cmp_val" in
-          pr "@;char %s;@;double %s;" cmp_def cmp_val;
-          pr "@;%s = 1;" ref0_def;
-          pr "@;%s = (double)i;" ref0_val;
-          pr "@;%s = 1;" ref1_def;
-          pr "@;%s = (double)j;" ref1_val;
-          generate_expr_with_res_in p dgfip_flags oc cmp_def cmp_val expr;
-          pr "@;cpt = %s && %s != 0.0;" cmp_def cmp_val;
-          (* ----------- *)
-          pr "@]@;}";
-          pr "@;@[<v 2>if (i < iRight && (j >= iEnd || cpt)) {";
-          pr "@;b[k] = irdata->events[i];";
-          pr "@;i = i + 1;";
-          pr "@]@;@;@[<v 2>} else {";
-          pr "@;b[k] = irdata->events[j];";
-          pr "@;j = j + 1;";
-          pr "@]@;}";
-          pr "@]@;}";
-          pr "@]@;}";
-          pr "@]@;}";
-          pr "@;@[<v 2>@[<hov 2>for (i = aBeg;@ i < aEnd;@ i++) {@]";
-          pr "@;irdata->events[i] = b[i];";
-          pr "@]@;}";
-          pr "@]@;}";
-          pr "@;free(b);";
-          pr "@]@;}"
-      | None -> ());
-      pr "%a" (generate_stmts dgfip_flags p) stmts;
-      pr "@;free(irdata->events);";
-      pr "@;irdata->events = %s;" events_sav;
-      pr "@;irdata->nb_events = %s;" nb_events_sav;
-      pr "@]@;}"
+      let cpt_j = fresh_c_local "j" in
+      let need_j = ref false in
+      let init () =
+        pr "@;@[<v 2>{";
+        pr "@;T_event **%s = irdata->events;" events_sav;
+        pr "@;int %s = irdata->nb_events;" nb_events_sav;
+        pr "@;int %s = 0;" nb_add;
+        pr "@;T_event **%s = NULL;" events_tmp;
+        pr "@;int %s = 0;" cpt_i;
+        if !need_j then pr "@;int %s = 0;" cpt_j
+      in
+      let add_printer =
+        match add with
+        | Some expr ->
+            fun () ->
+              pr "@;@[<v 2>{";
+              let cond = fresh_c_local "cond" in
+              let cond_def = cond ^ "_def" in
+              let cond_val = cond ^ "_val" in
+              pr "@;char %s;@;double %s;" cond_def cond_val;
+              generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
+              pr "@;%s = (int)%s;" nb_add cond_val;
+              pr "@;if (%s < 0) %s = 0;" nb_add nb_add;
+              pr "@;@[<v 2>if (%s && 0 < %s) {" cond_def nb_add;
+              let cpt_k = fresh_c_local "k" in
+              pr "@;int %s = 0;" cpt_k;
+              pr "@;%s = (T_event **)malloc((%s + %s) * (sizeof (T_event *)));"
+                events_tmp nb_events_sav nb_add;
+              pr "@;@[<v 2>for (%s = 0; %s < %s; %s++) {" cpt_k cpt_k nb_add
+                cpt_k;
+              pr "@;T_event *%s = (T_event *)malloc(sizeof (T_event));" evt;
+              StrMap.iter
+                (fun f (ef : Com.event_field) ->
+                  if ef.is_var then
+                    let _, var = StrMap.min_binding p.program_vars in
+                    pr "@;%s->field_%s_var = %s;" evt f (VID.gen_info_ptr var)
+                  else (
+                    pr "@;%s->field_%s_def = 0;" evt f;
+                    pr "@;%s->field_%s_val = 0.0;" evt f))
+                p.program_event_fields;
+              pr "@;%s[%s] = %s;" events_tmp cpt_k evt;
+              pr "@]@;}";
+              pr "@]@;@[<v 2>} else {";
+              pr "@;%s = 0;" nb_add;
+              pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));"
+                events_tmp nb_events_sav;
+              pr "@]@;}";
+              pr "@;%s = %s;" cpt_i nb_add;
+              pr "@]@;}"
+        | None ->
+            fun () ->
+              pr "@;%s = (T_event **)malloc(%s * (sizeof (T_event *)));"
+                events_tmp nb_events_sav
+      in
+      let filter_printer =
+        match filter with
+        | Some (var, expr) ->
+            need_j := true;
+            fun () ->
+              pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
+              let ref_def = VID.gen_def None var in
+              (* !!! *)
+              let ref_val = VID.gen_val None var in
+              (* !!! *)
+              let cond = fresh_c_local "cond" in
+              let cond_def = cond ^ "_def" in
+              let cond_val = cond ^ "_val" in
+              pr "@;char %s;@;double %s;" cond_def cond_val;
+              pr "@;%s = 1;" ref_def;
+              pr "@;%s = (double)%s;" ref_val cpt_j;
+              generate_expr_with_res_in p dgfip_flags oc cond_def cond_val expr;
+              pr "@;@[<v 2>if (%s && %s != 0.0) {" cond_def cond_val;
+              pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_j;
+              pr "@;%s++;" cpt_i;
+              pr "@]@;}";
+              pr "@;%s++;" cpt_j;
+              pr "@]@;}";
+              pr "@;irdata->events = %s;" events_tmp;
+              pr "@;irdata->nb_events = %s;" cpt_i
+        | None ->
+            fun () ->
+              pr "@;@[<v 2>while (%s < %s) {" cpt_i nb_events_sav;
+              pr "@;%s[%s] = irdata->events[%s];" events_tmp cpt_i cpt_i;
+              pr "@;%s++;" cpt_i;
+              pr "@]@;}";
+              pr "@;irdata->events = %s;" events_tmp;
+              pr "@;irdata->nb_events = %s;" cpt_i
+      in
+      let sort_printer =
+        match sort with
+        | Some (var0, var1, expr) ->
+            fun () ->
+              pr "@;/* merge sort */";
+              pr "@;@[<v 2>{";
+              pr "@;int aBeg = %s;" nb_add;
+              pr "@;int aEnd = irdata->nb_events;";
+              pr
+                "@;\
+                 T_event **b = (T_event **)malloc(irdata->nb_events * (sizeof \
+                 (T_event *)));";
+              pr "@;int width;";
+              pr "@;int iLeft;";
+              pr "@;int i;";
+              pr
+                "@;\
+                 @[<v 2>@[<hov 2>for (width = 1;@ width < aEnd;@ width = 2 * \
+                 width) {@]";
+              pr
+                "@;\
+                 @[<v 2>@[<hov 2>for (iLeft = aBeg;@ iLeft < aEnd;@ iLeft = \
+                 iLeft + 2 * width) {@]";
+              pr "@;int iRight = iLeft + width;";
+              pr "@;int iEnd = iLeft + 2 * width;";
+              pr "@;if (iRight > aEnd) iRight = aEnd;";
+              pr "@;if (iEnd > aEnd) iEnd = aEnd;";
+              pr "@;@[<v 2>{";
+              pr "@;int i = iLeft;";
+              pr "@;int j = iRight;";
+              pr "@;int k;";
+              pr "@;@[<v 2>@[<hov 2>for (k = iLeft;@ k < iEnd;@ k++) {@]";
+              pr "@;int cpt = 0;";
+              pr "@;@[<v 2>{";
+              (* Comparaison *)
+              let ref0_def = VID.gen_def None var0 in
+              (* !!! *)
+              let ref0_val = VID.gen_val None var0 in
+              (* !!! *)
+              let ref1_def = VID.gen_def None var1 in
+              (* !!! *)
+              let ref1_val = VID.gen_val None var1 in
+              (* !!! *)
+              let cmp_def = fresh_c_local "cmp_def" in
+              let cmp_val = fresh_c_local "cmp_val" in
+              pr "@;char %s;@;double %s;" cmp_def cmp_val;
+              pr "@;%s = 1;" ref0_def;
+              pr "@;%s = (double)i;" ref0_val;
+              pr "@;%s = 1;" ref1_def;
+              pr "@;%s = (double)j;" ref1_val;
+              generate_expr_with_res_in p dgfip_flags oc cmp_def cmp_val expr;
+              pr "@;cpt = %s && %s != 0.0;" cmp_def cmp_val;
+              (* ----------- *)
+              pr "@]@;}";
+              pr "@;@[<v 2>if (i < iRight && (j >= iEnd || cpt)) {";
+              pr "@;b[k] = irdata->events[i];";
+              pr "@;i = i + 1;";
+              pr "@]@;@;@[<v 2>} else {";
+              pr "@;b[k] = irdata->events[j];";
+              pr "@;j = j + 1;";
+              pr "@]@;}";
+              pr "@]@;}";
+              pr "@]@;}";
+              pr "@]@;}";
+              pr "@;@[<v 2>@[<hov 2>for (i = aBeg;@ i < aEnd;@ i++) {@]";
+              pr "@;irdata->events[i] = b[i];";
+              pr "@]@;}";
+              pr "@]@;}";
+              pr "@;free(b);";
+              pr "@]@;}"
+        | None -> ignore
+      in
+      let finalize () =
+        pr "%a" (generate_stmts dgfip_flags p) stmts;
+        pr "@;free(irdata->events);";
+        pr "@;irdata->events = %s;" events_sav;
+        pr "@;irdata->nb_events = %s;" nb_events_sav;
+        pr "@]@;}"
+      in
+      init ();
+      add_printer ();
+      filter_printer ();
+      sort_printer ();
+      finalize ()
   | Restore (al, var_params, evts, evtfs, stmts) ->
       pr "@;@[<v 2>{";
       let rest_name = fresh_c_local "restore" in
