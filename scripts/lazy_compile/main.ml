@@ -2,13 +2,14 @@
     
     $ lazy_compile --files [FILEDIR] --config [CONFIGFILE]
 
-    Can be configured with additional environment variables:
+    Can be configured with additional environment variables.
     - [OUTPUT_DIR]: the dir to write the .o files (default: output). Generated if
       it does not exist.
     - [DEPGRAPH_FILENAME]: the file in which is serialized the dependency graph. Written
       in [OUTPUT_DIR].
     - [DEBUG]: displays debug messages (default: 0).
     - [PEDANTIC]: makes clang pedantic (default: 1).
+    - [CC]: the C compiler to use.
 
     How to compile:
     
@@ -39,6 +40,8 @@ module Env = struct
   let debug = getenv ~default:"0" "DEBUG"
 
   let pedantic = getenv ~default:"1" "PEDANTIC"
+
+  let cc = getenv ~default:"clang" "CC"
 end
 
 (** Debug & error logs. *)
@@ -75,7 +78,7 @@ let output_file_name cfile =
 let compile_file ~cfile ~ofile =
   let pedantic = if Env.pedantic = "0" then "" else "--pedantic " in
   let cmd =
-    Format.sprintf "clang -std=c89 %s -O2 -c %s -o %s" pedantic cfile ofile
+    Format.sprintf "%s -std=c89 %s -O2 -c %s -o %s" Env.cc pedantic cfile ofile
   in
   Log.log "Compiling file %S...@." cfile;
   let res = run_command cmd in
@@ -255,35 +258,28 @@ end
 
 (** Handles the configuration file.
     The configuration file syntax is the following:
-    - "# Files to compile"
-    - A list of files to compile (one by line)
     - "# External dependencies"
     - A list of pairs "file:command" where 'file' is the name of the external
       dependency as it would appear in the C file including it, and 'command' is
       a command returning the version of the file, which will be used to check
       if it changed between two compilations. *)
 module Config = struct
-  let mdeps_header = "# Files to compile"
-
-  let ext_deps = "# External dependencies"
+  let header = "# External dependencies"
 
   (** The regexp for reading the external dependencies pairs. *)
   let ext_dep_regexp = Str.regexp {|^\(.*\):\(.*\)$|}
 
-  (** Reads [config_file] and builds the depenency graph of the project. *)
-  let read ~cfiles_dir ~config_file =
+  (** Reads [config_file] and builds the external depenency list of the project. *)
+  let read ~config_file =
     let chan = open_in config_file in
-    let rec empty_header () =
+    let rec empty_header_then_deps () =
       match input_line chan with
-      | "" -> empty_header ()
+      | "" -> empty_header_then_deps ()
       | l ->
-          if l <> mdeps_header then (
-            Log.err "[Error] File should start with %s, not %S" mdeps_header l;
+          if l <> header then (
+            Log.err "[Error] File should start with %s, not %S" header l;
             raise (Failure "Config.read"))
-    and mdeps acc =
-      match input_line chan with
-      | "" -> mdeps acc
-      | l -> if l = ext_deps then acc else mdeps (l :: acc)
+          else edeps []
     and edeps acc =
       match input_line chan with
       | exception End_of_file -> acc
@@ -299,15 +295,28 @@ module Config = struct
             raise (Failure "Config.read"))
     in
     try
-      empty_header ();
-      let mdeps = mdeps [] in
-      let edeps = edeps [] in
+      let edeps = empty_header_then_deps () in
       close_in chan;
-      DepGraph.build_graph ~cfiles_dir mdeps edeps
+      edeps
     with exn ->
       close_in chan;
       raise exn
 end
+
+let get_cfiles_of_dir cfiles_dir =
+  let files = Sys.readdir cfiles_dir in
+  Array.fold_left
+    (fun acc f ->
+      if f = ""
+      then acc
+      else
+      match Filename.extension f, f.[0] with
+      | (".c" | ".h"), ('a'..'z' | 'A'..'Z' | '0'..'9') -> f :: acc
+      | _ -> acc)
+    []
+    files
+;;
+     
 
 (** Intermediary function;
     From an [old] dependency map corresponding to an old compilation, and
@@ -384,7 +393,11 @@ let compile ~cfiles_dir ~config_file =
   Log.log "Stating compilation...@.";
   let old = DepGraph.read () in
   Log.debug "Old graph: %a" DepGraph.pp old;
-  let new_ = Config.read ~cfiles_dir ~config_file in
+  let new_ =
+    let ext_deps = Config.read ~config_file
+    and mlang_generated = get_cfiles_of_dir cfiles_dir in
+    DepGraph.build_graph ~cfiles_dir mlang_generated ext_deps
+  in
   Log.debug "New graph: %a" DepGraph.pp new_;
   let m : bool StrMap.t = compile_graph ~cfiles_dir ~old ~new_ in
   let newly_compiled =
