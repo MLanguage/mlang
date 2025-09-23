@@ -10,7 +10,6 @@ module TGV = struct
   external uget : t -> string -> float option = "ml_tgv_get"
   external uget_array : t -> string -> int -> float option = "ml_tgv_get_array"
   external uset : t -> string -> float -> unit = "ml_tgv_set"
-  external copy_all : t -> t -> unit = "ml_tgv_copy"
 
   let defined tgv var = udefined tgv var
 

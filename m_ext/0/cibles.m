@@ -18,6 +18,14 @@ V_IND_TRAIT : saisie contexte
   alias IND_TRAIT
   : "indicateur de nature de traitement primitif ou correctif";
 
+V_FLAG : saisie contexte
+  classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 0
+  restituee
+  alias FLAG
+  : "Drapeau bidon" type BOOLEEN;
+
+V_TAB_FLAG : tableau[5] calculee base primrest = 0 : "tableau de drapeaux" type BOOLEEN;
+
 V_ARG : saisie contexte
   classe = 0 priorite = 10 categorie_TL = 20 modcat = 1 primrest = 0
   restituee
@@ -52,6 +60,35 @@ BOBO4 : calculee base primrest = 0 restituee : "" ;
 BOBORES : calculee base primrest = 0 restituee : "" ;
 
 espace_variables ESP : categorie saisie, base;
+
+cible test_dans_domaine:
+application: iliad;
+variables_temporaires: TMP;
+afficher_erreur "entree test_dans_domaine\n" indenter(2);
+afficher_erreur "dans_domaine(" nom(BOBO1) ", calculee) = " (dans_domaine(BOBO1, calculee)) "\n";
+afficher_erreur "dans_domaine(" nom(BOBO1) ", calculee base) = " (dans_domaine(BOBO1, calculee base)) "\n";
+iterer  : variable V : BOBO1, TOTO01, V_BLA, TMP : dans (
+  afficher_erreur "dans_domaine(" nom(V) ", saisie *) = " (dans_domaine(V, saisie *)) "\n";
+)
+afficher_erreur indenter(-2) "sortie test_dans_domaine\n";
+
+cible test_sp_ref:
+application: iliad;
+afficher_erreur "entree test_sp_ref\n" indenter(2);
+GLOBAL.BOBO1 = 1;
+ESP.BOBO1 = 2;
+GLOBAL.TOTO01 = 3;
+afficher_erreur "0 " nom(GLOBAL.BOBO1) " = " (GLOBAL.BOBO1) "\n";
+afficher_erreur "0 " nom(ESP.BOBO1) " = " (ESP.BOBO1) "\n";
+afficher_erreur "0 " nom(GLOBAL.TOTO01) " = " (GLOBAL.TOTO01) "\n";
+iterer : variable V : BOBO1 : dans (
+  ESP.V = V;
+  V = 10 + ESP.V;
+)
+afficher_erreur "1 " nom(GLOBAL.BOBO1) " = " (GLOBAL.BOBO1) "\n";
+afficher_erreur "1 " nom(ESP.BOBO1) " = " (ESP.BOBO1) "\n";
+afficher_erreur "1 " nom(GLOBAL.TOTO01) " = " (GLOBAL.TOTO01) "\n";
+afficher_erreur indenter(-2) "sortie test_sp_ref\n";
 
 regle primitive 10:
 application : iliad;
@@ -99,16 +136,16 @@ afficher_erreur indenter(-2) "sortie test_esp\n";
 
 cible cible_sp_args:
 application : iliad;
-arguments: ARG_TMP, ARG;
+arguments: ATMP, A;
 afficher_erreur "entree cible_sp_args\n" indenter(2);
 afficher_erreur "0: "
-  nom(ARG_TMP) " = " (ARG_TMP) ", "
-  nom(ARG) " = " (ARG) "\n";
-ARG_TMP = ARG_TMP + 1;
-ARG = 42;
+  nom(ATMP) " = " (ATMP) ", "
+  nom(A) " = " (A) "\n";
+ATMP = ATMP + 1;
+A = 42;
 afficher_erreur "1: "
-  nom(ARG_TMP) " = " (ARG_TMP) ", "
-  nom(ARG) " = " (ARG) "\n";
+  nom(ATMP) " = " (ATMP) ", "
+  nom(A) " = " (A) "\n";
 afficher_erreur indenter(-2) "sortie cible_sp_args\n";
 
 cible test_cible_avec_args:
@@ -347,60 +384,123 @@ iterer : variable I : entre 0..4 increment 1 : dans (
 afficher_erreur nom(TUTU) "[7] = " (TUTU[7]) "\n";
 afficher_erreur indenter(-2) "sortie test_tab\n";
 
-cible test_est_variable:
+cible test_meme_variable:
 application: iliad;
-variables_temporaires: A0, AA tableau[25], AKK3, X;
-afficher_erreur "entree test_est_variable\n" indenter(2);
+variables_temporaires: PROUT, A0, AA tableau[25], AKK3, X;
+afficher_erreur "entree test_meme_variable\n" indenter(2);
 X = 3;
 afficher_erreur
-  nom(V_ANREV) ": V_ANREV " (est_variable(V_ANREV, V_ANREV))
-  ", ANREV " (est_variable(V_ANREV, ANREV))
-  ", PROUT " (est_variable(V_ANREV, PROUT)) "\n";
+  nom(V_ANREV) ": V_ANREV " (meme_variable(V_ANREV, V_ANREV))
+  ", ANREV " (meme_variable(V_ANREV, ANREV))
+  ", PROUT " (meme_variable(V_ANREV, PROUT)) "\n";
 afficher_erreur
-  nom(TUTU) ": TUTU " (est_variable(TUTU, TUTU))
-  ", PROUT " (est_variable(TUTU, PROUT)) "\n";
+  nom(TUTU) ": TUTU " (meme_variable(TUTU, TUTU))
+  ", PROUT " (meme_variable(TUTU, PROUT)) "\n";
 afficher_erreur
-  nom(TUTU) "[" (X) "]: TUTU3 " (est_variable(TUTU[X], TUTU3))
-  ", PROUT " (est_variable(TUTU[X], PROUT)) "\n";
+  nom(TUTU) "[" (X) "]: TUTU3 " (meme_variable(TUTU[X], TUTU3))
+  ", PROUT " (meme_variable(TUTU[X], PROUT)) "\n";
 afficher_erreur
-  nom(A0) ": A0 " (est_variable(A0, A0))
-  ", PROUT " (est_variable(A0, PROUT)) "\n";
+  nom(A0) ": A0 " (meme_variable(A0, A0))
+  ", PROUT " (meme_variable(A0, PROUT)) "\n";
 afficher_erreur
-  nom(AA) ": AA " (est_variable(AA, AA))
-  ", PROUT " (est_variable(AA, PROUT)) "\n";
+  nom(AA) ": AA " (meme_variable(AA, AA))
+  ", PROUT " (meme_variable(AA, PROUT)) "\n";
 afficher_erreur
-  nom(AA) "[" (X) "]: AA03 " (est_variable(AA[X], AA03))
-  ", PROUT " (est_variable(AA[X], PROUT)) "\n";
+  nom(AA) "[" (X) "]: AA03 " (meme_variable(AA[X], AA03))
+  ", PROUT " (meme_variable(AA[X], PROUT)) "\n";
 iterer
 : variable VAR
 : V_ANREV, A0, AA03, AKK3
 : dans (
   afficher_erreur nom(VAR) ": "
-  "V_ANREV " (est_variable(VAR, V_ANREV))
-  ", ANREV " (est_variable(VAR, ANREV))
-  ", TUTU " (est_variable(VAR, TUTU))
-  ", A0 " (est_variable(VAR, A0))
-  ", AA03 " (est_variable(VAR, AA03))
-  ", AKK3 " (est_variable(VAR, AKK3))
-  ", PROUT " (est_variable(VAR, PROUT)) "\n";
+  "V_ANREV " (meme_variable(VAR, V_ANREV))
+  ", ANREV " (meme_variable(VAR, ANREV))
+  ", TUTU " (meme_variable(VAR, TUTU))
+  ", A0 " (meme_variable(VAR, A0))
+  ", AA03 " (meme_variable(VAR, AA03))
+  ", AKK3 " (meme_variable(VAR, AKK3))
+  ", PROUT " (meme_variable(VAR, PROUT)) "\n";
 )
 afficher_erreur
   nom(champ_evenement(0, code)) ": "
-  "RESULTAT " (est_variable(champ_evenement(0, code), RESULTAT))
-  ", PROUT " (est_variable(champ_evenement(0, code), PROUT)) "\n";
-afficher_erreur indenter(-2) "sortie test_est_variable\n";
+  "RESULTAT " (meme_variable(champ_evenement(0, code), RESULTAT))
+  ", PROUT " (meme_variable(champ_evenement(0, code), PROUT)) "\n";
+afficher_erreur indenter(-2) "sortie test_meme_variable\n";
+
+cible test_arranger:
+application: iliad;
+variables_temporaires: PREM_EVT;
+afficher_erreur "entree test_arranger\n" indenter(2);
+afficher_erreur "0 " (PREM_EVT) "\n";
+PREM_EVT = champ_evenement(0, numero);
+afficher_erreur "1 " (PREM_EVT) "\n";
+arranger_evenements
+#: trier R1, R2 : avec champ_evenement(R1, numero) <= champ_evenement(R2, numero)
+: filtrer R : avec 1
+: dans (
+  iterer
+  : variable R
+  : entre 0..(nb_evenements() - 1) increment 1
+  : dans (
+    afficher_erreur "2 " (R) " " (PREM_EVT) "\n";
+  )
+)
+afficher_erreur "3 " (PREM_EVT) "\n";
+afficher_erreur indenter(-2) "sortie test_arranger\n";
+
+cible test_boucle:
+application: iliad;
+variables_temporaires: DEB, FIN;
+afficher_erreur "entree test_boucle\n" indenter(2);
+DEB = 0;
+FIN = 10;
+afficher_erreur "deb DEB = " (DEB) " FIN = " (FIN) "\n" indenter(2);
+iterer
+: variable I
+: entre DEB..FIN increment 1
+: dans (
+  afficher_erreur "I = " (I) "\n";
+  afficher_erreur "0 DEB = " (DEB) " FIN = " (FIN) " I = " (I) "\n";
+  I = 0;
+  DEB = 0;
+  FIN = 0;
+  afficher_erreur "1 DEB = " (DEB) " FIN = " (FIN) " I = " (I) "\n";
+)
+afficher_erreur indenter(-2) "fin DEB = " (DEB) " FIN = " (FIN) "\n";
+afficher_erreur indenter(-2) "sortie test_boucle\n";
+
+cible test_type:
+application: iliad;
+variables_temporaires: VAR, VARTAB tableau[5];
+afficher_erreur "entree test_type\n" indenter(2);
+afficher_erreur "type(" nom(FLAG) ", BOOLEEN) = " (type(FLAG, BOOLEEN)) "\n";
+afficher_erreur "type(" nom(V_ANREV) ", BOOLEEN) = " (type(V_ANREV, BOOLEEN)) "\n";
+afficher_erreur "type(" nom(V_TAB_FLAG) ", BOOLEEN) = " (type(V_TAB_FLAG, BOOLEEN)) "\n";
+afficher_erreur "type(" nom(V_TAB_FLAG[0]) ", BOOLEEN) = " (type(V_TAB_FLAG[0], BOOLEEN)) "\n";
+afficher_erreur "type(" nom(VAR) ", BOOLEEN) = " (type(VAR, BOOLEEN)) "\n";
+afficher_erreur "type(" nom(VARTAB) ", BOOLEEN) = " (type(VARTAB, BOOLEEN)) "\n";
+afficher_erreur "type(" nom(VARTAB[0]) ", BOOLEEN) = " (type(VARTAB[0], BOOLEEN)) "\n";
+iterer : variable V : FLAG, VAR : dans (
+  afficher_erreur "type(" nom(V) ", BOOLEEN) = " (type(V, BOOLEEN)) "\n";
+)
+afficher_erreur indenter(-2) "sortie test_type\n";
 
 cible tests:
 application: iliad;
 variables_temporaires: U0, UUU tableau[5], U1;
-calculer cible test_esp;
-calculer cible test_cible_avec_args;
+#calculer cible test_dans_domaine;
+#calculer cible test_sp_ref;
+#calculer cible test_esp;
+#calculer cible test_cible_avec_args;
 #calculer cible test_varcons;
 #calculer cible test_args;
 #calculer cible test_tmpref;
 #calculer cible test_aff;
 #calculer cible test_tab;
-#calculer cible test_est_variable;
+#calculer cible test_meme_variable;
+#calculer cible test_arranger;
+#calculer cible test_boucle;
+calculer cible test_type;
 
 cible enchainement_primitif:
 application: iliad;

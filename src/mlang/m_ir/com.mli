@@ -1,6 +1,12 @@
 module CatVar : sig
   type t = Input of StrSet.t | Computed of { is_base : bool }
 
+  val all_inputs : t
+
+  val is_input : t -> bool
+
+  val is_computed : t -> bool
+
   val pp : Format.formatter -> t -> unit
 
   val compare : t -> t -> int
@@ -308,7 +314,9 @@ and 'v expression =
   | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v m_access * string Pos.marked
   | Size of 'v m_access
-  | IsVariable of 'v m_access * string Pos.marked
+  | Type of 'v m_access * value_typ Pos.marked
+  | SameVariable of 'v m_access * 'v m_access
+  | InDomain of 'v m_access * Pos.t CatVar.Map.t
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -406,6 +414,7 @@ type ('v, 'e) instruction =
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
+  | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
 

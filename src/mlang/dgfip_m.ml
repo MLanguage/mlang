@@ -242,7 +242,10 @@ evenement
 : valeur penalite
 : valeur base_tl
 : valeur date
-: valeur 2042_rect;
+: valeur 2042_rect
+: valeur anc_penalite
+: valeur id_evt
+: valeur strate;
 |}
 
 let string_to_rule_domain_id : string -> string list = function

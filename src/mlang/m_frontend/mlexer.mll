@@ -84,6 +84,7 @@ rule token = parse
     | "cible" -> TARGET
     | "const" -> CONST
     | "dans" -> IN
+    | "dans_domaine" -> IN_DOMAIN
     | "discordance" -> DISCORDANCE
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
@@ -91,7 +92,7 @@ rule token = parse
     | "erreur" -> ERROR
     | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE
-    | "est_variable" -> IS_VARIABLE
+    | "meme_variable" -> SAME_VARIABLE
     | "et" -> AND
     | "evenement" -> EVENT
     | "evenements" -> EVENTS
@@ -115,6 +116,7 @@ rule token = parse
     | "nb_informatives" -> NB_INFORMATIVES
     | "neant" -> NOTHING
     | "nettoie_erreurs" -> CLEAN_ERRORS
+    | "nettoie_erreurs_finalisees" -> CLEAN_FINALIZED_ERRORS
     | "nom" -> NAME
     | "non" -> NOT
     | "numero_compl" -> COMPL_NUMBER

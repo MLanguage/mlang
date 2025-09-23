@@ -61,11 +61,27 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
+  let alias_already_declared_as_var alias old_pos pos =
+    let msg =
+      Format.asprintf
+        "alias \"%s\" declared more than once: already declared as variable %a"
+        alias Pos.format old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
   let variable_already_declared name old_pos pos =
     let msg =
       Format.asprintf
         "variable \"%s\" declared more than once: already declared %a" name
         Pos.format old_pos
+    in
+    Errors.raise_spanned_error msg pos
+
+  let variable_already_declared_as_alias name old_pos pos =
+    let msg =
+      Format.asprintf
+        "variable \"%s\" declared more than once: already declared as alias %a"
+        name Pos.format old_pos
     in
     Errors.raise_spanned_error msg pos
 
@@ -374,6 +390,12 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
+  let tmp_var_has_no_var_space var_name pos =
+    let msg =
+      Pp.spr "temporary variable \"%s\" does not has a space" var_name
+    in
+    Errors.raise_spanned_error msg pos
+
   let category_forbidden_with_space cat_pos sp_name =
     let msg =
       Pp.spr "variable category forbidden with variable space \"%s\"" sp_name
@@ -478,6 +500,7 @@ type program = {
   prog_dict : Com.Var.t IntMap.t;
   prog_vars : int StrMap.t;
   prog_alias : int StrMap.t;
+  prog_varalias : int StrMap.t;
   prog_var_spaces : int StrMap.t;
   prog_var_spaces_idx : Com.variable_space IntMap.t;
   prog_event_fields : Com.event_field StrMap.t;
@@ -504,22 +527,32 @@ let is_vartmp (var : string) =
 
 let check_name_in_tgv prog m_name =
   let vn, vpos = Pos.to_couple m_name in
-  let err old_pos = Err.variable_already_declared vn old_pos vpos in
-  match StrMap.find_opt vn prog.prog_vars with
+  (match StrMap.find_opt vn prog.prog_vars with
   | Some id ->
       let var = IntMap.find id prog.prog_dict in
       let old_pos = Pos.get @@ Com.Var.name var in
-      err old_pos
+      Err.variable_already_declared vn old_pos vpos
+  | None -> ());
+  match StrMap.find_opt vn prog.prog_alias with
+  | Some id ->
+      let var = IntMap.find id prog.prog_dict in
+      let old_pos = Pos.get @@ Com.Var.name var in
+      Err.variable_already_declared_as_alias vn old_pos vpos
   | None -> ()
 
 let check_alias_in_tgv prog m_alias =
   let an, apos = Pos.to_couple m_alias in
-  let err old_pos = Err.alias_already_declared an old_pos apos in
-  match StrMap.find_opt an prog.prog_alias with
+  (match StrMap.find_opt an prog.prog_alias with
   | Some id ->
       let var = IntMap.find id prog.prog_dict in
       let old_pos = Pos.get @@ Option.get @@ Com.Var.alias var in
-      err old_pos
+      Err.alias_already_declared an old_pos apos
+  | None -> ());
+  match StrMap.find_opt an prog.prog_vars with
+  | Some id ->
+      let var = IntMap.find id prog.prog_dict in
+      let old_pos = Pos.get @@ Option.get @@ Com.Var.alias var in
+      Err.alias_already_declared_as_var an old_pos apos
   | None -> ()
 
 let check_name_in_tmp tmps m_name =
@@ -594,12 +627,13 @@ let empty_program (p : Mast.program) main_target =
     prog_var_cats = Com.CatVar.Map.empty;
     prog_dict = IntMap.empty;
     prog_vars = StrMap.empty;
+    prog_alias = StrMap.empty;
+    prog_varalias = StrMap.empty;
     prog_var_spaces = StrMap.empty;
     prog_var_spaces_idx = IntMap.empty;
     prog_event_fields = StrMap.empty;
     prog_event_field_idxs = IntMap.empty;
     prog_event_pos = Pos.none;
-    prog_alias = StrMap.empty;
     prog_errors = StrMap.empty;
     prog_rdoms = Com.DomainIdMap.empty;
     prog_rdom_syms = Com.DomainIdMap.empty;
@@ -737,15 +771,19 @@ let check_global_var (var : Com.Var.t) (prog : program) : program =
     cat.attributs;
   check_name_in_tgv prog var.name;
   let prog_dict = IntMap.add var.id var prog.prog_dict in
-  let prog_vars = StrMap.add name var.id prog.prog_vars in
-  let prog_alias =
+  let prog_vars, prog_varalias =
+    ( StrMap.add name var.id prog.prog_vars,
+      StrMap.add name var.id prog.prog_varalias )
+  in
+  let prog_alias, prog_varalias =
     match Com.Var.alias var with
     | Some m_alias ->
         check_alias_in_tgv prog m_alias;
-        StrMap.add (Pos.unmark m_alias) var.id prog.prog_alias
-    | None -> prog.prog_alias
+        ( StrMap.add (Pos.unmark m_alias) var.id prog.prog_alias,
+          StrMap.add (Pos.unmark m_alias) var.id prog_varalias )
+    | None -> (prog.prog_alias, prog_varalias)
   in
-  { prog with prog_dict; prog_vars; prog_alias }
+  { prog with prog_dict; prog_vars; prog_alias; prog_varalias }
 
 let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
   match var_decl with
@@ -1145,6 +1183,11 @@ let add_var_env (var : Com.Var.t) env =
   let prog_dict = IntMap.add var.id var env.prog.prog_dict in
   let prog = { env.prog with prog_dict } in
   let vars = StrMap.add (Com.Var.name_str var) var.id env.vars in
+  let vars =
+    match Com.Var.alias var with
+    | None -> vars
+    | Some (Pos.Mark (alias, _)) -> StrMap.add alias var.id vars
+  in
   { env with prog; vars }
 
 let check_name_in_env env m_name =
@@ -1328,7 +1371,9 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
           | None -> Err.unknown_event_field f_name f_pos);
           fold_aux acc e env)
-  | Size (Pos.Mark (access, _)) | IsVariable (Pos.Mark (access, _), _) -> (
+  | Size (Pos.Mark (access, _))
+  | InDomain (Pos.Mark (access, _), _)
+  | Type (Pos.Mark (access, _), _) -> (
       match access with
       | VarAccess (m_sp_opt, m_v) ->
           let acc = fold_sp m_sp_opt env acc in
@@ -1347,6 +1392,28 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
           | None -> Err.unknown_event_field f_name f_pos);
           fold_aux acc e env)
+  | SameVariable (Pos.Mark (access0, _), Pos.Mark (access1, _)) ->
+      let fold_access access acc =
+        match access with
+        | Com.VarAccess (m_sp_opt, m_v) ->
+            let acc = fold_sp m_sp_opt env acc in
+            fold_var m_sp_opt m_v Both env acc
+        | Com.TabAccess (m_sp_opt, m_v, m_i) ->
+            let acc = fold_sp m_sp_opt env acc in
+            let acc = fold_var m_sp_opt m_v Table env acc in
+            fold_aux acc m_i env
+        | Com.FieldAccess (m_sp_opt, e, f, _) ->
+            if env.proc_type = Filter then
+              Err.forbidden_expresion_in_filter expr_pos;
+            let acc = fold_sp m_sp_opt env acc in
+            let f_name, f_pos = Pos.to_couple f in
+            (match StrMap.find_opt f_name env.prog.prog_event_fields with
+            | Some ef when ef.is_var -> ()
+            | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
+            | None -> Err.unknown_event_field f_name f_pos);
+            fold_aux acc e env
+      in
+      acc |> fold_access access0 |> fold_access access1
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes ->
       if env.proc_type = Filter then Err.forbidden_expresion_in_filter expr_pos;
       acc
@@ -1402,9 +1469,12 @@ let check_variable (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name)
         let id = StrMap.find v_name env.vars in
         IntMap.find id env.prog.prog_dict
       in
-      let var_loc = Com.Var.cat_var_loc var in
-      if not (Com.CatVar.LocMap.mem var_loc vsd.vs_cats) then
-        Err.variable_not_in_var_space v_name sp_name (Pos.get m_vn)
+      if Com.Var.is_tgv var then (
+        let var_loc = Com.Var.cat_var_loc var in
+        if not (Com.CatVar.LocMap.mem var_loc vsd.vs_cats) then
+          Err.variable_not_in_var_space v_name sp_name (Pos.get m_vn))
+      else if Com.Var.is_temp var then
+        Err.tmp_var_has_no_var_space v_name (Pos.get m_vn)
 
 let check_expression (env : var_env) (m_expr : Mast.m_expression) : unit =
   let get_var m_v = Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v in
@@ -1938,6 +2008,10 @@ let rec check_instructions (env : var_env)
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
             aux (env, Pos.mark Com.CleanErrors instr_pos :: res) il
+        | Com.CleanFinalizedErrors ->
+            if env.proc_type = Rule then
+              Err.insruction_forbidden_in_rules instr_pos;
+            aux (env, Pos.mark Com.CleanFinalizedErrors instr_pos :: res) il
         | Com.ExportErrors ->
             if env.proc_type = Rule then
               Err.insruction_forbidden_in_rules instr_pos;
@@ -2131,7 +2205,8 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
         | Com.Restore _ -> Err.insruction_forbidden_in_rules instr_pos
         | Com.ArrangeEvents _ -> Err.insruction_forbidden_in_rules instr_pos
         | Com.RaiseError _ -> Err.insruction_forbidden_in_rules instr_pos
-        | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
+        | Com.CleanErrors | Com.CleanFinalizedErrors | Com.ExportErrors
+        | Com.FinalizeErrors ->
             Err.insruction_forbidden_in_rules instr_pos)
   in
   let tmps', in_vars, out_vars, def_vars =
@@ -2276,7 +2351,7 @@ let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     (* Already checked during preprocessing *)
     t.target_apps
   in
-  let env = new_var_env ~vars:prog.prog_vars prog proc_type in
+  let env = new_var_env ~vars:prog.prog_varalias prog proc_type in
   let env, target_args, target_result, target_tmp_vars, target_prog =
     check_code env target_name t.target_tmp_vars t.target_args t.target_result
       t.target_prog
@@ -2337,7 +2412,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     in
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
-  let env = new_var_env ~vars:prog.prog_vars prog Rule in
+  let env = new_var_env ~vars:prog.prog_varalias prog Rule in
   let env, _, _, rule_tmp_vars, rule_instrs =
     check_code env (Pos.without "") r.rule_tmp_vars [] None r.rule_formulaes
   in
@@ -2747,7 +2822,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
         in
         (match verif_var with
         | Some (Pos.Mark (var_name, var_pos)) -> (
-            match StrMap.find_opt var_name prog.prog_vars with
+            match StrMap.find_opt var_name prog.prog_varalias with
             | None -> Err.unknown_variable var_pos
             | Some _ -> ())
         | None -> ());
@@ -2772,7 +2847,7 @@ let check_verif (v : Mast.verification) (prog : program) : program =
             (vdom_sts, var_sts)
           in
           let init = (Com.CatVar.Map.empty, StrMap.empty) in
-          let env = new_var_env ~vars:prog.prog_vars prog Verif in
+          let env = new_var_env ~vars:prog.prog_varalias prog Verif in
           fold_var_expr get_var fold_sp fold_var init verif_expr env
         in
         let verif_seq, prog = get_seq prog in
@@ -2812,7 +2887,7 @@ let convert_verifs (prog : program) : program =
         let target_prog =
           let map_var m_v =
             let name = Com.get_normal_var (Pos.unmark m_v) in
-            let id = StrMap.find name prog.prog_vars in
+            let id = StrMap.find name prog.prog_varalias in
             Pos.same id m_v
           in
           List.map
@@ -2866,24 +2941,39 @@ let eval_expr_verif (prog : program) (verif : verif)
     | Var _ -> Err.variable_forbidden_in_filter (Pos.get expr)
     | Attribut (Pos.Mark (VarAccess (_, m_v), _), m_attr) ->
         let var_name = Com.get_normal_var @@ Pos.unmark m_v in
-        let id = StrMap.find var_name prog.prog_vars in
+        let id = StrMap.find var_name prog.prog_varalias in
         let var = IntMap.find id prog.prog_dict in
         let attrs = Com.Var.attrs var in
         let m_val = StrMap.find (Pos.unmark m_attr) attrs in
         Some (float (Pos.unmark m_val))
     | Size (Pos.Mark (VarAccess (_, m_v), _)) ->
         let var_name = Com.get_normal_var @@ Pos.unmark m_v in
-        let id = StrMap.find var_name prog.prog_vars in
+        let id = StrMap.find var_name prog.prog_varalias in
         let var = IntMap.find id prog.prog_dict in
         Some (float @@ Com.Var.size @@ var)
-    | IsVariable (Pos.Mark (VarAccess (_, m_v), _), m_name) -> (
+    | Type (Pos.Mark (VarAccess (_, m_v), _), Pos.Mark (typ, _)) ->
         let var_name = Com.get_normal_var @@ Pos.unmark m_v in
-        let id = StrMap.find var_name prog.prog_vars in
+        let id = StrMap.find var_name prog.prog_varalias in
         let var = IntMap.find id prog.prog_dict in
-        if Pos.unmark m_name = Com.Var.name_str var then Some 1.0
+        if Com.Var.is_tgv var then
+          Some (if Com.Var.typ var = Some typ then 1.0 else 0.0)
+        else Err.variable_forbidden_in_filter (Pos.get expr)
+    | SameVariable
+        (Pos.Mark (VarAccess (_, m_v0), _), Pos.Mark (VarAccess (_, m_v1), _))
+      -> (
+        let var_alias m_v =
+          let var_name = Com.get_normal_var @@ Pos.unmark m_v in
+          let id = StrMap.find var_name prog.prog_varalias in
+          let var = IntMap.find id prog.prog_dict in
+          (Com.Var.name_str var, Com.Var.alias var)
+        in
+        let n0, a0_opt = var_alias m_v0 in
+        let n1, a1_opt = var_alias m_v1 in
+        if n0 = n1 then Some 1.0
         else
-          match Com.Var.alias var with
-          | Some m_alias when Pos.unmark m_alias = Pos.unmark m_name -> Some 1.0
+          match (a0_opt, a1_opt) with
+          | Some m_a0, Some m_a1 when Pos.unmark m_a0 = Pos.unmark m_a1 ->
+              Some 1.0
           | _ -> Some 0.0)
     | NbCategory cs ->
         let cats = mast_to_catvars cs prog.prog_var_cats in
@@ -3011,7 +3101,8 @@ let eval_expr_verif (prog : program) (verif : verif)
             in
             Some (if res = positive then 1.0 else 0.0))
     | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
-    | FuncCallLoop _ | Loop _ | Attribut _ | Size _ | IsVariable _ ->
+    | FuncCallLoop _ | Loop _ | Attribut _ | Size _ | Type _ | SameVariable _
+    | InDomain _ ->
         assert false
   in
   aux expr

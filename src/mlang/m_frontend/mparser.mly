@@ -59,7 +59,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token IS_VARIABLE VARIABLE_SPACE SPACE
+%token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
 
 %token EOF
 
@@ -878,6 +878,7 @@ instruction:
     Some (RaiseError (e_name, var))
   }
 | CLEAN_ERRORS SEMICOLON { Some CleanErrors }
+| CLEAN_FINALIZED_ERRORS SEMICOLON { Some CleanFinalizedErrors }
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
 
@@ -1467,14 +1468,21 @@ function_call:
     Attribut (access, attr)
   }
 | SIZE LPAREN access = with_pos(var_access) RPAREN { Size access }
+| TYPE LPAREN access = with_pos(var_access)
+  COMMA typ = with_pos(value_type_prim) RPAREN { Type (access, typ) }
 | NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
-| IS_VARIABLE LPAREN access = with_pos(var_access)
-  COMMA name = symbol_with_pos RPAREN {
-    IsVariable (access, name)
-  } 
+| SAME_VARIABLE LPAREN access0 = with_pos(var_access)
+  COMMA access1 = with_pos(var_access) RPAREN {
+    SameVariable (access0, access1)
+  }
+| IN_DOMAIN LPAREN access = with_pos(var_access)
+  COMMA vcat = with_pos(var_category_id) RPAREN {
+    let vc = Com.CatVar.Map.from_string_list vcat in
+    InDomain (access, vc)
+  }
 | s = with_pos(function_name) LPAREN RPAREN {
     FuncCall (parse_function_name s, [])
   }
