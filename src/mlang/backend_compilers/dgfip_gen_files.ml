@@ -63,7 +63,7 @@ let gen_table_varinfo vars cat Com.CatVar.{ id_int; id_str; attributs; _ } stats
       StrMap.iter (fun _ av -> Pp.fpr fmt ", %d" (Pos.unmark av)) attrs;
       Pp.fpr fmt " },\n")
     vars;
-  Pp.fpr fmt "  NULL\n};\n\n";
+  Pp.fpr fmt "  {NULL}\n};\n\n";
   close_out oc;
   let nb = IntMap.cardinal vars in
   let attr_set =
@@ -86,7 +86,7 @@ let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
         "  { \"%s\", \"\", %d, %d, %d, ID_TMP_VARS, EST_TEMPORAIRE },\n" name
         idx tab_idx size)
     vars;
-  Pp.fpr fmt "  NULL\n};\n\n"
+  Pp.fpr fmt "  {NULL}\n};\n\n"
 
 let gen_table_tab_varinfo (cprog : Mir.program) fmt =
   let table_map = cprog.program_stats.table_map in
@@ -180,7 +180,7 @@ let gen_table_varinfos (cprog : Mir.program) flags =
       Pp.fpr fmt "  { \"%s\", %s },\n" name var_addr
     in
     StrMap.iter iter var_map;
-    Pp.fpr fmt "  NULL\n};\n\n");
+    Pp.fpr fmt "  {NULL}\n};\n\n");
   gen_table_tmp_varinfo cprog fmt;
   gen_table_tab_varinfo cprog fmt;
   close_out oc;
@@ -366,8 +366,8 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
 let gen_dbg fmt =
   Pp.fpr fmt
     {|int change_couleur(int couleur, int typographie);
-int get_couleur();
-int get_typo();
+int get_couleur(void);
+int get_typo(void);
     
 #ifdef FLG_TRACE
 extern int niv_trace;
@@ -587,7 +587,11 @@ extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 #define TYPE_REEL 6
 
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
-extern void free_erreur();
+#ifdef ANCIEN
+void free_erreur(void);
+#else
+void free_erreur(T_irdata*);
+#endif /* ANCIEN */
 
 #define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
@@ -900,11 +904,11 @@ int change_couleur (int couleur,int typographie) {
 	return 0;
 }
 
-int get_couleur () {
+int get_couleur (void) {
 	return color ;
 }
 
-int get_typo () {
+int get_typo (void) {
 	return typo ;
 }
 
@@ -1213,6 +1217,9 @@ void print_string(FILE *std, T_print_context *pr_ctx, char *str) {
     str++;
   }
 }
+
+char isnan(double);
+char isinf(double);    
 
 void print_double(FILE *std, T_print_context *pr_ctx, double f, int pmin, int pmax) {
   print_indent(NULL, pr_ctx);
@@ -1976,7 +1983,6 @@ char lis_tabaccess(
   char *res_def, double *res_val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
-  int idx = 0;
   if (info == NULL) {
     *res_val = 0.0;
     if (
@@ -2018,7 +2024,6 @@ void ecris_tabaccess(
 /* !!! */
 void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom) {
   T_varinfo *info = NULL;
-  T_var_space *vsp;
   char res_def = 0;
   double res_val = 0.0;
 
@@ -2027,7 +2032,6 @@ void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, char *nom)
   if (info == NULL) {
     fprintf(pr_ctx->std, "inconnu");
   } else {
-    vsp = get_var_space(irdata, var_space);
     lis_varinfo(irdata, var_space, info, &res_def, &res_val);
     if (res_def == 0) {
       fprintf(pr_ctx->std, "indefini");
@@ -2236,7 +2240,6 @@ void aff_val(
           "T_varinfo *event_field_%s_var(T_irdata *irdata, char idx_def, \
            double idx_val) {\n"
           f;
-        pr "  T_varinfo *info = NULL;\n";
         pr "  int idx = (int)floor(idx_val);\n";
         pr "  if (idx_def != 1 || idx < 0 || irdata->nb_events <= idx) {\n";
         pr "    return NULL;\n";
