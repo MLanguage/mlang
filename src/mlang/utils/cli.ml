@@ -182,13 +182,21 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
+let no_local_vars =
+  Arg.(
+    value & flag
+    & info [ "no-local-vars" ]
+        ~doc:
+          "(experimental) Does not generate local vars for definitions and \
+           evaluation.")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
     $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
     $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
     $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ income_year_cli $ m_clean_calls $ dgfip_options $ no_local_vars)
 
 let info =
   let doc =
@@ -296,6 +304,8 @@ let dgfip_flags = ref Dgfip_options.default_flags
 
 let execution_mode = ref Extraction
 
+let no_local_var = ref false
+
 (* Default value for the epsilon slack when comparing things in the
    interpreter *)
 let comparison_error_margin = ref 0.000001
@@ -310,7 +320,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (income_year_ : int option) (value_sort_ : value_sort)
     (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
     (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
-    (execution_mode_ : execution_mode) =
+    (execution_mode_ : execution_mode) (no_local_var_ : bool) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -333,6 +343,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   dgfip_test_filter := dgfip_test_filter_;
   mpp_function := mpp_function_;
   dgfip_flags := dgfip_flags_;
+  no_local_var := no_local_var_;
   match output_file_ with
   | None -> ()
   | Some o -> (

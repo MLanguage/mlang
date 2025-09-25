@@ -163,7 +163,7 @@ let set_opts (files : string list) (application_names : string list)
     (optimize_unsafe_float : bool) (precision : string option)
     (roundops : string option) (comparison_error_margin : float option)
     (income_year : int option) (m_clean_calls : bool)
-    (dgfip_options : string list option) =
+    (dgfip_options : string list option) (no_local_var : bool) =
   let value_sort =
     let precision = Option.get precision in
     if precision = "double" then Cli.RegularFloat
@@ -229,7 +229,7 @@ let set_opts (files : string list) (application_names : string list)
     var_info_debug display_time dep_graph_file print_cycles output
     optimize_unsafe_float m_clean_calls comparison_error_margin income_year
     value_sort round_ops backend dgfip_test_filter mpp_function dgfip_flags
-    execution_mode
+    execution_mode no_local_var
 
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;

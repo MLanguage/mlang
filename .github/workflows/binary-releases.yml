@@ -49,7 +49,7 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
-          ocaml-compiler: 4.11.2
+          ocaml-compiler: 4.13.1
 
       - name: Install dependencies
         run: |
