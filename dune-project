@@ -2,7 +2,7 @@
 
 (name mlang)
 
-(version %%VERSION%%)
+(version 189-13-gddb77c5c)
 
 (cram enable)
 
