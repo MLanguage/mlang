@@ -57,6 +57,9 @@ variable saisie variation
 variable saisie penalite
 : attribut primrest;
 
+variable saisie environnement
+: attribut toto;
+
 variable calculee
 : attribut primrest;
 
