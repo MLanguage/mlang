@@ -773,48 +773,6 @@ si nb_discordances() + nb_informatives() > 0 alors
   exporte_erreurs;
 finsi
 
-fonction truc:
-application: iliad;
-arguments: A0, A1;
-resultat: RES;
-variables_temporaires: TOTO;
-#V_IND_TRAIT = 4;
-afficher_erreur "truc\n" indenter(2);
-TOTO = 1;
-iterer
-: variable I
-: entre A0 .. A1 increment 1
-: dans (
-  si I = A0 alors
-    RES = 1;
-  sinon
-    RES = 2 * RES + TOTO;
-  finsi
-  afficher_erreur (I) ": " (RES) "\n";
-)
-afficher_erreur indenter(-2);
-
-cible test_boucle:
-application: iliad;
-arguments: I0, I1;
-variables_temporaires: TOTO;
-TOTO = 0;
-iterer
-: variable I
-: entre I0 .. I1 increment 0.7
-: entre 2 .. 1 increment -1
-: dans (
-  iterer
-  : variable J
-  : entre -3 .. -1 increment 1
-  : entre 1 .. 0 increment -1
-  : dans (
-    afficher_erreur nom(I) " = " (I) ", " nom(J) " = " (J) "\n";
-  )
-)
-TOTO = truc(TOTO, truc(4, truc(7, 9)));
-afficher_erreur "truc: " (TOTO) "\n";
-
 cible afficher_evenement:
 application: iliad;
 arguments: I;
@@ -860,8 +818,6 @@ application: iliad;
 variables_temporaires: A0, A1, EVT;
 A0 = 1.6;
 A1 = 3.6;
-calculer cible test_boucle : avec A0, A1;
-afficher_erreur "\n";
 afficher_erreur "nb_evenements() = " (nb_evenements()) "\n";
 afficher_erreur "\n";
 calculer cible afficher_evenements;

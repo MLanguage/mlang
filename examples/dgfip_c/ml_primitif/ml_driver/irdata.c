@@ -61,6 +61,15 @@ void finalise_erreur(T_irdata *irdata) {
   }
 }
 
+void nettoie_erreurs_finalisees(T_irdata *irdata) {
+  int i = 0;
+
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
+    irdata->err_finalise[i] = NULL;
+  }
+  irdata->nb_err_finalise = 0;
+}
+
 void exporte_erreur(T_irdata *irdata) {
   int i = 0;
 

@@ -191,17 +191,6 @@ CAMLprim value ml_tgv_set(value mlTgv, value mlCode, value mlMontant) {
   CAMLreturn(Val_unit);
 }
 
-CAMLprim value ml_tgv_copy(value mlSTgv, value mlDTgv) {
-  CAMLparam2(mlSTgv, mlDTgv);
-
-  T_irdata *stgv = Tgv_val(mlSTgv);
-  T_irdata *dtgv = Tgv_val(mlDTgv);
-  recopie_saisie(stgv, dtgv);
-  recopie_calculee(stgv, dtgv);
-  recopie_base(stgv, dtgv);
-  CAMLreturn(Val_unit);
-}
-
 CAMLprim value ml_annee_calc(value unit) {
   CAMLparam1(unit);
   CAMLreturn(Val_int(ANNEE_REVENU));
@@ -294,6 +283,15 @@ CAMLprim value ml_set_evt_list(value mlTgv, value mlEvtList) {
       evt->field_2042_rect_def = 1;
       evt->field_2042_rect_val = Double_val(Some_val(mlField));
     }
+
+    evt->field_anc_penalite_def = 0;
+    evt->field_anc_penalite_val = 0.0;
+
+    evt->field_id_evt_def = 0;
+    evt->field_id_evt_val = 0.0;
+
+    evt->field_strate_def = 0;
+    evt->field_strate_val = 0.0;
 
     i++;
     mlList = Field(mlList, 1);

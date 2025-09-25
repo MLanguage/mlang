@@ -1,6 +1,12 @@
 module CatVar = struct
   type t = Input of StrSet.t | Computed of { is_base : bool }
 
+  let all_inputs = Input (StrSet.one "*")
+
+  let is_input = function Input _ -> true | _ -> false
+
+  let is_computed = function Computed _ -> true | _ -> false
+
   let pp fmt = function
     | Input id ->
         let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
@@ -512,7 +518,9 @@ and 'v expression =
   | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v m_access * string Pos.marked
   | Size of 'v m_access
-  | IsVariable of 'v m_access * string Pos.marked
+  | Type of 'v m_access * value_typ Pos.marked
+  | SameVariable of 'v m_access * 'v m_access
+  | InDomain of 'v m_access * Pos.t CatVar.Map.t
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -640,6 +648,7 @@ type ('v, 'e) instruction =
       * ('v, 'e) m_instruction list
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
+  | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
 
@@ -741,9 +750,14 @@ and expr_map_var f = function
       let m_access' = m_access_map_var f m_access in
       Attribut (m_access', attr)
   | Size m_access -> Size (m_access_map_var f m_access)
-  | IsVariable (m_access, name) ->
+  | Type (m_access, m_typ) -> Type (m_access_map_var f m_access, m_typ)
+  | SameVariable (m_access0, m_access1) ->
+      let m_access0' = m_access_map_var f m_access0 in
+      let m_access1' = m_access_map_var f m_access1 in
+      SameVariable (m_access0', m_access1')
+  | InDomain (m_access, cvm) ->
       let m_access' = m_access_map_var f m_access in
-      IsVariable (m_access', name)
+      InDomain (m_access', cvm)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
@@ -872,6 +886,7 @@ and instr_map_var f g = function
       let m_err' = Pos.map g m_err in
       RaiseError (m_err', m_s_opt)
   | CleanErrors -> CleanErrors
+  | CleanFinalizedErrors -> CleanFinalizedErrors
   | ExportErrors -> ExportErrors
   | FinalizeErrors -> FinalizeErrors
 
@@ -949,7 +964,12 @@ and expr_fold_var f e acc =
   | NbCategory _ -> acc
   | Attribut (m_access, _) -> m_access_fold_var Info f m_access acc
   | Size m_access -> m_access_fold_var Info f m_access acc
-  | IsVariable (m_access, _) -> m_access_fold_var Info f m_access acc
+  | Type (m_access, _) -> m_access_fold_var Info f m_access acc
+  | SameVariable (m_access0, m_access1) ->
+      acc
+      |> m_access_fold_var Info f m_access0
+      |> m_access_fold_var Info f m_access1
+  | InDomain (m_access, _) -> m_access_fold_var Info f m_access acc
   | NbAnomalies -> acc
   | NbDiscordances -> acc
   | NbInformatives -> acc
@@ -1046,6 +1066,7 @@ and instr_fold_var f instr acc =
       |> fold_list (m_instr_fold_var f) m_il
   | RaiseError _ -> acc
   | CleanErrors -> acc
+  | CleanFinalizedErrors -> acc
   | ExportErrors -> acc
   | FinalizeErrors -> acc
 
@@ -1229,10 +1250,20 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "taille(%a)"
         (format_access form_var form_expr)
         (Pos.unmark m_acc)
-  | IsVariable (m_acc, name) ->
-      Format.fprintf fmt "est_variable(%a, %s)"
+  | Type (m_acc, m_typ) ->
+      Format.fprintf fmt "type(%a, %a)"
         (format_access form_var form_expr)
-        (Pos.unmark m_acc) (Pos.unmark name)
+        (Pos.unmark m_acc) format_value_typ (Pos.unmark m_typ)
+  | SameVariable (m_acc0, m_acc1) ->
+      Format.fprintf fmt "est_variable(%a, %a)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc0)
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc1)
+  | InDomain (m_acc, cvm) ->
+      Format.fprintf fmt "dans_domaine(%a, %a)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc) (CatVar.Map.pp_keys ()) cvm
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
@@ -1463,6 +1494,7 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "leve_erreur %a %s\n" form_err (Pos.unmark err)
           (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
     | CleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
+    | CleanFinalizedErrors -> Format.fprintf fmt "nettoie_erreurs_finalisees\n"
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
 

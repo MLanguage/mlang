@@ -504,21 +504,130 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
           let def_test = D.dinstr res_def in
           let value_comp = D.dinstr res_val in
           D.build_transitive_composition { set_vars; def_test; value_comp })
-  | IsVariable (m_acc, m_name) -> (
+  | Type (m_acc, m_typ) ->
+      let d_irdata = D.ddirect (D.dinstr "irdata") in
+      let set_vars0, evt_d_fun0 =
+        match Pos.unmark m_acc with
+        | Com.VarAccess (_, v) ->
+            ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
+        | Com.TabAccess (_, v, m_i) ->
+            let ei = generate_c_expr p m_i in
+            let d_fun =
+              D.dfun "lis_tabaccess_varinfo"
+                [
+                  d_irdata;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
+                  ei.def_test;
+                  ei.value_comp;
+                ]
+            in
+            (ei.set_vars, D.ddirect @@ d_fun)
+        | Com.FieldAccess (_, ie, f, _) ->
+            let e = generate_c_expr p ie in
+            let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
+            (e.set_vars, D.ddirect d_fun)
+      in
+      let c_type =
+        match Pos.unmark m_typ with
+        | Boolean -> "TYPE_BOOLEEN"
+        | DateYear -> "TYPE_DATE_AAAA"
+        | DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
+        | DateMonth -> "TYPE_DATE_MM"
+        | Integer -> "TYPE_ENTIER"
+        | Real -> "TYPE_REEL"
+      in
+      let res = fresh_c_local "res" in
+      let res_def = Pp.spr "%s_def" res in
+      let res_val = Pp.spr "%s_val" res in
+      let res_def_ptr = Pp.spr "&%s" res_def in
+      let res_val_ptr = Pp.spr "&%s" res_val in
+      let d_fun =
+        D.dfun "est_type"
+          [
+            evt_d_fun0;
+            D.ddirect @@ D.dinstr c_type;
+            D.ddirect @@ D.dinstr res_def_ptr;
+            D.ddirect @@ D.dinstr res_val_ptr;
+          ]
+      in
+      let set_vars =
+        set_vars0
+        @ [
+            (D.Def, res_def, d_fun);
+            (D.Val, res_val, D.ddirect (D.dinstr res_val));
+          ]
+      in
+      let def_test = D.dinstr res_def in
+      let value_comp = D.dinstr res_val in
+      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | SameVariable (m_acc0, m_acc1) ->
+      let d_irdata = D.ddirect (D.dinstr "irdata") in
+      let code_access m_acc =
+        match Pos.unmark m_acc with
+        | Com.VarAccess (_, v) ->
+            ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
+        | Com.TabAccess (_, v, m_i) ->
+            let ei = generate_c_expr p m_i in
+            let d_fun =
+              D.dfun "lis_tabaccess_varinfo"
+                [
+                  d_irdata;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
+                  ei.def_test;
+                  ei.value_comp;
+                ]
+            in
+            (ei.set_vars, D.ddirect @@ d_fun)
+        | Com.FieldAccess (_, ie, f, _) ->
+            let e = generate_c_expr p ie in
+            let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+            let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
+            (e.set_vars, D.ddirect d_fun)
+      in
+      let set_vars0, evt_d_fun0 = code_access m_acc0 in
+      let set_vars1, evt_d_fun1 = code_access m_acc1 in
+      let res = fresh_c_local "res" in
+      let res_def = Pp.spr "%s_def" res in
+      let res_val = Pp.spr "%s_val" res in
+      let res_def_ptr = Pp.spr "&%s" res_def in
+      let res_val_ptr = Pp.spr "&%s" res_val in
+      let d_fun =
+        D.dfun "meme_variable"
+          [
+            evt_d_fun0;
+            evt_d_fun1;
+            D.ddirect @@ D.dinstr res_def_ptr;
+            D.ddirect @@ D.dinstr res_val_ptr;
+          ]
+      in
+      let set_vars =
+        set_vars0 @ set_vars1
+        @ [
+            (D.Def, res_def, d_fun);
+            (D.Val, res_val, D.ddirect (D.dinstr res_val));
+          ]
+      in
+      let def_test = D.dinstr res_def in
+      let value_comp = D.dinstr res_val in
+      D.build_transitive_composition { set_vars; def_test; value_comp }
+  | InDomain (m_acc, cvm) -> (
+      assert (Com.CatVar.Map.cardinal cvm = 1);
+      let cv = fst @@ Com.CatVar.Map.min_binding cvm in
+      let id_cv = (Com.CatVar.Map.find cv p.program_var_categories).id_int in
       match Pos.unmark m_acc with
       | VarAccess (_, v) ->
           let ptr = VID.gen_info_ptr v in
-          let nameCmp = Pos.unmark m_name in
           let res = fresh_c_local "res" in
           let res_def = Pp.spr "%s_def" res in
           let res_val = Pp.spr "%s_val" res in
           let res_def_ptr = Pp.spr "&%s" res_def in
           let res_val_ptr = Pp.spr "&%s" res_val in
           let d_fun =
-            D.dfun "est_variable"
+            D.dfun "dans_domaine"
               [
                 D.ddirect @@ D.dinstr ptr;
-                D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
                 D.ddirect @@ D.dinstr res_def_ptr;
                 D.ddirect @@ D.dinstr res_val_ptr;
               ]
@@ -534,7 +643,6 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
           D.build_transitive_composition { set_vars; def_test; value_comp }
       | TabAccess (_, v, m_i) ->
           let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let nameCmp = Pos.unmark m_name in
           let res = fresh_c_local "res" in
           let res_def = Pp.spr "%s_def" res in
           let res_val = Pp.spr "%s_val" res in
@@ -543,13 +651,13 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
           let set_vars, d_fun =
             let ei = generate_c_expr p m_i in
             let d_fun =
-              D.dfun "est_variable_tabaccess"
+              D.dfun "dans_domaine_tabaccess"
                 [
                   d_irdata;
                   D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
                   ei.def_test;
                   ei.value_comp;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
                   D.ddirect @@ D.dinstr res_def_ptr;
                   D.ddirect @@ D.dinstr res_val_ptr;
                 ]
@@ -573,17 +681,16 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
             let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
             (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
           in
-          let nameCmp = Pos.unmark m_name in
           let res = fresh_c_local "res" in
           let res_def = Pp.spr "%s_def" res in
           let res_val = Pp.spr "%s_val" res in
           let res_def_ptr = Pp.spr "&%s" res_def in
           let res_val_ptr = Pp.spr "&%s" res_val in
           let d_fun =
-            D.dfun "est_variable"
+            D.dfun "dans_domaine"
               [
                 D.ddirect evt_d_fun;
-                D.ddirect @@ D.dinstr @@ Pp.spr "\"%s\"" nameCmp;
+                D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
                 D.ddirect @@ D.dinstr res_def_ptr;
                 D.ddirect @@ D.dinstr res_val_ptr;
               ]
@@ -1331,8 +1438,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
               let ref_tab = VID.gen_tab vcd.loc in
               let ref_name = VID.gen_ref_name_ptr var in
               let ref_info = VID.gen_info_ptr var in
-              let ref_def = VID.gen_def_ptr m_sp_opt var in
-              let ref_val = VID.gen_val_ptr m_sp_opt var in
+              let ref_def = VID.gen_def_ptr None var in
+              let ref_val = VID.gen_val_ptr None var in
               let cond = fresh_c_local "cond" in
               let cond_def = cond ^ "_def" in
               let cond_val = cond ^ "_val" in
@@ -1415,6 +1522,8 @@ let rec generate_stmt (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
       in
       pr "@;add_erreur(irdata, &erreur_%s, %s);" err_name code
   | CleanErrors -> Format.fprintf oc "@;nettoie_erreur(irdata);"
+  | CleanFinalizedErrors ->
+      Format.fprintf oc "@;nettoie_erreurs_finalisees(irdata);"
   | ExportErrors -> Format.fprintf oc "@;exporte_erreur(irdata);"
   | FinalizeErrors -> Format.fprintf oc "@;finalise_erreur(irdata);"
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
