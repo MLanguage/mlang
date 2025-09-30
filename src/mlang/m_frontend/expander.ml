@@ -930,7 +930,7 @@ let rec expand_instruction (const_map : const_context)
       in
       Pos.same (Com.ComputeChaining (chain, m_sp_opt')) m_instr :: prev
   | Com.RaiseError _ | Com.CleanErrors | Com.CleanFinalizedErrors
-  | Com.ExportErrors | Com.FinalizeErrors ->
+  | Com.ExportErrors | Com.FinalizeErrors | Com.Stop _ ->
       m_instr :: prev
 
 and expand_instructions (const_map : const_context)
