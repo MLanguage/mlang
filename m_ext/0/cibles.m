@@ -519,4 +519,13 @@ application: iliad;
 calculer cible enchainement_primitif;
 afficher_erreur "FIN\n";
 
+# cibles bidonnes pour correctif
+
+cible enchaineur_primitif:
+application: iliad;
+neant;
+
+cible enchaineur_correctif:
+application: iliad;
+neant;
 

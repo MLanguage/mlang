@@ -30,16 +30,6 @@ OCAMLFLAGS=
 #OCAMLFLAGS="-g -inline 0"
 # Pour instrumenter la couverture de code, il est nécessaire d'installer
 # le paquet OCaml bisect_ppx
-# Utiliser l'indicateur WITH_BISECT=1 pour activer l'instrumentation nécessaire
-# à l'analyse de la couverture de code lors des étapes de compilation.
-WITH_BISECT?=0
-ifeq ($(WITH_BISECT), 1)
-  BISECT_PATH:=$(shell ocamlfind query bisect_ppx)
-  ifeq ($(BISECT_PATH),)
-    $(error $(BISECT_PATH) Pour instrumenter la couverture de code, il faut \
-      installer le paquet OCaml bisect_ppx)
-  endif
-endif
 
 ##################################################
 # Building the backend
@@ -121,17 +111,9 @@ ifeq ($(call is_in,$(DGFIP_DIR)),1)
 cal: $(DRIVER_TARGETS)
 	@echo "Compilation de la calculette primitive:"
 	@echo "  OCAMLFLAGS=$(OCAMLFLAGS)"
-	@echo "  WITH_BISECT=$(WITH_BISECT)"
 	cd calc && rm -f $(DRIVER_OBJECT_FILES)
-ifeq ($(WITH_BISECT), 1)
-	cd calc && ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
-	-I $(BISECT_PATH)/common -I $(BISECT_PATH)/runtime \
-	-ppx "$(BISECT_PATH)/ppx.exe --as-ppx" \
-	unix.cmxa bisect_common.cmxa bisect.cmxa *.o $(DRIVER_FILES) -o cal
-else
 	cd calc && ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
 	unix.cmxa *.o $(DRIVER_FILES) -o ../cal
-endif
 	@echo "Compilation terminée"
 endif
 
@@ -155,7 +137,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal ${TEST_FILES}
+	./cal -recursif ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

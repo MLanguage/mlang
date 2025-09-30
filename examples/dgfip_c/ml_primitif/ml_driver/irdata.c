@@ -1,19 +1,19 @@
+/****** LICENCE CECIL *****/
+
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
+#include <limits.h>
 #include <math.h>
+#include <float.h>
 
 #include "mlang.h"
 
-/* Gestion des erreurs */
+#ifndef isinf
+int isinf(double d) {
+  return d < -DBL_MAX || DBL_MAX < d;
+}
+#endif /* isinf */
 
-/*
- * # ajouter_espace(sz, tab, nb) #
- *
- * tab est un tableau dynamique de taille sz.
- * On demande à disposer de nb cases dans tab.
- * Si il n'y a pas assez de place dans tab, on double sa taille.
- */
 void ajouter_espace(int *sz, char ***tab, int nb) {
   if (nb >= *sz) {
     int i = 0;
@@ -36,7 +36,55 @@ void ajouter_espace(int *sz, char ***tab, int nb) {
   }
 }
 
-void finalise_erreur(T_irdata *irdata) {
+void finalise_erreur_corr(T_irdata *irdata) {
+  int i = 0;
+  int trouve = 0;
+  int ano = 0;
+  T_discord *pDisco = irdata->discords;
+
+  while (pDisco != NULL && ano == 0) {
+    trouve = 0;
+    for (i = 0; i < irdata->nb_err_finalise && ! trouve; i++) {
+      if (strcmp(pDisco->erreur->nom, irdata->err_finalise[i]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (! trouve) {
+      ajouter_espace(&irdata->sz_err_finalise, &irdata->err_finalise, irdata->nb_err_finalise);
+      irdata->err_finalise[irdata->nb_err_finalise] = pDisco->erreur->nom;
+      irdata->nb_err_finalise++;
+      if (pDisco->erreur->type == ANOMALIE) ano = 1;
+    }
+    pDisco = pDisco->suivant;
+  }
+}
+
+void exporte_erreur_corr(T_irdata *irdata) {
+  int i = 0;
+  int j = 0;
+  int trouve = 0;
+
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
+    trouve = 0;
+    for (j = 0; j < irdata->nb_err_archive && ! trouve; j++) {
+      if (strcmp(irdata->err_finalise[i], irdata->err_archive[j]) == 0) {
+        trouve = 1;
+      }
+    }
+    if (! trouve) {
+      ajouter_espace(&irdata->sz_err_archive, &irdata->err_archive, irdata->nb_err_archive);
+      irdata->err_archive[irdata->nb_err_archive] = irdata->err_finalise[i];
+      irdata->nb_err_archive++;
+      ajouter_espace(&irdata->sz_err_sortie, &irdata->err_sortie, irdata->nb_err_sortie);
+      irdata->err_sortie[irdata->nb_err_sortie] = irdata->err_finalise[i];
+      irdata->nb_err_sortie++;
+      irdata->err_finalise[i] = NULL;
+    }
+  }
+  irdata->nb_err_finalise = 0;
+}
+
+void finalise_erreur_prim(T_irdata *irdata) {
   int i = 0;
   int trouve = 0;
   T_discord *pDisco = irdata->discords;
@@ -61,16 +109,7 @@ void finalise_erreur(T_irdata *irdata) {
   }
 }
 
-void nettoie_erreurs_finalisees(T_irdata *irdata) {
-  int i = 0;
-
-  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
-    irdata->err_finalise[i] = NULL;
-  }
-  irdata->nb_err_finalise = 0;
-}
-
-void exporte_erreur(T_irdata *irdata) {
+void exporte_erreur_prim(T_irdata *irdata) {
   int i = 0;
 
   for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
@@ -78,5 +117,47 @@ void exporte_erreur(T_irdata *irdata) {
     irdata->err_sortie[irdata->nb_err_sortie] = irdata->err_finalise[i];
     irdata->nb_err_sortie++;
   }
+}
+
+void finalise_erreur(T_irdata *irdata) {
+  T_varinfo *mode_corr = cherche_varinfo(irdata, "MODE_CORR");
+  char def = 0;
+  double val = 0.0;
+  if (mode_corr == NULL) {
+    finalise_erreur_prim(irdata);
+    return;
+  }
+  lis_varinfo(irdata, ESPACE_PAR_DEFAUT, mode_corr, &def, &val);
+  if (def == 1 && val == 1.0) {
+    finalise_erreur_corr(irdata);
+  } else {
+    finalise_erreur_prim(irdata);
+  }
+}
+
+void exporte_erreur(T_irdata *irdata) {
+  T_varinfo *mode_corr = cherche_varinfo(irdata, "MODE_CORR");
+  char def = 0;
+  double val = 0.0;
+  if (mode_corr == NULL) {
+    exporte_erreur_prim(irdata);
+    return;
+  }
+  lis_varinfo(irdata, ESPACE_PAR_DEFAUT, mode_corr, &def, &val);
+  if (def == 1 && val == 1.0) {
+    exporte_erreur_corr(irdata);
+  } else {
+    exporte_erreur_prim(irdata);
+  }
+}
+
+
+void nettoie_erreurs_finalisees(T_irdata *irdata) {
+  int i = 0;
+
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
+    irdata->err_finalise[i] = NULL;
+  }
+  irdata->nb_err_finalise = 0;
 }
 

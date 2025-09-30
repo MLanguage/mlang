@@ -816,4 +816,17 @@ cible enchainement_primitif_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4; # primitif
 calculer cible enchainement_primitif;
+exporte_erreurs;
+
+# enchaineurs pour le caclul correctif
+
+cible enchaineur_primitif:
+application: iliad;
+neant;
+
+# enchaineur correctif
+
+cible enchaineur_correctif:
+application: iliad;
+neant;
 

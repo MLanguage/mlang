@@ -1,4 +1,3 @@
-open Common
 
 type file = {
   c: in_channel;
@@ -9,7 +8,8 @@ let open_file filename =
   let c = open_in filename in
   { c; lines = [] }
 
-let close_file file = close_in file.c
+let close_file file =
+  close_in file.c
 
 let read_line file =
   match file.lines with
@@ -19,10 +19,9 @@ let read_line file =
 let put_back_line file line =
   file.lines <- line :: file.lines
 
-let convert_int s = try int_of_string s with _ -> 0
-
 let convert_float s =
   try Float.of_string s
+  (* with _ -> 0.0 *)
   with _ -> (* to cope with badly formatted tests *)
     try Float.of_string
           (String.sub s 0
@@ -30,9 +29,17 @@ let convert_float s =
                 ((String.index s '.') + 1) '.'))
     with _ -> 0.0
 
-let convert_float_opt s =
-  let rec isSpc i = i < 0 || (s.[i] = ' ' && isSpc (i - 1)) in
-  if isSpc (String.length s - 1) then None else Some (convert_float s)
+let convert_sens s =
+  if String.length s = 0 then (
+    failwith "Sens invalide"
+  ) else (
+    match s.[0] with
+   | 'R' | 'r' -> 0.0
+   | 'M' | 'm' -> 1.0
+   | 'P' | 'p' -> 2.0
+   | 'C' | 'c' -> 3.0
+   | _ -> failwith "Sens invalide"
+  )
 
 let parse_generic s =
   let sl = String.split_on_char '/' s in
@@ -44,61 +51,48 @@ let parse_generic s =
 let parse_controle s =
   let sl = String.split_on_char '/' s in
   match sl with
-  | [ err ] -> (String.trim err)
+  | [ err ] -> (err)
   | _ -> failwith (Printf.sprintf "Ligne controle invalide: '%s'" s)
 
 let parse_entree_corr s =
   let sl = String.split_on_char '/' s in
   match sl with
-  | [ code; montant; code_2042; sens; montant_rappel;
-      date_evt; penalite; base_tl; _cle_oc1; _cle_oc2 ] ->
-      let date_evt = convert_int date_evt in
-      (convert_int code, convert_float montant, convert_int code_2042,
-       sens.[0], convert_float montant_rappel,
-       (date_evt mod 10000, date_evt / 10000),
-       convert_int penalite, convert_float base_tl)
+  | [
+      code; montant; code_2042; sens; montant_rappel;
+      date; penalite; base_tl; _cle_oc1; _cle_oc2
+    ] -> (
+      convert_float code, convert_float montant, convert_float code_2042,
+      convert_sens sens, convert_float montant_rappel, convert_float date,
+      convert_float penalite, convert_float base_tl
+    )
   | _ -> failwith (Printf.sprintf "Ligne entree correctif invalide: '%s'" s)
 
 let parse_entree_rap s =
-  let err () = failwith (Printf.sprintf "Ligne entree rappel invalide: '%s'" s) in
   let sl = String.split_on_char '/' s in
   match sl with
-  | [ num_evt; num_rappel; code; montant; sens;
-      penalite; base_tl; date_evt; ind20 ] ->
-      if String.length code = 0 then err ();
-      let sens_float =
-        if String.length sens = 0 then err ();
-        match sens.[0] with
-        | 'R' -> 0.0
-        | 'C' -> 1.0
-        | 'M' -> 2.0
-        | 'P' -> 3.0
-        | _ -> err ()
-      in
-      (
-        convert_float num_evt,
-        convert_float num_rappel,
-        code,
-        convert_float montant,
-        sens_float,
-        convert_float_opt penalite,
-        convert_float_opt base_tl,
-        convert_float date_evt,
-        convert_float_opt ind20
-      ) (* TODO: improve *)
-  | _ -> err ()
+  | [
+      numero; rappel; code; montant; sens;
+      penalite; base_tl; date; _2042_rect
+    ] -> (
+      convert_float numero, convert_float rappel, code, convert_float montant,
+      convert_sens sens, convert_float penalite, convert_float base_tl,
+      convert_float date, convert_float _2042_rect
+    )
+  | _ -> failwith (Printf.sprintf "Ligne entree rappel invalide: '%s'" s)
 
 let read_section_contents f parsefun =
   let rec aux contents =
     let s = read_line f in
-    if String.length s < 1 then
+    if String.length s < 1 then (
       aux contents
-    (* else if s.[0] = '#' then *)
-    else if s.[0] = '#' ||
-            s = "CONTROLES-PRIMITIF" then (* to cope with badly formatted tests *)
-      (put_back_line f s; List.rev contents)
-    else
+    ) else if
+      s.[0] = '#'
+      || s = "CONTROLES-PRIMITIF" (* to cope with badly formatted tests *)
+    then (
+      put_back_line f s; List.rev contents
+    ) else (
       aux (parsefun s :: contents)
+    )
   in
   aux []
 
@@ -160,3 +154,4 @@ let is_empty filename =
     false
   with
   | End_of_file -> close_in c; true
+

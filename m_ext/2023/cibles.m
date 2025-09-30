@@ -993,22 +993,25 @@ finquand
 calculer cible trace_out;
 #afficher_erreur "]traite_double_liquidation2\n";
 
-# correctif
-
-cible enchainement_correctif:
-application: iliad;
-neant;
-
-# iterpréteur
+# primitif iterpréteur
 
 cible enchainement_primitif_interpreteur:
 application: iliad;
-si V_IND_TRAIT = 4 alors # primitif
-  calculer cible enchainement_primitif;
-sinon_si V_IND_TRAIT = 5 alors # correctif
-  calculer cible enchainement_correctif;
-finsi
-#calculer cible test;
+V_IND_TRAIT = 4; # primitif
+calculer cible enchainement_primitif;
+exporte_erreurs;
+
+# enchaineurs pour le caclul correctif
+
+cible enchaineur_primitif:
+application: iliad;
+neant;
+
+# enchaineur correctif
+
+cible enchaineur_correctif:
+application: iliad;
+neant;
 
 #{
 
