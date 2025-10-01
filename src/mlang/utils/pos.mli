@@ -35,8 +35,8 @@ val make : string -> Lexing.position * Lexing.position -> t
     @param loc A tuple containing the start and end [Lexing.position]. *)
 
 val make_between : t -> t -> t
-(** [make_between p1 p2] creates a new position that starts at the beginning
-    of [p1] and ends at the end of [p2].
+(** [make_between p1 p2] creates a new position that starts at the beginning of
+    [p1] and ends at the end of [p2].
     @raise Failure if [p1] and [p2] are from different files. *)
 
 (** {2 Formatting} *)
@@ -47,13 +47,14 @@ val format_short : Format.formatter -> t -> unit
 
 val format_gnu : Format.formatter -> t -> unit
 (** [format_gnu ppf pos] prints the position in a format compatible with GNU
-    error message standards.
-    (See: https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages) *)
+    error message standards. (See:
+    https://www.gnu.org/prep/standards/standards.html#Formatting-Error-Messages)
+*)
 
 val format : Format.formatter -> t -> unit
 (** [format ppf pos] prints a detailed, human-readable representation of the
-    position to the formatter [ppf]. Example:
-    `in file foo.ml, from 10:5 to 12:20`. *)
+    position to the formatter [ppf]. Example: `in file foo.ml, from 10:5 to
+    12:20`. *)
 
 val retrieve_loc_text : t -> string
 (** [retrieve_loc_text pos] reads the source file associated with [pos] and
@@ -102,7 +103,8 @@ val get_start_line : t -> int
 (** [get_start_line pos] returns the starting line number of the position. *)
 
 val get_start_column : t -> int
-(** [get_start_column pos] returns the starting column number of the position. *)
+(** [get_start_column pos] returns the starting column number of the position.
+*)
 
 val get_end_line : t -> int
 (** [get_end_line pos] returns the ending line number of the position. *)

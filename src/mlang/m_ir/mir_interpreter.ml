@@ -16,6 +16,8 @@
 
 exception Stop_instruction of string option
 
+exception Quit_instruction
+
 let exit_on_rte = ref true
 
 let repl_debug = ref false
@@ -965,6 +967,7 @@ struct
         | Stop_instruction (Some scope) as exn ->
             if scope = Pos.unmark var.name then () else raise exn)
     | Com.Stop scope -> raise (Stop_instruction scope)
+    | Com.Quit -> raise Quit_instruction
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
         let backup backup_vars access =
           match get_access_var ctx access with
@@ -1183,7 +1186,7 @@ struct
     let () =
       try List.iter (evaluate_stmt canBlock ctx) stmts with
       | BlockingError as b_err -> if canBlock then raise b_err
-      | Stop_instruction _ as exn ->
+      | (Stop_instruction _ | Quit_instruction) as exn ->
           then_ ();
           raise exn
     in
@@ -1258,9 +1261,11 @@ struct
       ctx.ctx_target <- main_target;
       evaluate_target false ctx main_target [];
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
-    with RuntimeError (e, ctx) ->
-      if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
+    with
+    | RuntimeError (e, ctx) ->
+        if !exit_on_rte then raise_runtime_as_structured e
+        else raise (RuntimeError (e, ctx))
+    | Quit_instruction -> ()
 end
 
 module BigIntPrecision = struct
@@ -1395,4 +1400,5 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
-  Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  with Quit_instruction -> Undefined

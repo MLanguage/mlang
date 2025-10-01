@@ -60,7 +60,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
 %token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
-%token STOP
+%token STOP QUIT
 
 %token EOF
 
@@ -883,6 +883,7 @@ instruction:
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
 | STOP SEMICOLON { Some (Stop None) }
+| QUIT SEMICOLON { Some Quit }
 | STOP s = SYMBOL SEMICOLON { Some (Stop (Some s)) }
 
 target_param:

@@ -417,8 +417,8 @@ type ('v, 'e) instruction =
   | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
-  | Stop of string option
-(* The scope identifier (current scope if None) *)
+  | Stop of string option (* The scope identifier (current scope if None) *)
+  | Quit
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 

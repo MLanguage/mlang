@@ -356,7 +356,7 @@ let expand_functions (p : program) : program =
           let instrs' = List.map map_instr instrs in
           Pos.same (ArrangeEvents (sort', filter', add', instrs')) m_instr
       | RaiseError _ | CleanErrors | CleanFinalizedErrors | ExportErrors
-      | FinalizeErrors | Stop _ ->
+      | FinalizeErrors | Stop _ | Quit ->
           m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in

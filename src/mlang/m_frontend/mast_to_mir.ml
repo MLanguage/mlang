@@ -57,7 +57,7 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
           (nbRef, max nbIt @@ max nbItSort nbItFilter)
       | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
       | Com.CleanErrors | Com.CleanFinalizedErrors | Com.ExportErrors
-      | Com.FinalizeErrors | Com.Stop _ ->
+      | Com.FinalizeErrors | Com.Stop _ | Com.Quit ->
           (0, 0)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
@@ -510,7 +510,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
           (nb, sz, nbRef, tdata)
       | Com.RaiseError _ | Com.CleanErrors | Com.CleanFinalizedErrors
-      | Com.ExportErrors | Com.FinalizeErrors | Com.Stop _ ->
+      | Com.ExportErrors | Com.FinalizeErrors | Com.Stop _ | Com.Quit ->
           (0, 0, 0, tdata)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
@@ -603,7 +603,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
   in
   (prog, { stats with nb_all_tmps; sz_all_tmps; nb_all_refs })
 
-(** {1 Translation } *)
+(** {1 Translation} *)
 
 (** {2 General translation context} *)
 
@@ -977,6 +977,8 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         aux (Pos.mark Com.FinalizeErrors pos :: res, dict) il
     | Pos.Mark (Com.Stop i, pos) :: il ->
         aux (Pos.mark (Com.Stop i) pos :: res, dict) il
+    | Pos.Mark (Com.Quit, pos) :: il ->
+        aux (Pos.mark Com.Quit pos :: res, dict) il
     | Pos.Mark (Com.ComputeDomain _, _) :: _
     | Pos.Mark (Com.ComputeChaining _, _) :: _
     | Pos.Mark (Com.ComputeVerifs _, _) :: _ ->

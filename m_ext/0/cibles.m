@@ -601,11 +601,20 @@ afficher(Y);
 afficher "\n";
 afficher "FIN test compter_calculee_restauree\n";
 
+# Test quitter
+cible test_quitter_cible :
+application : iliad;
+afficher "DEBUT test quitter_cible\n";
+afficher "FIN test quitter_cible\n";
+quitter;
+afficher "[ERREUR] Ce message ne devrait pas pouvoir s'afficher!\n";
+
 cible enchainement_primitif_interpreteur:
 application: iliad;
 calculer cible enchainement_primitif;
 calculer cible compter_calculee;
 calculer cible compter_calculee_restaurer;
+calculer cible test_quitter_cible;
 
 afficher_erreur "FIN\n";
 

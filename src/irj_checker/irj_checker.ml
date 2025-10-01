@@ -14,10 +14,11 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 (** The Irj_checker Module is a simple entry point to use the Mlang IRJ file
-    parser in order to perform syntactic checks on test files or produce other IR
-    test formats.
+    parser in order to perform syntactic checks on test files or produce other
+    IR test formats.
 
-    Usage: irj_checker.exe [--message-format=VAL] <test_file.irj> [transformation-target]*)
+    Usage: irj_checker.exe [--message-format=VAL] <test_file.irj>
+    [transformation-target]*)
 
 open Cmdliner
 open Mlang
