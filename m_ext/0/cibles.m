@@ -609,12 +609,17 @@ afficher "FIN test quitter_cible\n";
 quitter;
 afficher "[ERREUR] Ce message ne devrait pas pouvoir s'afficher!\n";
 
+cible apres_quitter_code_mort:
+application : iliad;
+afficher "[ERREUR] Cette cible ne doit pas s'exécuter!\n";
+
 cible enchainement_primitif_interpreteur:
 application: iliad;
 calculer cible enchainement_primitif;
 calculer cible compter_calculee;
 calculer cible compter_calculee_restaurer;
 calculer cible test_quitter_cible;
+calculer cible apres_quitter_code_mort;
 
 afficher_erreur "FIN\n";
 

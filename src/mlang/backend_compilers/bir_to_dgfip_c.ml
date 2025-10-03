@@ -80,19 +80,21 @@ let add_sanitizer ~f env = { env with scopes = Sanitize f :: env.scopes }
 (* Sanitize the current scope, i.e. calls all the sanitizers stored
    in the scope stack. If an id is given [up_to], sanitize up to
    the given scope. *)
-let sanitize ?up_to env =
+let sanitize ~up_to env =
   let stop_at_id =
     match up_to with
-    | None -> fun _ -> true
-    | Some i ->
+    | `Bottom -> fun _ -> false
+    | `NextId -> fun _ -> true
+    | `Id i ->
         let prefix = label_id_of_var_name i in
         fun i' -> Strings.starts_with ~prefix i'
   in
   let rec loop = function
     | [] -> (
         match up_to with
-        | None -> failwith "Sanitizing outside scope"
-        | Some u ->
+        | `Bottom -> ()
+        | `NextId -> failwith "Sanitizing outside scope"
+        | `Id u ->
             Format.ksprintf failwith "Sanitizing outside scope up to %s" u)
     | Sanitize f :: tl ->
         f ();
@@ -1167,6 +1169,10 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       (match m_sp_opt with
       | None -> ()
       | Some _ -> pr "@;irdata->var_space = var_space_sav;");
+      pr "@;if (irdata->abandon) {@;@[<v 2>";
+      sanitize ~up_to:`Bottom env;
+      pr "@;goto %s;" env.quit_label;
+      pr "@]@;}@;";
       pr "@]@;}@;"
   | Iterate (var, al, var_params, stmts) ->
       let it_name = fresh_c_local "iterate" in
@@ -1629,17 +1635,18 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       match get_current_label env with
       | None -> Format.ksprintf failwith "Stop instruction with no scope"
       | Some lbl ->
-          sanitize env;
+          sanitize ~up_to:`NextId env;
           Format.fprintf oc "@;goto %s;" lbl)
   | Stop (Some id) -> (
       match get_label_from ~scope_id:id env with
       | None -> Format.ksprintf failwith "Stop %s instruction with no scope" id
       | Some lbl ->
-          sanitize ~up_to:id env;
+          sanitize ~up_to:(`Id id) env;
           Format.fprintf oc "@;goto %s;" lbl)
   | Quit ->
-      sanitize env;
-      Format.fprintf oc "@;goto %s;" env.quit_label
+      sanitize ~up_to:`Bottom env;
+      pr "@;irdata->abandon = 1;";
+      pr "@;goto %s;" env.quit_label
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (env : env) (dgfip_flags : Dgfip_options.flags)

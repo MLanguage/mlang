@@ -208,6 +208,9 @@ module Err = struct
   let instruction_forbidden_in_rules pos =
     Errors.raise_spanned_error "instruction forbidden in rules" pos
 
+  let instruction_forbidden_outside_target pos =
+    Errors.raise_spanned_error "instruction only allowed in target" pos
+
   let unknown_domain rov pos =
     let msg = Format.asprintf "unknown %s domain" (rov_to_str rov) in
     Errors.raise_spanned_error msg pos
@@ -2060,11 +2063,10 @@ let rec check_instructions (env : var_env)
                 Err.stop_with_invalid_scope s env.scopes instr_pos
             | _ -> ());
             aux (env, Pos.mark (Com.Stop scope) instr_pos :: res) il
-        | Com.Quit ->
-            (* TODO: allow it in rules? *)
-            if env.proc_type = Rule then
-              Err.instruction_forbidden_in_rules instr_pos;
-            aux (env, Pos.mark Com.Quit instr_pos :: res) il)
+        | Com.Quit -> (
+            match env.proc_type with
+            | Target _ -> aux (env, Pos.mark Com.Quit instr_pos :: res) il
+            | _ -> Err.instruction_forbidden_outside_target instr_pos))
   in
   let env, res = aux (env, []) instrs in
   (env.prog, res)
@@ -2222,7 +2224,7 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
             Err.instruction_forbidden_in_rules instr_pos
             (* TODO: allow in rules to exit *)
         | Com.Quit ->
-            Err.instruction_forbidden_in_rules instr_pos
+            Err.instruction_forbidden_outside_target instr_pos
             (* TODO: allow in rules? *)
         | Com.Iterate_values (m_id, var_intervals, instrs) ->
             let var_name, var_pos =
