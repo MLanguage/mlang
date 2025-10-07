@@ -883,8 +883,8 @@ instruction:
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
 | STOP SEMICOLON { Some (Stop None) }
-| QUIT SEMICOLON { Some Quit }
 | STOP s = SYMBOL SEMICOLON { Some (Stop (Some s)) }
+| QUIT SEMICOLON { Some Quit }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {
