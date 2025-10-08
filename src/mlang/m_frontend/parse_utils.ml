@@ -16,7 +16,11 @@
 
 module E = Errors
 
+type loc = Lexing.position * Lexing.position
+
 let mk_position sloc = Pos.make (fst sloc).Lexing.pos_fname sloc
+
+let make_loc loc = loc
 
 (** {1 Frontend variable names}*)
 
