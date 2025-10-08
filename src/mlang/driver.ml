@@ -16,119 +16,32 @@
 
 open Backend_compilers
 open Irj_utils
-open Lexing
 open M_ir
 open M_frontend
-open Mlexer
 
 exception Exit
 
-(* The legacy compiler plays a nasty trick on us, that we have to reproduce:
-   rule 1 is modified to add assignments to APPLI_XXX variables according to the
-   target application (OCEANS, BATCH and ILIAD). *)
-let patch_rule_1 (backend : Config.backend) (dgfip_flags : Dgfip_options.flags)
-    (program : Mast.program) : Mast.program =
-  let open Mast in
-  let var_exists name =
-    List.exists
-      (List.exists (fun m_item ->
-           match Pos.unmark m_item with
-           | VariableDecl (ComputedVar m_cv) ->
-               Pos.unmark (Pos.unmark m_cv).comp_name = name
-           | VariableDecl (InputVar m_iv) ->
-               Pos.unmark (Pos.unmark m_iv).input_name = name
-           | _ -> false))
-      program
-  in
-  let mk_assign name value l =
-    if var_exists name then
-      let m_access =
-        Pos.without (Com.VarAccess (None, Pos.without (Com.Normal name)))
-      in
-      let litt = Com.mk_lit (Com.Float (if value then 1.0 else 0.0)) in
-      let cmd = Com.SingleFormula (VarDecl (m_access, Pos.without litt)) in
-      Pos.without cmd :: l
-    else l
-  in
-  let oceans, batch, iliad =
-    match backend with
-    | Dgfip_c ->
-        (dgfip_flags.flg_cfir, dgfip_flags.flg_gcos, dgfip_flags.flg_iliad)
-    | UnknownBackend -> (false, false, true)
-  in
-  List.map
-    (List.map (fun m_item ->
-         match Pos.unmark m_item with
-         | Rule r when Pos.unmark r.rule_number = 1 ->
-             let fl =
-               List.map
-                 (fun f -> Pos.same (Com.Affectation f) f)
-                 ([]
-                 |> mk_assign "APPLI_OCEANS" oceans
-                 |> mk_assign "APPLI_BATCH" batch
-                 |> mk_assign "APPLI_ILIAD" iliad)
-             in
-             let r' = { r with rule_formulaes = r.rule_formulaes @ fl } in
-             Pos.same (Rule r') m_item
-         | _ -> m_item))
-    program
-
-let parse () =
-  let current_progress, finish = Cli.create_progress_bar "Parsing" in
-
-  let parse filebuf source_file =
-    current_progress source_file;
-    let lex_curr_p = { filebuf.lex_curr_p with pos_fname = source_file } in
-    let filebuf = { filebuf with lex_curr_p } in
-    match Mparser.source_file token filebuf with
-    | commands -> commands
-    | exception Mparser.Error ->
-        Errors.raise_spanned_error "M syntax error"
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
-  in
-
-  let parse_file source_file =
-    let input = open_in source_file in
-    let filebuf = Lexing.from_channel input in
-    try
-      parse filebuf source_file
-      (* We're catching exceptions to properly close the input channel *)
-    with Errors.StructuredError _ as e ->
-      close_in input;
-      raise e
-  in
-
-  let parse_m_dgfip m_program =
-    if !Config.without_dgfip_m then m_program
-    else
-      let parse_internal str =
-        let filebuf = Lexing.from_string str in
-        let source_file = Dgfip_m.internal_m in
-        parse filebuf source_file
-      in
-      let decs = parse_internal Dgfip_m.declarations in
-      let events = parse_internal Dgfip_m.event_declaration in
-      events :: decs :: m_program
-  in
-
-  let parse_m_files m_program =
-    let parse_file_progress source_file =
-      current_progress source_file;
-      parse_file source_file
-    in
-    (*FIXME: use a fold here *)
-    let prog =
-      List.map parse_file_progress @@ Config.get_files !Config.source_files
-    in
-    List.rev prog @ m_program
-  in
-
-  let m_program =
-    [] |> parse_m_dgfip |> parse_m_files |> List.rev
-    |> patch_rule_1 !Config.backend !Config.dgfip_flags
-  in
-  finish "completed!";
-  m_program
+let process_dgfip_options (backend : Config.backend)
+    ~(application_names : string list) (dgfip_options : string list option) =
+  match backend with
+  | Dgfip_c -> begin
+      match dgfip_options with
+      | None ->
+          Cli.error_print
+            "when using the DGFiP backend, DGFiP options MUST be provided";
+          raise Exit
+      | Some options -> begin
+          match
+            Dgfip_options.process_dgfip_options ~application_names options
+          with
+          | Ok (`Ok flags) -> flags
+          | Ok _ -> assert false
+          | Error _ ->
+              Cli.error_print "parsing of DGFiP options failed, aborting";
+              raise Exit
+        end
+    end
+  | UnknownBackend -> Dgfip_options.default_flags
 
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;
@@ -161,7 +74,9 @@ let extract m_program =
 let driver () =
   try
     Cli.debug_print "Reading M files...";
-    let m_program = parse () in
+    let progress_bar = Cli.create_progress_bar "Parsing" in
+    let files = Config.get_files !Config.source_files in
+    let m_program = Parsing.parse files progress_bar in
     Cli.debug_print "Elaborating...";
     let m_program = Expander.proceed m_program in
     let m_program = Validator.proceed !Config.mpp_function m_program in
@@ -186,12 +101,12 @@ let set_opts (files : string list) (application_names : string list)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int)
     (m_clean_calls : bool) (dgfip_options : string list option)
-    (no_nondet_display : bool) =
+    (no_nondet_display : bool) (plain_output : bool) =
   Config.set_opts ~files ~application_names ~without_dgfip_m ~debug
     ~var_info_debug ~display_time ~print_cycles ~backend ~output ~run_tests
     ~dgfip_test_filter ~run_test ~mpp_function ~optimize_unsafe_float ~precision
     ~roundops ~comparison_error_margin ~income_year ~m_clean_calls
-    ~dgfip_options ~no_nondet_display
+    ~dgfip_options ~no_nondet_display ~plain_output
 
 let run () =
   let eval_cli =
