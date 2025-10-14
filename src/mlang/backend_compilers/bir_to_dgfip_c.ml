@@ -1647,7 +1647,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       sanitize ~up_to:`Bottom env;
       pr "@;irdata->abandon = 1;";
       pr "@;goto %s;" env.quit_label
-  | Stop SKTarget | Stop SKFun -> failwith "TODO"
+  | Stop SKTarget | Stop SKFun -> pr "@;goto %s;" env.quit_label
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (env : env) (dgfip_flags : Dgfip_options.flags)

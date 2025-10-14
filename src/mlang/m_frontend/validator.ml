@@ -2228,6 +2228,7 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
             Err.instruction_forbidden_in_rules instr_pos
         | Com.Print _ -> aux (tmps, in_vars, out_vars, def_vars) il
         | Com.Iterate _ -> Err.instruction_forbidden_in_rules instr_pos
+        | Com.Stop SKFun -> aux (tmps, in_vars, out_vars, def_vars) il
         | Com.Stop _ ->
             Err.instruction_forbidden_in_rules instr_pos
             (* TODO: allow in rules to exit *)

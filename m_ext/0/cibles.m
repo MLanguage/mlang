@@ -335,6 +335,16 @@ afficher_erreur "argument ARG3 <" nom(ARG3) "> <" alias(ARG3) ">\n";
 afficher_erreur "resultat RES <" nom(RES) "> <" alias(RES) ">\n";
 afficher_erreur indenter(-2) "sortie test_aff_fonction\n";
 
+fonction fun_test_stop_fonction:
+application: iliad;
+arguments: ARG0, ARG1;
+resultat: RES;
+variables_temporaires: PROUT0, PROUT1, PROUT2;
+afficher_erreur "entree fun_test_stop_fonction\n" indenter(2);
+RES = ARG0 + ARG1;
+stop fonction;
+RES = -1;
+
 cible test_aff_cible:
 application: iliad;
 arguments: ARG0, ARG1, ARG2, ARG3, ARG4, ARG5, ARG6;
@@ -601,13 +611,30 @@ afficher(Y);
 afficher "\n";
 afficher "FIN test compter_calculee_restauree\n";
 
+# Test stop fonction
+cible test_stop_fonction :
+application : iliad;
+afficher "DEBUT test stop_fonction\n";
+Y = fun_test_stop_fonction(1, 2);
+afficher "Y = 3 ? ";
+afficher (Y);
+afficher "\n FIN test stop_fonction\n";
+
+# Test stop cible
+cible test_stop_cible :
+application : iliad;
+afficher "DEBUT test stop_cible\n";
+afficher "FIN test stop_cible\n";
+stop cible;
+afficher "[ERREUR stop_cible] Ce message ne devrait pas pouvoir s'afficher!\n";
+
 # Test stop application
 cible test_stop_application :
 application : iliad;
 afficher "DEBUT test stop_app\n";
 afficher "FIN test stop_app\n";
 stop application;
-afficher "[ERREUR] Ce message ne devrait pas pouvoir s'afficher!\n";
+afficher "[ERREUR stop_application] Ce message ne devrait pas pouvoir s'afficher!\n";
 
 cible apres_stop_application_code_mort:
 application : iliad;
@@ -618,6 +645,8 @@ application: iliad;
 calculer cible enchainement_primitif;
 calculer cible compter_calculee;
 calculer cible compter_calculee_restaurer;
+calculer cible test_stop_fonction;
+calculer cible test_stop_cible;
 calculer cible test_stop_application;
 calculer cible apres_stop_application_code_mort;
 

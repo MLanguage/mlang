@@ -1205,7 +1205,7 @@ struct
     set_args 0 target.target_args args;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).var <- Option.get target.target_result;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value <- Undefined;
-    evaluate_target_aux false ctx target;
+    evaluate_target_aux ~is_fun:true false ctx target;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value
 
   and evaluate_target (canBlock : bool) (ctx : ctx) (target : Mir.target)
@@ -1222,13 +1222,13 @@ struct
               ctx.ctx_ref.(ctx.ctx_ref_org + n).org <- org;
               set_args (n + 1) vl' al'
           | None -> ())
-      | [], [] -> evaluate_target_aux canBlock ctx target
+      | [], [] -> evaluate_target_aux ~is_fun:false canBlock ctx target
       | _ -> assert false
     in
     set_args 0 target.target_args args
 
-  and evaluate_target_aux (canBlock : bool) (ctx : ctx) (target : Mir.target) :
-      unit =
+  and evaluate_target_aux ~(is_fun : bool) (canBlock : bool) (ctx : ctx)
+      (target : Mir.target) : unit =
     let sav_target = ctx.ctx_target in
     ctx.ctx_target <- target;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + target.target_sz_tmps;
@@ -1239,9 +1239,15 @@ struct
         ctx.ctx_tmps.(i).value <- Undefined)
       target.target_tmp_vars;
     ctx.ctx_ref_org <- ctx.ctx_ref_org + target.target_nb_refs;
-    evaluate_stmts canBlock ctx target.target_prog;
-    ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
-    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps;
+    let then_ () =
+      ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
+      ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps
+    in
+    let () =
+      try evaluate_stmts ~then_ canBlock ctx target.target_prog with
+      | Stop_instruction SKTarget when not is_fun -> ()
+      | Stop_instruction SKFun when is_fun -> ()
+    in
     ctx.ctx_target <- sav_target
 
   let evaluate_program (ctx : ctx) : unit =
@@ -1264,6 +1270,7 @@ struct
         else raise (RuntimeError (e, ctx))
     | Stop_instruction SKApplication ->
         (* The only stop never caught by anything else *) ()
+    | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 end
 
 module BigIntPrecision = struct
