@@ -376,6 +376,14 @@ type 'v formula =
   | SingleFormula of 'v formula_decl
   | MultipleFormulaes of 'v formula_loop * 'v formula_decl
 
+type stop_kind =
+  | SKApplication (* Leave the whole application *)
+  | SKTarget (* Leave the current target *)
+  | SKFun (* Leave the current function *)
+  | SKId of string option
+(* Leave the iterator with the selected var
+   (or the current if [None]) *)
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -417,8 +425,7 @@ type ('v, 'e) instruction =
   | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
-  | Stop of string option (* The scope identifier (current scope if None) *)
-  | Quit
+  | Stop of stop_kind
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 

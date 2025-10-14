@@ -1631,22 +1631,23 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       Format.fprintf oc "@;nettoie_erreurs_finalisees(irdata);"
   | ExportErrors -> Format.fprintf oc "@;exporte_erreur(irdata);"
   | FinalizeErrors -> Format.fprintf oc "@;finalise_erreur(irdata);"
-  | Stop None -> (
+  | Stop (SKId None) -> (
       match get_current_label env with
       | None -> Format.ksprintf failwith "Stop instruction with no scope"
       | Some lbl ->
           sanitize ~up_to:`NextId env;
           Format.fprintf oc "@;goto %s;" lbl)
-  | Stop (Some id) -> (
+  | Stop (SKId (Some id)) -> (
       match get_label_from ~scope_id:id env with
       | None -> Format.ksprintf failwith "Stop %s instruction with no scope" id
       | Some lbl ->
           sanitize ~up_to:(`Id id) env;
           Format.fprintf oc "@;goto %s;" lbl)
-  | Quit ->
+  | Stop SKApplication ->
       sanitize ~up_to:`Bottom env;
       pr "@;irdata->abandon = 1;";
       pr "@;goto %s;" env.quit_label
+  | Stop SKTarget | Stop SKFun -> failwith "TODO"
   | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
 
 and generate_stmts (env : env) (dgfip_flags : Dgfip_options.flags)

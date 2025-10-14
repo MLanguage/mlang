@@ -126,7 +126,6 @@ rule token = parse
     | "pour" -> FOR
     | "puis_quand" -> THEN_WHEN
     | "quand" -> WHEN
-    | "quitter" -> QUIT
     | "reference" -> REFERENCE
     | "regle" -> RULE
     | "restaurer" -> RESTORE

@@ -14,9 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-exception Stop_instruction of string option
-
-exception Quit_instruction
+exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
@@ -934,8 +932,8 @@ struct
               Com.CatVar.Map.iter eval vcs)
             var_params
         with
-        | Stop_instruction None -> ()
-        | Stop_instruction (Some scope) as exn ->
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
             if scope = Pos.unmark var.name then () else raise exn)
     | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) -> (
         try
@@ -963,11 +961,10 @@ struct
               | Undefined -> ())
             var_intervals
         with
-        | Stop_instruction None -> ()
-        | Stop_instruction (Some scope) as exn ->
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
             if scope = Pos.unmark var.name then () else raise exn)
     | Com.Stop scope -> raise (Stop_instruction scope)
-    | Com.Quit -> raise Quit_instruction
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
         let backup backup_vars access =
           match get_access_var ctx access with
@@ -1186,7 +1183,7 @@ struct
     let () =
       try List.iter (evaluate_stmt canBlock ctx) stmts with
       | BlockingError as b_err -> if canBlock then raise b_err
-      | (Stop_instruction _ | Quit_instruction) as exn ->
+      | Stop_instruction _ as exn ->
           then_ ();
           raise exn
     in
@@ -1265,7 +1262,8 @@ struct
     | RuntimeError (e, ctx) ->
         if !exit_on_rte then raise_runtime_as_structured e
         else raise (RuntimeError (e, ctx))
-    | Quit_instruction -> ()
+    | Stop_instruction SKApplication ->
+        (* The only stop never caught by anything else *) ()
 end
 
 module BigIntPrecision = struct
@@ -1401,4 +1399,4 @@ let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
   try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
-  with Quit_instruction -> Undefined
+  with Stop_instruction _ -> Undefined
