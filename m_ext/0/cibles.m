@@ -342,7 +342,7 @@ resultat: RES;
 variables_temporaires: PROUT0, PROUT1, PROUT2;
 afficher_erreur "entree fun_test_stop_fonction\n" indenter(2);
 RES = ARG0 + ARG1;
-stop fonction;
+stop D;
 RES = -1;
 
 cible test_aff_cible:

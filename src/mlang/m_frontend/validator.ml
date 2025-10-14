@@ -408,8 +408,12 @@ module Err = struct
     in
     Errors.raise_spanned_error msg cat_pos
 
-  let stop_outside_scope pos =
-    let msg = "instruction stop should only be used inside an iteration" in
+  let stop_outside_scope ?scope pos =
+    let msg =
+      Format.sprintf
+        "instruction 'stop%s;' should only be used inside an iteration"
+        (match scope with None -> String.empty | Some s -> " " ^ s)
+    in
     Errors.raise_spanned_error msg pos
 
   let stop_with_invalid_scope scope current_scopes pos =
@@ -2068,7 +2072,7 @@ let rec check_instructions (env : var_env)
                 if env.proc_type = Rule then
                   Err.instruction_forbidden_in_rules instr_pos;
                 (match env.scopes with
-                | [] -> Err.stop_outside_scope instr_pos
+                | [] -> Err.stop_outside_scope ?scope instr_pos
                 | _ -> ());
                 match scope with
                 | Some s when not (List.mem s env.scopes) ->
