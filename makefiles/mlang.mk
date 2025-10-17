@@ -35,7 +35,7 @@ else
 endif
 
 remise_a_zero_versionnage: FORCE
-	sed -i 's/(version .*)/(version %%VERSION%%)/' dune-project
+	sed -i '' 's/(version .*)/(version %%VERSION%%)/' dune-project
 	git checkout -- *.opam
 
 ##################################################
@@ -54,7 +54,7 @@ ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	echo $(shell pwd)
-	sed -i 's/(version %%VERSION%%)/(version ${shell git describe --always --dirty --tag})/' dune-project
+	sed -i '' 's/(version %%VERSION%%)/(version ${shell git describe --always --dirty --tag})/' dune-project
 	LINKING_MODE=$(LINKING_MODE) dune build $(DUNE_OPTIONS)
 	$(call make_in_raw,,remise_a_zero_versionnage)
 endif
