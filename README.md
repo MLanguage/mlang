@@ -3,7 +3,6 @@
 ![CI Tests](https://github.com/MLanguage/mlang/actions/workflows/check_correctness.yml/badge.svg)
 [![Documentation deployed](https://img.shields.io/badge/Developper%20documentation-deployed-GREEN.svg)](https://mlanguage.github.io/mlang/mlang/index.html)
 
-
 The M language has been invented by the French Direction Générale des Finances
 Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
@@ -73,6 +72,19 @@ will reinstall OCaml dependencies and refetch the M source code.
 The interpreter and the C backend in `examples/dgfip_c/` should be usable straight away,
 as the C compiler was installed for Opam. Mlang results are tested on GCC and Clang, the latter
 being preferred if available.
+
+> You will probably need to do the following to get the repo to work correctly :
+> 1. set the C compiler flags correctly :
+> ```shell
+> export LIBRARY_PATH=$HOMEBREW_PREFIX/lib:$LIBRARY_PATH
+> export C_INCLUDE_PATH=$HOMEBREW_PREFIX/include:$C_INCLUDE_PATH
+> ```
+> you can replace `$HOMEBREW_PREFIX/include` with wherever your includes lives, and similarly for `$HOMEBREW_PREFIX/lib`
+> 
+> 2. `eval $(opam env)`
+> 2. `opam install menhir`
+
+
 
 ## Usage
 
