@@ -27,6 +27,7 @@ include $(ROOT_DIR)/makefiles/c_backend.mk
   clean_backend clean_backend_c clean_backend_exe clean_backend_tmp clean_backend_res clean_backend_all
 
 FORCE:
+	eval (opam env)
 
 .DEFAULT_GOAL:=default
 
