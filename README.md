@@ -74,6 +74,7 @@ as the C compiler was installed for Opam. Mlang results are tested on GCC and Cl
 being preferred if available.
 
 > You will probably need to do the following to get the repo to work correctly :
+> 1. install `gmp` and `mpfr` C libraries
 > 1. set the C compiler flags correctly :
 > ```shell
 > export LIBRARY_PATH=$HOMEBREW_PREFIX/lib:$LIBRARY_PATH
@@ -83,8 +84,6 @@ being preferred if available.
 > 
 > 2. `eval $(opam env)`
 > 2. `opam install menhir`
-
-
 
 ## Usage
 
