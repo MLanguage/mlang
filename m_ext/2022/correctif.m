@@ -1,6 +1,5 @@
 # correctif
 
-ABANDON : calculee primrest = 0 : "" ;
 MAX_ID_EVT: calculee primrest = 0 : "" ;
 
 TMP_ARG1 : calculee primrest = 0 : "" ;
@@ -313,7 +312,14 @@ si nb_anomalies() > 0 alors
   nettoie_erreurs_finalisees;
   finalise_erreurs;
   exporte_erreurs;
-  GLOBAL.ABANDON = 1;
+  iterer
+  : variable VAR
+  : categorie *
+  : espace CORR
+  : dans (
+    GLOBAL.VAR = VAR;
+  )
+  stop application;
 sinon
   finalise_erreurs;
 finsi
@@ -322,7 +328,14 @@ cible signaler_erreur_ano:
 application: iliad;
 finalise_erreurs;
 exporte_erreurs;
-ABANDON = 1;
+iterer
+: variable VAR
+: categorie *
+: espace CORR
+: dans (
+  GLOBAL.VAR = VAR;
+)
+stop application;
 
 cible init_majo_str_tr :
 application: iliad;
@@ -1787,54 +1800,47 @@ si GLOBAL.TL_D2042_NB > 0 alors
   calculer cible init_1731;
   calculer cible enchaine_calcul_corr;
   calculer cible signaler_erreurs;
-  quand GLOBAL.ABANDON = 0 faire
-    calculer cible sauve_base_tl_corr;
-  finquand
+  calculer cible sauve_base_tl_corr;
 finsi
-quand GLOBAL.ABANDON = 0 faire
-  si GLOBAL.TL_D2042_RECT_NB > 0 alors
-    calculer cible reset_saisie_calc;
-    calculer cible remplit_tgv_tl_d2042_rect;
-    calculer cible init_1731;
-    calculer cible enchaine_calcul_corr;
-    calculer cible signaler_erreurs;
-    quand GLOBAL.ABANDON = 0 faire
-      calculer cible sauve_base_tl_rect_corr;
-    finquand
-  finsi
-puis_quand GLOBAL.ABANDON = 0 faire
-  CORR.MFCDIS = GLOBAL.TL_MF_MFCDIS;
-  CORR.MFCHR = GLOBAL.TL_MF_MFCHR;
-  CORR.MFCHR7 = GLOBAL.TL_MF_MFCHR7;
-  CORR.MFCS = GLOBAL.TL_MF_MFCS;
-  CORR.MFCSAL = GLOBAL.TL_MF_MFCSAL;
-  CORR.MFCVN = GLOBAL.TL_MF_MFCVN;
-  CORR.MFGAIN = GLOBAL.TL_MF_MFGAIN;
-  CORR.MFGLO = GLOBAL.TL_MF_MFGLO;
-  CORR.MFIFI = GLOBAL.TL_MF_MFIFI;
-  CORR.MFIR = GLOBAL.TL_MF_MFIR;
-  CORR.MFMCSG820 = GLOBAL.TL_MF_MFMCSG820;
-  CORR.MFPCAP = GLOBAL.TL_MF_MFPCAP;
-  CORR.MFPS = GLOBAL.TL_MF_MFPS;
-  CORR.MFPSOL = GLOBAL.TL_MF_MFPSOL;
-  CORR.MFRD = GLOBAL.TL_MF_MFRD;
-  CORR.MFREGV = GLOBAL.TL_MF_MFREGV;
-  CORR.MFRSE1 = GLOBAL.TL_MF_MFRSE1;
-  CORR.MFRSE2 = GLOBAL.TL_MF_MFRSE2;
-  CORR.MFRSE3 = GLOBAL.TL_MF_MFRSE3;
-  CORR.MFRSE4 = GLOBAL.TL_MF_MFRSE4;
-  CORR.MFRSE5 = GLOBAL.TL_MF_MFRSE5;
-  CORR.MFRSE6 = GLOBAL.TL_MF_MFRSE6;
-  CORR.MFRSE7 = GLOBAL.TL_MF_MFRSE7;
-  CORR.MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA;
-  CORR.RAPCI_TL = GLOBAL.TL_BASE_TL;
-  CORR.RAPCI_INIT = GLOBAL.TL_BASE_TL_INIT;
-  CORR.RAPCI_RECT = GLOBAL.TL_BASE_TL_RECT;
-  CORR.CI_TL = GLOBAL.TL_BASE_TL_TBTC;
-  CORR.CI_INIT = GLOBAL.TL_BASE_TL_TBTC_INIT;
-  CORR.CI_RECT = GLOBAL.TL_BASE_TL_TBTC_RECT;
-  calculer cible ench_tl_corr;
-finquand
+si GLOBAL.TL_D2042_RECT_NB > 0 alors
+  calculer cible reset_saisie_calc;
+  calculer cible remplit_tgv_tl_d2042_rect;
+  calculer cible init_1731;
+  calculer cible enchaine_calcul_corr;
+  calculer cible signaler_erreurs;
+  calculer cible sauve_base_tl_rect_corr;
+finsi
+CORR.MFCDIS = GLOBAL.TL_MF_MFCDIS;
+CORR.MFCHR = GLOBAL.TL_MF_MFCHR;
+CORR.MFCHR7 = GLOBAL.TL_MF_MFCHR7;
+CORR.MFCS = GLOBAL.TL_MF_MFCS;
+CORR.MFCSAL = GLOBAL.TL_MF_MFCSAL;
+CORR.MFCVN = GLOBAL.TL_MF_MFCVN;
+CORR.MFGAIN = GLOBAL.TL_MF_MFGAIN;
+CORR.MFGLO = GLOBAL.TL_MF_MFGLO;
+CORR.MFIFI = GLOBAL.TL_MF_MFIFI;
+CORR.MFIR = GLOBAL.TL_MF_MFIR;
+CORR.MFMCSG820 = GLOBAL.TL_MF_MFMCSG820;
+CORR.MFPCAP = GLOBAL.TL_MF_MFPCAP;
+CORR.MFPS = GLOBAL.TL_MF_MFPS;
+CORR.MFPSOL = GLOBAL.TL_MF_MFPSOL;
+CORR.MFRD = GLOBAL.TL_MF_MFRD;
+CORR.MFREGV = GLOBAL.TL_MF_MFREGV;
+CORR.MFRSE1 = GLOBAL.TL_MF_MFRSE1;
+CORR.MFRSE2 = GLOBAL.TL_MF_MFRSE2;
+CORR.MFRSE3 = GLOBAL.TL_MF_MFRSE3;
+CORR.MFRSE4 = GLOBAL.TL_MF_MFRSE4;
+CORR.MFRSE5 = GLOBAL.TL_MF_MFRSE5;
+CORR.MFRSE6 = GLOBAL.TL_MF_MFRSE6;
+CORR.MFRSE7 = GLOBAL.TL_MF_MFRSE7;
+CORR.MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA;
+CORR.RAPCI_TL = GLOBAL.TL_BASE_TL;
+CORR.RAPCI_INIT = GLOBAL.TL_BASE_TL_INIT;
+CORR.RAPCI_RECT = GLOBAL.TL_BASE_TL_RECT;
+CORR.CI_TL = GLOBAL.TL_BASE_TL_TBTC;
+CORR.CI_INIT = GLOBAL.TL_BASE_TL_TBTC_INIT;
+CORR.CI_RECT = GLOBAL.TL_BASE_TL_TBTC_RECT;
+calculer cible ench_tl_corr;
 
 cible recherche_C22R02:
 application: iliad;
@@ -3018,27 +3024,24 @@ si GLOBAL.MAJO_D2042_P_NB > 0 et NB_RAPPELS_P != 0 alors
   finsi
   calculer cible enchaine_verification_corr;
   calculer cible signaler_erreurs;
-  quand GLOBAL.ABANDON = 0 faire
-    CORR.FLAG_TRMAJOP = 1;
-    CORR.FLAG_RETARD = GLOBAL.RETARD;
-    CORR.FLAG_RETARD08 = GLOBAL.RETARD08;
-    CORR.FLAG_RETARD07 = GLOBAL.RETARD07;
-    CORR.FLAG_RETARD99 = GLOBAL.RETARD99;
-    CORR.FLAG_RETARD22 = GLOBAL.RETARD22;
-    CORR.FLAG_RETARD101718 = GLOBAL.RETARD101718;
-    CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
-    CORR.IND_RJLJ = GLOBAL.CORR_RJLJ;
-    calculer cible init_1731;
-    calculer cible enchaine_calcul_corr;
-    calculer cible verif_calcul_corrective_corr;
-    calculer cible signaler_erreurs;
-  puis_quand GLOBAL.ABANDON = 0 faire
-    calculer cible sauve_base_stratemajo_corr;
-    CORR.FLAG_TRMAJOP = 0;
-    CORR.FLAG_RETARD = 0;
-    CORR.FLAG_RETARD08 = 0;
-    calculer cible sauve_base_majo_corr;
-  finquand
+  CORR.FLAG_TRMAJOP = 1;
+  CORR.FLAG_RETARD = GLOBAL.RETARD;
+  CORR.FLAG_RETARD08 = GLOBAL.RETARD08;
+  CORR.FLAG_RETARD07 = GLOBAL.RETARD07;
+  CORR.FLAG_RETARD99 = GLOBAL.RETARD99;
+  CORR.FLAG_RETARD22 = GLOBAL.RETARD22;
+  CORR.FLAG_RETARD101718 = GLOBAL.RETARD101718;
+  CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
+  CORR.IND_RJLJ = GLOBAL.CORR_RJLJ;
+  calculer cible init_1731;
+  calculer cible enchaine_calcul_corr;
+  calculer cible verif_calcul_corrective_corr;
+  calculer cible signaler_erreurs;
+  calculer cible sauve_base_stratemajo_corr;
+  CORR.FLAG_TRMAJOP = 0;
+  CORR.FLAG_RETARD = 0;
+  CORR.FLAG_RETARD08 = 0;
+  calculer cible sauve_base_majo_corr;
 finsi
 
 cible cumule_base_tl_aux:
@@ -4641,116 +4644,29 @@ si INDICE_EVT < 2 alors
   finsi
   INR_FLAG = INR_FLAG_INR_NON_TL;
   calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-  quand GLOBAL.ABANDON = 0 faire
-    calculer cible sauve_base_inr_r9901_corr;
-  finquand
+  calculer cible sauve_base_inr_r9901_corr;
 finsi
-quand GLOBAL.ABANDON = 0 faire
-  iterer
-  : variable VAR
-  : categorie saisie *
-  : espace INR_D2042
-  : dans (
-    INR_D2042_R9901_ANT.VAR = VAR;
-  )
-  iterer
-  : variable VAR
-  : categorie saisie *
-  : espace INR_D2042_PROV_ANT
-  : dans (
-    INR_D2042.VAR = VAR;
-  )
-  si non positif(IS_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_F;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    si positif(GLOBAL.MENTION_EXP) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_RAPPEL_MF;
-      MAJ1 = indefini;
-      MAJ2 = indefini;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_C;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_MENTION_EXP_99R;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_MENTION_EXP_99;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-  CAS_INR = 1;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  CORR.REF1731 = 1;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_HR_corr;
-  CORR.REF1731 = 0;
-  iterer
-  : variable VAR
-  : categorie saisie *
-  : espace INR_D2042_PROV_ANT
-  : dans (
-    INR_D2042.VAR = VAR;
-  )
-  si non positif(IS_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_F;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    si positif(GLOBAL.MENTION_EXP) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_RAPPEL_MF;
-      MAJ1 = indefini;
-      MAJ2 = indefini;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_C;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_MENTION_EXP_99;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-  iterer
-  : variable VAR
-  : categorie saisie *
-  : espace INR_D2042
-  : dans (
-    INR_D2042_REFR99R_ANT.VAR = VAR;
-  )
+iterer
+: variable VAR
+: categorie saisie *
+: espace INR_D2042
+: dans (
+  INR_D2042_R9901_ANT.VAR = VAR;
+)
+iterer
+: variable VAR
+: categorie saisie *
+: espace INR_D2042_PROV_ANT
+: dans (
+  INR_D2042.VAR = VAR;
+)
+si non positif(IS_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_F;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
   si positif(GLOBAL.MENTION_EXP) alors
     calculer cible contexte_2042_INR;
@@ -4761,396 +4677,457 @@ puis_quand GLOBAL.ABANDON = 0 faire
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
   finsi
 
-  si
-    non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-    et positif(IS_PREMIER)
-  alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_C;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-
-  si
-    non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-    et positif(IS_PREMIER)
-  alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_MENTION_EXP_99;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-
   calculer cible contexte_2042_INR;
-  MAJ0 = MAJ_RAPPEL_R55;
+  MAJ0 = MAJ_RAPPEL_C;
   MAJ1 = indefini;
   MAJ2 = indefini;
   MAJ3 = indefini;
   calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
-  si  non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD)) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_M;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_MENTION_EXP_99R;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
-  CAS_INR = 2;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  CORR.REF1731 = 1;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_ref_corr;
-  CORR.REF1731 = 0;
-  si non positif(IS_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_MENTION_EXP_99R;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_MENTION_EXP_99;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+CAS_INR = 1;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+CORR.REF1731 = 1;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_HR_corr;
+CORR.REF1731 = 0;
+iterer
+: variable VAR
+: categorie saisie *
+: espace INR_D2042_PROV_ANT
+: dans (
+  INR_D2042.VAR = VAR;
+)
+si non positif(IS_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_F;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
-    CAS_INR = 3;
-    calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-    INR_FLAG = INR_FLAG_INR_NON_TL;
-    calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-    quand GLOBAL.ABANDON = 0 faire
-      calculer cible sauve_base_inr_ntl_corr;
-    finquand
-  finsi
-puis_quand GLOBAL.ABANDON = 0 faire
-  si non positif(DEFAUT_RETARD_PREMIER) et positif(HAS_C22R02) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL;
-    MAJ1 = MAJ_RAPPEL_CP22;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    INR_FLAG = INR_FLAG_INR_NON_TL;
-    calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-    quand GLOBAL.ABANDON = 0 faire
-      calculer cible sauve_base_abat98_corr;
-    finquand
-  finsi
-puis_quand GLOBAL.ABANDON = 0 faire
-  si non positif(DEFAUT_RETARD_PREMIER) alors
+  si positif(GLOBAL.MENTION_EXP) alors
     calculer cible contexte_2042_INR;
     MAJ0 = MAJ_RAPPEL_MF;
     MAJ1 = indefini;
     MAJ2 = indefini;
     MAJ3 = indefini;
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_CP;
-    MAJ1 = MAJ_1728;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_CP;
-    MAJ1 = MAJ_CODE_1729_2A5;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_CP;
-    MAJ1 = MAJ_CODE_1729_6;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_R;
-    MAJ1 = MAJ_1728;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL;
-    MAJ1 = MAJ_RAPPEL_R;
-    MAJ2 = MAJ_CODE_1729_2A5;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_R;
-    MAJ1 = MAJ_CODE_1729_6;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
   finsi
-  si (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD)) et non positif(IS_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_RAPPEL_M;
-    MAJ1 = indefini;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-  CAS_INR = 4;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_ntl_corr;
-
-  si non positif(DEFAUT_RETARD_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL15;
-    MAJ1 = MAJ_RAPPEL_R;
-    MAJ2 = MAJ_CODE_1729_2A5;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-
-  CAS_INR = 5;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_intertl_corr;
-
-  si non positif(DEFAUT_RETARD_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL;
-    MAJ1 = MAJ_CONTEXTE_22;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL;
-    MAJ1 = MAJ_CODE_22;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL;
-    MAJ1 = MAJ_CODE_24;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_NON_TL;
-      MAJ1 = MAJ_RAPPEL_CP22;
-      MAJ2 = indefini;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_NON_TL;
-      MAJ1 = MAJ_RAPPEL_CP24;
-      MAJ2 = indefini;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-  finsi
-
-  CAS_INR = 6;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_ntl22_corr;
-
-  si non positif(DEFAUT_RETARD_PREMIER) alors
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL15;
-    MAJ1 = MAJ_CODE_22;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    calculer cible contexte_2042_INR;
-    MAJ0 = MAJ_NON_TL15;
-    MAJ1 = MAJ_RAPPEL_CP22;
-    MAJ2 = indefini;
-    MAJ3 = indefini;
-    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-  finsi
-  CAS_INR = 7;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_corr;
 
   calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_C;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_MENTION_EXP_99;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+iterer
+: variable VAR
+: categorie saisie *
+: espace INR_D2042
+: dans (
+  INR_D2042_REFR99R_ANT.VAR = VAR;
+)
+
+si positif(GLOBAL.MENTION_EXP) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_MF;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+si
+  non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
+  et positif(IS_PREMIER)
+alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_C;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+si
+  non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
+  et positif(IS_PREMIER)
+alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_MENTION_EXP_99;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+calculer cible contexte_2042_INR;
+MAJ0 = MAJ_RAPPEL_R55;
+MAJ1 = indefini;
+MAJ2 = indefini;
+MAJ3 = indefini;
+calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+si  non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD)) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_M;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+CAS_INR = 2;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+CORR.REF1731 = 1;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_ref_corr;
+CORR.REF1731 = 0;
+si non positif(IS_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_MENTION_EXP_99R;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  CAS_INR = 3;
+  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+  INR_FLAG = INR_FLAG_INR_NON_TL;
+  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+  calculer cible sauve_base_inr_ntl_corr;
+finsi
+si non positif(DEFAUT_RETARD_PREMIER) et positif(HAS_C22R02) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL;
+  MAJ1 = MAJ_RAPPEL_CP22;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+  INR_FLAG = INR_FLAG_INR_NON_TL;
+  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+  calculer cible sauve_base_abat98_corr;
+finsi
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_MF;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_CP;
+  MAJ1 = MAJ_1728;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_CP;
+  MAJ1 = MAJ_CODE_1729_2A5;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_CP;
+  MAJ1 = MAJ_CODE_1729_6;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_R;
+  MAJ1 = MAJ_1728;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL;
+  MAJ1 = MAJ_RAPPEL_R;
+  MAJ2 = MAJ_CODE_1729_2A5;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_R;
+  MAJ1 = MAJ_CODE_1729_6;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+si (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD)) et non positif(IS_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_RAPPEL_M;
+  MAJ1 = indefini;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+CAS_INR = 4;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_ntl_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  calculer cible contexte_2042_INR;
   MAJ0 = MAJ_NON_TL15;
+  MAJ1 = MAJ_RAPPEL_R;
+  MAJ2 = MAJ_CODE_1729_2A5;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+CAS_INR = 5;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_intertl_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL;
+  MAJ1 = MAJ_CONTEXTE_22;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL;
+  MAJ1 = MAJ_CODE_22;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL;
   MAJ1 = MAJ_CODE_24;
   MAJ2 = indefini;
   MAJ3 = indefini;
   calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
+  si non positif(HAS_C22R02) alors
+    calculer cible contexte_2042_INR;
+    MAJ0 = MAJ_NON_TL;
+    MAJ1 = MAJ_RAPPEL_CP22;
+    MAJ2 = indefini;
+    MAJ3 = indefini;
+    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+  finsi
+
+  si non positif(HAS_C22R02) alors
+    calculer cible contexte_2042_INR;
+    MAJ0 = MAJ_NON_TL;
+    MAJ1 = MAJ_RAPPEL_CP24;
+    MAJ2 = indefini;
+    MAJ3 = indefini;
+    calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+  finsi
+finsi
+
+CAS_INR = 6;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_ntl22_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) alors
   calculer cible contexte_2042_INR;
   MAJ0 = MAJ_NON_TL15;
-  MAJ1 = MAJ_RAPPEL_CP24;
+  MAJ1 = MAJ_CODE_22;
   MAJ2 = indefini;
   MAJ3 = indefini;
   calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
-  CAS_INR = 8;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_NON_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_ntl24_corr;
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_NON_TL15;
+  MAJ1 = MAJ_RAPPEL_CP22;
+  MAJ2 = indefini;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+CAS_INR = 7;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_corr;
 
-  CAS_INR = 9;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+calculer cible contexte_2042_INR;
+MAJ0 = MAJ_NON_TL15;
+MAJ1 = MAJ_CODE_24;
+MAJ2 = indefini;
+MAJ3 = indefini;
+calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+calculer cible contexte_2042_INR;
+MAJ0 = MAJ_NON_TL15;
+MAJ1 = MAJ_RAPPEL_CP24;
+MAJ2 = indefini;
+MAJ3 = indefini;
+calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+CAS_INR = 8;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_NON_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_ntl24_corr;
+
+CAS_INR = 9;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_tl_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) et positif(HAS_C22R02) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_RAPPEL_R;
+  MAJ3 = MAJ_CODE_22;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_RAPPEL_CP22;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
   INR_FLAG = INR_FLAG_INR_TL;
   calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_tl_corr;
+  calculer cible sauve_base_abat99_corr;
 
-  si non positif(DEFAUT_RETARD_PREMIER) et positif(HAS_C22R02) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_RAPPEL_R;
+  MAJ3 = MAJ_CODE_24;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_RAPPEL_CP24;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  INR_FLAG = INR_FLAG_INR_TL;
+  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+  calculer cible sauve_base_abat99_corr;
+finsi
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_RAPPEL_R;
+  MAJ3 = MAJ_CODE_1729_2A5;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+finsi
+
+CAS_INR = 10;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_tl_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  calculer cible contexte_2042_INR;
+  MAJ0 = MAJ_TL;
+  MAJ1 = MAJ_TL15;
+  MAJ2 = MAJ_CONTEXTE_22;
+  MAJ3 = indefini;
+  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+
+  si non positif(HAS_C22R02) alors
     calculer cible contexte_2042_INR;
     MAJ0 = MAJ_TL;
     MAJ1 = MAJ_TL15;
     MAJ2 = MAJ_RAPPEL_R;
     MAJ3 = MAJ_CODE_22;
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
+  finsi
 
+  si non positif(HAS_C22R02) alors
     calculer cible contexte_2042_INR;
     MAJ0 = MAJ_TL;
     MAJ1 = MAJ_TL15;
     MAJ2 = MAJ_RAPPEL_CP22;
     MAJ3 = indefini;
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    INR_FLAG = INR_FLAG_INR_TL;
-    calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-    quand GLOBAL.ABANDON = 0 faire
-      calculer cible sauve_base_abat99_corr;
-
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_R;
-      MAJ3 = MAJ_CODE_24;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_CP24;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-      INR_FLAG = INR_FLAG_INR_TL;
-      calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-    puis_quand GLOBAL.ABANDON = 0 faire
-      calculer cible sauve_base_abat99_corr;
-    finquand
   finsi
-puis_quand GLOBAL.ABANDON = 0 faire
-  si non positif(DEFAUT_RETARD_PREMIER) alors
+finsi
+
+CAS_INR = 11;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_tl22_corr;
+
+si non positif(DEFAUT_RETARD_PREMIER) alors
+  si non positif(HAS_C22R02) alors
     calculer cible contexte_2042_INR;
     MAJ0 = MAJ_TL;
     MAJ1 = MAJ_TL15;
     MAJ2 = MAJ_RAPPEL_R;
-    MAJ3 = MAJ_CODE_1729_2A5;
+    MAJ3 = MAJ_CODE_24;
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
   finsi
 
-  CAS_INR = 10;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_tl_corr;
-
-  si non positif(DEFAUT_RETARD_PREMIER) alors
+  si non positif(HAS_C22R02) alors
     calculer cible contexte_2042_INR;
     MAJ0 = MAJ_TL;
     MAJ1 = MAJ_TL15;
-    MAJ2 = MAJ_CONTEXTE_22;
+    MAJ2 = MAJ_RAPPEL_CP24;
     MAJ3 = indefini;
     calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_R;
-      MAJ3 = MAJ_CODE_22;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_CP22;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
   finsi
+finsi
 
-  CAS_INR = 11;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_tl22_corr;
+CAS_INR = 12;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_tl24_corr;
 
-  si non positif(DEFAUT_RETARD_PREMIER) alors
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_R;
-      MAJ3 = MAJ_CODE_24;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
+calculer cible contexte_2042_INR;
+MAJ0 = MAJ_RAPPEL_NF;
+MAJ1 = indefini;
+MAJ2 = indefini;
+MAJ3 = indefini;
+calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
 
-    si non positif(HAS_C22R02) alors
-      calculer cible contexte_2042_INR;
-      MAJ0 = MAJ_TL;
-      MAJ1 = MAJ_TL15;
-      MAJ2 = MAJ_RAPPEL_CP24;
-      MAJ3 = indefini;
-      calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-    finsi
-  finsi
-
-  CAS_INR = 12;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_tl24_corr;
-
-  calculer cible contexte_2042_INR;
-  MAJ0 = MAJ_RAPPEL_NF;
-  MAJ1 = indefini;
-  MAJ2 = indefini;
-  MAJ3 = indefini;
-  calculer cible met_a_jour_2042_INR_evt : avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
-  CAS_INR = 13;
-  calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
-  INR_FLAG = INR_FLAG_INR_TL;
-  calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-puis_quand GLOBAL.ABANDON = 0 faire
-  calculer cible sauve_base_inr_inter22_corr;
-finquand
+CAS_INR = 13;
+calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
+INR_FLAG = INR_FLAG_INR_TL;
+calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
+calculer cible sauve_base_inr_inter22_corr;
 
 cible calcul_inr_proc:
 application: iliad;
@@ -5276,22 +5253,18 @@ alors
     calculer cible verif_calcul_corrective_corr;
     calculer cible signaler_erreurs;
   finsi
-  quand ABANDON = 0 faire
-    calculer cible sauve_base_stratemajo_corr;
-    CORR.FLAG_RETARD = 0;
-    CORR.FLAG_RETARD08 = 0;
-    GLOBAL.MAJO_DERN_STR_TR = NUM_STRATE;
-    GLOBAL.MAJO_PREM_STR = 0;
-    GLOBAL.MAJO_NB_STR_TR = GLOBAL.MAJO_NB_STR_TR + 1;
-  finquand
+  calculer cible sauve_base_stratemajo_corr;
+  CORR.FLAG_RETARD = 0;
+  CORR.FLAG_RETARD08 = 0;
+  GLOBAL.MAJO_DERN_STR_TR = NUM_STRATE;
+  GLOBAL.MAJO_PREM_STR = 0;
+  GLOBAL.MAJO_NB_STR_TR = GLOBAL.MAJO_NB_STR_TR + 1;
 finsi
-quand ABANDON = 0 faire
-  si NUM_STRATE = GLOBAL.NB_STRATES - 1 alors
-    GLOBAL.MAJO_DERN_STR_TR = 0;
-    calculer cible enchaine_verification_corr;
-    calculer cible signaler_erreurs;
-  finsi
-finquand
+si NUM_STRATE = GLOBAL.NB_STRATES - 1 alors
+  GLOBAL.MAJO_DERN_STR_TR = 0;
+  calculer cible enchaine_verification_corr;
+  calculer cible signaler_erreurs;
+finsi
 
 cible calcul_majo_normal_proc:
 application: iliad;
@@ -5339,21 +5312,16 @@ si GLOBAL.D2042_NB > 0 alors
   calculer cible detecte_penalites;
   calculer cible enchaine_verification_corr;
   calculer cible signaler_erreurs;
-  quand ABANDON = 0 faire
-    calculer cible enchaine_calcul_corr;
-    calculer cible verif_calcul_corrective_corr;
-    calculer cible signaler_erreurs;
-  puis_quand ABANDON = 0 faire
-    calculer cible sauve_base_stratemajo_corr;
-    calculer cible sauve_base_anterieure_corr;
-    CORR.FLAG_TRTARDIF = 0;
-    CORR.FLAG_RETARD = 0;
-    CORR.FLAG_RETARD08 = 0;
-  finquand
-finsi
-quand ABANDON = 0 faire
+  calculer cible enchaine_calcul_corr;
+  calculer cible verif_calcul_corrective_corr;
+  calculer cible signaler_erreurs;
+  calculer cible sauve_base_stratemajo_corr;
   calculer cible sauve_base_anterieure_corr;
-finquand
+  CORR.FLAG_TRTARDIF = 0;
+  CORR.FLAG_RETARD = 0;
+  CORR.FLAG_RETARD08 = 0;
+finsi
+calculer cible sauve_base_anterieure_corr;
 
 cible calcul_majo_tardif_proc:
 application: iliad;
@@ -5515,94 +5483,88 @@ sinon
     calculer cible calcul_cum_p;
   finsi
   calculer cible  calcul_majo_P : avec NB_RAPPELS_P;
-  quand ABANDON = 0 faire
-    calculer cible clear_majo_str_tr;
-    iterer
-    : variable NUM_STR
-    : entre 0 ..(GLOBAL.NB_STRATES + 0 - 1) increment 1
+  calculer cible clear_majo_str_tr;
+  iterer
+  : variable NUM_STR
+  : entre 0 ..(GLOBAL.NB_STRATES + 0 - 1) increment 1
+  : dans (
+    arranger_evenements
+    : trier R1, R2
+    : avec
+      si (champ_evenement(R1, strate) != -1 et champ_evenement(R2, strate) = -1) alors (1)
+      sinon (si (champ_evenement(R1, strate) = -1 et champ_evenement(R2, strate) != -1) alors (0)
+      sinon (si (champ_evenement(R1, strate) < champ_evenement(R2, strate)) alors (1)
+      sinon (si (champ_evenement(R1, strate) > champ_evenement(R2, strate)) alors (0)
+      sinon (si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
+      sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
+      sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
+      sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
+      sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
     : dans (
-      quand ABANDON = 0 faire
-        arranger_evenements
-        : trier R1, R2
-        : avec
-          si (champ_evenement(R1, strate) != -1 et champ_evenement(R2, strate) = -1) alors (1)
-          sinon (si (champ_evenement(R1, strate) = -1 et champ_evenement(R2, strate) != -1) alors (0)
-          sinon (si (champ_evenement(R1, strate) < champ_evenement(R2, strate)) alors (1)
-          sinon (si (champ_evenement(R1, strate) > champ_evenement(R2, strate)) alors (0)
-          sinon (si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
-          sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
-          sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
-          sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
-          sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
+      si NUM_STR = 0 alors
+        PROCHAINE_STRATE = champ_evenement(0, strate);
+      sinon
+        PROCHAINE_STRATE = indefini;
+        iterer
+        : variable R
+        : entre 0..(nb_evenements() - 1) increment 1
         : dans (
-          si NUM_STR = 0 alors
-            PROCHAINE_STRATE = champ_evenement(0, strate);
-          sinon
-            PROCHAINE_STRATE = indefini;
-            iterer
-            : variable R
-            : entre 0..(nb_evenements() - 1) increment 1
-            : dans (
-              si
-                (non present(PROCHAINE_STRATE))
-                et champ_evenement(R, strate) = NUM_STR
-              alors
-                PROCHAINE_STRATE = champ_evenement(R, strate);
-              finsi
-            )
-            si non present(PROCHAINE_STRATE) alors
-              PROCHAINE_STRATE = champ_evenement(nb_evenements() - 1, strate);
-            finsi
+          si
+            (non present(PROCHAINE_STRATE))
+            et champ_evenement(R, strate) = NUM_STR
+          alors
+            PROCHAINE_STRATE = champ_evenement(R, strate);
           finsi
         )
-        si NUM_STR dans (20, 21, 22) alors
-          MAJ0 = MAJ_TL;
-          MAJ1 = indefini;
-          MAJ2 = indefini;
-          MAJ3 = indefini;
-          calculer cible met_a_jour_2042_strate
-          : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
-          : espace MAJO_D2042_STRATE;
-        sinon
-          MAJ0 = indefini;
-          MAJ1 = indefini;
-          MAJ2 = indefini;
-          MAJ3 = indefini;
-          calculer cible met_a_jour_2042_strate
-          : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
-          : espace MAJO_D2042_STRATE;
+        si non present(PROCHAINE_STRATE) alors
+          PROCHAINE_STRATE = champ_evenement(nb_evenements() - 1, strate);
         finsi
-        NB_RAPPELS_STRATE = GLOBAL.NB_RAPPELS_RES;
-        MAJ0 = MAJ_ABAT_20;
-        MAJ1 = indefini;
-        MAJ2 = indefini;
-        MAJ3 = indefini;
-        calculer cible met_a_jour_2042_strate
-        : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
-        : espace MAJO_D2042_ABAT_STRATE;
-        GLOBAL.MAJO_NUM_STRATE = NUM_STR;
-        calculer cible calcul_majo_normal
-        : avec IS_PREMIER, INDICE_EVT, NUM_STR, NB_RAPPELS_STRATE, PROCHAINE_STRATE;
-      finquand
+      finsi
     )
-  finquand
+    si NUM_STR dans (20, 21, 22) alors
+      MAJ0 = MAJ_TL;
+      MAJ1 = indefini;
+      MAJ2 = indefini;
+      MAJ3 = indefini;
+      calculer cible met_a_jour_2042_strate
+      : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
+      : espace MAJO_D2042_STRATE;
+    sinon
+      MAJ0 = indefini;
+      MAJ1 = indefini;
+      MAJ2 = indefini;
+      MAJ3 = indefini;
+      calculer cible met_a_jour_2042_strate
+      : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
+      : espace MAJO_D2042_STRATE;
+    finsi
+    NB_RAPPELS_STRATE = GLOBAL.NB_RAPPELS_RES;
+    MAJ0 = MAJ_ABAT_20;
+    MAJ1 = indefini;
+    MAJ2 = indefini;
+    MAJ3 = indefini;
+    calculer cible met_a_jour_2042_strate
+    : avec NUM_STR, MAJ0, MAJ1, MAJ2, MAJ3
+    : espace MAJO_D2042_ABAT_STRATE;
+    GLOBAL.MAJO_NUM_STRATE = NUM_STR;
+    calculer cible calcul_majo_normal
+    : avec IS_PREMIER, INDICE_EVT, NUM_STR, NB_RAPPELS_STRATE, PROCHAINE_STRATE;
+  )
 finsi
-quand ABANDON = 0 faire
-  CORR.FLAG_RETARD = GLOBAL.RETARD;
-  CORR.FLAG_RETARD07 = GLOBAL.RETARD07;
-  CORR.FLAG_RETARD08 = GLOBAL.RETARD08;
-  CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
-  CORR.FLAG_RETARD101718 = GLOBAL.RETARD101718;
-  CORR.FLAG_RETARD22 = GLOBAL.RETARD22;
-  CORR.FLAG_RETARD99 = GLOBAL.RETARD99;
-  CORR.FLAG_DEFAUT = GLOBAL.DEFAUT;
-  CORR.FLAG_DEFAUT10 = GLOBAL.DEFAUT10;
-  CORR.FLAG_DEFAUT11 = GLOBAL.DEFAUT11;
-  CORR.FLAG_RECTIF = GLOBAL.RECTIF;
-  CORR.FLAG_RECTIFMAJO = GLOBAL.RECTIF_MAJO;
-  calculer cible sauve_base_majo_corr;
-  calculer cible sauve_base_anterieure_corr;
-finquand
+CORR.FLAG_RETARD = GLOBAL.RETARD;
+CORR.FLAG_RETARD07 = GLOBAL.RETARD07;
+CORR.FLAG_RETARD08 = GLOBAL.RETARD08;
+CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
+CORR.FLAG_RETARD101718 = GLOBAL.RETARD101718;
+CORR.FLAG_RETARD22 = GLOBAL.RETARD22;
+CORR.FLAG_RETARD99 = GLOBAL.RETARD99;
+CORR.FLAG_DEFAUT = GLOBAL.DEFAUT;
+CORR.FLAG_DEFAUT10 = GLOBAL.DEFAUT10;
+CORR.FLAG_DEFAUT11 = GLOBAL.DEFAUT11;
+CORR.FLAG_RECTIF = GLOBAL.RECTIF;
+CORR.FLAG_RECTIFMAJO = GLOBAL.RECTIF_MAJO;
+calculer cible sauve_base_majo_corr;
+calculer cible sauve_base_anterieure_corr;
 
 cible calcul_majo_proc:
 application: iliad;
@@ -5890,7 +5852,7 @@ iterer
 : variable R
 : entre 0..(nb_evenements() - 1) increment 1
 : dans (
-  si ABANDON = 0 et champ_evenement(R, id_evt) = INDICE_EVT alors
+  si champ_evenement(R, id_evt) = INDICE_EVT alors
     calculer cible get_nature : avec NATURE, champ_evenement(R, code);
     si QUELLE_SP = 0 alors
       ELEM_2042 = D2042.champ_evenement(R, code);
@@ -5908,304 +5870,276 @@ iterer
       leve_erreur A72207;
       calculer cible signaler_erreur_ano;
     finsi
-    quand ABANDON = 0 faire
+    si
+      champ_evenement(R, penalite) = 32
+      et non meme_variable(champ_evenement(R, code), 8VX)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A045;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      non (champ_evenement(R, penalite) dans (0, 32))
+      et meme_variable(champ_evenement(R, code), 8VX)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A044;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      champ_evenement(R, sens) != SENS_M
+      et non (champ_evenement(R, penalite) dans (0, 7, 8, 10, 11, 17, 18, 99))
+    alors
+      si meme_variable(champ_evenement(R, code), 8VW) alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A042;
+        calculer cible signaler_erreur_ano;
+      sinon_si meme_variable(champ_evenement(R, code), 8VV) alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A041;
+        calculer cible signaler_erreur_ano;
+      finsi
+    finsi
+    si
+      non (champ_evenement(R, penalite) dans (30, 35, 99))
+      et meme_variable(champ_evenement(R, code), 8WW)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A046;
+      calculer cible signaler_erreur_ano;
+    finsi
+    calculer cible alias_commence_par_5 : avec COMMENCE_PAR_5, champ_evenement(R, code);
+    si
+      champ_evenement(R, penalite) = 31
+      et (
+        meme_variable(champ_evenement(R, code), 5QM)
+        ou meme_variable(champ_evenement(R, code), 5RM)
+        ou non positif(COMMENCE_PAR_5)
+      )
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A048;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      champ_evenement(R, sens) = SENS_M
+      et champ_evenement(R, penalite) != 0
+      et non meme_variable(champ_evenement(R, code), REGCO)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A970;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.NUM_EVT_9XT > GLOBAL.NUM_EVT_9XU alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96903;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.NUM_EVT_9XU > GLOBAL.NUM_EVT_9XT alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96904;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.MONTANT_9XT = 0 et GLOBAL.MONTANT_9XU != 0 alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96803;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.MONTANT_9XU = 0 et GLOBAL.MONTANT_9XT != 0 alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96804;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.NUM_EVT_9YT > GLOBAL.NUM_EVT_9YU alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96901;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.NUM_EVT_9YU > GLOBAL.NUM_EVT_9YT alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96902;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.MONTANT_9YT = 0 et GLOBAL.MONTANT_9YU != 0 alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96801;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si GLOBAL.MONTANT_9YU = 0 et GLOBAL.MONTANT_9YT != 0 alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A96802;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si champ_evenement(R, sens) = SENS_R et champ_evenement(R, penalite) = 0 alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A971;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si present(ELEM_2042) alors
       si
-        champ_evenement(R, penalite) = 32
-        et non meme_variable(champ_evenement(R, code), 8VX)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A045;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        non (champ_evenement(R, penalite) dans (0, 32))
-        et meme_variable(champ_evenement(R, code), 8VX)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A044;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        champ_evenement(R, sens) != SENS_M
-        et non (champ_evenement(R, penalite) dans (0, 7, 8, 10, 11, 17, 18, 99))
-      alors
-        si meme_variable(champ_evenement(R, code), 8VW) alors
-          nettoie_erreurs_finalisees;
-          leve_erreur A042;
-          calculer cible signaler_erreur_ano;
-        sinon_si meme_variable(champ_evenement(R, code), 8VV) alors
-          nettoie_erreurs_finalisees;
-          leve_erreur A041;
-          calculer cible signaler_erreur_ano;
-        finsi
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        non (champ_evenement(R, penalite) dans (30, 35, 99))
-        et meme_variable(champ_evenement(R, code), 8WW)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A046;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      calculer cible alias_commence_par_5 : avec COMMENCE_PAR_5, champ_evenement(R, code);
-      si
-        champ_evenement(R, penalite) = 31
-        et (
-          meme_variable(champ_evenement(R, code), 5QM)
-          ou meme_variable(champ_evenement(R, code), 5RM)
-          ou non positif(COMMENCE_PAR_5)
-        )
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A048;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        champ_evenement(R, sens) = SENS_M
-        et champ_evenement(R, penalite) != 0
-        et non meme_variable(champ_evenement(R, code), REGCO)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A970;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.NUM_EVT_9XT > GLOBAL.NUM_EVT_9XU alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96903;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.NUM_EVT_9XU > GLOBAL.NUM_EVT_9XT alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96904;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.MONTANT_9XT = 0 et GLOBAL.MONTANT_9XU != 0 alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96803;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.MONTANT_9XU = 0 et GLOBAL.MONTANT_9XT != 0 alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96804;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.NUM_EVT_9YT > GLOBAL.NUM_EVT_9YU alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96901;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.NUM_EVT_9YU > GLOBAL.NUM_EVT_9YT alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96902;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.MONTANT_9YT = 0 et GLOBAL.MONTANT_9YU != 0 alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96801;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si GLOBAL.MONTANT_9YU = 0 et GLOBAL.MONTANT_9YT != 0 alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A96802;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si champ_evenement(R, sens) = SENS_R et champ_evenement(R, penalite) = 0 alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A971;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si present(ELEM_2042) alors
-        si
-          type(champ_evenement(R, code), BOOLEEN)
-          et non (
-            (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-            et champ_evenement(R, numero) = champ_evenement(0, numero)
-          )
-        alors
-          si NATURE = N_REVENU alors
-            si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_M alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72001;
-              calculer cible signaler_erreur_ano;
-            sinon_si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_C alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72002;
-              calculer cible signaler_erreur_ano;
-            sinon_si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_R alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72003;
-              calculer cible signaler_erreur_ano;
-            finsi
-          sinon_si NATURE = N_CHARGE alors
-            si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_M alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72001;
-              calculer cible signaler_erreur_ano;
-            sinon_si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_C alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72002;
-              calculer cible signaler_erreur_ano;
-            sinon_si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_R alors
-              nettoie_erreurs_finalisees;
-              leve_erreur A72003;
-              calculer cible signaler_erreur_ano;
-            finsi
-          finsi
-        finsi
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        NAT_RECH dans (0, 6)
-        et NATURE = N_REVENU
-        et champ_evenement(R, sens) = SENS_C
-        et non present(ELEM_2042)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A72002;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        non (
-          meme_variable(champ_evenement(R, code), 0AX)
-          ou meme_variable(champ_evenement(R, code), 0AY)
-          ou meme_variable(champ_evenement(R, code), 0AZ)
-        )
-        et NATURE = N_CHARGE
-        et champ_evenement(R, sens) = SENS_R
-        et non present(ELEM_2042)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A72003;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si champ_evenement(R, sens) = SENS_P et non present(ELEM_2042) alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A721;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        non (
-          meme_variable(champ_evenement(R, code), 0AX)
-          ou meme_variable(champ_evenement(R, code), 0AY)
-          ou meme_variable(champ_evenement(R, code), 0AZ)
-        )
-      alors
-        si
-          NATURE = N_CHARGE
-          et champ_evenement(R, sens) = SENS_R
-          et champ_evenement(R, montant) > MONTANT_2042
-        alors
-          si champ_evenement(R, penalite) = 99 alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A72204;
-            calculer cible signaler_erreur_ano;
-          sinon
-            nettoie_erreurs_finalisees;
-            leve_erreur A72201;
-            calculer cible signaler_erreur_ano;
-          finsi
-        finsi
-        quand ABANDON = 0 faire
-          si
-            NATURE = N_REVENU
-            et champ_evenement(R, sens) = SENS_M
-            et (
-              non present(ELEM_2042)
-              ou champ_evenement(R, montant) > MONTANT_2042
-            )
-          alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A72202;
-            calculer cible signaler_erreur_ano;
-          finsi
-        puis_quand ABANDON = 0 faire
-          CORR.V_FLAG8OT = positif(GLOBAL.COD8OT + 0);
-          si
-            NATURE = N_REVENU
-            et champ_evenement(R, sens) = SENS_C
-            et champ_evenement(R, penalite) = 0
-            et present(ELEM_2042)
-            et champ_evenement(R, montant) > MONTANT_2042
-          alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A72203;
-            calculer cible signaler_erreur_ano;
-          finsi
-        finquand
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        champ_evenement(R, sens) dans (SENS_R, SENS_P)
-        et champ_evenement(R, penalite) dans (9, 12)
-        et vers_annee(champ_evenement(R, date)) >= 2006
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A724;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        (positif(GLOBAL.DEFAUT1011) ou positif(GLOBAL.RETARD0718))
-        et champ_evenement(R, numero) != champ_evenement(0, numero)
-        et champ_evenement(R, penalite) = 22
-        et non positif(CORR.V_FLAGANO726 + 0)
-      alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A725;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        (positif(GLOBAL.DEFAUT1011) ou positif(GLOBAL.RETARD0718))
+        type(champ_evenement(R, code), BOOLEEN)
         et non (
-          # codes_sf
-          meme_variable(champ_evenement(R, code), 0AM)
-          ou meme_variable(champ_evenement(R, code), 0AC)
-          ou meme_variable(champ_evenement(R, code), 0AD)
-          ou meme_variable(champ_evenement(R, code), 0AO)
-          ou meme_variable(champ_evenement(R, code), 0AV)
+          (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
+          et champ_evenement(R, numero) = champ_evenement(0, numero)
         )
-        et champ_evenement(R, penalite) != 99
-        et positif(CORR.V_FLAGANO726 + 0)
       alors
-        nettoie_erreurs_finalisees;
-        leve_erreur A726;
-        calculer cible signaler_erreur_ano;
-      finsi
-    puis_quand ABANDON = 0 faire
-      si
-        champ_evenement(R, numero) = champ_evenement(nb_evenements() - 1, numero)
-        et champ_evenement(R, sens) dans (SENS_R, SENS_C, SENS_M)
-      alors
-        calculer cible recherche_CR02 : avec NAT_RECH, R;
-        si NAT_RECH = 2 alors
-          nettoie_erreurs_finalisees;
-          leve_erreur A72301;
-          calculer cible signaler_erreur_ano;
-        sinon_si NAT_RECH = 3 et non positif(GLOBAL.ISF_PRIM) alors
-          leve_erreur IM41;
-          finalise_erreurs;
+        si NATURE = N_REVENU alors
+          si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_M alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72001;
+            calculer cible signaler_erreur_ano;
+          sinon_si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_C alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72002;
+            calculer cible signaler_erreur_ano;
+          sinon_si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_R alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72003;
+            calculer cible signaler_erreur_ano;
+          finsi
+        sinon_si NATURE = N_CHARGE alors
+          si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_M alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72001;
+            calculer cible signaler_erreur_ano;
+          sinon_si ELEM_2042 >= 1 et champ_evenement(R, sens) = SENS_C alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72002;
+            calculer cible signaler_erreur_ano;
+          sinon_si ELEM_2042 <= 0 et champ_evenement(R, sens) = SENS_R alors
+            nettoie_erreurs_finalisees;
+            leve_erreur A72003;
+            calculer cible signaler_erreur_ano;
+          finsi
         finsi
       finsi
-    finquand
+    finsi
+    si
+      NAT_RECH dans (0, 6)
+      et NATURE = N_REVENU
+      et champ_evenement(R, sens) = SENS_C
+      et non present(ELEM_2042)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A72002;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      non (
+        meme_variable(champ_evenement(R, code), 0AX)
+        ou meme_variable(champ_evenement(R, code), 0AY)
+        ou meme_variable(champ_evenement(R, code), 0AZ)
+      )
+      et NATURE = N_CHARGE
+      et champ_evenement(R, sens) = SENS_R
+      et non present(ELEM_2042)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A72003;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si champ_evenement(R, sens) = SENS_P et non present(ELEM_2042) alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A721;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      non (
+        meme_variable(champ_evenement(R, code), 0AX)
+        ou meme_variable(champ_evenement(R, code), 0AY)
+        ou meme_variable(champ_evenement(R, code), 0AZ)
+      )
+    alors
+      si
+        NATURE = N_CHARGE
+        et champ_evenement(R, sens) = SENS_R
+        et champ_evenement(R, montant) > MONTANT_2042
+      alors
+        si champ_evenement(R, penalite) = 99 alors
+          nettoie_erreurs_finalisees;
+          leve_erreur A72204;
+          calculer cible signaler_erreur_ano;
+        sinon
+          nettoie_erreurs_finalisees;
+          leve_erreur A72201;
+          calculer cible signaler_erreur_ano;
+        finsi
+      finsi
+      si
+        NATURE = N_REVENU
+        et champ_evenement(R, sens) = SENS_M
+        et (
+          non present(ELEM_2042)
+          ou champ_evenement(R, montant) > MONTANT_2042
+        )
+      alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A72202;
+        calculer cible signaler_erreur_ano;
+      finsi
+      CORR.V_FLAG8OT = positif(GLOBAL.COD8OT + 0);
+      si
+        NATURE = N_REVENU
+        et champ_evenement(R, sens) = SENS_C
+        et champ_evenement(R, penalite) = 0
+        et present(ELEM_2042)
+        et champ_evenement(R, montant) > MONTANT_2042
+      alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A72203;
+        calculer cible signaler_erreur_ano;
+      finsi
+    finsi
+    si
+      champ_evenement(R, sens) dans (SENS_R, SENS_P)
+      et champ_evenement(R, penalite) dans (9, 12)
+      et vers_annee(champ_evenement(R, date)) >= 2006
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A724;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      (positif(GLOBAL.DEFAUT1011) ou positif(GLOBAL.RETARD0718))
+      et champ_evenement(R, numero) != champ_evenement(0, numero)
+      et champ_evenement(R, penalite) = 22
+      et non positif(CORR.V_FLAGANO726 + 0)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A725;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      (positif(GLOBAL.DEFAUT1011) ou positif(GLOBAL.RETARD0718))
+      et non (
+        # codes_sf
+        meme_variable(champ_evenement(R, code), 0AM)
+        ou meme_variable(champ_evenement(R, code), 0AC)
+        ou meme_variable(champ_evenement(R, code), 0AD)
+        ou meme_variable(champ_evenement(R, code), 0AO)
+        ou meme_variable(champ_evenement(R, code), 0AV)
+      )
+      et champ_evenement(R, penalite) != 99
+      et positif(CORR.V_FLAGANO726 + 0)
+    alors
+      nettoie_erreurs_finalisees;
+      leve_erreur A726;
+      calculer cible signaler_erreur_ano;
+    finsi
+    si
+      champ_evenement(R, numero) = champ_evenement(nb_evenements() - 1, numero)
+      et champ_evenement(R, sens) dans (SENS_R, SENS_C, SENS_M)
+    alors
+      calculer cible recherche_CR02 : avec NAT_RECH, R;
+      si NAT_RECH = 2 alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A72301;
+        calculer cible signaler_erreur_ano;
+      sinon_si NAT_RECH = 3 et non positif(GLOBAL.ISF_PRIM) alors
+        leve_erreur IM41;
+        finalise_erreurs;
+      finsi
+    finsi
   finsi
 )
 
@@ -6538,215 +6472,198 @@ iterer
 : variable R
 : entre 0..(nb_evenements() - 1) increment 1
 : dans (
-  quand ABANDON = 0 faire
-    calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
-    si
+  calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
+  si
+    (champ_evenement(R, sens) = SENS_C et champ_evenement(R, penalite) = 0)
+    ou champ_evenement(R, penalite) = 99
+    ou positif(EST_TAX_INIT)
+  alors
+    GLOBAL.RECTIF = 0;
+  finsi
+  si
+    (champ_evenement(R, sens) = SENS_C et champ_evenement(R, penalite) = 0)
+    ou champ_evenement(R, penalite) dans (1, 99)
+  alors
+    GLOBAL.RECTIF_MAJO = 1;
+  finsi
+  si
+    (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
+    et (
       (champ_evenement(R, sens) = SENS_C et champ_evenement(R, penalite) = 0)
       ou champ_evenement(R, penalite) = 99
-      ou positif(EST_TAX_INIT)
-    alors
-      GLOBAL.RECTIF = 0;
+    )
+  alors
+    champ_evenement(R, date) = champ_evenement(0, date);
+  finsi
+  si
+    champ_evenement(R, penalite) = 30
+    et non meme_variable(champ_evenement(R, code), 8WW)
+  alors
+    nettoie_erreurs_finalisees;
+    leve_erreur A047;
+    calculer cible signaler_erreur_ano;
+  finsi
+)
+arranger_evenements
+: trier R1, R2
+: avec
+  si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
+  sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
+  sinon (si (vers_annee(champ_evenement(R1, date)) < vers_annee(champ_evenement(R2, date))) alors (1)
+  sinon (si (vers_annee(champ_evenement(R1, date)) > vers_annee(champ_evenement(R2, date))) alors (0)
+  sinon (si (vers_mois(champ_evenement(R1, date)) < vers_mois(champ_evenement(R2, date))) alors (1)
+  sinon (si (vers_mois(champ_evenement(R1, date)) > vers_mois(champ_evenement(R2, date))) alors (0)
+  sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
+  sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
+  sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
+: dans (
+  calculer cible prepare_reference;
+  calculer cible prepare_tl;
+  calculer cible prepare_majo;
+  calculer cible prepare_inr;
+  QUELLE_SP = 0;
+  INDICE_EVT_CTRL = 0;
+  calculer cible controle : avec QUELLE_SP, INDICE_EVT_CTRL;
+  calculer cible denature_rappels;
+  ANO_994_1 = 0;
+  iterer
+  : variable R
+  : entre 0..(nb_evenements() - 1) increment 1
+  : dans (
+    si non positif(ANO_994_1) alors
+      si
+        # penalites_1731bis
+        champ_evenement(R, penalite) dans (3, 4, 5, 6, 8, 11, 30, 31, 32, 35, 55)
+      alors
+        ANO_994_1 = 1;
+      finsi
     finsi
-    si
-      (champ_evenement(R, sens) = SENS_C et champ_evenement(R, penalite) = 0)
-      ou champ_evenement(R, penalite) dans (1, 99)
-    alors
-      GLOBAL.RECTIF_MAJO = 1;
+  )
+  ANO_994_2 = 0;
+  iterer
+  : variable R
+  : entre 0..(nb_evenements() - 1) increment 1
+  : dans (
+    si non positif(ANO_994_2) alors
+      si
+        champ_evenement(R, penalite) dans (2, 7, 10, 17, 18, 22)
+      alors
+        ANO_994_2 = 1;
+      finsi
     finsi
+  )
+  GLOBAL.PENA_994 = (positif(ANO_994_1) et positif(ANO_994_2));
+  CORR.PENA994 = GLOBAL.PENA_994;
+  CORR.V_FLAGMENC = 0;
+  iterer
+  : variable INDICE_EVT
+  : entre 0..GLOBAL.MAX_ID_EVT increment 1
+  : dans (
+    IS_PREMIER = (INDICE_EVT = 0);
+    IS_DERNIER = (INDICE_EVT = GLOBAL.MAX_ID_EVT);
+    CORR.V_FLAGR22 = 0;
+    iterer
+    : variable R
+    : entre 0..(nb_evenements() - 1) increment 1
+    : dans (
+      si non positif(CORR.V_FLAGR22) alors
+        si
+          champ_evenement(R, id_evt) = INDICE_EVT
+          et champ_evenement(R, penalite) = 22
+        alors
+          CORR.V_FLAGR22 = 1;
+        finsi
+      finsi
+    )
+    CORR.V_FLAGR24 = 0;
+    iterer
+    : variable R
+    : entre 0..(nb_evenements() - 1) increment 1
+    : dans (
+      si non positif(CORR.V_FLAGR24) alors
+        si
+          champ_evenement(R, id_evt) = INDICE_EVT
+          et champ_evenement(R, penalite) = 24
+        alors
+          CORR.V_FLAGR24 = 1;
+        finsi
+      finsi
+    )
+    calculer cible traite_reference : avec IS_PREMIER, INDICE_EVT;
+    calculer cible traite_tl : avec IS_PREMIER, INDICE_EVT;
+    calculer cible traite_inr : avec INDICE_EVT;
+    calculer cible traite_majo : avec IS_PREMIER, INDICE_EVT;
+    CORR.FLAGPREM = IS_PREMIER;
+    GLOBAL.FLAGPREM = IS_PREMIER;
+    si positif(IS_DERNIER) alors
+      CORR.FLAGDERNIE = IS_DERNIER;
+      GLOBAL.FLAGDERNIE = IS_DERNIER;
+    finsi
+    calculer cible init_1731;
+    EXISTE_SENS_RC = 0;
+    iterer
+    : variable R
+    : entre 0..(nb_evenements() - 1) increment 1
+    : dans (
+      si non positif(EXISTE_SENS_RC) alors
+        si
+          champ_evenement(R, id_evt) = INDICE_EVT
+          et champ_evenement(R, sens) dans (SENS_R, SENS_C)
+        alors
+          EXISTE_SENS_RC = 1;
+        finsi
+      finsi
+    )
+    si positif(EXISTE_SENS_RC) alors
+      CORR.ART1731BIS = 0;
+      GLOBAL.ART1731BIS = 0;
+    finsi
+    iterer
+    : variable VAR
+    : categorie calculee
+    : espace CORR
+    : dans (
+      VAR = indefini;
+    )
+    si positif(GLOBAL.FLAGMENC) alors
+      CORR.FLAGMENC = 1;
+    finsi
+    calculer cible calcul_tl : avec IS_PREMIER;
+    calculer cible calcul_inr : avec IS_PREMIER, INDICE_EVT;
     si
-      (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-      et (
-        (champ_evenement(R, sens) = SENS_C et champ_evenement(R, penalite) = 0)
-        ou champ_evenement(R, penalite) = 99
+      positif(IS_DERNIER)
+      ou (
+        positif(IS_PREMIER)
+        et non positif(GLOBAL.DEFAUT)
+        et positif(GLOBAL.RETARD)
       )
     alors
-      champ_evenement(R, date) = champ_evenement(0, date);
+      calculer cible calcul_majo : avec IS_PREMIER, INDICE_EVT;
     finsi
     si
-      champ_evenement(R, penalite) = 30
-      et non meme_variable(champ_evenement(R, code), 8WW)
+      positif(IS_DERNIER)
+      et positif(GLOBAL.PRESENT_8VV)
+      et positif(GLOBAL.PRESENT_8VW)
+      et CORR.RE168 + 0 > 0
+      et CORR.TAX1649 + 0 > 0
     alors
       nettoie_erreurs_finalisees;
-      leve_erreur A047;
+      leve_erreur A043;
       calculer cible signaler_erreur_ano;
     finsi
-  finquand
-)
-quand ABANDON = 0 faire
-  arranger_evenements
-  : trier R1, R2
-  : avec
-    si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
-    sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
-    sinon (si (vers_annee(champ_evenement(R1, date)) < vers_annee(champ_evenement(R2, date))) alors (1)
-    sinon (si (vers_annee(champ_evenement(R1, date)) > vers_annee(champ_evenement(R2, date))) alors (0)
-    sinon (si (vers_mois(champ_evenement(R1, date)) < vers_mois(champ_evenement(R2, date))) alors (1)
-    sinon (si (vers_mois(champ_evenement(R1, date)) > vers_mois(champ_evenement(R2, date))) alors (0)
-    sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
-    sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
-    sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
-  : dans (
-    calculer cible prepare_reference;
-    quand ABANDON = 0 faire
-      calculer cible prepare_tl;
-      calculer cible prepare_majo;
-      calculer cible prepare_inr;
-      QUELLE_SP = 0;
-      INDICE_EVT_CTRL = 0;
+    si non positif(IS_DERNIER) alors
+      QUELLE_SP = 1;
+      INDICE_EVT_CTRL = INDICE_EVT + 1;
       calculer cible controle : avec QUELLE_SP, INDICE_EVT_CTRL;
-    puis_quand ABANDON = 0 faire
-      calculer cible denature_rappels;
-      ANO_994_1 = 0;
-      iterer
-      : variable R
-      : entre 0..(nb_evenements() - 1) increment 1
-      : dans (
-        si non positif(ANO_994_1) alors
-          si
-            # penalites_1731bis
-            champ_evenement(R, penalite) dans (3, 4, 5, 6, 8, 11, 30, 31, 32, 35, 55)
-          alors
-            ANO_994_1 = 1;
-          finsi
-        finsi
-      )
-      ANO_994_2 = 0;
-      iterer
-      : variable R
-      : entre 0..(nb_evenements() - 1) increment 1
-      : dans (
-        si non positif(ANO_994_2) alors
-          si
-            champ_evenement(R, penalite) dans (2, 7, 10, 17, 18, 22)
-          alors
-            ANO_994_2 = 1;
-          finsi
-        finsi
-      )
-      GLOBAL.PENA_994 = (positif(ANO_994_1) et positif(ANO_994_2));
-      CORR.PENA994 = GLOBAL.PENA_994;
-      CORR.V_FLAGMENC = 0;
-      iterer
-      : variable INDICE_EVT
-      : entre 0..GLOBAL.MAX_ID_EVT increment 1
-      : dans (
-        quand ABANDON = 0 faire
-          IS_PREMIER = (INDICE_EVT = 0);
-          IS_DERNIER = (INDICE_EVT = GLOBAL.MAX_ID_EVT);
-          CORR.V_FLAGR22 = 0;
-          iterer
-          : variable R
-          : entre 0..(nb_evenements() - 1) increment 1
-          : dans (
-            si non positif(CORR.V_FLAGR22) alors
-              si
-                champ_evenement(R, id_evt) = INDICE_EVT
-                et champ_evenement(R, penalite) = 22
-              alors
-                CORR.V_FLAGR22 = 1;
-              finsi
-            finsi
-          )
-          CORR.V_FLAGR24 = 0;
-          iterer
-          : variable R
-          : entre 0..(nb_evenements() - 1) increment 1
-          : dans (
-            si non positif(CORR.V_FLAGR24) alors
-              si
-                champ_evenement(R, id_evt) = INDICE_EVT
-                et champ_evenement(R, penalite) = 24
-              alors
-                CORR.V_FLAGR24 = 1;
-              finsi
-            finsi
-          )
-          calculer cible traite_reference : avec IS_PREMIER, INDICE_EVT;
-          calculer cible traite_tl : avec IS_PREMIER, INDICE_EVT;
-          calculer cible traite_inr : avec INDICE_EVT;
-          calculer cible traite_majo : avec IS_PREMIER, INDICE_EVT;
-          CORR.FLAGPREM = IS_PREMIER;
-          GLOBAL.FLAGPREM = IS_PREMIER;
-          si positif(IS_DERNIER) alors
-            CORR.FLAGDERNIE = IS_DERNIER;
-            GLOBAL.FLAGDERNIE = IS_DERNIER;
-          finsi
-          calculer cible init_1731;
-          EXISTE_SENS_RC = 0;
-          iterer
-          : variable R
-          : entre 0..(nb_evenements() - 1) increment 1
-          : dans (
-            si non positif(EXISTE_SENS_RC) alors
-              si
-                champ_evenement(R, id_evt) = INDICE_EVT
-                et champ_evenement(R, sens) dans (SENS_R, SENS_C)
-              alors
-                EXISTE_SENS_RC = 1;
-              finsi
-            finsi
-          )
-          si positif(EXISTE_SENS_RC) alors
-            CORR.ART1731BIS = 0;
-            GLOBAL.ART1731BIS = 0;
-          finsi
-          iterer
-          : variable VAR
-          : categorie calculee
-          : espace CORR
-          : dans (
-            VAR = indefini;
-          )
-          si positif(GLOBAL.FLAGMENC) alors
-            CORR.FLAGMENC = 1;
-          finsi
-          calculer cible calcul_tl : avec IS_PREMIER;
-        puis_quand ABANDON = 0 faire
-          calculer cible calcul_inr : avec IS_PREMIER, INDICE_EVT;
-        puis_quand ABANDON = 0 faire
-          si
-            positif(IS_DERNIER)
-            ou (
-              positif(IS_PREMIER)
-              et non positif(GLOBAL.DEFAUT)
-              et positif(GLOBAL.RETARD)
-            )
-          alors
-            calculer cible calcul_majo : avec IS_PREMIER, INDICE_EVT;
-          finsi
-        puis_quand ABANDON = 0 faire
-          si
-            positif(IS_DERNIER)
-            et positif(GLOBAL.PRESENT_8VV)
-            et positif(GLOBAL.PRESENT_8VW)
-            et CORR.RE168 + 0 > 0
-            et CORR.TAX1649 + 0 > 0
-          alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A043;
-            calculer cible signaler_erreur_ano;
-          finsi
-        puis_quand ABANDON = 0 faire
-          si non positif(IS_DERNIER) alors
-            QUELLE_SP = 1;
-            INDICE_EVT_CTRL = INDICE_EVT + 1;
-            calculer cible controle : avec QUELLE_SP, INDICE_EVT_CTRL;
-            quand ABANDON = 0 faire
-              calculer cible sauve_base_anterieure_cor_corr;
-              si positif(IS_PREMIER) alors
-                calculer cible sauve_base_premier_corr;
-              finsi
-            finquand
-          finsi
-        puis_quand ABANDON = 0 faire
-          CORR.V_FLAGR22 = 0;
-          CORR.V_FLAGR24 = 0;
-        finquand
-      )
-    finquand
+      calculer cible sauve_base_anterieure_cor_corr;
+      si positif(IS_PREMIER) alors
+        calculer cible sauve_base_premier_corr;
+      finsi
+    finsi
+    CORR.V_FLAGR22 = 0;
+    CORR.V_FLAGR24 = 0;
   )
-finquand
-
+)
 
 cible nb_transf_2042_rappels:
 application: iliad;
@@ -6778,7 +6695,6 @@ iterer
 : variable R
 : entre 0..(nb_evenements() - 1) increment 1
 : dans (
-  quand ABANDON = 0 faire
   si
     meme_variable(champ_evenement(R, code), 9YA)
     et champ_evenement(R, numero) != champ_evenement(nb_evenements() - 1, numero)
@@ -6787,181 +6703,177 @@ iterer
     leve_erreur A99302;
     calculer cible signaler_erreur_ano;
   finsi
-  puis_quand ABANDON = 0 faire
-    si
-      type(champ_evenement(R, code), BOOLEEN)
-      et non (champ_evenement(R, montant) dans (0, 1))
-    alors
-      nettoie_erreurs_finalisees;
-      leve_erreur A910;
-      calculer cible signaler_erreur_ano;
-    finsi
-  finquand
+  si
+    type(champ_evenement(R, code), BOOLEEN)
+    et non (champ_evenement(R, montant) dans (0, 1))
+  alors
+    nettoie_erreurs_finalisees;
+    leve_erreur A910;
+    calculer cible signaler_erreur_ano;
+  finsi
 )
-quand ABANDON = 0 faire
-  calculer cible set_rappel_ifi_prim;
-  FIN = 0;
+calculer cible set_rappel_ifi_prim;
+FIN = 0;
+iterer
+: variable R
+: entre 0..(nb_evenements() - 1) increment 1
+: dans (
+  si
+    non positif(FIN)
+    et meme_variable(champ_evenement(R, code), REGCO)
+  alors
+    calculer cible transfo_pena_regco : avec R;
+    si present(GLOBAL.REGCO) alors
+      si GLOBAL.REGCO - champ_evenement(R, montant) < 0 alors
+        champ_evenement(R, sens) = SENS_R;
+        champ_evenement(R, montant) = champ_evenement(R, montant) - GLOBAL.REGCO;
+      sinon
+        champ_evenement(R, sens) = SENS_M;
+        champ_evenement(R, montant) = GLOBAL.REGCO - champ_evenement(R, montant);
+      finsi
+      FIN = 1;
+    finsi
+  finsi
+)
+si non present(GLOBAL.CMAJ) alors
+  GLOBAL.PREMIER_EVT = champ_evenement(0, numero);
   iterer
   : variable R
   : entre 0..(nb_evenements() - 1) increment 1
   : dans (
-    si
-      non positif(FIN)
-      et meme_variable(champ_evenement(R, code), REGCO)
-    alors
-      calculer cible transfo_pena_regco : avec R;
-      si present(GLOBAL.REGCO) alors
-        si GLOBAL.REGCO - champ_evenement(R, montant) < 0 alors
-          champ_evenement(R, sens) = SENS_R;
-          champ_evenement(R, montant) = champ_evenement(R, montant) - GLOBAL.REGCO;
-        sinon
-          champ_evenement(R, sens) = SENS_M;
-          champ_evenement(R, montant) = GLOBAL.REGCO - champ_evenement(R, montant);
-        finsi
-        FIN = 1;
+    si meme_variable(champ_evenement(R, code), 8VV) alors
+      GLOBAL.PRESENT_8VV = 1;
+    sinon_si meme_variable(champ_evenement(R, code), 8VW) alors
+      GLOBAL.PRESENT_8VW = 1;
+    sinon_si meme_variable(champ_evenement(R, code), 9YT) alors
+      GLOBAL.PRESENT_9YT = 1;
+      si champ_evenement(R, montant) = 18 alors
+        GLOBAL.MONTANT_9YT = 7;
+      sinon
+        GLOBAL.MONTANT_9YT = champ_evenement(R, montant);
       finsi
+      GLOBAL.PENALITE_9YT = champ_evenement(R, penalite);
+      GLOBAL.NUM_EVT_9YT = champ_evenement(R, numero);
+      CORR.CMAJ2 = champ_evenement(R, montant);
+      GLOBAL.CMAJ2 = champ_evenement(R, montant);
+      si GLOBAL.MONTANT_9YT != 0 alors
+        GLOBAL.SENS_9YT = champ_evenement(R, sens);
+        GLOBAL.IND_20_9YT = champ_evenement(R, 2042_rect);
+        GLOBAL.BASE_TL_9YT = champ_evenement(R, base_tl);
+        GLOBAL.R_TARDIF = 1;
+      finsi
+    sinon_si meme_variable(champ_evenement(R, code), 9YU) alors
+      GLOBAL.PRESENT_9YU = 1;
+      GLOBAL.MONTANT_9YU = champ_evenement(R, montant);
+      GLOBAL.PENALITE_9YU = champ_evenement(R, penalite);
+      GLOBAL.NUM_EVT_9YU = champ_evenement(R, numero);
+      GLOBAL.SENS_9YU = champ_evenement(R, sens);
+      MOIS = vers_mois(champ_evenement(R, montant));
+      ANNEE = vers_annee(champ_evenement(R, montant));
+      CORR.DATEINR = ANNEE * 10000 + MOIS * 100 + 1;
+      GLOBAL.DATEINR = CORR.DATEINR;
+      CORR.MOISAN2 = champ_evenement(R, montant);
+      GLOBAL.MOISAN2 = champ_evenement(R, montant);
+      GLOBAL.DATE_9YU = vers_date(MOIS, ANNEE);
     finsi
   )
-  si non present(GLOBAL.CMAJ) alors
-    GLOBAL.PREMIER_EVT = champ_evenement(0, numero);
-    iterer
-    : variable R
-    : entre 0..(nb_evenements() - 1) increment 1
-    : dans (
-      si meme_variable(champ_evenement(R, code), 8VV) alors
-        GLOBAL.PRESENT_8VV = 1;
-      sinon_si meme_variable(champ_evenement(R, code), 8VW) alors
-        GLOBAL.PRESENT_8VW = 1;
-      sinon_si meme_variable(champ_evenement(R, code), 9YT) alors
-        GLOBAL.PRESENT_9YT = 1;
-        si champ_evenement(R, montant) = 18 alors
-          GLOBAL.MONTANT_9YT = 7;
-        sinon
-          GLOBAL.MONTANT_9YT = champ_evenement(R, montant);
-        finsi
-        GLOBAL.PENALITE_9YT = champ_evenement(R, penalite);
-        GLOBAL.NUM_EVT_9YT = champ_evenement(R, numero);
-        CORR.CMAJ2 = champ_evenement(R, montant);
-        GLOBAL.CMAJ2 = champ_evenement(R, montant);
-        si GLOBAL.MONTANT_9YT != 0 alors
-          GLOBAL.SENS_9YT = champ_evenement(R, sens);
-          GLOBAL.IND_20_9YT = champ_evenement(R, 2042_rect);
-          GLOBAL.BASE_TL_9YT = champ_evenement(R, base_tl);
-          GLOBAL.R_TARDIF = 1;
-        finsi
-      sinon_si meme_variable(champ_evenement(R, code), 9YU) alors
-        GLOBAL.PRESENT_9YU = 1;
-        GLOBAL.MONTANT_9YU = champ_evenement(R, montant);
-        GLOBAL.PENALITE_9YU = champ_evenement(R, penalite);
-        GLOBAL.NUM_EVT_9YU = champ_evenement(R, numero);
-        GLOBAL.SENS_9YU = champ_evenement(R, sens);
-        MOIS = vers_mois(champ_evenement(R, montant));
-        ANNEE = vers_annee(champ_evenement(R, montant));
-        CORR.DATEINR = ANNEE * 10000 + MOIS * 100 + 1;
-        GLOBAL.DATEINR = CORR.DATEINR;
-        CORR.MOISAN2 = champ_evenement(R, montant);
-        GLOBAL.MOISAN2 = champ_evenement(R, montant);
-        GLOBAL.DATE_9YU = vers_date(MOIS, ANNEE);
-      finsi
-    )
-  finsi
-  si
-    (positif(GLOBAL.PRESENT_9YT) ou positif(GLOBAL.PRESENT_9YU))
-    et GLOBAL.MONTANT_9YT != 0
-    et GLOBAL.MONTANT_9YU != 0
-  alors
-    GLOBAL.R_TARDIF = 1;
-  finsi
-  si non present(GLOBAL.CMAJ) alors
-    GLOBAL.PREMIER_EVT = champ_evenement(0, numero);
-    iterer
-    : variable R
-    : entre 0..(nb_evenements() - 1) increment 1
-    : dans (
-      si meme_variable(champ_evenement(R, code), 9XT) alors
-        GLOBAL.PRESENT_9XT = 1;
-        si champ_evenement(R, montant) = 34 alors
-          GLOBAL.MONTANT_9XT = 8;
-        sinon_si champ_evenement(R, montant) = 18 alors
-          GLOBAL.MONTANT_9XT = 7;
-        sinon
-          GLOBAL.MONTANT_9XT = champ_evenement(R, montant);
-        finsi
-        si champ_evenement(R, montant) = 34 alors
-          CORR.V_FLAGR34 = 1;
-        finsi
-        GLOBAL.PENALITE_9XT  = champ_evenement(R, penalite);
-        GLOBAL.NUM_EVT_9XT = champ_evenement(R, numero);
-        si GLOBAL.MONTANT_9XT != 0 alors
-          GLOBAL.SENS_9XT = champ_evenement(R, sens);
-          GLOBAL.IND_20_9XT = champ_evenement(R, 2042_rect);
-          GLOBAL.BASE_TL_9XT = champ_evenement(R, base_tl);
-          GLOBAL.R_TARDIF = 1;
-        finsi
-      sinon_si meme_variable(champ_evenement(R, code), 9XU) alors
-        GLOBAL.PRESENT_9XU = 1;
-        GLOBAL.MONTANT_9XU = champ_evenement(R, montant);
-        GLOBAL.PENALITE_9XU = champ_evenement(R, penalite);
-        GLOBAL.NUM_EVT_9XU = champ_evenement(R, numero);
-        GLOBAL.SENS_9XU = champ_evenement(R, sens);
-        MOIS = vers_mois(champ_evenement(R, montant));
-        ANNEE = vers_annee(champ_evenement(R, montant));
-        GLOBAL.DATE_9XU = vers_date(MOIS, ANNEE);
-      finsi
-    )
-  finsi
-  si
-    (positif(GLOBAL.PRESENT_9XT) ou positif(GLOBAL.PRESENT_9XU))
-    et GLOBAL.MONTANT_9XT != 0
-    et GLOBAL.MONTANT_9XU != 0
-  alors
-    GLOBAL.R_TARDIF = 1;
-  finsi
+finsi
+si
+  (positif(GLOBAL.PRESENT_9YT) ou positif(GLOBAL.PRESENT_9YU))
+  et GLOBAL.MONTANT_9YT != 0
+  et GLOBAL.MONTANT_9YU != 0
+alors
+  GLOBAL.R_TARDIF = 1;
+finsi
+si non present(GLOBAL.CMAJ) alors
+  GLOBAL.PREMIER_EVT = champ_evenement(0, numero);
   iterer
   : variable R
   : entre 0..(nb_evenements() - 1) increment 1
   : dans (
-    si
-      meme_variable(champ_evenement(R, code), 9YT)
-      ou meme_variable(champ_evenement(R, code), 9YU)
-      ou meme_variable(champ_evenement(R, code), 9XT)
-      ou meme_variable(champ_evenement(R, code), 9XU)
-    alors
-      champ_evenement(R, numero) = -1;
-    sinon
-      si
-        positif(GLOBAL.PRESENT_9YT)
-        et champ_evenement(R, numero) >= GLOBAL.NUM_EVT_9YT
-      alors
-        champ_evenement(R, numero) = champ_evenement(R, numero) + 1;
+    si meme_variable(champ_evenement(R, code), 9XT) alors
+      GLOBAL.PRESENT_9XT = 1;
+      si champ_evenement(R, montant) = 34 alors
+        GLOBAL.MONTANT_9XT = 8;
+      sinon_si champ_evenement(R, montant) = 18 alors
+        GLOBAL.MONTANT_9XT = 7;
+      sinon
+        GLOBAL.MONTANT_9XT = champ_evenement(R, montant);
       finsi
-      si
-        positif(GLOBAL.PRESENT_9XT)
-        et champ_evenement(R, numero) >= GLOBAL.NUM_EVT_9XT
-      alors
-         champ_evenement(R, numero) = champ_evenement(R, numero) + 1;
+      si champ_evenement(R, montant) = 34 alors
+        CORR.V_FLAGR34 = 1;
       finsi
+      GLOBAL.PENALITE_9XT  = champ_evenement(R, penalite);
+      GLOBAL.NUM_EVT_9XT = champ_evenement(R, numero);
+      si GLOBAL.MONTANT_9XT != 0 alors
+        GLOBAL.SENS_9XT = champ_evenement(R, sens);
+        GLOBAL.IND_20_9XT = champ_evenement(R, 2042_rect);
+        GLOBAL.BASE_TL_9XT = champ_evenement(R, base_tl);
+        GLOBAL.R_TARDIF = 1;
+      finsi
+    sinon_si meme_variable(champ_evenement(R, code), 9XU) alors
+      GLOBAL.PRESENT_9XU = 1;
+      GLOBAL.MONTANT_9XU = champ_evenement(R, montant);
+      GLOBAL.PENALITE_9XU = champ_evenement(R, penalite);
+      GLOBAL.NUM_EVT_9XU = champ_evenement(R, numero);
+      GLOBAL.SENS_9XU = champ_evenement(R, sens);
+      MOIS = vers_mois(champ_evenement(R, montant));
+      ANNEE = vers_annee(champ_evenement(R, montant));
+      GLOBAL.DATE_9XU = vers_date(MOIS, ANNEE);
     finsi
   )
-  NB_RAPPELS = nb_evenements();
-  NB_NOUVEAUX_RAPPELS = 0;
+finsi
+si
+  (positif(GLOBAL.PRESENT_9XT) ou positif(GLOBAL.PRESENT_9XU))
+  et GLOBAL.MONTANT_9XT != 0
+  et GLOBAL.MONTANT_9XU != 0
+alors
+  GLOBAL.R_TARDIF = 1;
+finsi
+iterer
+: variable R
+: entre 0..(nb_evenements() - 1) increment 1
+: dans (
   si
-    positif(GLOBAL.PRESENT_9YT)
-    et positif(GLOBAL.PRESENT_9YU)
-    et GLOBAL.MONTANT_9YT != 0
-    et GLOBAL.MONTANT_9YU != 0
+    meme_variable(champ_evenement(R, code), 9YT)
+    ou meme_variable(champ_evenement(R, code), 9YU)
+    ou meme_variable(champ_evenement(R, code), 9XT)
+    ou meme_variable(champ_evenement(R, code), 9XU)
   alors
-    calculer cible nb_transf_2042_rappels;
+    champ_evenement(R, numero) = -1;
+  sinon
+    si
+      positif(GLOBAL.PRESENT_9YT)
+      et champ_evenement(R, numero) >= GLOBAL.NUM_EVT_9YT
+    alors
+      champ_evenement(R, numero) = champ_evenement(R, numero) + 1;
+    finsi
+    si
+      positif(GLOBAL.PRESENT_9XT)
+      et champ_evenement(R, numero) >= GLOBAL.NUM_EVT_9XT
+    alors
+       champ_evenement(R, numero) = champ_evenement(R, numero) + 1;
+    finsi
   finsi
-  si
-    positif(GLOBAL.PRESENT_9XT)
-    et positif(GLOBAL.PRESENT_9XU)
-    et GLOBAL.MONTANT_9XT != 0
-    et GLOBAL.MONTANT_9XU != 0
-  alors
-    calculer cible nb_transf_2042_rappels;
-  finsi
-finquand
+)
+NB_RAPPELS = nb_evenements();
+NB_NOUVEAUX_RAPPELS = 0;
+si
+  positif(GLOBAL.PRESENT_9YT)
+  et positif(GLOBAL.PRESENT_9YU)
+  et GLOBAL.MONTANT_9YT != 0
+  et GLOBAL.MONTANT_9YU != 0
+alors
+  calculer cible nb_transf_2042_rappels;
+finsi
+si
+  positif(GLOBAL.PRESENT_9XT)
+  et positif(GLOBAL.PRESENT_9XU)
+  et GLOBAL.MONTANT_9XT != 0
+  et GLOBAL.MONTANT_9XU != 0
+alors
+  calculer cible nb_transf_2042_rappels;
+finsi
 
 cible set_id_evt:
 application: iliad;
@@ -7131,33 +7043,27 @@ arranger_evenements
         calculer cible signaler_erreur_ano;
       finsi
     finsi
-    quand ABANDON = 0 faire
-      si positif(GLOBAL.PRESENT_9XT) et positif(GLOBAL.PRESENT_9XU) alors
-        calculer cible test_9XT : avec TEST_9XT;
-        si non positif(TEST_9XT) alors
-          nettoie_erreurs_finalisees;
-          leve_erreur A96103;
-          calculer cible signaler_erreur_ano;
-        finsi
-        quand ABANDON = 0 faire
-          calculer cible test_mois_9XU : avec TEST_MOIS_9XU;
-          si non positif(TEST_MOIS_9XU) alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A96303;
-            calculer cible signaler_erreur_ano;
-          finsi
-        puis_quand ABANDON = 0 faire
-          calculer cible test_an_9XU : avec TEST_AN_9XU;
-          si non positif(TEST_AN_9XU) alors
-            nettoie_erreurs_finalisees;
-            leve_erreur A96304;
-            calculer cible signaler_erreur_ano;
-          finsi
-        finquand
+    si positif(GLOBAL.PRESENT_9XT) et positif(GLOBAL.PRESENT_9XU) alors
+      calculer cible test_9XT : avec TEST_9XT;
+      si non positif(TEST_9XT) alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A96103;
+        calculer cible signaler_erreur_ano;
       finsi
-    puis_quand ABANDON = 0 faire
-      calculer cible calcul_aux;
-    finquand
+      calculer cible test_mois_9XU : avec TEST_MOIS_9XU;
+      si non positif(TEST_MOIS_9XU) alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A96303;
+        calculer cible signaler_erreur_ano;
+      finsi
+      calculer cible test_an_9XU : avec TEST_AN_9XU;
+      si non positif(TEST_AN_9XU) alors
+        nettoie_erreurs_finalisees;
+        leve_erreur A96304;
+        calculer cible signaler_erreur_ano;
+      finsi
+    finsi
+    calculer cible calcul_aux;
   )
 )
 
@@ -7169,7 +7075,14 @@ CORR.PEN_RAPPEL = champ_evenement(R, penalite);
 calculer cible verif_cohe_horizontale_corr;
 calculer cible reset_codes_rappel;
 si nb_anomalies() + nb_discordances() + nb_informatives() > 0 alors
-  GLOBAL.ABANDON = 1;
+  iterer
+  : variable VAR
+  : categorie *
+  : espace CORR
+  : dans (
+    GLOBAL.VAR = VAR;
+  )
+  stop application;
 finsi
 
 cible calcul_avec_rappels:
@@ -7179,32 +7092,26 @@ iterer
 : variable R
 : entre 0..(nb_evenements() - 1) increment 1
 : dans (
-  quand GLOBAL.ABANDON = 0 faire
-    calculer cible range_rappel : avec R;
-  finquand
+  calculer cible range_rappel : avec R;
 )
-quand GLOBAL.ABANDON = 0 faire
-  TROUVE_0AZ = 0;
-  iterer
-  : variable R
-  : entre 0..(nb_evenements() - 1) increment 1
-  : dans (
-    si
-      non positif(TROUVE_0AZ)
-      et meme_variable(champ_evenement(R, code), 0AZ)
-    alors
-      GLOBAL.ANNEE_DECES_CONJOINT = champ_evenement(R, montant);
-      TROUVE_0AZ = 1;
-    finsi
-  )
-  calculer cible prepare_rappels;
-puis_quand ABANDON = 0 faire
-  calculer cible prepare_rappels_puis_calcul;
-finquand
+TROUVE_0AZ = 0;
+iterer
+: variable R
+: entre 0..(nb_evenements() - 1) increment 1
+: dans (
+  si
+    non positif(TROUVE_0AZ)
+    et meme_variable(champ_evenement(R, code), 0AZ)
+  alors
+    GLOBAL.ANNEE_DECES_CONJOINT = champ_evenement(R, montant);
+    TROUVE_0AZ = 1;
+  finsi
+)
+calculer cible prepare_rappels;
+calculer cible prepare_rappels_puis_calcul;
 
 cible calcul:
 application: iliad;
-GLOBAL.ABANDON = 0;
 calculer cible init_variables;
 iterer
 : variable VAR
@@ -7235,11 +7142,7 @@ si nb_evenements() = 0 alors
 sinon
   calculer cible calcul_avec_rappels;
 finsi
-quand ABANDON = 0 faire
-  si non positif(ABANDON) alors
-    exporte_erreurs;
-  finsi
-finquand
+exporte_erreurs;
 iterer
 : variable VAR
 : categorie *
@@ -7247,7 +7150,6 @@ iterer
 : dans (
   GLOBAL.VAR = VAR;
 )
-
 
 #{ tester l'existence des attributs dans les fonctions attribut(...),
    meme_variable(...), dans_domaine(...) }#
