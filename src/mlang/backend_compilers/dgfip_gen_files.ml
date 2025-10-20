@@ -532,6 +532,7 @@ struct S_irdata {
   int nb_events;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
+  char abandon;   
 };
 
 typedef struct S_irdata T_irdata;
@@ -1510,6 +1511,7 @@ T_irdata *cree_irdata(void) {
   irdata->ctx_pr_err.std = stderr;
   irdata->ctx_pr_err.indent = 0;
   irdata->ctx_pr_err.is_newline = 1;
+  irdata->abandon = 0;
   return irdata;
 
 erreur_cree_irdata:

@@ -882,8 +882,11 @@ instruction:
 | CLEAN_FINALIZED_ERRORS SEMICOLON { Some CleanFinalizedErrors }
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
-| STOP SEMICOLON { Some (Stop None) }
-| STOP s = SYMBOL SEMICOLON { Some (Stop (Some s)) }
+| STOP APPLICATION SEMICOLON { Some (Stop SKApplication) }
+| STOP FONCTION SEMICOLON { Some (Stop SKFun) }
+| STOP TARGET SEMICOLON { Some (Stop SKTarget) } 
+| STOP s = SYMBOL SEMICOLON { Some (Stop (SKId (Some s))) }
+| STOP SEMICOLON { Some (Stop (SKId None)) }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {

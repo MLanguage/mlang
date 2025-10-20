@@ -610,6 +610,14 @@ type 'v formula =
   | SingleFormula of 'v formula_decl
   | MultipleFormulaes of 'v formula_loop * 'v formula_decl
 
+type stop_kind =
+  | SKApplication (* Leave the whole application *)
+  | SKTarget (* Leave the current target *)
+  | SKFun (* Leave the current function *)
+  | SKId of string option
+(* Leave the iterator with the selected var
+   (or the current if [None]) *)
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -651,7 +659,7 @@ type ('v, 'e) instruction =
   | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
-  | Stop of string option
+  | Stop of stop_kind
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
@@ -1500,8 +1508,11 @@ let rec format_instruction form_var form_err =
     | CleanFinalizedErrors -> Format.fprintf fmt "nettoie_erreurs_finalisees\n"
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
-    | Stop None -> Format.fprintf fmt "stop\n"
-    | Stop (Some s) -> Format.fprintf fmt "stop %s\n" s
+    | Stop (SKId None) -> Format.fprintf fmt "stop\n"
+    | Stop (SKId (Some s)) -> Format.fprintf fmt "stop %s\n" s
+    | Stop SKApplication -> Format.fprintf fmt "stop application\n"
+    | Stop SKFun -> Format.fprintf fmt "stop fonction\n"
+    | Stop SKTarget -> Format.fprintf fmt "stop cible\n"
 
 and format_instructions form_var form_err fmt instrs =
   Pp.list "" (Pp.unmark (format_instruction form_var form_err)) fmt instrs

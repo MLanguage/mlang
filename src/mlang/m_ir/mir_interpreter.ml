@@ -14,7 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-exception Stop_instruction of string option
+exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
@@ -932,8 +932,8 @@ struct
               Com.CatVar.Map.iter eval vcs)
             var_params
         with
-        | Stop_instruction None -> ()
-        | Stop_instruction (Some scope) as exn ->
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
             if scope = Pos.unmark var.name then () else raise exn)
     | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) -> (
         try
@@ -961,8 +961,8 @@ struct
               | Undefined -> ())
             var_intervals
         with
-        | Stop_instruction None -> ()
-        | Stop_instruction (Some scope) as exn ->
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
             if scope = Pos.unmark var.name then () else raise exn)
     | Com.Stop scope -> raise (Stop_instruction scope)
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
@@ -1205,7 +1205,7 @@ struct
     set_args 0 target.target_args args;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).var <- Option.get target.target_result;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value <- Undefined;
-    evaluate_target_aux false ctx target;
+    evaluate_target_aux ~is_fun:true false ctx target;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value
 
   and evaluate_target (canBlock : bool) (ctx : ctx) (target : Mir.target)
@@ -1222,13 +1222,13 @@ struct
               ctx.ctx_ref.(ctx.ctx_ref_org + n).org <- org;
               set_args (n + 1) vl' al'
           | None -> ())
-      | [], [] -> evaluate_target_aux canBlock ctx target
+      | [], [] -> evaluate_target_aux ~is_fun:false canBlock ctx target
       | _ -> assert false
     in
     set_args 0 target.target_args args
 
-  and evaluate_target_aux (canBlock : bool) (ctx : ctx) (target : Mir.target) :
-      unit =
+  and evaluate_target_aux ~(is_fun : bool) (canBlock : bool) (ctx : ctx)
+      (target : Mir.target) : unit =
     let sav_target = ctx.ctx_target in
     ctx.ctx_target <- target;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + target.target_sz_tmps;
@@ -1239,9 +1239,15 @@ struct
         ctx.ctx_tmps.(i).value <- Undefined)
       target.target_tmp_vars;
     ctx.ctx_ref_org <- ctx.ctx_ref_org + target.target_nb_refs;
-    evaluate_stmts canBlock ctx target.target_prog;
-    ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
-    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps;
+    let then_ () =
+      ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
+      ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps
+    in
+    let () =
+      try evaluate_stmts ~then_ canBlock ctx target.target_prog with
+      | Stop_instruction SKTarget when not is_fun -> ()
+      | Stop_instruction SKFun when is_fun -> ()
+    in
     ctx.ctx_target <- sav_target
 
   let evaluate_program (ctx : ctx) : unit =
@@ -1258,9 +1264,13 @@ struct
       ctx.ctx_target <- main_target;
       evaluate_target false ctx main_target [];
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
-    with RuntimeError (e, ctx) ->
-      if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
+    with
+    | RuntimeError (e, ctx) ->
+        if !exit_on_rte then raise_runtime_as_structured e
+        else raise (RuntimeError (e, ctx))
+    | Stop_instruction SKApplication ->
+        (* The only stop never caught by anything else *) ()
+    | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 end
 
 module BigIntPrecision = struct
@@ -1395,4 +1405,5 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
     (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
-  Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  with Stop_instruction _ -> Undefined

@@ -367,7 +367,7 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
 
 (**{2 Markers}*)
 
-(** Prints [\[INFO\]] in blue on the terminal standard output *)
+(** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
 
@@ -390,28 +390,28 @@ let format_with_style (styles : ANSITerminal.style list)
   if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
   else Printf.sprintf str
 
-(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
-    timing since last debug *)
+(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
+    since last debug *)
 let debug_marker (f_time : bool) =
   if f_time then time_marker ();
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
 
-(** Prints [\[ERROR\]] in red on the terminal error output *)
+(** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () =
   ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
 
-(** Prints [\[WARNING\]] in yellow on the terminal standard output *)
+(** Prints [[WARNING]] in yellow on the terminal standard output *)
 let warning_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
 
-(** Prints [\[RESULT\]] in green on the terminal standard output *)
+(** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
 
 let clocks =
   Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
-(** Prints [\[🕛\]] in blue on the terminal standard output *)
+(** Prints [[🕛]] in blue on the terminal standard output *)
 let clock_marker i =
   let new_time = Unix.gettimeofday () in
   let initial_time = !initial_time in

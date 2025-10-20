@@ -20,8 +20,8 @@ val check_all_tests :
   Cli.round_ops ->
   (string -> bool) ->
   unit
-(** [check_all_tests p folder vs ro filter]
-    Executes [p] with all tests in [folder] whose name satisfy [filter]. *)
+(** [check_all_tests p folder vs ro filter] Executes [p] with all tests in
+    [folder] whose name satisfy [filter]. *)
 
 val check_one_test :
   Mir.program -> string -> Cli.value_sort -> Cli.round_ops -> unit

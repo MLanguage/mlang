@@ -208,6 +208,12 @@ module Err = struct
   let instruction_forbidden_in_rules pos =
     Errors.raise_spanned_error "instruction forbidden in rules" pos
 
+  let instruction_forbidden_outside_target pos =
+    Errors.raise_spanned_error "instruction only allowed in targets" pos
+
+  let instruction_forbidden_outside_function pos =
+    Errors.raise_spanned_error "instruction only allowed in functions" pos
+
   let unknown_domain rov pos =
     let msg = Format.asprintf "unknown %s domain" (rov_to_str rov) in
     Errors.raise_spanned_error msg pos
@@ -402,8 +408,12 @@ module Err = struct
     in
     Errors.raise_spanned_error msg cat_pos
 
-  let stop_outside_scope pos =
-    let msg = "instruction stop should only be used inside an iteration" in
+  let stop_outside_scope ?scope pos =
+    let msg =
+      Format.sprintf
+        "instruction 'stop%s;' should only be used inside an iteration"
+        (match scope with None -> String.empty | Some s -> " " ^ s)
+    in
     Errors.raise_spanned_error msg pos
 
   let stop_with_invalid_scope scope current_scopes pos =
@@ -2049,16 +2059,25 @@ let rec check_instructions (env : var_env)
               Err.instruction_forbidden_in_rules instr_pos;
             aux (env, Pos.mark Com.FinalizeErrors instr_pos :: res) il
         | Com.Stop scope ->
-            (* TODO: allow it in rules to exit *)
             if env.proc_type = Rule then
               Err.instruction_forbidden_in_rules instr_pos;
-            (match env.scopes with
-            | [] -> Err.stop_outside_scope instr_pos
-            | _ -> ());
-            (match scope with
-            | Some s when not (List.mem s env.scopes) ->
-                Err.stop_with_invalid_scope s env.scopes instr_pos
-            | _ -> ());
+            (match (scope, env.proc_type) with
+            | SKApplication, _ -> ()
+            | SKTarget, Target _ -> ()
+            | SKTarget, _ -> Err.instruction_forbidden_outside_target instr_pos
+            | SKFun, Func -> ()
+            | SKFun, _ -> Err.instruction_forbidden_outside_function instr_pos
+            | SKId scope, _ -> (
+                (* TODO: allow it in rules to exit *)
+                if env.proc_type = Rule then
+                  Err.instruction_forbidden_in_rules instr_pos;
+                (match env.scopes with
+                | [] -> Err.stop_outside_scope ?scope instr_pos
+                | _ -> ());
+                match scope with
+                | Some s when not (List.mem s env.scopes) ->
+                    Err.stop_with_invalid_scope s env.scopes instr_pos
+                | _ -> ()));
             aux (env, Pos.mark (Com.Stop scope) instr_pos :: res) il)
   in
   let env, res = aux (env, []) instrs in
@@ -2213,6 +2232,7 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
             Err.instruction_forbidden_in_rules instr_pos
         | Com.Print _ -> aux (tmps, in_vars, out_vars, def_vars) il
         | Com.Iterate _ -> Err.instruction_forbidden_in_rules instr_pos
+        | Com.Stop SKFun -> aux (tmps, in_vars, out_vars, def_vars) il
         | Com.Stop _ ->
             Err.instruction_forbidden_in_rules instr_pos
             (* TODO: allow in rules to exit *)

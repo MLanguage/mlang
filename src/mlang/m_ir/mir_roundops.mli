@@ -32,7 +32,8 @@ module DefaultRoundOps : RoundOpsFunctor
 (** Default rounding operations: those used in the PC/single-thread context *)
 
 module MultiRoundOps : RoundOpsFunctor
-(** Multithread rounding operations: those used in the PC/multi-thread context *)
+(** Multithread rounding operations: those used in the PC/multi-thread context
+*)
 
 (** Mainframe rounding operations: those used in the mainframe context. As the
     behavior depends on the sie of the `long` type, this size must be given as
