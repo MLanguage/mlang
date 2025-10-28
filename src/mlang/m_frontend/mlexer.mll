@@ -64,6 +64,7 @@ rule token = parse
     | "REEL" -> REAL
     | "afficher" -> PRINT
     | "afficher_erreur" -> PRINT_ERR
+    | "aiguillage" -> MATCH
     | "ajouter" -> ADD
     | "alias" -> ALIAS
     | "alors" -> THEN
@@ -79,12 +80,14 @@ rule token = parse
     | "calculable" -> COMPUTABLE
     | "calculee" -> COMPUTED
     | "calculer" -> COMPUTE
+    | "cas" -> CASE
     | "categorie" -> CATEGORY
     | "champ_evenement" -> EVENT_FIELD
     | "cible" -> TARGET
     | "const" -> CONST
     | "dans" -> IN
     | "dans_domaine" -> IN_DOMAIN
+    | "defaut" -> DEFAULT
     | "discordance" -> DISCORDANCE
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING

@@ -1,5 +1,5 @@
-open Mlang
-open Mlang.Irj_ast
+open Utils
+open Irj_utils.Irj_ast
 
 type avis_type = Texte | Gavlir
 

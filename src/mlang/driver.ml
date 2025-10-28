@@ -14,7 +14,11 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+open Backend_compilers
+open Irj_utils
 open Lexing
+open M_ir
+open M_frontend
 open Mlexer
 
 exception Exit

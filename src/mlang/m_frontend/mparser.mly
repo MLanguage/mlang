@@ -25,11 +25,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
-   match v with
-   | ParseVar v -> AtomVar (Pos.mark v pos)
-   | ParseInt v -> AtomLiteral (Float (float_of_int v))
-
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -60,11 +55,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
 %token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
-%token STOP
+%token STOP MATCH CASE DEFAULT
 
 %token EOF
 
 %type<Mast.source_file> source_file
+%type<Mast.m_instruction list> instruction_list_rev
 
 %nonassoc SEMICOLON
 %left OR
@@ -887,6 +883,17 @@ instruction:
 | STOP TARGET SEMICOLON { Some (Stop SKTarget) } 
 | STOP s = SYMBOL SEMICOLON { Some (Stop (SKId (Some s))) }
 | STOP SEMICOLON { Some (Stop (SKId None)) }
+| MATCH LPAREN e = with_pos(expression) RPAREN COLON LPAREN l = nonempty_list(switch_case) RPAREN SEMICOLON
+  { Some (Switch (e, l)) }
+
+switch_case_value:
+| CASE s = SYMBOL { Some (Com.Float (float_of_string s)) }
+| CASE UNDEFINED { Some Com.Undefined }
+| DEFAULT { None }
+
+switch_case:
+  | c = switch_case_value COLON LPAREN ilt = instruction_list_rev RPAREN
+    { c, List.rev ilt }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {
