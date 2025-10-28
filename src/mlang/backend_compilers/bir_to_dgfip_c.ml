@@ -1281,6 +1281,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let itval_val = VID.gen_val None var in
       (* !!! *)
       let postfix = fresh_c_local "" in
+      let i_val = Format.sprintf "i_val%s" postfix in
       let e0_def = Format.sprintf "e0_def%s" postfix in
       let e0_val = Format.sprintf "e0_val%s" postfix in
       let e1_def = Format.sprintf "e1_def%s" postfix in
@@ -1292,6 +1293,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       List.iter
         (fun (e0, e1, step) ->
           pr "@;@[<v 2>{";
+          pr "@;double %s;" i_val;
           pr "@;char %s;@;double %s;" e0_def e0_val;
           pr "@;char %s;@;double %s;" e1_def e1_val;
           pr "@;char %s;@;double %s;" step_def step_val;
@@ -1302,10 +1304,11 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             step_val;
           pr
             "@;\
-             @[<v 2>@[<hov 2>for (%s = 1,@ %s = %s;@ (%s > 0.0 ? %s <= %s : %s \
-             >= %s);@ %s = %s + %s) {@]"
-            itval_def itval_val e0_val step_val itval_val e1_val itval_val
-            e1_val itval_val itval_val step_val;
+             @[<v 2>@[<hov 2>for (%s = %s;@ (%s > 0.0 ? %s <= %s : %s >= %s);@ \
+             %s = %s + %s) {@]"
+            i_val e0_val step_val i_val e1_val i_val e1_val i_val i_val step_val;
+          pr "@;%s = 1;" itval_def;
+          pr "@;%s = %s;" itval_val i_val;
           pr "%a" (generate_stmts env dgfip_flags p) stmts;
           pr "@]@;}";
           pr "@]@;}";

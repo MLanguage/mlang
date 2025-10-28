@@ -342,7 +342,7 @@ resultat: RES;
 variables_temporaires: PROUT0, PROUT1, PROUT2;
 afficher_erreur "entree fun_test_stop_fonction\n" indenter(2);
 RES = ARG0 + ARG1;
-stop D;
+stop fonction;
 RES = -1;
 
 cible test_aff_cible:
@@ -509,8 +509,8 @@ variables_temporaires: U0, UUU tableau[5], U1;
 #calculer cible test_tab;
 #calculer cible test_meme_variable;
 #calculer cible test_arranger;
-#calculer cible test_boucle;
-calculer cible test_type;
+calculer cible test_boucle;
+#calculer cible test_type;
 
 cible enchainement_primitif:
 application: iliad;

@@ -37,7 +37,7 @@ else ifeq ($(filter $(YEAR), 2018 2019 2020 2023), $(YEAR))
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
 else ifeq ($(filter $(YEAR), 0), $(YEAR))
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+	SOURCE_FILES?=#$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
