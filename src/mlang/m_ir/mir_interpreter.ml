@@ -812,9 +812,9 @@ struct
           List.iter
             (fun (case, stmts) ->
               match (case, v) with
-              | None, _ | Some Com.Undefined, Undefined ->
+              | Com.Default, _ | Value Undefined, Undefined ->
                   evaluate_stmts ~then_ canBlock ctx stmts
-              | Some (Com.Float f), Number n
+              | Value (Float f), Number n
                 when compare_numbers Eq n (N.of_float f) ->
                   evaluate_stmts ~then_ canBlock ctx stmts
               | _ -> ())

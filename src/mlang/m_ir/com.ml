@@ -438,6 +438,8 @@ type variable_space = {
 
 type literal = Float of float | Undefined
 
+type case = Default | Value of literal
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -654,8 +656,7 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of
-      ('v m_expression * (literal option * ('v, 'e) m_instruction list) list)
+  | Switch of ('v m_expression * (case * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -1112,6 +1113,10 @@ let format_literal fmt l =
   Format.pp_print_string fmt
     (match l with Float f -> string_of_float f | Undefined -> "indefini")
 
+let format_case fmt = function
+  | Default -> Format.pp_print_string fmt "default"
+  | Value v -> format_literal fmt v
+
 let format_atom form_var fmt vl =
   match vl with
   | AtomVar v -> form_var fmt v
@@ -1354,11 +1359,7 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
         List.iter
           (fun (c, l) ->
-            let () =
-              match c with
-              | None -> Format.fprintf fmt "default :@,"
-              | Some c -> Format.fprintf fmt "cas %a :@," format_literal c
-            in
+            Format.fprintf fmt "%a :@," format_case c;
             Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
           l;
         Format.fprintf fmt "@]@,"

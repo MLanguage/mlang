@@ -425,6 +425,13 @@ module Err = struct
         current_scopes
     in
     Errors.raise_spanned_error msg pos
+
+  let non_exclusive_cases case pos =
+    let msg =
+      Pp.spr "switch cases must be exclusive: %a cannot be used twice"
+        Com.format_case case
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -2025,12 +2032,13 @@ let rec check_instructions (env : var_env)
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Switch (e, l) ->
             let e' = map_expr env e in
-            let env, rev_l' =
+            let _cases, env, rev_l' =
               List.fold_left
-                (fun (env, rev_l') (c, l) ->
+                (fun (cases, env, rev_l') (c, l) ->
+                  if List.mem c cases then Err.non_exclusive_cases c instr_pos;
                   let prog, l'elt = check_instructions env l in
-                  ({ env with prog }, (c, l'elt) :: rev_l'))
-                (env, []) l
+                  (c :: cases, { env with prog }, (c, l'elt) :: rev_l'))
+                ([], env, []) l
             in
             let l' = List.rev rev_l' in
             let res_instr = Com.Switch (e', l') in

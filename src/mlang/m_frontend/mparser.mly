@@ -887,9 +887,9 @@ instruction:
   { Some (Switch (e, l)) }
 
 switch_case_value:
-| CASE s = SYMBOL { Some (Com.Float (float_of_string s)) }
-| CASE UNDEFINED { Some Com.Undefined }
-| DEFAULT { None }
+| CASE s = SYMBOL { Value (Com.Float (float_of_string s)) }
+| CASE UNDEFINED { Value Com.Undefined }
+| DEFAULT { Com.Default }
 
 switch_case:
   | c = switch_case_value COLON ilt = instruction_list_rev

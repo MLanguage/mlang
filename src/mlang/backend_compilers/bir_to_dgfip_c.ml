@@ -973,9 +973,9 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         List.fold_left
           (fun (und, def, oth) (c, l) ->
             match c with
-            | None -> (und, l :: def, oth)
-            | Some Com.Undefined -> (l :: und, def, oth)
-            | Some (Float f) -> (und, def, (f, l) :: oth))
+            | Com.Default -> (und, l :: def, oth)
+            | Com.(Value Undefined) -> (l :: und, def, oth)
+            | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
           ([], [], []) l
       in
       let undef_branches = List.rev undef_branches
