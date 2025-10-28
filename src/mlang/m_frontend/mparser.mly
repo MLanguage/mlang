@@ -883,7 +883,7 @@ instruction:
 | STOP TARGET SEMICOLON { Some (Stop SKTarget) } 
 | STOP s = SYMBOL SEMICOLON { Some (Stop (SKId (Some s))) }
 | STOP SEMICOLON { Some (Stop (SKId None)) }
-| MATCH LPAREN e = with_pos(expression) RPAREN COLON LPAREN l = nonempty_list(switch_case) RPAREN SEMICOLON
+| MATCH LPAREN e = with_pos(expression) RPAREN COLON LPAREN l = nonempty_list(switch_case) RPAREN
   { Some (Switch (e, l)) }
 
 switch_case_value:

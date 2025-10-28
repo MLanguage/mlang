@@ -342,7 +342,7 @@ resultat: RES;
 variables_temporaires: PROUT0, PROUT1, PROUT2;
 afficher_erreur "entree fun_test_stop_fonction\n" indenter(2);
 RES = ARG0 + ARG1;
-stop D;
+stop fonction;
 RES = -1;
 
 cible test_aff_cible:
@@ -611,6 +611,23 @@ afficher(Y);
 afficher "\n";
 afficher "FIN test compter_calculee_restauree\n";
 
+# Test aiguillage
+cible test_aiguillage :
+application : iliad;
+afficher "DEBUT test aiguillage\n";
+Y = 1;
+aiguillage (Y) : (
+  cas 0:
+    afficher "Y = 0, echec\n";
+  cas 1:
+    afficher "Y = 1, OK!\n";
+  cas indefini:
+    afficher "Y = --indefini--, echec\n";
+  defaut:
+    afficher "Y = ?, echec\n";
+)
+afficher "FIN test aiguillage\n";
+
 # Test stop fonction
 cible test_stop_fonction :
 application : iliad;
@@ -645,6 +662,7 @@ application: iliad;
 calculer cible enchainement_primitif;
 calculer cible compter_calculee;
 calculer cible compter_calculee_restaurer;
+calculer cible test_aiguillage;
 calculer cible test_stop_fonction;
 calculer cible test_stop_cible;
 calculer cible test_stop_application;
