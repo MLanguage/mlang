@@ -2,7 +2,7 @@
 
 (name mlang)
 
-(version 186-15-ga4a1d1ff)
+(version %%VERSION%%)
 
 (generate_opam_files true)
 

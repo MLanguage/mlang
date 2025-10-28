@@ -804,6 +804,22 @@ struct
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx f
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
+    | Com.Switch (c, l) -> (
+        let v = evaluate_expr ctx c in
+        let exception INTERNAL_STOP_SWITCH in
+        let then_ () = raise INTERNAL_STOP_SWITCH in
+        try
+          List.iter
+            (fun (case, stmts) ->
+              match (case, v) with
+              | None, _ | Some Com.Undefined, Undefined ->
+                  evaluate_stmts ~then_ canBlock ctx stmts
+              | Some (Com.Float f), Number n
+                when compare_numbers Eq n (N.of_float f) ->
+                  evaluate_stmts ~then_ canBlock ctx stmts
+              | _ -> ())
+            l
+        with INTERNAL_STOP_SWITCH -> ())
     | Com.WhenDoElse (wdl, ed) ->
         let rec aux = function
           | (expr, dl, _) :: l -> (

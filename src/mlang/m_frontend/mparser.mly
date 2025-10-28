@@ -892,7 +892,7 @@ switch_case_value:
 | DEFAULT { None }
 
 switch_case:
-  | c = switch_case_value COLON LPAREN ilt = instruction_list_rev RPAREN
+  | c = switch_case_value COLON ilt = instruction_list_rev
     { c, List.rev ilt }
 
 target_param:
