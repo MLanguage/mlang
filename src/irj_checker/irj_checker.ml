@@ -80,9 +80,9 @@ let irj_check_file (f : string) (message_format : message_format_enum)
 let rec irj_checker (f : string) (message_format : message_format_enum)
     (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
-  if not (Sys.file_exists f) then
-    Errors.raise_error
-      (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
+  if not (Sys.file_exists f) then (
+    Cli.error_print "%s: this path is not a valid file in the filesystem" f;
+    exit 124);
   if Sys.is_directory f then
     Array.iter
       (fun sub ->
