@@ -55,6 +55,12 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
           let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
           let nbRef, nbIt = aux_instrs instrs in
           (nbRef, max nbIt @@ max nbItSort nbItFilter)
+      | Com.Switch (_, l) ->
+          List.fold_left
+            (fun (mNbRef, mNbIt) (_, l) ->
+              let nbRef, nbIt = aux_instrs l in
+              (max nbRef mNbRef, max nbIt mNbIt))
+            (0, 0) l
       | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
       | Com.CleanErrors | Com.CleanFinalizedErrors | Com.ExportErrors
       | Com.FinalizeErrors | Com.Stop _ ->
@@ -375,6 +381,13 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let sz = max szI @@ max szT szE in
           let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
+      | Com.Switch (expr, l) ->
+          let nbI, szI, nbRefI, tdata = aux_expr tdata expr in
+          List.fold_left
+            (fun (mNb, mSz, mNbRef, tdata) (_, l) ->
+              let nb, sz, rbRef, tdata = aux_instrs tdata l in
+              (max nb mNb, max sz mSz, max rbRef mNbRef, tdata))
+            (nbI, szI, nbRefI, tdata) l
       | Com.WhenDoElse (wdl, ed) ->
           let rec wde (nb, sz, nbRef, tdata) = function
             | (me, dl, _) :: wdl' ->
@@ -799,6 +812,17 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let prog_else, dict = aux ([], dict) ile in
         let instr' = Com.IfThenElse (expr, prog_then, prog_else) in
         aux (Pos.mark instr' pos :: res, dict) il
+    | Pos.Mark (Com.Switch (e, l), pos) :: il ->
+        let e' = translate_expression p dict e in
+        let revl', dict =
+          List.fold_left
+            (fun (revl, dict) (c, l) ->
+              let l', dict = aux ([], dict) l in
+              ((c, l') :: revl, dict))
+            ([], dict) l
+        in
+        let i' = Com.Switch (e', List.rev revl') in
+        aux (Pos.mark i' pos :: res, dict) il
     | Pos.Mark (Com.WhenDoElse (wdl, ed), pos) :: il ->
         let wdl', dict =
           rev_fst

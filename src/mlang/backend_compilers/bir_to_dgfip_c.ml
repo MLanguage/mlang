@@ -967,6 +967,50 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         pr "%a" (generate_stmts env dgfip_flags p) iffalse);
       pr "@]@;}";
       pr "@]@;}"
+  | Switch (e, l) ->
+      (* Undef & Default should be unique, but just in case we take them all *)
+      let undef_branches, default_branches, other_branches =
+        List.fold_left
+          (fun (und, def, oth) (c, l) ->
+            match c with
+            | Com.Default -> (und, l :: def, oth)
+            | Com.(Value Undefined) -> (l :: und, def, oth)
+            | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+          ([], [], []) l
+      in
+      let undef_branches = List.rev undef_branches
+      and default_branches = List.rev default_branches
+      and other_branches = List.rev other_branches in
+      let exp = fresh_c_local "exp" in
+      let exp_def = exp ^ "_def" in
+      let exp_val = exp ^ "_val" in
+      pr "@;char %s;@;double %s;" exp_def exp_val;
+      generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
+      pr "@;@[<v 2>{";
+      pr "@;@[<v 2>if (%s) {" exp_def;
+      pr "@;";
+      (* Expression is defined *)
+      let () =
+        List.iter
+          (fun (v, br) ->
+            pr "if (EQ_E((%s),(%#.19g)))@;@[<v 2>%a@]@; else " exp_val v
+              (generate_stmts env dgfip_flags p)
+              br)
+          other_branches
+      in
+      let () =
+        match default_branches with
+        | [] -> ()
+        | hd :: _ -> pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
+      in
+      pr "@;}";
+      (* Expression is undefined *)
+      let () =
+        match undef_branches with
+        | [] -> ()
+        | hd :: _ -> pr " else %a" (generate_stmts env dgfip_flags p) hd
+      in
+      pr "@]@;}@]"
   | WhenDoElse (wdl, ed) ->
       let goto_label = fresh_c_local "when_do_block" in
       let fin_label = fresh_c_local "when_do_end" in

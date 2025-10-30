@@ -780,6 +780,12 @@ let rec expand_instruction (const_map : const_context)
       let ithen' = expand_instructions const_map ithen in
       let ielse' = expand_instructions const_map ielse in
       Pos.same (Com.IfThenElse (expr', ithen', ielse')) m_instr :: prev
+  | Com.Switch (e, l) ->
+      let e' = expand_expression const_map ParamsMap.empty e in
+      let l' =
+        List.map (fun (c, l) -> (c, expand_instructions const_map l)) l
+      in
+      Pos.same (Com.Switch (e', l')) m_instr :: prev
   | Com.WhenDoElse (wdl, ed) ->
       let map (expr, dl, pos) =
         let expr' = expand_expression const_map ParamsMap.empty expr in

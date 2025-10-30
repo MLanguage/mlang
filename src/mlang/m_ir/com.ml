@@ -438,6 +438,8 @@ type variable_space = {
 
 type literal = Float of float | Undefined
 
+type case = Default | Value of literal
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -654,6 +656,7 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
+  | Switch of ('v m_expression * (case * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -806,6 +809,12 @@ and instr_map_var f g = function
       let m_il0' = List.map (m_instr_map_var f g) m_il0 in
       let m_il1' = List.map (m_instr_map_var f g) m_il1 in
       IfThenElse (m_e0', m_il0', m_il1')
+  | Switch (e, l) ->
+      let e' = m_expr_map_var f e in
+      let l' =
+        List.map (fun (c, l) -> (c, List.map (m_instr_map_var f g) l)) l
+      in
+      Switch (e', l')
   | WhenDoElse (m_eil, m_il) ->
       let map (m_e0, m_il0, pos) =
         let m_e0' = m_expr_map_var f m_e0 in
@@ -1019,6 +1028,9 @@ and instr_fold_var f instr acc =
       acc |> m_expr_fold_var f m_e0
       |> fold_list (m_instr_fold_var f) m_il0
       |> fold_list (m_instr_fold_var f) m_il1
+  | Switch (e, l) ->
+      acc |> m_expr_fold_var f e
+      |> fold_list (fun (_, l) -> fold_list (m_instr_fold_var f) l) l
   | WhenDoElse (m_eil, m_il) ->
       let fold (m_e0, m_il0, _) accu =
         accu |> m_expr_fold_var f m_e0 |> fold_list (m_instr_fold_var f) m_il0
@@ -1100,6 +1112,10 @@ let format_value_typ fmt t =
 let format_literal fmt l =
   Format.pp_print_string fmt
     (match l with Float f -> string_of_float f | Undefined -> "indefini")
+
+let format_case fmt = function
+  | Default -> Format.pp_print_string fmt "default"
+  | Value v -> format_literal fmt v
 
 let format_atom form_var fmt vl =
   match vl with
@@ -1339,6 +1355,14 @@ let rec format_instruction form_var form_err =
     | IfThenElse (cond, t, f) ->
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
           form_expr (Pos.unmark cond) form_instrs t form_instrs f
+    | Switch (e, l) ->
+        Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
+        List.iter
+          (fun (c, l) ->
+            Format.fprintf fmt "%a :@," format_case c;
+            Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
+          l;
+        Format.fprintf fmt "@]@,"
     | WhenDoElse (wdl, ed) ->
         let pp_wd th fmt (expr, dl, _) =
           Format.fprintf fmt "@[<v 2>%swhen (%a) do@\n%a@;@]" th form_expr

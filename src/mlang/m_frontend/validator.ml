@@ -425,6 +425,13 @@ module Err = struct
         current_scopes
     in
     Errors.raise_spanned_error msg pos
+
+  let non_exclusive_cases case pos =
+    let msg =
+      Pp.spr "switch cases must be exclusive: %a cannot be used twice"
+        Com.format_case case
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -2023,6 +2030,19 @@ let rec check_instructions (env : var_env)
             let env = { env with prog } in
             let instr' = Com.ArrangeEvents (sort', filter', add', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
+        | Com.Switch (e, l) ->
+            let e' = map_expr env e in
+            let _cases, env, rev_l' =
+              List.fold_left
+                (fun (cases, env, rev_l') (c, l) ->
+                  if List.mem c cases then Err.non_exclusive_cases c instr_pos;
+                  let prog, l'elt = check_instructions env l in
+                  (c :: cases, { env with prog }, (c, l'elt) :: rev_l'))
+                ([], env, []) l
+            in
+            let l' = List.rev rev_l' in
+            let res_instr = Com.Switch (e', l') in
+            aux (env, Pos.mark res_instr instr_pos :: res) il
         | Com.RaiseError (m_err, m_var_opt) ->
             if env.proc_type = Rule then
               Err.instruction_forbidden_in_rules instr_pos;
@@ -2199,6 +2219,25 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
             in
             let def_vars =
               merge_seq_defs def_vars (merge_par_defs def_then def_else)
+            in
+            aux (tmps, in_vars, out_vars, def_vars) il
+        | Com.Switch (e, l) ->
+            let in_expr = inout_expression env e in
+            (* Reversed order, but it does not matter *)
+            let in_l, out_l, def_l =
+              List.fold_left
+                (fun (il, ol, dl) (_, l) ->
+                  let i, o, d = inout_instrs env tmps l in
+                  (i :: il, o :: ol, d :: dl))
+                ([], [], []) l
+            in
+            let in_vars =
+              StrMap.union_snd in_expr
+              @@ List.fold_left StrMap.union_snd in_vars in_l
+            and out_vars = List.fold_left StrMap.union_snd out_vars out_l
+            and def_vars =
+              merge_seq_defs def_vars
+              @@ List.fold_left merge_par_defs StrMap.empty def_l
             in
             aux (tmps, in_vars, out_vars, def_vars) il
         | Com.WhenDoElse (wdl, ed) ->

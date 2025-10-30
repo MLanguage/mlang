@@ -218,6 +218,8 @@ type verif_domain = verif_domain_data domain
 
 type literal = Float of float | Undefined
 
+type case = Default | Value of literal
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -420,6 +422,7 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
+  | Switch of ('v m_expression * (case * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -484,6 +487,8 @@ val get_normal_var : var_name -> string
 val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
+
+val format_case : Pp.t -> case -> unit
 
 val format_atom : (Pp.t -> 'v -> unit) -> Pp.t -> 'v atom -> unit
 
