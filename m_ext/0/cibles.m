@@ -623,7 +623,7 @@ aiguillage (Y) : (
     afficher "Y = 1, OK!\n";
   cas indefini:
     afficher "Y = --indefini--, echec\n";
-  defaut:
+  par_defaut:
     afficher "Y = ?, echec\n";
 )
 afficher "FIN test aiguillage\n";

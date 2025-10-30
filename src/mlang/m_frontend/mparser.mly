@@ -55,7 +55,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
 %token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
-%token STOP MATCH CASE DEFAULT
+%token STOP MATCH CASE
 
 %token EOF
 
@@ -889,7 +889,7 @@ instruction:
 switch_case_value:
 | CASE s = SYMBOL { Value (Com.Float (float_of_string s)) }
 | CASE UNDEFINED { Value Com.Undefined }
-| DEFAULT { Com.Default }
+| BY_DEFAULT { Com.Default }
 
 switch_case:
   | c = switch_case_value COLON ilt = instruction_list_rev

@@ -87,7 +87,6 @@ rule token = parse
     | "const" -> CONST
     | "dans" -> IN
     | "dans_domaine" -> IN_DOMAIN
-    | "defaut" -> DEFAULT
     | "discordance" -> DISCORDANCE
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
