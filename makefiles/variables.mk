@@ -123,3 +123,5 @@ MAKE_DGFIP=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$
 
 MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR)/calc ROOT_DIR="$(ROOT_DIR)"
 
+IRJ_BIN=irj_checker
+IRJ_TESTS_DIRS?=tests/2019 tests/2020 tests/2022 tests/2023
