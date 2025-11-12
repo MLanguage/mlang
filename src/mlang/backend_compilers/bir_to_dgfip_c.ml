@@ -1420,7 +1420,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let nb_events_sav = fresh_c_local "nb_events_sav" in
       let nb_add = fresh_c_local "nb_add" in
       let cpt_i = fresh_c_local "i" in
-      let cpt_j = fresh_c_local "j" in
       let evt = fresh_c_local "evt" in
       let pp_sanitize () =
         pr "@;free(irdata->events);";
@@ -1434,7 +1433,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@;int %s = 0;" nb_add;
       pr "@;T_event **%s = NULL;" events_tmp;
       pr "@;int %s = 0;" cpt_i;
-      pr "@;int %s = 0;" cpt_j;
       (match add with
       | Some expr ->
           pr "@;@[<v 2>{";
@@ -1475,6 +1473,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             nb_events_sav);
       (match filter with
       | Some (var, expr) ->
+          let cpt_j = fresh_c_local "j" in
+          pr "@;int %s = 0;" cpt_j;
           pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
           let ref_def = VID.gen_def None var in
           (* !!! *)
