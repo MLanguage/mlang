@@ -1066,8 +1066,9 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let print = fresh_c_local "print" in
       let print_def = print ^ "_def" in
       let print_val = print ^ "_val" in
-      (* The [print] var only is needed in a few cases. *)
+      (* The [print*] variables only are needed in a few cases. *)
       let print_var_is_needed = ref false in
+      let print_def_val_are_needed = ref false in
       (* Iterating on the arguments and saving the associated printers in a
          list to check as we build it if we will need the print_var; in which
          case, we set the previous reference to true. *)
@@ -1105,6 +1106,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                       pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr
                         fld
                 | TabAccess (m_sp_opt, v, m_idx) ->
+                    print_def_val_are_needed := true;
                     fun () ->
                       pr_sp m_sp_opt (Some v);
                       pr "@;@[<v 2>{";
@@ -1135,6 +1137,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                       StrMap.find (Pos.unmark f) p.program_event_fields
                     in
                     print_var_is_needed := ef.is_var;
+                    print_def_val_are_needed := ef.is_var;
                     fun () ->
                       pr_sp m_sp_opt None;
                       if ef.is_var then (
@@ -1153,6 +1156,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                           print_std pr_ctx print (Pos.unmark f) fld;
                         pr "@]@;}"))
             | PrintIndent e ->
+                print_def_val_are_needed := true;
                 fun () ->
                   generate_expr_with_res_in p dgfip_flags oc print_def print_val
                     e;
@@ -1161,6 +1165,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                     print_val;
                   pr "@]@;}"
             | PrintExpr (e, min, max) ->
+                print_def_val_are_needed := true;
                 fun () ->
                   generate_expr_with_res_in p dgfip_flags oc print_def print_val
                     e;
@@ -1173,7 +1178,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           args
       in
       pr "@;@[<v 2>{";
-      pr "@;char %s;@;double %s;" print_def print_val;
+      if !print_def_val_are_needed then
+        pr "@;char %s;@;double %s;" print_def print_val;
       if !print_var_is_needed then pr "@;int %s;" print;
       List.iter (fun f -> f ()) printers;
       pr "@]@;}"
