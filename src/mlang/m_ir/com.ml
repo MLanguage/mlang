@@ -656,7 +656,7 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case * ('v, 'e) m_instruction list) list)
+  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -1358,8 +1358,8 @@ let rec format_instruction form_var form_err =
     | Switch (e, l) ->
         Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
         List.iter
-          (fun (c, l) ->
-            Format.fprintf fmt "%a :@," format_case c;
+          (fun (cl, l) ->
+            List.iter (Format.fprintf fmt "%a :@," format_case) cl;
             Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
           l;
         Format.fprintf fmt "@]@,"

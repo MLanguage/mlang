@@ -810,14 +810,17 @@ struct
         let then_ () = raise INTERNAL_STOP_SWITCH in
         try
           List.iter
-            (fun (case, stmts) ->
-              match (case, v) with
-              | Com.Default, _ | Value Undefined, Undefined ->
-                  evaluate_stmts ~then_ canBlock ctx stmts
-              | Value (Float f), Number n
-                when compare_numbers Eq n (N.of_float f) ->
-                  evaluate_stmts ~then_ canBlock ctx stmts
-              | _ -> ())
+            (fun (cases, stmts) ->
+              List.iter
+                (fun case ->
+                  match (case, v) with
+                  | Com.Default, _ | Value Undefined, Undefined ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | Value (Float f), Number n
+                    when compare_numbers Eq n (N.of_float f) ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | _ -> ())
+                cases)
             l
         with INTERNAL_STOP_SWITCH -> ())
     | Com.WhenDoElse (wdl, ed) ->

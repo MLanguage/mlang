@@ -887,13 +887,17 @@ instruction:
   { Some (Switch (e, l)) }
 
 switch_case_value:
-| CASE s = SYMBOL { Value (Com.Float (float_of_string s)) }
-| CASE UNDEFINED { Value Com.Undefined }
-| BY_DEFAULT { Com.Default }
+| CASE s = SYMBOL COLON { Value (Com.Float (float_of_string s)) }
+| CASE UNDEFINED COLON { Value Com.Undefined }
+| BY_DEFAULT COLON { Com.Default }
+
+switch_cases_rev:
+  | sc = switch_case_value { [ sc ] }
+  | scl = switch_cases_rev sc = switch_case_value { sc :: scl }
 
 switch_case:
-  | c = switch_case_value COLON ilt = instruction_list_rev
-    { c, List.rev ilt }
+  | scr = switch_cases_rev ilt = instruction_list_rev
+    { List.rev scr, ilt }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {

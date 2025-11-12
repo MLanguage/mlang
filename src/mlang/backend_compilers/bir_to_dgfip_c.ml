@@ -971,11 +971,14 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       (* Undef & Default should be unique, but just in case we take them all *)
       let undef_branches, default_branches, other_branches =
         List.fold_left
-          (fun (und, def, oth) (c, l) ->
-            match c with
-            | Com.Default -> (und, l :: def, oth)
-            | Com.(Value Undefined) -> (l :: und, def, oth)
-            | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+          (fun acc (cl, l) ->
+            List.fold_left
+              (fun (und, def, oth) c ->
+                match c with
+                | Com.Default -> (und, l :: def, oth)
+                | Com.(Value Undefined) -> (l :: und, def, oth)
+                | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+              acc cl)
           ([], [], []) l
       in
       let undef_branches = List.rev undef_branches
