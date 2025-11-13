@@ -39,3 +39,6 @@ clean: FORCE remise_a_zero_versionnage
 	rm -f doc/doc.html
 	dune clean
 
+sphinx-doc: FORCE
+	cp -rf source-doc/* _build/default/source-doc/ 
+	sphinx-build -M html _build/default/source-doc/ doc/sphinx/
