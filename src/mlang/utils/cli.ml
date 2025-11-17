@@ -137,6 +137,14 @@ let roundops =
            running on a mainframe. In this case, the size of the long type has \
            to be specified; it can be either 32 or 64.")
 
+let plain_output =
+  Arg.(
+    value
+    & flag
+    & info
+      [ "plain_output" ]
+      ~doc:"Do not print terminal characters.")
+
 let comparison_error_margin_cli =
   Arg.(
     value
@@ -183,7 +191,7 @@ let mlang_t f =
     $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
-    $ m_clean_calls $ dgfip_options)
+    $ m_clean_calls $ dgfip_options $ plain_output)
 
 let info =
   let doc =
@@ -273,8 +281,8 @@ let time_marker () =
 
 let format_with_style (styles : ANSITerminal.style list)
     (str : ('a, unit, string) format) =
-  if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
-  else Printf.sprintf str
+  if !Config.plain_output (* can depend on a stylr flag *) then Printf.sprintf str
+  else ANSITerminal.sprintf styles str
 
 (** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
     timing since last debug *)
