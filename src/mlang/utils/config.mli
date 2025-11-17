@@ -126,6 +126,8 @@ val execution_mode : execution_mode ref
 
 val platform : platform ref
 
+val plain_output : bool ref
+
 val set_all_arg_refs :
   (* files *) files ->
   (* applications *) string list ->
@@ -146,4 +148,5 @@ val set_all_arg_refs :
   (* mpp_function *) string ->
   (* dgfip_flags *) Dgfip_options.flags ->
   (* execution_mode *) execution_mode ->
+  (* plain_output *) bool ->
   unit

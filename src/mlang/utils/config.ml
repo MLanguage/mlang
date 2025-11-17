@@ -139,6 +139,8 @@ let income_year = ref 0
 
 let platform = ref Executable
 
+let plain_output = ref true
+
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (no_print_cycles_ : bool) (output_file_ : string option)
@@ -146,7 +148,8 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (comparison_error_margin_ : float option) (income_year_ : int)
     (value_sort_ : value_sort) (round_ops_ : round_ops) (backend_ : backend)
     (dgfip_test_filter_ : bool) (mpp_function_ : string)
-    (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode) =
+    (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode)
+    (plain_output_ : bool) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -165,6 +168,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   dgfip_test_filter := dgfip_test_filter_;
   mpp_function := mpp_function_;
   dgfip_flags := dgfip_flags_;
+  plain_output := plain_output_;
   match output_file_ with
   | None -> ()
   | Some o -> (
