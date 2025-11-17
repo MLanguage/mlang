@@ -96,6 +96,8 @@ val no_nondet_display : bool ref
 
 val platform : platform ref
 
+val plain_output : bool ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -118,5 +120,5 @@ val set_opts :
   m_clean_calls:bool ->
   dgfip_options:string list option ->
   no_nondet_display:bool ->
-  execution_mode:execution_mode ->
+  plain_output:bool ->
   [ `Displayed_dgfip_help | `Error of string | `Run ]
