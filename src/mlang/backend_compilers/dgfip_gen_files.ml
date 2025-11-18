@@ -771,6 +771,7 @@ extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
 extern int nb_evenements(T_irdata *irdata);
 
+extern T_varinfo *cherche_varinfo_statique(const char *nom);
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 
 extern char lis_varinfo(
@@ -1735,6 +1736,30 @@ int lis_erreur_type(T_erreur *err) {
 int nb_evenements(T_irdata *irdata) {
   if (irdata == NULL) return 0;
   return irdata->nb_events;
+}
+
+T_varinfo *cherche_varinfo_statique(const char *nom) {
+  T_varinfo_map *map = NULL;
+  int res = -1;
+  int inf = 0;
+  int sup = NB_variable + NB_saisie;
+  int millieu = 0;
+
+  if (nom == NULL) return NULL;
+  while ((res != 0) && (inf < sup)) {
+    millieu = (inf + sup) / 2;
+    map = &(varinfo[millieu]);
+    res = strcmp(nom, map->name);
+    if (res < 0) {
+      sup = millieu;
+    } else if (res > 0) {
+      inf = millieu + 1;
+    }
+  }
+  if (res == 0) {
+    return map->info;
+  }
+  return NULL;
 }
 
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
