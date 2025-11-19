@@ -897,7 +897,7 @@ switch_cases_rev:
 
 switch_case:
   | scr = switch_cases_rev ilt = instruction_list_rev
-    { List.rev scr, ilt }
+    { List.rev scr, List.rev ilt }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {

@@ -627,62 +627,62 @@ variables_temporaires: PENA, I;
   sinon
     PENA = GLOBAL.MAJO_CODE_STRATE;
   finsi
-  si PENA = 1 alors
-    I = 25;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 2 alors
-    I = 23;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 3 alors
-    I = 14;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 4 alors
-    I = 9;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 5 alors
-    I = 7;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 6 alors
-    I = 3;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 7 ou PENA = 18 alors
-    I = 17;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 8 alors
-    I = 12;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 10 alors
-    I = 16;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 11 alors
-    I = 11;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 17 alors
-    I = 15;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 22 alors
-    I = 24;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 30 alors
-    I = 10;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 31 alors
-    I = 6;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 32 alors
-    I = 5;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 35 alors
-    I = 9;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 55 alors
-    I = 13;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 99 alors
-    I = 0;
-    calculer cible set_majo_str_tr : avec I;
-  finsi
-)
+  aiguillage (PENA) : (
+    cas 1 :
+      I = 25;
+      calculer cible set_majo_str_tr : avec I;
+    cas 2 :
+      I = 23;
+      calculer cible set_majo_str_tr : avec I;
+    cas 3 :
+      I = 14;
+      calculer cible set_majo_str_tr : avec I;
+    cas 4 :
+      I = 9;
+      calculer cible set_majo_str_tr : avec I;
+    cas 5 :
+      I = 7;
+      calculer cible set_majo_str_tr : avec I;
+    cas 6 :
+      I = 3;
+      calculer cible set_majo_str_tr : avec I;
+    cas 7 : cas 18 :
+      I = 17;
+      calculer cible set_majo_str_tr : avec I;
+    cas 8 :
+      I = 12;
+      calculer cible set_majo_str_tr : avec I;
+    cas 10 :
+      I = 16;
+      calculer cible set_majo_str_tr : avec I;
+    cas 11 :
+      I = 11;
+      calculer cible set_majo_str_tr : avec I;
+    cas 17 :
+      I = 15;
+      calculer cible set_majo_str_tr : avec I;
+    cas 22 :
+      I = 24;
+      calculer cible set_majo_str_tr : avec I;
+    cas 30 :
+      I = 10;
+      calculer cible set_majo_str_tr : avec I;
+    cas 31 :
+      I = 6;
+      calculer cible set_majo_str_tr : avec I;
+    cas 32 :
+      I = 5;
+      calculer cible set_majo_str_tr : avec I;
+    cas 35 :
+      I = 9;
+      calculer cible set_majo_str_tr : avec I;
+    cas 55 :
+      I = 13;
+      calculer cible set_majo_str_tr : avec I;
+    cas 99:
+      I = 0;
+      calculer cible set_majo_str_tr : avec I;
+  )
 
 cible remplit_tgv_d2042:
 application: iliad;
