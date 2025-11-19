@@ -628,61 +628,29 @@ variables_temporaires: PENA, I;
     PENA = GLOBAL.MAJO_CODE_STRATE;
   finsi
   aiguillage (PENA) : (
-    cas 1 :
-      I = 25;
-      calculer cible set_majo_str_tr : avec I;
-    cas 2 :
-      I = 23;
-      calculer cible set_majo_str_tr : avec I;
-    cas 3 :
-      I = 14;
-      calculer cible set_majo_str_tr : avec I;
-    cas 4 :
-      I = 9;
-      calculer cible set_majo_str_tr : avec I;
-    cas 5 :
-      I = 7;
-      calculer cible set_majo_str_tr : avec I;
-    cas 6 :
-      I = 3;
-      calculer cible set_majo_str_tr : avec I;
-    cas 7 : cas 18 :
-      I = 17;
-      calculer cible set_majo_str_tr : avec I;
-    cas 8 :
-      I = 12;
-      calculer cible set_majo_str_tr : avec I;
-    cas 10 :
-      I = 16;
-      calculer cible set_majo_str_tr : avec I;
-    cas 11 :
-      I = 11;
-      calculer cible set_majo_str_tr : avec I;
-    cas 17 :
-      I = 15;
-      calculer cible set_majo_str_tr : avec I;
-    cas 22 :
-      I = 24;
-      calculer cible set_majo_str_tr : avec I;
-    cas 30 :
-      I = 10;
-      calculer cible set_majo_str_tr : avec I;
-    cas 31 :
-      I = 6;
-      calculer cible set_majo_str_tr : avec I;
-    cas 32 :
-      I = 5;
-      calculer cible set_majo_str_tr : avec I;
-    cas 35 :
-      I = 9;
-      calculer cible set_majo_str_tr : avec I;
-    cas 55 :
-      I = 13;
-      calculer cible set_majo_str_tr : avec I;
-    cas 99:
-      I = 0;
-      calculer cible set_majo_str_tr : avec I;
+    cas 1 : I = 25;
+    cas 2 : I = 23;
+    cas 3 : I = 14;
+    cas 4 : I = 9;
+    cas 5 : I = 7;
+    cas 6 : I = 3;
+    cas 7 :
+    cas 18 : I = 17;
+    cas 8 :  I = 12;
+    cas 10 : I = 16;
+    cas 11 : I = 11;
+    cas 17 : I = 15;
+    cas 22 : I = 24;
+    cas 30 : I = 10;
+    cas 31 : I = 6;
+    cas 32 : I = 5;
+    cas 35 : I = 9;
+    cas 55 : I = 13;
+    cas 99 : I = 0;
+    cas indefini :
+    par_defaut : stop cible;
   )
+  calculer cible set_majo_str_tr : avec I;
 
 cible remplit_tgv_d2042:
 application: iliad;
@@ -881,6 +849,7 @@ alors
   si dans_domaine(VAR, saisie contexte) alors
     NATURE = vers_nature(attribut(VAR, modcat));
   sinon_si
+    # Il s'agit de la même condition qu'au dessus ? 
     dans_domaine(VAR, saisie famille)
     ou dans_domaine(VAR, saisie revenu)
     ou dans_domaine(VAR, saisie revenu corrective)
@@ -948,41 +917,40 @@ iterer
 : dans (
   calculer cible get_nature : avec NATURE, VAR;
   si NATURE = N_REVENU alors
-    si
-      attribut(VAR, cotsoc) = 1
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+  aiguillage( attribut(VAR, cotsoc) ) : (
+    cas 1:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
+        GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+    cas 5:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+    cas 9:
+      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+    cas 10:
       GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
       GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
       GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) = 5
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si attribut(VAR, cotsoc) = 9 alors
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si attribut(VAR, cotsoc) = 10 alors
-      GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
-      GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
+    cas 11: cas 12: cas 13: cas 14: cas 19: cas 20: cas 21:
       GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) dans (11, 12, 13, 14, 19, 20, 21)
-    alors
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    sinon_si attribut(VAR, cotsoc) = 16 alors
+    cas 16:
       GLOBAL.MAJO_T_RABPLO = GLOBAL.MAJO_T_RABPLO + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) = 18
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    finsi
+    cas 18:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+  )
   finsi
 )
 
@@ -2071,72 +2039,61 @@ iterer
       sinon_si positif(EST_ISF) alors
         GLOBAL.TL_MF_MFIFI = GLOBAL.TL_MF_MFIFI + MF_DEF;
       sinon
-        COTSOC = attribut(champ_evenement(R, code), cotsoc);
-        si COTSOC = 2 alors
-          GLOBAL.TL_MF_MFCDIS = GLOBAL.TL_MF_MFCDIS + MF_DEF;
-        sinon_si COTSOC = 3 alors
-          GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
-        sinon_si COTSOC = 4 alors
-          GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
-        sinon_si COTSOC = 5 alors
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        sinon_si COTSOC = 6 alors
-          GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
-        sinon_si COTSOC = 7 alors
-          GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
-        sinon_si COTSOC = 8 alors
-          GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
-        sinon_si COTSOC = 9 alors
-          GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
-        sinon_si COTSOC = 10 alors
-          GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-          GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-        sinon_si COTSOC = 11 alors
-          GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 12 alors
-          GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 13 alors
-          GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 14 alors
-          GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 16 alors
-          GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
-        sinon_si COTSOC = 17 alors
-          GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-        sinon_si COTSOC = 18 alors
-          GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-        sinon_si COTSOC = 19 alors
-          GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 20 alors
-          GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-          GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 21 alors
-          GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-          GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 22 alors
-          GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 1 alors
-          GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-          GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        sinon
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        finsi
+        aiguillage (attribut(champ_evenement(R, code), cotsoc)) : (
+          cas 2: GLOBAL.TL_MF_MFCDIS = GLOBAL.TL_MF_MFCDIS + MF_DEF;
+	  cas 3: GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
+	  cas 4: GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
+	  cas 5: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+	  cas 6: GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
+	  cas 7: GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
+	  cas 8: GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
+	  cas 9: GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
+	  cas 10 :
+	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+	  cas 11:
+	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 12:
+	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 13:
+	    GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 14:
+	    GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 16: GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
+	  cas 17: GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+	  cas 18:
+	    GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
+	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+	  cas 19:
+	    GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 20:
+	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 21:
+	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 22:
+	    GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 1:
+	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+          par_defaut: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+        )
       finsi
     finsi
   finsi
