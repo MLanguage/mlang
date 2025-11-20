@@ -46,7 +46,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)/calc),1)
 %.o: %.c
-	$(CC) $(BACKEND_CFLAGS) -c $< -o $@
+	$(CC) $(BACKEND_CFLAGS) -I. -c $< -o $@
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -95,8 +95,7 @@ endif
 
 # Build derivative file lists
 DRIVER_TARGETS:=$(foreach file,$(DRIVER_FILES),calc/$(file))
-DRIVER_TEMP:=$(DRIVER_FILES:.ml=.o)
-DRIVER_OBJECT_FILES:=$(DRIVER_TEMP:.c=.o)
+DRIVER_OBJECT_FILES:=$(DRIVER_C_FILES:.c=.o)
 # TODO: use &: when upgraded to GNU Make 4.3+
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -110,10 +109,11 @@ endif
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 cal: $(DRIVER_TARGETS)
 	@echo "Compilation de la calculette primitive:"
-	@echo "  OCAMLFLAGS=$(OCAMLFLAGS)"
-	cd calc && rm -f $(DRIVER_OBJECT_FILES)
-	cd calc && ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
-	unix.cmxa *.o $(DRIVER_FILES) -o ../cal
+	@for I in $(DRIVER_C_FILES:.c=.o) ; \
+	do \
+	  $(MAKE_DGFIP_CALC) $$I || exit; \
+	done
+	cd calc && $(CC) -lm *.o -o ../cal
 	@echo "Compilation terminée"
 endif
 
@@ -137,7 +137,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal -recursif ${TEST_FILES}
+	./cal -mode primitif -recursif ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

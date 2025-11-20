@@ -80,9 +80,11 @@ endif
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
-DRIVER_DIR?=ml_driver
-# Driver sources for tax calculator (must be manually ordered for OCaml compiler)
-DRIVER_FILES?=irdata.c stubs.c m.ml read_test.ml main.ml
+DRIVER_DIR?=c_driver
+# Driver sources for tax calculator
+DRIVER_H_FILES?=aide.h chaine.h commun.h fichiers.h format.h ida.h irj.h liste.h mem.h options.h traitement.h utils.h
+DRIVER_C_FILES?=aide.c chaine.c commun.c fichiers.c format.c ida.c irdata.c irj.c liste.c main.c mem.c options.c traitement.c utils.c
+DRIVER_FILES?=$(DRIVER_H_FILES) $(DRIVER_C_FILES)
 
 # Flag to disable binary dump comparison
 NO_BINARY_COMPARE?=1
