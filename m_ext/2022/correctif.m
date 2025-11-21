@@ -2237,117 +2237,69 @@ fonction get_strate_pena:
 application: iliad;
 arguments: STR;
 resultat: PENA;
-si STR = 0 alors
-  PENA = 99;
-sinon_si STR = 1 alors
-  PENA = -1;
-sinon_si STR dans (2, 3) alors
-  PENA = 6;
-sinon_si STR = 4 alors
-  PENA = 12;
-sinon_si STR = 5 alors
-  PENA = 32;
-sinon_si STR = 6 alors
-  PENA = 31;
-sinon_si STR = 7 alors
-  PENA = 5;
-sinon_si STR = 8 alors
-  PENA = 4;
-sinon_si STR = 9 alors
-  PENA = 35;
-sinon_si STR = 10 alors
-  PENA = 30;
-sinon_si STR = 11 alors
-  PENA = 11;
-sinon_si STR = 12 alors
-  PENA = 8;
-sinon_si STR = 13 alors
-  PENA = 55;
-sinon_si STR = 14 alors
-  PENA = 3;
-sinon_si STR = 15 alors
-  PENA = 17;
-sinon_si STR = 16 alors
-  PENA = 10;
-sinon_si STR = 17 alors
-  PENA = 7;
-sinon_si STR dans (18, 19, 20, 21, 22, 23) alors
-  PENA = 2;
-sinon_si STR = 24 alors
-  PENA = 22;
-sinon_si STR = 25 alors
-  PENA = 24;
-sinon
-  PENA = -1;
-finsi
-
-fonction get_strate_taux:
-application: iliad;
-arguments: STR;
-resultat: PENA;
-si STR = 0 alors
-  PENA = 99;
-sinon_si STR = 1 alors
-  PENA = -1;
-sinon_si STR dans (2, 3) alors
-  PENA = 6;
-sinon_si STR = 4 alors
-  PENA = 12;
-sinon_si STR = 5 alors
-  PENA = 32;
-sinon_si STR = 6 alors
-  PENA = 31;
-sinon_si STR = 7 alors
-  PENA = 5;
-sinon_si STR = 8 alors
-  PENA = 4;
-sinon_si STR = 9 alors
-  PENA = 35;
-sinon_si STR = 10 alors
-  PENA = 30;
-sinon_si STR = 11 alors
-  PENA = 11;
-sinon_si STR = 12 alors
-  PENA = 8;
-sinon_si STR = 13 alors
-  PENA = 55;
-sinon_si STR = 14 alors
-  PENA = 3;
-sinon_si STR = 15 alors
-  PENA = 17;
-sinon_si STR = 16 alors
-  PENA = 10;
-sinon_si STR = 17 alors
-  PENA = 7;
-sinon_si STR dans (18, 19, 20, 21, 22, 23) alors
-  PENA = 2;
-sinon_si STR = 24 alors
-  PENA = 22;
-sinon_si STR = 25 alors
-  PENA = 24;
-sinon
-  PENA = -1;
-finsi
+aiguillage(STR):(
+  cas 0: PENA = 99;
+  cas 1 : PENA = -1;
+  cas 2 :
+  cas 3 : PENA = 6;
+  cas 4 : PENA = 12;
+  cas 5 : PENA = 32;
+  cas 6 : PENA = 31;
+  cas 7 : PENA = 5;
+  cas 8 : PENA = 4;
+  cas 9 : PENA = 35;
+  cas 10: PENA = 30;
+  cas 11: PENA = 11;
+  cas 12: PENA = 8;
+  cas 13: PENA = 55;
+  cas 14: PENA = 3;
+  cas 15: PENA = 17;
+  cas 16: PENA = 10;
+  cas 17: PENA = 7;
+  cas 18:
+  cas 19:
+  cas 20:
+  cas 21:
+  cas 22:
+  cas 23: PENA = 2;
+  cas 24: PENA = 22;
+  cas 25: PENA = 24;
+  par_defaut: PENA = -1;
+)
 
 fonction get_strate_taux:
 application: iliad;
 arguments: STR;
 resultat: TAUX;
-si STR dans (0, 1) alors
-  TAUX = -1;
-sinon_si STR dans (2, 18, 19, 20, 21, 22, 23, 24, 25) alors
-  TAUX = 0;
-sinon_si STR = 3 alors
-  TAUX = 100;
-sinon_si STR dans (4, 5, 6, 7, 8, 9) alors
-  TAUX = 80;
-sinon_si STR dans (10, 11, 12, 13, 14) alors
-  TAUX = 40;
-sinon_si STR dans (15, 16, 17) alors
-  TAUX = 10;
-sinon
-  TAUX = -1;
-finsi
+aiguillage (STR) : (
+  cas 0 :
+  cas 1 : TAUX = -1;
+  cas 2 : TAUX = 0;
+  cas 3 : TAUX = 100;
+  cas 4 :
+  cas 5 :
+  cas 6 :
+  cas 7 :
+  cas 8 :
+  cas 9 : TAUX = 80;
+  cas 10:
+  cas 11:
+  cas 12:
+  cas 13:
+  cas 14: TAUX = 40;
+  cas 15:
+  cas 16:
+  cas 17: TAUX = 10;
+  cas 18:
+  cas 19:
+  cas 20:
+  cas 21:
+  cas 22:
+  cas 23:
+  cas 24:
+  cas 25: TAUX = 0;
+  par_defaut: TAUX = -1;
+)
 
 cible get_code_situation_famille:
 application: iliad;
