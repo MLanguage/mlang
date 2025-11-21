@@ -54,7 +54,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
+%token SAME_VARIABLE VARIABLE_SPACE IS SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
 %token STOP MATCH CASE
 
 %token EOF
@@ -891,9 +891,10 @@ instruction:
   { Some (Switch (e, l)) }
 
 switch_case_value:
-| CASE s = SYMBOL COLON { Value (Com.Float (float_of_string s)) }
-| CASE UNDEFINED COLON { Value Com.Undefined }
-| BY_DEFAULT COLON { Com.Default }
+| CASE s = SYMBOL COLON { Com.CValue (Com.Float (float_of_string s)) }
+| CASE UNDEFINED COLON { Com.CValue Com.Undefined }
+| CASE IS acc = with_pos(var_access) COLON { Com.CVar acc }
+| BY_DEFAULT COLON { Com.CDefault }
 
 switch_cases_rev:
   | sc = switch_case_value { [ sc ] }
@@ -1139,13 +1140,13 @@ var_access:
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     match m_i_opt with
     | None -> Com.VarAccess (Some (m_sp, -1), m_v)
-    | Some m_i -> Com.TabAccess (Some (m_sp, -1), m_v, m_i)
+    | Some m_i -> Com.TabAccess ((Some (m_sp, -1), m_v), m_i)
   }
 | v = symbol_with_pos m_i_opt = with_pos(brackets)? {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
     match m_i_opt with
     | None -> Com.VarAccess (None, m_v)
-    | Some m_i -> Com.TabAccess (None, m_v, m_i)
+    | Some m_i -> Com.TabAccess ((None, m_v), m_i)
   }
 | sp = symbol_with_pos DOT EVENT_FIELD LPAREN idx = with_pos(expression)
   COMMA f = symbol_with_pos RPAREN {
@@ -1347,13 +1348,13 @@ enumeration_item:
     let a =
       match m_i_opt with
       | None -> Com.VarAccess (Some (m_sp, -1), m_v)
-      | Some m_i -> Com.TabAccess (Some (m_sp, -1), m_v, m_i)
+      | Some m_i -> Com.TabAccess ((Some (m_sp, -1), m_v), m_i)
     in
     Com.VarValue (Pos.mark a (mk_position $sloc))
   }
 | v = symbol_with_pos LBRACKET m_i = with_pos(expression) RBRACKET {
     let m_v =  Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    let a = Com.TabAccess (None, m_v, m_i) in
+    let a = Com.TabAccess ((None, m_v), m_i) in
     Com.VarValue (Pos.mark a (mk_position $sloc))
   }
 | v = SYMBOL {
@@ -1440,11 +1441,11 @@ factor:
   LBRACKET m_i = with_pos(sum_expression) RBRACKET {
     let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    Var (TabAccess (Some (m_sp, -1), m_v, m_i))
+    Var (TabAccess ((Some (m_sp, -1), m_v), m_i))
   }
 | v = symbol_with_pos LBRACKET m_i = with_pos(sum_expression) RBRACKET {
     let m_v = Pos.same (parse_variable $sloc (Pos.unmark v)) v in
-    Var (TabAccess (None, m_v, m_i))
+    Var (TabAccess ((None, m_v), m_i))
   }
 | sp = symbol_with_pos DOT v = symbol_with_pos {
     let m_sp =  Pos.same (parse_variable $sloc (Pos.unmark sp)) sp in

@@ -438,8 +438,6 @@ type variable_space = {
 
 type literal = Float of float | Undefined
 
-type case = Default | Value of literal
-
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -477,12 +475,16 @@ type m_var_name = var_name Pos.marked
 
 type var_space = (m_var_name * int) option
 
+type 'v var_id = var_space * 'v
+
 type 'v access =
-  | VarAccess of var_space * 'v
-  | TabAccess of var_space * 'v * 'v m_expression
+  | VarAccess of 'v var_id
+  | TabAccess of 'v var_id * 'v m_expression
   | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
+
+and 'v case = CDefault | CValue of literal | CVar of 'v m_access
 
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
 
@@ -656,7 +658,8 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
+  | Switch of
+      ('v m_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -683,10 +686,10 @@ let target_is_function t = t.target_result <> None
 
 let rec access_map_var f = function
   | VarAccess (m_sp_opt, v) -> VarAccess (m_sp_opt, f v)
-  | TabAccess (m_sp_opt, v, m_i) ->
+  | TabAccess ((m_sp_opt, v), m_i) ->
       let v' = f v in
       let m_i' = m_expr_map_var f m_i in
-      TabAccess (m_sp_opt, v', m_i')
+      TabAccess ((m_sp_opt, v'), m_i')
   | FieldAccess (m_sp_opt, m_i, field, id) ->
       let m_i' = m_expr_map_var f m_i in
       FieldAccess (m_sp_opt, m_i', field, id)
@@ -802,6 +805,11 @@ and formula_map_var f = function
       let fd' = formula_decl_map_var f fd in
       MultipleFormulaes (fl', fd')
 
+and case_map_var f = function
+  | CDefault -> CDefault
+  | CValue v -> CValue v
+  | CVar acc -> CVar (m_access_map_var f acc)
+
 and instr_map_var f g = function
   | Affectation m_f -> Affectation (Pos.map (formula_map_var f) m_f)
   | IfThenElse (m_e0, m_il0, m_il1) ->
@@ -812,7 +820,10 @@ and instr_map_var f g = function
   | Switch (e, l) ->
       let e' = m_expr_map_var f e in
       let l' =
-        List.map (fun (c, l) -> (c, List.map (m_instr_map_var f g) l)) l
+        List.map
+          (fun (c, l) ->
+            (List.map (case_map_var f) c, List.map (m_instr_map_var f g) l))
+          l
       in
       Switch (e', l')
   | WhenDoElse (m_eil, m_il) ->
@@ -920,7 +931,7 @@ let fold_opt fold opt acc = match opt with Some e -> fold e acc | None -> acc
 let rec access_fold_var usage f a acc =
   match a with
   | VarAccess (m_sp_opt, v) -> acc |> f usage m_sp_opt (Some v)
-  | TabAccess (m_sp_opt, v, m_i) ->
+  | TabAccess ((m_sp_opt, v), m_i) ->
       acc |> f usage m_sp_opt (Some v) |> m_expr_fold_var f m_i
   | FieldAccess (m_sp_opt, m_i, _, _) ->
       acc |> f usage m_sp_opt None |> m_expr_fold_var f m_i
@@ -1113,10 +1124,6 @@ let format_literal fmt l =
   Format.pp_print_string fmt
     (match l with Float f -> string_of_float f | Undefined -> "indefini")
 
-let format_case fmt = function
-  | Default -> Format.pp_print_string fmt "default"
-  | Value v -> format_literal fmt v
-
 let format_atom form_var fmt vl =
   match vl with
   | AtomVar v -> form_var fmt v
@@ -1180,21 +1187,19 @@ let format_comp_op fmt op =
     | Eq -> "="
     | Neq -> "!=")
 
+let format_varid form_var fmt (m_sp_opt, v) =
+  let sp_str =
+    match m_sp_opt with
+    | None -> ""
+    | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
+  in
+  Pp.fpr fmt "%s%a" sp_str form_var v
+
 let format_access form_var form_expr fmt = function
-  | VarAccess (m_sp_opt, v) ->
-      let sp_str =
-        match m_sp_opt with
-        | None -> ""
-        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
-      in
-      Pp.fpr fmt "%s%a" sp_str form_var v
-  | TabAccess (m_sp_opt, v, m_i) ->
-      let sp_str =
-        match m_sp_opt with
-        | None -> ""
-        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
-      in
-      Pp.fpr fmt "%s%a[%a]" sp_str form_var v form_expr (Pos.unmark m_i)
+  | VarAccess v_id -> format_varid form_var fmt v_id
+  | TabAccess (v_id, m_i) ->
+      Pp.fpr fmt "%a[%a]" (format_varid form_var) v_id form_expr
+        (Pos.unmark m_i)
   | FieldAccess (m_sp_opt, e, f, _) ->
       let sp_str =
         match m_sp_opt with
@@ -1203,6 +1208,11 @@ let format_access form_var form_expr fmt = function
       in
       Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str form_expr (Pos.unmark e)
         (Pos.unmark f)
+
+let format_case form_var form_expr fmt = function
+  | CDefault -> Format.pp_print_string fmt "default"
+  | CValue v -> format_literal fmt v
+  | CVar acc -> format_access form_var form_expr fmt (Pos.unmark acc)
 
 let format_set_value form_var form_expr fmt sv =
   match sv with
@@ -1359,7 +1369,9 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
         List.iter
           (fun (cl, l) ->
-            List.iter (Format.fprintf fmt "%a :@," format_case) cl;
+            List.iter
+              (Format.fprintf fmt "%a :@," (format_case form_var form_expr))
+              cl;
             Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
           l;
         Format.fprintf fmt "@]@,"

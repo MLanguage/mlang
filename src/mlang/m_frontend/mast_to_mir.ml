@@ -348,7 +348,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
     and aux_access tdata m_a =
       match Pos.unmark m_a with
       | Com.VarAccess _ -> (0, 0, 0, tdata)
-      | Com.TabAccess (_, _, mi) | Com.FieldAccess (_, mi, _, _) ->
+      | Com.TabAccess (_, mi) | Com.FieldAccess (_, mi, _, _) ->
           aux_expr tdata mi
     and aux_instr tdata (Pos.Mark (instr, _pos)) =
       match instr with
@@ -531,7 +531,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       match expr with
       | Com.TestInSet (_, me, values) ->
           let fold (nb, sz, nbRef, tdata) = function
-            | Com.VarValue (Pos.Mark (TabAccess (_, _, mei), _))
+            | Com.VarValue (Pos.Mark (TabAccess (_, mei), _))
             | Com.VarValue (Pos.Mark (FieldAccess (_, mei, _, _), _)) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata mei in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
@@ -543,26 +543,25 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
           (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
-      | Com.Var (TabAccess (_, _, me))
+      | Com.Var (TabAccess (_, me))
       | Com.Var (FieldAccess (_, me, _, _))
-      | Com.Size (Pos.Mark (TabAccess (_, _, me), _))
+      | Com.Size (Pos.Mark (TabAccess (_, me), _))
       | Com.Size (Pos.Mark (FieldAccess (_, me, _, _), _))
-      | Com.Type (Pos.Mark (TabAccess (_, _, me), _), _)
+      | Com.Type (Pos.Mark (TabAccess (_, me), _), _)
       | Com.Type (Pos.Mark (FieldAccess (_, me, _, _), _), _)
-      | Com.Attribut (Pos.Mark (TabAccess (_, _, me), _), _)
+      | Com.Attribut (Pos.Mark (TabAccess (_, me), _), _)
       | Com.Attribut (Pos.Mark (FieldAccess (_, me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1)
       | Com.Binop (_, me0, me1)
       | Com.SameVariable
-          ( Pos.Mark (TabAccess (_, _, me0), _),
-            Pos.Mark (TabAccess (_, _, me1), _) )
+          (Pos.Mark (TabAccess (_, me0), _), Pos.Mark (TabAccess (_, me1), _))
       | Com.SameVariable
-          ( Pos.Mark (TabAccess (_, _, me0), _),
+          ( Pos.Mark (TabAccess (_, me0), _),
             Pos.Mark (FieldAccess (_, me1, _, _), _) )
       | Com.SameVariable
           ( Pos.Mark (FieldAccess (_, me0, _, _), _),
-            Pos.Mark (TabAccess (_, _, me1), _) )
+            Pos.Mark (TabAccess (_, me1), _) )
       | Com.SameVariable
           ( Pos.Mark (FieldAccess (_, me0, _, _), _),
             Pos.Mark (FieldAccess (_, me1, _, _), _) ) ->
@@ -687,7 +686,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
               | Some l -> Literal (Float (float (Pos.unmark l)))
               | None -> Literal Undefined)
-        | TabAccess (_, m_id, _) -> (
+        | TabAccess ((_, m_id), _) -> (
             let var = get_var dict m_id in
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
             | Some l -> Literal (Float (float (Pos.unmark l)))
@@ -769,16 +768,24 @@ and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let v' = get_var dict m_v in
       Com.VarAccess (m_sp_opt', v')
-  | TabAccess (m_sp_opt, m_v, m_i) ->
+  | TabAccess ((m_sp_opt, m_v), m_i) ->
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let v' = get_var dict m_v in
       let m_i' = translate_expression p dict m_i in
-      Com.TabAccess (m_sp_opt', v', m_i')
+      Com.TabAccess ((m_sp_opt', v'), m_i')
   | FieldAccess (m_sp_opt, i, f, _) ->
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let i' = translate_expression p dict i in
       let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
       Com.FieldAccess (m_sp_opt', i', f, ef.index)
+
+let translate_case (p : Validator.program) (dict : Com.Var.t IntMap.t)
+    (case : int Pos.marked Com.case) : Com.Var.t Com.case =
+  match case with
+  | CDefault -> CDefault
+  | CValue v -> CValue v
+  | CVar (Pos.Mark (acc, pos)) ->
+      CVar (Pos.mark (translate_access p dict acc) pos)
 
 (** {2 Translation of instructions} *)
 
@@ -817,8 +824,9 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let revl', dict =
           List.fold_left
             (fun (revl, dict) (c, l) ->
+              let c' = List.map (translate_case p dict) c in
               let l', dict = aux ([], dict) l in
-              ((c, l') :: revl, dict))
+              ((c', l') :: revl, dict))
             ([], dict) l
         in
         let i' = Com.Switch (e', List.rev revl') in

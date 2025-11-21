@@ -436,7 +436,7 @@ struct
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -459,7 +459,7 @@ struct
     | Com.VarAccess (m_sp_opt, v) ->
         let vsd, v, vorg = get_var ctx m_sp_opt v in
         Some (vsd, v, vorg)
-    | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
+    | Com.TabAccess ((m_sp_opt, m_v), m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
             let vsd, v, vorg = get_var ctx m_sp_opt m_v in
@@ -523,7 +523,7 @@ struct
   and set_access ctx access value =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -800,15 +800,9 @@ struct
                 then Number (N.one ())
                 else Number (N.zero ())
             | None -> Undefined)
-        | SameVariable (m_acc0, m_acc1) -> (
-            let v0_opt = get_access_var ctx (Pos.unmark m_acc0) in
-            let v1_opt = get_access_var ctx (Pos.unmark m_acc1) in
-            match (v0_opt, v1_opt) with
-            | Some (_, v0, _), Some (_, v1, _) ->
-                if Com.Var.name_str v0 = Com.Var.name_str v1 then
-                  Number (N.one ())
-                else Number (N.zero ())
-            | _, _ -> Number (N.zero ()))
+        | SameVariable (m_acc0, m_acc1) ->
+            if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
+            else Number (N.zero ())
         | InDomain (m_acc, cvm) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) ->
@@ -847,6 +841,14 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
+  and same_variable ctx m_acc m_acc' : bool =
+    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
+    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
+    match (v0_opt, v1_opt) with
+    | Some (_, v0, _), Some (_, v1, _) ->
+        Com.Var.name_str v0 = Com.Var.name_str v1
+    | _, _ -> false
+
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =
     match Pos.unmark stmt with
@@ -873,7 +875,6 @@ struct
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
     | Com.Switch (c, l) -> (
-        let v = evaluate_expr ctx c in
         let exception INTERNAL_STOP_SWITCH in
         let then_ () = raise INTERNAL_STOP_SWITCH in
         try
@@ -881,13 +882,29 @@ struct
             (fun (cases, stmts) ->
               List.iter
                 (fun case ->
-                  match (case, v) with
-                  | Com.Default, _ | Value Undefined, Undefined ->
-                      evaluate_stmts ~then_ canBlock ctx stmts
-                  | Value (Float f), Number n
-                    when compare_numbers Eq n (N.of_float f) ->
-                      evaluate_stmts ~then_ canBlock ctx stmts
-                  | _ -> ())
+                  match case with
+                  | Com.CDefault | CValue Undefined ->
+                      let v = evaluate_expr ctx c in
+                      if v = Undefined then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CValue (Float f) -> (
+                      let v = evaluate_expr ctx c in
+                      match v with
+                      | Number v' when v' = N.of_float f ->
+                          evaluate_stmts ~then_ canBlock ctx stmts
+                      | _ -> ())
+                  | CVar m_acc ->
+                      let compared_m_acc =
+                        match Pos.unmark c with
+                        | Var v -> Pos.same v c
+                        | c ->
+                            Format.kasprintf failwith
+                              "Invalid expression %a in switch"
+                              (Com.format_expression Com.Var.pp)
+                              c
+                      in
+                      if same_variable ctx m_acc compared_m_acc then
+                        evaluate_stmts ~then_ canBlock ctx stmts)
                 cases)
             l
         with INTERNAL_STOP_SWITCH -> ())

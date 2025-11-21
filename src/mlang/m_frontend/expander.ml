@@ -583,7 +583,7 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
       | Pos.Mark (AtomVar m_v', _) ->
           let a' = Com.VarAccess (m_sp_opt', m_v') in
           ExpAccess (Pos.mark a' a_pos))
-  | TabAccess (m_sp_opt, m_v, m_i) -> (
+  | TabAccess ((m_sp_opt, m_v), m_i) -> (
       match expand_variable const_map loop_map m_v with
       | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_table v_pos
       | Pos.Mark (AtomVar m_v', _) ->
@@ -597,7 +597,7 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
               m_sp_opt
           in
           let m_i' = expand_expression const_map loop_map m_i in
-          let a' = Com.TabAccess (m_sp_opt', m_v', m_i') in
+          let a' = Com.TabAccess ((m_sp_opt', m_v'), m_i') in
           ExpAccess (Pos.mark a' a_pos))
   | FieldAccess (m_sp_opt, e, f, i_f) ->
       let m_sp_opt' =

@@ -240,9 +240,9 @@ and expand_functions_access (p : program) (access : 'var Com.access) :
     'var Com.access =
   match access with
   | VarAccess _ -> access
-  | TabAccess (m_sp_opt, m_v, i) ->
+  | TabAccess ((m_sp_opt, m_v), i) ->
       let i' = expand_functions_expr p i in
-      TabAccess (m_sp_opt, m_v, i')
+      TabAccess ((m_sp_opt, m_v), i')
   | FieldAccess (m_sp_opt, v_i, f, i_f) ->
       let m_i = expand_functions_expr p v_i in
       FieldAccess (m_sp_opt, m_i, f, i_f)

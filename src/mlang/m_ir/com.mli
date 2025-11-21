@@ -325,9 +325,6 @@ type verif_domain = verif_domain_data domain
 (** A literal can either be a float value or undefined. *)
 type literal = Float of float | Undefined
 
-(** A case for switches (aiguillages). *)
-type case = Default | Value of literal
-
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -386,15 +383,18 @@ type var_space = (m_var_name * int) option
 (** The prefix of a variable that defines its space. No space is equivalent to
     the default space. *)
 
+type 'v var_id = var_space * 'v
+
 (** A generic representation of an access to a variable, read or write. *)
 type 'v access =
-  | VarAccess of var_space * 'v  (** Simple variable occurence *)
-  | TabAccess of var_space * 'v * 'v m_expression
-      (** Access to a cell of a table *)
+  | VarAccess of 'v var_id  (** Simple variable occurence *)
+  | TabAccess of 'v var_id * 'v m_expression  (** Access to a cell of a table *)
   | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
       (** Call to 'champ_evenement' *)
 
 and 'v m_access = 'v access Pos.marked
+
+and 'v case = CDefault | CValue of literal | CVar of 'v m_access
 
 (** Values that can be substituted for loop parameters *)
 and 'v atom = AtomVar of 'v | AtomLiteral of literal
@@ -560,7 +560,8 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
+  | Switch of
+      ('v m_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -634,7 +635,12 @@ val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
 
-val format_case : Pp.t -> case -> unit
+val format_case :
+  (Pp.t -> 'v -> unit) ->
+  (Pp.t -> 'v expression -> unit) ->
+  Pp.t ->
+  'v case ->
+  unit
 
 val format_atom : (Pp.t -> 'v -> unit) -> Pp.t -> 'v atom -> unit
 
