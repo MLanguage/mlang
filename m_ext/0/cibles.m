@@ -626,6 +626,14 @@ aiguillage (Y) : (
   par_defaut:
     afficher "Y = ?, echec\n";
 )
+aiguillage (Y) : (
+  cas est X:
+    afficher "X = Y, ah bon?\n";
+  cas est Y:
+    afficher "Y = Y, ouf";
+  par_defaut:
+    afficher "Y = ?, echec\n";
+)
 afficher "FIN test aiguillage\n";
 
 # Test stop fonction

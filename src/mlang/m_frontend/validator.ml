@@ -427,9 +427,29 @@ module Err = struct
     Errors.raise_spanned_error msg pos
 
   let non_exclusive_cases case pos =
+    let format_var_name fmt v =
+      Format.fprintf fmt "%s" (Com.get_var_name (Pos.unmark v))
+    in
     let msg =
       Pp.spr "switch cases must be exclusive: %a cannot be used twice"
-        Com.format_case case
+        (Com.format_case format_var_name
+           (Com.format_expression format_var_name))
+        case
+    in
+    Errors.raise_spanned_error msg pos
+
+  let forbidden_variable_check_in_switch expr case pos =
+    let format_var_name fmt v =
+      Format.fprintf fmt "%s" (Com.get_var_name (Pos.unmark v))
+    in
+    let msg =
+      Pp.spr
+        "switch case %a is invalid: cannot match a variable with expression %a"
+        (Com.format_case format_var_name
+           (Com.format_expression format_var_name))
+        case
+        (Com.format_expression format_var_name)
+        (Pos.unmark expr)
     in
     Errors.raise_spanned_error msg pos
 end
@@ -1255,7 +1275,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
               | VarAccess (m_sp_opt, m_v) ->
                   let acc = fold_sp m_sp_opt env acc in
                   fold_var m_sp_opt m_v Num env acc
-              | TabAccess (m_sp_opt, m_v, m_i) ->
+              | TabAccess ((m_sp_opt, m_v), m_i) ->
                   let acc = fold_sp m_sp_opt env acc in
                   let acc = fold_var m_sp_opt m_v Table env acc in
                   fold_aux acc m_i env
@@ -1339,7 +1359,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
       | VarAccess (m_sp_opt, m_v) ->
           let acc = fold_sp m_sp_opt env acc in
           fold_var m_sp_opt m_v Num env acc
-      | TabAccess (m_sp_opt, m_v, m_i) ->
+      | TabAccess ((m_sp_opt, m_v), m_i) ->
           let acc = fold_sp m_sp_opt env acc in
           let acc = fold_var m_sp_opt m_v Table env acc in
           fold_aux acc m_i env
@@ -1375,7 +1395,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
           | None -> Err.unknown_variable var_pos);
           let acc = fold_sp m_sp_opt env acc in
           fold_var m_sp_opt m_v Both env acc
-      | TabAccess (m_sp_opt, m_v, m_i) ->
+      | TabAccess ((m_sp_opt, m_v), m_i) ->
           let name, var_pos = Pos.to_couple @@ get_var m_v in
           (match StrMap.find_opt name env.vars with
           | Some id ->
@@ -1415,7 +1435,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
       | VarAccess (m_sp_opt, m_v) ->
           let acc = fold_sp m_sp_opt env acc in
           fold_var m_sp_opt m_v Both env acc
-      | TabAccess (m_sp_opt, m_v, m_i) ->
+      | TabAccess ((m_sp_opt, m_v), m_i) ->
           let acc = fold_sp m_sp_opt env acc in
           let acc = fold_var m_sp_opt m_v Table env acc in
           fold_aux acc m_i env
@@ -1435,7 +1455,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
         | Com.VarAccess (m_sp_opt, m_v) ->
             let acc = fold_sp m_sp_opt env acc in
             fold_var m_sp_opt m_v Both env acc
-        | Com.TabAccess (m_sp_opt, m_v, m_i) ->
+        | Com.TabAccess ((m_sp_opt, m_v), m_i) ->
             let acc = fold_sp m_sp_opt env acc in
             let acc = fold_var m_sp_opt m_v Table env acc in
             fold_aux acc m_i env
@@ -1639,12 +1659,12 @@ let rec check_instructions (env : var_env)
         check_variable m_sp_opt m_v mem_var env;
         let m_v' = map_var env m_v in
         Pos.mark (Com.VarAccess (m_sp_opt, m_v')) apos
-    | Com.TabAccess (m_sp_opt, m_v, m_i) ->
+    | Com.TabAccess ((m_sp_opt, m_v), m_i) ->
         check_var_space m_sp_opt env;
         check_variable m_sp_opt m_v Table env;
         let m_v' = map_var env m_v in
         let m_i' = map_expr env m_i in
-        Pos.mark (Com.TabAccess (m_sp_opt, m_v', m_i')) apos
+        Pos.mark (Com.TabAccess ((m_sp_opt, m_v'), m_i')) apos
     | Com.FieldAccess (m_sp_opt, m_i, f, id) ->
         if env.proc_type = Rule then
           Err.instruction_forbidden_in_rules (Pos.get m_a);
@@ -1658,6 +1678,14 @@ let rec check_instructions (env : var_env)
         let m_i' = map_expr env m_i in
         let a' = Com.FieldAccess (m_sp_opt, m_i', f, id) in
         Pos.mark a' apos
+  in
+  let check_case env c =
+    match c with
+    | Com.CDefault -> Com.CDefault
+    | CValue v -> CValue v
+    | CVar acc ->
+        let acc' = check_m_access ~onlyVar:true Both env acc in
+        CVar acc'
   in
   let rec aux
       ((env, res) :
@@ -1827,12 +1855,12 @@ let rec check_instructions (env : var_env)
                               check_var_space m_sp_opt env;
                               check_variable m_sp_opt v Both env;
                               Com.VarAccess (m_sp_opt, map_var env v)
-                          | Com.TabAccess (m_sp_opt, m_v, m_i) ->
+                          | Com.TabAccess ((m_sp_opt, m_v), m_i) ->
                               check_var_space m_sp_opt env;
                               check_variable m_sp_opt m_v Table env;
                               let m_v' = map_var env m_v in
                               let m_i' = map_expr env m_i in
-                              Com.TabAccess (m_sp_opt, m_v', m_i')
+                              Com.TabAccess ((m_sp_opt, m_v'), m_i')
                           | Com.FieldAccess (m_sp_opt, e, f, id) -> (
                               let f_name, f_pos = Pos.to_couple f in
                               check_var_space m_sp_opt env;
@@ -2032,14 +2060,31 @@ let rec check_instructions (env : var_env)
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Switch (e, l) ->
             let e' = map_expr env e in
+            let expr_is_var =
+              match Pos.unmark e' with Var _ -> true | _ -> false
+            in
+            let case_is_var = function
+              | Com.CVar _ -> true
+              | CValue _ | CDefault -> false
+            in
             let _cases, env, rev_l' =
               List.fold_left
                 (fun (cases, env, rev_l') (cl, l) ->
                   match List.find (fun c -> List.mem c cases) cl with
                   | c -> Err.non_exclusive_cases c instr_pos
                   | exception Not_found ->
+                      let () =
+                        if not expr_is_var then
+                          match List.find case_is_var cases with
+                          | c ->
+                              Err.forbidden_variable_check_in_switch e c
+                                instr_pos
+                          | exception Not_found -> ()
+                      in
                       let prog, l'elt = check_instructions env l in
-                      (cl @ cases, { env with prog }, (cl, l'elt) :: rev_l'))
+                      let env = { env with prog } in
+                      let cl' = List.map (check_case env) cl in
+                      (cl @ cases, env, (cl', l'elt) :: rev_l'))
                 ([], env, []) l
             in
             let l' = List.rev rev_l' in
@@ -2178,7 +2223,7 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
                       StrMap.add vn def_list def_vars
                     in
                     aux (tmps, in_vars, out_vars, def_vars) il
-                | TabAccess (_, m_id, m_i) ->
+                | TabAccess ((_, m_id), m_i) ->
                     let m_v =
                       let var =
                         IntMap.find (Pos.unmark m_id) env.prog.prog_dict
