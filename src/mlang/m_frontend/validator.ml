@@ -2034,10 +2034,12 @@ let rec check_instructions (env : var_env)
             let e' = map_expr env e in
             let _cases, env, rev_l' =
               List.fold_left
-                (fun (cases, env, rev_l') (c, l) ->
-                  if List.mem c cases then Err.non_exclusive_cases c instr_pos;
-                  let prog, l'elt = check_instructions env l in
-                  (c :: cases, { env with prog }, (c, l'elt) :: rev_l'))
+                (fun (cases, env, rev_l') (cl, l) ->
+                  match List.find (fun c -> List.mem c cases) cl with
+                  | c -> Err.non_exclusive_cases c instr_pos
+                  | exception Not_found ->
+                      let prog, l'elt = check_instructions env l in
+                      (cl @ cases, { env with prog }, (cl, l'elt) :: rev_l'))
                 ([], env, []) l
             in
             let l' = List.rev rev_l' in

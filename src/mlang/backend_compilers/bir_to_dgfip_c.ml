@@ -968,14 +968,18 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@]@;}";
       pr "@]@;}"
   | Switch (e, l) ->
+      pr "@;@[<v 2>{";
       (* Undef & Default should be unique, but just in case we take them all *)
       let undef_branches, default_branches, other_branches =
         List.fold_left
-          (fun (und, def, oth) (c, l) ->
-            match c with
-            | Com.Default -> (und, l :: def, oth)
-            | Com.(Value Undefined) -> (l :: und, def, oth)
-            | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+          (fun acc (cl, l) ->
+            List.fold_left
+              (fun (und, def, oth) c ->
+                match c with
+                | Com.Default -> (und, l :: def, oth)
+                | Com.(Value Undefined) -> (l :: und, def, oth)
+                | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+              acc cl)
           ([], [], []) l
       in
       let undef_branches = List.rev undef_branches
@@ -986,22 +990,31 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let exp_val = exp ^ "_val" in
       pr "@;char %s;@;double %s;" exp_def exp_val;
       generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
-      pr "@;@[<v 2>{";
       pr "@;@[<v 2>if (%s) {" exp_def;
       pr "@;";
       (* Expression is defined *)
       let () =
-        List.iter
-          (fun (v, br) ->
-            pr "if (EQ_E((%s),(%#.19g)))@;@[<v 2>%a@]@; else " exp_val v
+        match other_branches with
+        | [] -> ()
+        | (v, br) :: tl ->
+            pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
               (generate_stmts env dgfip_flags p)
-              br)
-          other_branches
+              br;
+            List.iter
+              (fun (v, br) ->
+                pr "@; else if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val
+                  v
+                  (generate_stmts env dgfip_flags p)
+                  br)
+              tl
       in
       let () =
-        match default_branches with
-        | [] -> ()
-        | hd :: _ -> pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
+        match (default_branches, other_branches) with
+        | [], _ -> ()
+        | hd :: _, [] ->
+            pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
+        | hd :: _, _ ->
+            pr "@;else {@[<v 2>%a@]@;}" (generate_stmts env dgfip_flags p) hd
       in
       pr "@;}";
       (* Expression is undefined *)

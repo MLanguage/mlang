@@ -619,8 +619,8 @@ Y = 1;
 aiguillage (Y) : (
   cas 0:
     afficher "Y = 0, echec\n";
-  cas 1:
-    afficher "Y = 1, OK!\n";
+  cas 1: cas 2:
+    afficher "Y = 1 ou 2, OK!\n";
   cas indefini:
     afficher "Y = --indefini--, echec\n";
   par_defaut:

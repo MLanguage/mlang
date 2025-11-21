@@ -340,59 +340,34 @@ stop application;
 cible init_majo_str_tr :
 application: iliad;
 arguments: I, B;
-si I = 0 alors
-  MAJO_STR_TR_00 = B;
-sinon_si I = 1 alors
-  MAJO_STR_TR_01 = B;
-sinon_si I = 2 alors
-  MAJO_STR_TR_02 = B;
-sinon_si I = 3 alors
-  MAJO_STR_TR_03 = B;
-sinon_si I = 4 alors
-  MAJO_STR_TR_04 = B;
-sinon_si I = 5 alors
-  MAJO_STR_TR_05 = B;
-sinon_si I = 6 alors
-  MAJO_STR_TR_06 = B;
-sinon_si I = 7 alors
-  MAJO_STR_TR_07 = B;
-sinon_si I = 8 alors
-  MAJO_STR_TR_08 = B;
-sinon_si I = 9 alors
-  MAJO_STR_TR_09 = B;
-sinon_si I = 10 alors
-  MAJO_STR_TR_10 = B;
-sinon_si I = 11 alors
-  MAJO_STR_TR_11 = B;
-sinon_si I = 12 alors
-  MAJO_STR_TR_12 = B;
-sinon_si I = 13 alors
-  MAJO_STR_TR_13 = B;
-sinon_si I = 14 alors
-  MAJO_STR_TR_14 = B;
-sinon_si I = 15 alors
-  MAJO_STR_TR_15 = B;
-sinon_si I = 16 alors
-  MAJO_STR_TR_16 = B;
-sinon_si I = 17 alors
-  MAJO_STR_TR_17 = B;
-sinon_si I = 18 alors
-  MAJO_STR_TR_18 = B;
-sinon_si I = 19 alors
-  MAJO_STR_TR_19 = B;
-sinon_si I = 20 alors
-  MAJO_STR_TR_20 = B;
-sinon_si I = 21 alors
-  MAJO_STR_TR_21 = B;
-sinon_si I = 22 alors
-  MAJO_STR_TR_22 = B;
-sinon_si I = 23 alors
-  MAJO_STR_TR_23 = B;
-sinon_si I = 24 alors
-  MAJO_STR_TR_24 = B;
-sinon_si I = 25 alors
-  MAJO_STR_TR_25 = B;
-finsi
+aiguillage (I) : (
+  cas 0: MAJO_STR_TR_00 = B;
+  cas 1: MAJO_STR_TR_01 = B;
+  cas 2: MAJO_STR_TR_02 = B;
+  cas 3: MAJO_STR_TR_03 = B;
+  cas 4: MAJO_STR_TR_04 = B;
+  cas 5: MAJO_STR_TR_05 = B;
+  cas 6: MAJO_STR_TR_06 = B;
+  cas 7: MAJO_STR_TR_07 = B;
+  cas 8: MAJO_STR_TR_08 = B;
+  cas 9: MAJO_STR_TR_09 = B;
+  cas 10: MAJO_STR_TR_10 = B;
+  cas 11: MAJO_STR_TR_11 = B;
+  cas 12: MAJO_STR_TR_12 = B;
+  cas 13: MAJO_STR_TR_13 = B;
+  cas 14: MAJO_STR_TR_14 = B;
+  cas 15: MAJO_STR_TR_15 = B;
+  cas 16: MAJO_STR_TR_16 = B;
+  cas 17: MAJO_STR_TR_17 = B;
+  cas 18: MAJO_STR_TR_18 = B;
+  cas 19: MAJO_STR_TR_19 = B;
+  cas 20: MAJO_STR_TR_20 = B;
+  cas 21: MAJO_STR_TR_21 = B;
+  cas 22: MAJO_STR_TR_22 = B;
+  cas 23: MAJO_STR_TR_23 = B;
+  cas 24: MAJO_STR_TR_24 = B;
+  cas 25: MAJO_STR_TR_25 = B;
+)
 
 cible set_majo_str_tr:
 application: iliad;
@@ -532,128 +507,85 @@ CORR.COD_RAPPEL = indefini;
 cible add_majo_T_RABP:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABP07 = GLOBAL.MAJO_T_RABP07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABP08 = GLOBAL.MAJO_T_RABP08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABP09 = GLOBAL.MAJO_T_RABP09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABP10 = GLOBAL.MAJO_T_RABP10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABP11 = GLOBAL.MAJO_T_RABP11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABP12 = GLOBAL.MAJO_T_RABP12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABP17 = GLOBAL.MAJO_T_RABP17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABP31 = GLOBAL.MAJO_T_RABP31 + MONTANT;
-finsi
+aiguillage (PENA): (
+  cas 7: GLOBAL.MAJO_T_RABP07 = GLOBAL.MAJO_T_RABP07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABP08 = GLOBAL.MAJO_T_RABP08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABP09 = GLOBAL.MAJO_T_RABP09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABP10 = GLOBAL.MAJO_T_RABP10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABP11 = GLOBAL.MAJO_T_RABP11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABP12 = GLOBAL.MAJO_T_RABP12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABP17 = GLOBAL.MAJO_T_RABP17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABP31 = GLOBAL.MAJO_T_RABP31 + MONTANT;
+)
 
 cible add_majo_T_RABPPS:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABPPS07 = GLOBAL.MAJO_T_RABPPS07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABPPS08 = GLOBAL.MAJO_T_RABPPS08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABPPS09 = GLOBAL.MAJO_T_RABPPS09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABPPS10 = GLOBAL.MAJO_T_RABPPS10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABPPS11 = GLOBAL.MAJO_T_RABPPS11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABPPS12 = GLOBAL.MAJO_T_RABPPS12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABPPS17 = GLOBAL.MAJO_T_RABPPS17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABPPS31 = GLOBAL.MAJO_T_RABPPS31 + MONTANT;
-finsi
+aiguillage (PENA): (
+  cas 7: GLOBAL.MAJO_T_RABPPS07 = GLOBAL.MAJO_T_RABPPS07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABPPS08 = GLOBAL.MAJO_T_RABPPS08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABPPS09 = GLOBAL.MAJO_T_RABPPS09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABPPS10 = GLOBAL.MAJO_T_RABPPS10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABPPS11 = GLOBAL.MAJO_T_RABPPS11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABPPS12 = GLOBAL.MAJO_T_RABPPS12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABPPS17 = GLOBAL.MAJO_T_RABPPS17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABPPS31 = GLOBAL.MAJO_T_RABPPS31 + MONTANT;
+)
 
 cible add_majo_T_RABPCS:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABPCS07 = GLOBAL.MAJO_T_RABPCS07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABPCS08 = GLOBAL.MAJO_T_RABPCS08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABPCS09 = GLOBAL.MAJO_T_RABPCS09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABPCS10 = GLOBAL.MAJO_T_RABPCS10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABPCS11 = GLOBAL.MAJO_T_RABPCS11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABPCS12 = GLOBAL.MAJO_T_RABPCS12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABPCS17 = GLOBAL.MAJO_T_RABPCS17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABPCS31 = GLOBAL.MAJO_T_RABPCS31 + MONTANT;
-finsi
+aiguillage (PENA) : (
+  cas 7: GLOBAL.MAJO_T_RABPCS07 = GLOBAL.MAJO_T_RABPCS07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABPCS08 = GLOBAL.MAJO_T_RABPCS08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABPCS09 = GLOBAL.MAJO_T_RABPCS09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABPCS10 = GLOBAL.MAJO_T_RABPCS10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABPCS11 = GLOBAL.MAJO_T_RABPCS11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABPCS12 = GLOBAL.MAJO_T_RABPCS12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABPCS17 = GLOBAL.MAJO_T_RABPCS17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABPCS31 = GLOBAL.MAJO_T_RABPCS31 + MONTANT;
+)
 
 cible add_majo_T_RABPRD:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABPRD07 = GLOBAL.MAJO_T_RABPRD07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABPRD08 = GLOBAL.MAJO_T_RABPRD08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABPRD09 = GLOBAL.MAJO_T_RABPRD09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABPRD10 = GLOBAL.MAJO_T_RABPRD10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABPRD11 = GLOBAL.MAJO_T_RABPRD11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABPRD12 = GLOBAL.MAJO_T_RABPRD12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABPRD17 = GLOBAL.MAJO_T_RABPRD17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABPRD31 = GLOBAL.MAJO_T_RABPRD31 + MONTANT;
-finsi
+aiguillage (PENA) : (
+  cas 7: GLOBAL.MAJO_T_RABPRD07 = GLOBAL.MAJO_T_RABPRD07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABPRD08 = GLOBAL.MAJO_T_RABPRD08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABPRD09 = GLOBAL.MAJO_T_RABPRD09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABPRD10 = GLOBAL.MAJO_T_RABPRD10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABPRD11 = GLOBAL.MAJO_T_RABPRD11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABPRD12 = GLOBAL.MAJO_T_RABPRD12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABPRD17 = GLOBAL.MAJO_T_RABPRD17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABPRD31 = GLOBAL.MAJO_T_RABPRD31 + MONTANT;
+)
 
 cible add_majo_T_RABPCH:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABPCH07 = GLOBAL.MAJO_T_RABPCH07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABPCH08 = GLOBAL.MAJO_T_RABPCH08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABPCH09 = GLOBAL.MAJO_T_RABPCH09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABPCH10 = GLOBAL.MAJO_T_RABPCH10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABPCH11 = GLOBAL.MAJO_T_RABPCH11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABPCH12 = GLOBAL.MAJO_T_RABPCH12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABPCH17 = GLOBAL.MAJO_T_RABPCH17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABPCH31 = GLOBAL.MAJO_T_RABPCH31 + MONTANT;
-finsi
-
+aiguillage (PENA) : (
+  cas 7: GLOBAL.MAJO_T_RABPCH07 = GLOBAL.MAJO_T_RABPCH07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABPCH08 = GLOBAL.MAJO_T_RABPCH08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABPCH09 = GLOBAL.MAJO_T_RABPCH09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABPCH10 = GLOBAL.MAJO_T_RABPCH10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABPCH11 = GLOBAL.MAJO_T_RABPCH11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABPCH12 = GLOBAL.MAJO_T_RABPCH12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABPCH17 = GLOBAL.MAJO_T_RABPCH17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABPCH31 = GLOBAL.MAJO_T_RABPCH31 + MONTANT;
+)
 cible add_majo_T_RABPLO:
 application: iliad;
 arguments: PENA, MONTANT;
-si PENA = 7 alors
-  GLOBAL.MAJO_T_RABPLO07 = GLOBAL.MAJO_T_RABPLO07 + MONTANT;
-sinon_si PENA = 8 alors
-  GLOBAL.MAJO_T_RABPLO08 = GLOBAL.MAJO_T_RABPLO08 + MONTANT;
-sinon_si PENA = 9 alors
-  GLOBAL.MAJO_T_RABPLO09 = GLOBAL.MAJO_T_RABPLO09 + MONTANT;
-sinon_si PENA = 10 alors
-  GLOBAL.MAJO_T_RABPLO10 = GLOBAL.MAJO_T_RABPLO10 + MONTANT;
-sinon_si PENA = 11 alors
-  GLOBAL.MAJO_T_RABPLO11 = GLOBAL.MAJO_T_RABPLO11 + MONTANT;
-sinon_si PENA = 12 alors
-  GLOBAL.MAJO_T_RABPLO12 = GLOBAL.MAJO_T_RABPLO12 + MONTANT;
-sinon_si PENA = 17 alors
-  GLOBAL.MAJO_T_RABPLO17 = GLOBAL.MAJO_T_RABPLO17 + MONTANT;
-sinon_si PENA = 31 alors
-  GLOBAL.MAJO_T_RABPLO31 = GLOBAL.MAJO_T_RABPLO31 + MONTANT;
-finsi
+aiguillage (PENA) : (
+  cas 7: GLOBAL.MAJO_T_RABPLO07 = GLOBAL.MAJO_T_RABPLO07 + MONTANT;
+  cas 8: GLOBAL.MAJO_T_RABPLO08 = GLOBAL.MAJO_T_RABPLO08 + MONTANT;
+  cas 9: GLOBAL.MAJO_T_RABPLO09 = GLOBAL.MAJO_T_RABPLO09 + MONTANT;
+  cas 10: GLOBAL.MAJO_T_RABPLO10 = GLOBAL.MAJO_T_RABPLO10 + MONTANT;
+  cas 11: GLOBAL.MAJO_T_RABPLO11 = GLOBAL.MAJO_T_RABPLO11 + MONTANT;
+  cas 12: GLOBAL.MAJO_T_RABPLO12 = GLOBAL.MAJO_T_RABPLO12 + MONTANT;
+  cas 17: GLOBAL.MAJO_T_RABPLO17 = GLOBAL.MAJO_T_RABPLO17 + MONTANT;
+  cas 31: GLOBAL.MAJO_T_RABPLO31 = GLOBAL.MAJO_T_RABPLO31 + MONTANT;
+)
 
 cible contexte_2042_INR:
 application: iliad;
@@ -695,61 +627,30 @@ variables_temporaires: PENA, I;
   sinon
     PENA = GLOBAL.MAJO_CODE_STRATE;
   finsi
-  si PENA = 1 alors
-    I = 25;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 2 alors
-    I = 23;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 3 alors
-    I = 14;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 4 alors
-    I = 9;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 5 alors
-    I = 7;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 6 alors
-    I = 3;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 7 ou PENA = 18 alors
-    I = 17;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 8 alors
-    I = 12;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 10 alors
-    I = 16;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 11 alors
-    I = 11;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 17 alors
-    I = 15;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 22 alors
-    I = 24;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 30 alors
-    I = 10;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 31 alors
-    I = 6;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 32 alors
-    I = 5;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 35 alors
-    I = 9;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 55 alors
-    I = 13;
-    calculer cible set_majo_str_tr : avec I;
-  sinon_si PENA = 99 alors
-    I = 0;
-    calculer cible set_majo_str_tr : avec I;
-  finsi
+  aiguillage (PENA) : (
+    cas 1 : I = 25;
+    cas 2 : I = 23;
+    cas 3 : I = 14;
+    cas 4 : I = 9;
+    cas 5 : I = 7;
+    cas 6 : I = 3;
+    cas 7 :
+    cas 18 : I = 17;
+    cas 8 :  I = 12;
+    cas 10 : I = 16;
+    cas 11 : I = 11;
+    cas 17 : I = 15;
+    cas 22 : I = 24;
+    cas 30 : I = 10;
+    cas 31 : I = 6;
+    cas 32 : I = 5;
+    cas 35 : I = 9;
+    cas 55 : I = 13;
+    cas 99 : I = 0;
+    cas indefini :
+    par_defaut : stop cible;
+  )
+  calculer cible set_majo_str_tr : avec I;
 
 cible remplit_tgv_d2042:
 application: iliad;
@@ -948,6 +849,7 @@ alors
   si dans_domaine(VAR, saisie contexte) alors
     NATURE = vers_nature(attribut(VAR, modcat));
   sinon_si
+    # Il s'agit de la même condition qu'au dessus ? 
     dans_domaine(VAR, saisie famille)
     ou dans_domaine(VAR, saisie revenu)
     ou dans_domaine(VAR, saisie revenu corrective)
@@ -1015,41 +917,40 @@ iterer
 : dans (
   calculer cible get_nature : avec NATURE, VAR;
   si NATURE = N_REVENU alors
-    si
-      attribut(VAR, cotsoc) = 1
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+  aiguillage( attribut(VAR, cotsoc) ) : (
+    cas 1:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
+        GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+    cas 5:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+    cas 9:
+      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+    cas 10:
       GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
       GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
       GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) = 5
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si attribut(VAR, cotsoc) = 9 alors
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    sinon_si attribut(VAR, cotsoc) = 10 alors
-      GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
-      GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
+    cas 11: cas 12: cas 13: cas 14: cas 19: cas 20: cas 21:
       GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) dans (11, 12, 13, 14, 19, 20, 21)
-    alors
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    sinon_si attribut(VAR, cotsoc) = 16 alors
+    cas 16:
       GLOBAL.MAJO_T_RABPLO = GLOBAL.MAJO_T_RABPLO + VAR;
-    sinon_si
-      attribut(VAR, cotsoc) = 18
-      et attribut(VAR, categorie_TL) dans (20, 21)
-    alors
-      GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    finsi
+    cas 18:
+      si attribut(VAR, categorie_TL) dans (20, 21)
+      alors
+        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      finsi
+  )
   finsi
 )
 
@@ -2138,72 +2039,61 @@ iterer
       sinon_si positif(EST_ISF) alors
         GLOBAL.TL_MF_MFIFI = GLOBAL.TL_MF_MFIFI + MF_DEF;
       sinon
-        COTSOC = attribut(champ_evenement(R, code), cotsoc);
-        si COTSOC = 2 alors
-          GLOBAL.TL_MF_MFCDIS = GLOBAL.TL_MF_MFCDIS + MF_DEF;
-        sinon_si COTSOC = 3 alors
-          GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
-        sinon_si COTSOC = 4 alors
-          GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
-        sinon_si COTSOC = 5 alors
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        sinon_si COTSOC = 6 alors
-          GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
-        sinon_si COTSOC = 7 alors
-          GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
-        sinon_si COTSOC = 8 alors
-          GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
-        sinon_si COTSOC = 9 alors
-          GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
-        sinon_si COTSOC = 10 alors
-          GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-          GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-        sinon_si COTSOC = 11 alors
-          GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 12 alors
-          GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 13 alors
-          GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 14 alors
-          GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 16 alors
-          GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
-        sinon_si COTSOC = 17 alors
-          GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-        sinon_si COTSOC = 18 alors
-          GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-        sinon_si COTSOC = 19 alors
-          GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 20 alors
-          GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-          GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 21 alors
-          GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-          GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 22 alors
-          GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-        sinon_si COTSOC = 1 alors
-          GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-          GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-          GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-          GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        sinon
-          GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-        finsi
+        aiguillage (attribut(champ_evenement(R, code), cotsoc)) : (
+          cas 2: GLOBAL.TL_MF_MFCDIS = GLOBAL.TL_MF_MFCDIS + MF_DEF;
+	  cas 3: GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
+	  cas 4: GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
+	  cas 5: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+	  cas 6: GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
+	  cas 7: GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
+	  cas 8: GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
+	  cas 9: GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
+	  cas 10 :
+	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+	  cas 11:
+	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 12:
+	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 13:
+	    GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 14:
+	    GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 16: GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
+	  cas 17: GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+	  cas 18:
+	    GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
+	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+	  cas 19:
+	    GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 20:
+	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 21:
+	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 22:
+	    GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	  cas 1:
+	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+          par_defaut: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+        )
       finsi
     finsi
   finsi
@@ -2347,117 +2237,69 @@ fonction get_strate_pena:
 application: iliad;
 arguments: STR;
 resultat: PENA;
-si STR = 0 alors
-  PENA = 99;
-sinon_si STR = 1 alors
-  PENA = -1;
-sinon_si STR dans (2, 3) alors
-  PENA = 6;
-sinon_si STR = 4 alors
-  PENA = 12;
-sinon_si STR = 5 alors
-  PENA = 32;
-sinon_si STR = 6 alors
-  PENA = 31;
-sinon_si STR = 7 alors
-  PENA = 5;
-sinon_si STR = 8 alors
-  PENA = 4;
-sinon_si STR = 9 alors
-  PENA = 35;
-sinon_si STR = 10 alors
-  PENA = 30;
-sinon_si STR = 11 alors
-  PENA = 11;
-sinon_si STR = 12 alors
-  PENA = 8;
-sinon_si STR = 13 alors
-  PENA = 55;
-sinon_si STR = 14 alors
-  PENA = 3;
-sinon_si STR = 15 alors
-  PENA = 17;
-sinon_si STR = 16 alors
-  PENA = 10;
-sinon_si STR = 17 alors
-  PENA = 7;
-sinon_si STR dans (18, 19, 20, 21, 22, 23) alors
-  PENA = 2;
-sinon_si STR = 24 alors
-  PENA = 22;
-sinon_si STR = 25 alors
-  PENA = 24;
-sinon
-  PENA = -1;
-finsi
-
-fonction get_strate_taux:
-application: iliad;
-arguments: STR;
-resultat: PENA;
-si STR = 0 alors
-  PENA = 99;
-sinon_si STR = 1 alors
-  PENA = -1;
-sinon_si STR dans (2, 3) alors
-  PENA = 6;
-sinon_si STR = 4 alors
-  PENA = 12;
-sinon_si STR = 5 alors
-  PENA = 32;
-sinon_si STR = 6 alors
-  PENA = 31;
-sinon_si STR = 7 alors
-  PENA = 5;
-sinon_si STR = 8 alors
-  PENA = 4;
-sinon_si STR = 9 alors
-  PENA = 35;
-sinon_si STR = 10 alors
-  PENA = 30;
-sinon_si STR = 11 alors
-  PENA = 11;
-sinon_si STR = 12 alors
-  PENA = 8;
-sinon_si STR = 13 alors
-  PENA = 55;
-sinon_si STR = 14 alors
-  PENA = 3;
-sinon_si STR = 15 alors
-  PENA = 17;
-sinon_si STR = 16 alors
-  PENA = 10;
-sinon_si STR = 17 alors
-  PENA = 7;
-sinon_si STR dans (18, 19, 20, 21, 22, 23) alors
-  PENA = 2;
-sinon_si STR = 24 alors
-  PENA = 22;
-sinon_si STR = 25 alors
-  PENA = 24;
-sinon
-  PENA = -1;
-finsi
+aiguillage(STR):(
+  cas 0: PENA = 99;
+  cas 1 : PENA = -1;
+  cas 2 :
+  cas 3 : PENA = 6;
+  cas 4 : PENA = 12;
+  cas 5 : PENA = 32;
+  cas 6 : PENA = 31;
+  cas 7 : PENA = 5;
+  cas 8 : PENA = 4;
+  cas 9 : PENA = 35;
+  cas 10: PENA = 30;
+  cas 11: PENA = 11;
+  cas 12: PENA = 8;
+  cas 13: PENA = 55;
+  cas 14: PENA = 3;
+  cas 15: PENA = 17;
+  cas 16: PENA = 10;
+  cas 17: PENA = 7;
+  cas 18:
+  cas 19:
+  cas 20:
+  cas 21:
+  cas 22:
+  cas 23: PENA = 2;
+  cas 24: PENA = 22;
+  cas 25: PENA = 24;
+  par_defaut: PENA = -1;
+)
 
 fonction get_strate_taux:
 application: iliad;
 arguments: STR;
 resultat: TAUX;
-si STR dans (0, 1) alors
-  TAUX = -1;
-sinon_si STR dans (2, 18, 19, 20, 21, 22, 23, 24, 25) alors
-  TAUX = 0;
-sinon_si STR = 3 alors
-  TAUX = 100;
-sinon_si STR dans (4, 5, 6, 7, 8, 9) alors
-  TAUX = 80;
-sinon_si STR dans (10, 11, 12, 13, 14) alors
-  TAUX = 40;
-sinon_si STR dans (15, 16, 17) alors
-  TAUX = 10;
-sinon
-  TAUX = -1;
-finsi
+aiguillage (STR) : (
+  cas 0 :
+  cas 1 : TAUX = -1;
+  cas 2 : TAUX = 0;
+  cas 3 : TAUX = 100;
+  cas 4 :
+  cas 5 :
+  cas 6 :
+  cas 7 :
+  cas 8 :
+  cas 9 : TAUX = 80;
+  cas 10:
+  cas 11:
+  cas 12:
+  cas 13:
+  cas 14: TAUX = 40;
+  cas 15:
+  cas 16:
+  cas 17: TAUX = 10;
+  cas 18:
+  cas 19:
+  cas 20:
+  cas 21:
+  cas 22:
+  cas 23:
+  cas 24:
+  cas 25: TAUX = 0;
+  par_defaut: TAUX = -1;
+)
 
 cible get_code_situation_famille:
 application: iliad;
