@@ -2304,23 +2304,19 @@ aiguillage (STR) : (
 cible get_code_situation_famille:
 application: iliad;
 arguments: RESULTAT, CORR, VAR;
-si meme_variable(VAR, 0AM) alors
-  RESULTAT = SF_MARIAGE;
-sinon_si meme_variable(VAR, 0AC) alors
-  RESULTAT = SF_CELIBAT;
-sinon_si meme_variable(VAR, 0AD) alors
-  RESULTAT = SF_DIVORCE;
-sinon_si meme_variable(VAR, 0AO) alors
-  RESULTAT = SF_PACSE;
-sinon_si meme_variable(VAR, 0AV) alors
-  si positif(CORR) et GLOBAL.ANNEE_DECES_CONJOINT = GLOBAL.ANNEE_REVENU alors
-    RESULTAT = SF_VEUVAGE_TRUE;
-  sinon
-    RESULTAT = SF_VEUVAGE_FALSE;
-  finsi
-sinon
-  RESULTAT = SF_INVALIDE;
-finsi
+aiguillage(VAR):(
+  cas est 0AM: RESULTAT = SF_MARIAGE;
+  cas est 0AC: RESULTAT = SF_CELIBAT;
+  cas est 0AD: RESULTAT = SF_DIVORCE;
+  cas est 0AO: RESULTAT = SF_PACSE;
+  cas est 0AV:
+    si positif(CORR) et GLOBAL.ANNEE_DECES_CONJOINT = GLOBAL.ANNEE_REVENU alors
+      RESULTAT = SF_VEUVAGE_TRUE;
+    sinon
+      RESULTAT = SF_VEUVAGE_FALSE;
+    finsi
+  par_defaut: RESULTAT = SF_INVALIDE;
+)
 
 cible is_rappel_strate:
 application: iliad;
