@@ -508,7 +508,7 @@ and 'v expression =
           flag is set to [false]) *)
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
-  | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
+  | Binop of binop Pos.marked * 'v m_expression list
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
@@ -735,10 +735,9 @@ and expr_map_var f = function
       let m_e0' = m_expr_map_var f m_e0 in
       let m_e1' = m_expr_map_var f m_e1 in
       Comparison (op, m_e0', m_e1')
-  | Binop (op, m_e0, m_e1) ->
-      let m_e0' = m_expr_map_var f m_e0 in
-      let m_e1' = m_expr_map_var f m_e1 in
-      Binop (op, m_e0', m_e1')
+  | Binop (op, l) ->
+      let l' = List.map (m_expr_map_var f) l in
+      Binop (op, l')
   | Conditional (m_e0, m_e1, m_e2_opt) ->
       let m_e0' = m_expr_map_var f m_e0 in
       let m_e1' = m_expr_map_var f m_e1 in
@@ -964,8 +963,7 @@ and expr_fold_var f e acc =
   | Unop (_, m_e0) -> m_expr_fold_var f m_e0 acc
   | Comparison (_, m_e0, m_e1) ->
       acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
-  | Binop (_, m_e0, m_e1) ->
-      acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
+  | Binop (_, l) -> List.fold_left (fun acc e -> m_expr_fold_var f e acc) acc l
   | Conditional (m_e0, m_e1, m_e2_opt) ->
       acc |> m_expr_fold_var f m_e0 |> m_expr_fold_var f m_e1
       |> fold_opt (m_expr_fold_var f) m_e2_opt
@@ -1242,9 +1240,12 @@ let rec format_expression form_var fmt =
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" form_expr (Pos.unmark e1) format_comp_op
         (Pos.unmark op) form_expr (Pos.unmark e2)
-  | Binop (op, e1, e2) ->
-      Format.fprintf fmt "(%a %a %a)" form_expr (Pos.unmark e1) format_binop
-        (Pos.unmark op) form_expr (Pos.unmark e2)
+  | Binop (op, l) ->
+      Format.pp_print_list
+        ~pp_sep:(fun fmt _ ->
+          Format.fprintf fmt "%a" format_binop (Pos.unmark op))
+        (fun fmt e -> Format.fprintf fmt "%a" form_expr (Pos.unmark e))
+        fmt l
   | Unop (op, e) ->
       Format.fprintf fmt "%a %a" format_unop op form_expr (Pos.unmark e)
   | Conditional (e1, e2, e3) ->

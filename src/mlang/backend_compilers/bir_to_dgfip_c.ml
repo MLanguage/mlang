@@ -317,10 +317,11 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
       let se1 = generate_c_expr p e1 in
       let se2 = generate_c_expr p e2 in
       comparison op se1 se2
-  | Binop (op, e1, e2) ->
-      let se1 = generate_c_expr p e1 in
-      let se2 = generate_c_expr p e2 in
-      binop op se1 se2
+  | Binop (op, l) -> (
+      let sl = List.map (generate_c_expr p) l in
+      match sl with
+      | [] -> assert false (* Cannot have a binop with no arguments *)
+      | hd :: tl -> List.fold_left (binop op) hd tl)
   | Unop (op, e) -> unop op @@ generate_c_expr p e
   | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr p c in

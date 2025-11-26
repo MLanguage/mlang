@@ -1276,9 +1276,7 @@ let rec fold_var_expr (get_var : 'v -> string Pos.marked)
   | Comparison (_op, e1, e2) ->
       let acc = fold_aux acc e1 env in
       fold_aux acc e2 env
-  | Binop (_op, e1, e2) ->
-      let acc = fold_aux acc e1 env in
-      fold_aux acc e2 env
+  | Binop (_op, l) -> List.fold_left (fun acc e -> fold_aux acc e env) acc l
   | Unop (_op, e) -> fold_aux acc e env
   | Conditional (e1, e2, e3_opt) -> (
       let acc = fold_aux acc e1 env in
@@ -3149,41 +3147,54 @@ let eval_expr_verif (prog : program) (verif : verif)
             | Lte -> Some (if f0 <= f1 then 1.0 else 0.0)
             | Eq -> Some (if f0 = f1 then 1.0 else 0.0)
             | Neq -> Some (if f0 <> f1 then 1.0 else 0.0)))
-    | Binop (op, e0, e1) -> (
-        let r0 = aux e0 in
-        let r1 = aux e1 in
-        match Pos.unmark op with
-        | Com.And -> (
-            match r0 with
-            | None -> None
-            | Some f0 -> if f0 = 0.0 then r0 else r1)
-        | Com.Or -> (
-            match r0 with None -> r1 | Some f0 -> if f0 = 0.0 then r1 else r0)
-        | Com.Add -> (
-            match (r0, r1) with
-            | None, None -> None
-            | None, Some _ -> r1
-            | Some _, None -> r0
-            | Some f0, Some f1 -> Some (f0 +. f1))
-        | Com.Sub -> (
-            match (r0, r1) with
-            | None, None -> None
-            | None, Some _ -> r1
-            | Some _, None -> r0
-            | Some f0, Some f1 -> Some (f0 +. f1))
-        | Com.Mul -> (
-            match (r0, r1) with
-            | None, _ | _, None -> None
-            | Some f0, Some f1 -> Some (f0 *. f1))
-        | Com.Div -> (
-            match (r0, r1) with
-            | None, _ | _, None -> None
-            | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1))
-        | Com.Mod -> (
-            match (r0, r1) with
-            | None, _ | _, None -> None
-            | Some f0, Some f1 ->
-                if f1 = 0.0 then r1 else Some (mod_float f0 f1)))
+    | Binop (op, l) -> (
+        let simp_pair =
+          match Pos.unmark op with
+          | Com.And -> (
+              fun r0 r1 ->
+                match r0 with
+                | None -> None
+                | Some f0 -> if f0 = 0.0 then r0 else r1)
+          | Com.Or -> (
+              fun r0 r1 ->
+                match r0 with
+                | None -> r1
+                | Some f0 -> if f0 = 0.0 then r1 else r0)
+          | Com.Add -> (
+              fun r0 r1 ->
+                match (r0, r1) with
+                | None, None -> None
+                | None, Some _ -> r1
+                | Some _, None -> r0
+                | Some f0, Some f1 -> Some (f0 +. f1))
+          | Com.Sub -> (
+              fun r0 r1 ->
+                match (r0, r1) with
+                | None, None -> None
+                | None, Some _ -> r1
+                | Some _, None -> r0
+                | Some f0, Some f1 -> Some (f0 +. f1))
+          | Com.Mul -> (
+              fun r0 r1 ->
+                match (r0, r1) with
+                | None, _ | _, None -> None
+                | Some f0, Some f1 -> Some (f0 *. f1))
+          | Com.Div -> (
+              fun r0 r1 ->
+                match (r0, r1) with
+                | None, _ | _, None -> None
+                | Some f0, Some f1 -> if f1 = 0.0 then r1 else Some (f0 /. f1))
+          | Com.Mod -> (
+              fun r0 r1 ->
+                match (r0, r1) with
+                | None, _ | _, None -> None
+                | Some f0, Some f1 ->
+                    if f1 = 0.0 then r1 else Some (mod_float f0 f1))
+        in
+        match l with
+        | [] -> None
+        | hd :: tl ->
+            List.fold_left (fun r e -> simp_pair r (aux e)) (aux hd) tl)
     | Conditional (e0, e1, e2) -> (
         let r0 = aux e0 in
         let r1 = aux e1 in

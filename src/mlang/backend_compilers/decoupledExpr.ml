@@ -43,10 +43,10 @@ and expr =
   | Dfalse
   | Dlit of float
   | Dvar of expr_var
-  | Dand of expr * expr
-  | Dor of expr * expr
+  | Dand of expr list
+  | Dor of expr list
   | Dunop of string * expr
-  | Dbinop of string * expr * expr
+  | Dbinop of string * expr list
   | Dfun of string * expr list
   | Dite of expr * expr * expr
   | Dinstr of string
@@ -74,7 +74,7 @@ let cast (kind : dflag) (expr : expr) =
   | Dfalse, Val -> Dlit 0.
   | Dlit 0., Def -> Dfalse
   | Dlit _, Def -> Dtrue
-  | _, Def -> Dbinop ("!=", expr, Dlit 0.)
+  | _, Def -> Dbinop ("!=", [ expr; Dlit 0. ])
   | _, Val -> expr
 
 (** local stacks operations *)
@@ -106,7 +106,7 @@ let rec expr_position (expr : expr) (st : local_stacks) =
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
       else Must_be_pushed
-  | Dbinop ("/", e1, e2) -> begin
+  | Dbinop ("/", [ e1; e2 ]) -> begin
       (* avoid storage of division by zero. It assumes all division are
          guarded *)
       match (expr_position e1 st, expr_position e2 st) with
@@ -115,6 +115,9 @@ let rec expr_position (expr : expr) (st : local_stacks) =
           (* Needed to bumb the stack to avoid erasing subexpressions *)
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
+  | Dbinop ("/", l) ->
+      Format.ksprintf Errors.raise_error "Invalid arity for division (%i)"
+        (List.length l)
   | Ddirect _ -> Not_to_stack
   | _ -> Must_be_pushed
 
@@ -217,42 +220,111 @@ let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
    the point at which the constructed expression is expected to be allocated (if
    needed). *)
 
+let dand' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | Dtrue, _ -> (e2, lv2)
+  | _, Dtrue -> (e1, lv1)
+  | Dfalse, _ | _, Dfalse -> (Dfalse, [])
+  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, lv1)
+  | Dand l, Dand l' -> (Dand (l @ l'), lv2 @ lv1)
+  | Dand l, _ -> (Dand (l @ [ e2 ]), lv2 @ lv1)
+  | _, Dand l -> (Dand (e1 :: l), lv2 @ lv1)
+  | _ -> (Dand [ e1; e2 ], lv2 @ lv1)
+
+let dor' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | Dtrue, _ | _, Dtrue -> (Dtrue, [])
+  | Dfalse, _ -> (e2, lv2)
+  | _, Dfalse -> (e1, lv1)
+  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, lv1)
+  | Dor l, Dor l' -> (Dor (l @ l'), lv2 @ lv1)
+  | Dor l, _ -> (Dor (l @ [ e2 ]), lv2 @ lv1)
+  | _, Dor l -> (Dor (e1 :: l), lv2 @ lv1)
+  | _ -> (Dor [ e1; e2 ], lv2 @ lv1)
+
+let dnot' (e, lv) =
+  match e with
+  | Dtrue -> (Dfalse, [])
+  | Dfalse -> (Dtrue, [])
+  | Dunop ("!", e) -> (e, lv)
+  | _ -> (Dunop ("!", e), lv)
+
+let minus' (e, lv) =
+  match e with
+  | Dlit f -> (Dlit (-.f), [])
+  | Dunop ("-", e) -> (e, lv)
+  | _ -> (Dunop ("-", e), lv)
+
+let plus' ?(reduce_zero_add = false) (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | Dlit 0., _ when reduce_zero_add -> (e2, lv2)
+  | _, Dlit 0. when reduce_zero_add -> (e1, lv1)
+  | Dlit f1, Dlit f2 -> (Dlit (f1 +. f2), [])
+  | Dbinop ("+", l), Dbinop ("+", l') -> (Dbinop ("+", l @ l'), lv2 @ lv1)
+  | Dbinop ("+", l), _ -> (Dbinop ("+", l @ [ e2 ]), lv2 @ lv1)
+  | _, Dbinop ("+", l) -> (Dbinop ("+", e1 :: l), lv2 @ lv1)
+  | _ -> (Dbinop ("+", [ e1; e2 ]), lv2 @ lv1)
+
+let sub' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | Dlit 0., _ -> (Dunop ("-", e2), lv2)
+  | _, Dlit 0. -> (e1, lv1)
+  | Dlit f1, Dlit f2 -> (Dlit (f1 -. f2), [])
+  | _, Dunop ("-", e2) -> plus' (e1, lv1) (e2, lv2)
+  | Dbinop ("-", l), Dbinop ("+", l') -> (Dbinop ("-", l @ l'), lv2 @ lv1)
+  | Dbinop ("-", l), e -> (Dbinop ("-", l @ [ e ]), lv2 @ lv1)
+  | _ -> (Dbinop ("-", [ e1; e2 ]), lv2 @ lv1)
+
+let mult' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | Dlit 1., _ -> (e2, lv2)
+  | _, Dlit 1. -> (e1, lv1)
+  | Dlit 0., _ | _, Dlit 0. -> (Dlit 0., [])
+  | Dlit f1, Dlit f2 -> (Dlit (f1 *. f2), [])
+  | Dbinop ("*", l), Dbinop ("*", l') -> (Dbinop ("*", l @ l'), lv2 @ lv1)
+  | Dbinop ("*", l), _ -> (Dbinop ("*", l @ [ e2 ]), lv2 @ lv1)
+  | _, Dbinop ("*", l) -> (Dbinop ("*", e1 :: l), lv2 @ lv1)
+  | _ -> (Dbinop ("*", [ e1; e2 ]), lv2 @ lv1)
+
+let div' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | _, Dlit 1. -> (e1, lv1)
+  | Dlit f1, Dlit f2 ->
+      let f = f1 /. f2 in
+      (Dlit f, [])
+  | _ -> (Dbinop ("/", [ e1; e2 ]), lv2 @ lv1)
+
+let modulo' (e1, lv1) (e2, lv2) =
+  match (e1, e2) with
+  | _, Dlit 1. -> (e1, lv1)
+  | Dlit f1, Dlit f2 ->
+      let f = mod_float f1 f2 in
+      (Dlit f, [])
+  | _ -> (Dfun ("fmod", [ e1; e2 ]), lv2 @ lv1)
+
 let dand (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
     : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Def e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Def e2 in
-  match (e1, e2) with
-  | Dtrue, _ -> (e2, Def, lv2)
-  | _, Dtrue -> (e1, Def, lv1)
-  | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
-  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
+  let e, l = dand' (e1, lv1) (e2, lv2) in
+  (e, Def, l)
 
 let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
     t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Def e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Def e2 in
-  match (e1, e2) with
-  | Dtrue, _ | _, Dtrue -> (Dtrue, Def, [])
-  | Dfalse, _ -> (e2, Def, lv2)
-  | _, Dfalse -> (e1, Def, lv1)
-  | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
+  let e, l = dor' (e1, lv1) (e2, lv2) in
+  (e, Def, l)
 
 let dnot (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Def e in
-  match e with
-  | Dtrue -> (Dfalse, Def, [])
-  | Dfalse -> (Dtrue, Def, [])
-  | Dunop ("!", e) -> (e, Def, lv)
-  | _ -> (Dunop ("!", e), Def, lv)
+  let e, lv = dnot' (e, lv) in
+  (e, Def, lv)
 
 let minus (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Val e in
-  match e with
-  | Dlit f -> (Dlit (-.f), Val, [])
-  | Dunop ("-", e) -> (e, Val, lv)
-  | _ -> (Dunop ("-", e), Val, lv)
+  let e, lv = minus' (e, lv) in
+  (e, Val, lv)
 
 let plus (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
     : t =
@@ -261,54 +333,36 @@ let plus (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   let reduce_zero_add = false in
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  match (e1, e2) with
-  | Dlit 0., _ when reduce_zero_add -> (e2, Val, lv2)
-  | _, Dlit 0. when reduce_zero_add -> (e1, Val, lv1)
-  | Dlit f1, Dlit f2 -> (Dlit (f1 +. f2), Val, [])
-  | _ -> (Dbinop ("+", e1, e2), Val, lv2 @ lv1)
+  let e, lv = plus' ~reduce_zero_add (e1, lv1) (e2, lv2) in
+  (e, Val, lv)
 
 let sub (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
     t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  match (e1, e2) with
-  | Dlit 0., _ -> (Dunop ("-", e2), Val, lv2)
-  | _, Dlit 0. -> (e1, Val, lv1)
-  | Dlit f1, Dlit f2 -> (Dlit (f1 -. f2), Val, [])
-  | _ -> (Dbinop ("-", e1, e2), Val, lv2 @ lv1)
+  let e, lv = sub' (e1, lv1) (e2, lv2) in
+  (e, Val, lv)
 
 let mult (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
     : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  match (e1, e2) with
-  | Dlit 1., _ -> (e2, Val, lv2)
-  | _, Dlit 1. -> (e1, Val, lv1)
-  | Dlit 0., _ | _, Dlit 0. -> (Dlit 0., Val, [])
-  | Dlit f1, Dlit f2 -> (Dlit (f1 *. f2), Val, [])
-  | _ -> (Dbinop ("*", e1, e2), Val, lv2 @ lv1)
+  let e, lv = mult' (e1, lv1) (e2, lv2) in
+  (e, Val, lv)
 
 let div (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
     t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  match (e1, e2) with
-  | _, Dlit 1. -> (e1, Val, lv1)
-  | Dlit f1, Dlit f2 ->
-      let f = f1 /. f2 in
-      (Dlit f, Val, [])
-  | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
+  let e, lv = div' (e1, lv1) (e2, lv2) in
+  (e, Val, lv)
 
 let modulo (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
-  match (e1, e2) with
-  | _, Dlit 1. -> (e1, Val, lv1)
-  | Dlit f1, Dlit f2 ->
-      let f = mod_float f1 f2 in
-      (Dlit f, Val, [])
-  | _ -> (Dfun ("fmod", [ e1; e2 ]), Val, lv2 @ lv1)
+  let e, lv = modulo' (e1, lv1) (e2, lv2) in
+  (e, Val, lv)
 
 let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
@@ -324,8 +378,9 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
         then Dtrue
         else Dfalse
     | Dvar v1, Dvar v2 ->
-        if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
-    | _ -> Dbinop (op, e1, e2)
+        if String.equal op "==" && v1 = v2 then Dtrue
+        else Dbinop (op, [ e1; e2 ])
+    | _ -> Dbinop (op, [ e1; e2 ])
   in
   let e =
     match op with
@@ -368,8 +423,8 @@ let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
     else (* this will happen. Staying on the safe side *) Val
   in
   match (c, t, e) with
-  | Dtrue, _, _ -> (t, tkind, lvt)
-  | Dfalse, _, _ -> (e, ekind, lve)
+  | (Dfalse | Dlit 0.), _, _ -> (e, ekind, lve)
+  | (Dtrue | Dlit _), _, _ -> (t, tkind, lvt)
   | _, Dtrue, Dtrue | _, Dfalse, Dfalse -> (t, tkind, lvt)
   | _, Dlit 1., Dlit 0. -> (c, Def, lvc)
   | _, Dlit f, Dlit f' when f = f' -> (Dlit f, ite_kind, [])
@@ -449,7 +504,12 @@ let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
         (generate_variable ~trace_flag:dgfip_flags.flg_trace ~def_flag m_sp_opt
            var)
 
-let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
+let rec format_dexpr_list (dgfip_flags : Dgfip_options.flags) ~sep =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt _ -> Format.fprintf fmt " %s " sep)
+    (format_dexpr dgfip_flags)
+
+and format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   let format_dexpr = format_dexpr dgfip_flags in
   match de with
   | Dtrue -> Format.fprintf fmt "1"
@@ -463,36 +523,39 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
   | Dvar evar -> format_expr_var dgfip_flags fmt evar
-  | Dand (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1 format_dexpr
-        de2
-  | Dor (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
-        de2
+  | Dand l ->
+      Format.fprintf fmt "@[<hov 2>(%a@])"
+        (format_dexpr_list dgfip_flags ~sep:"&&")
+        l
+  | Dor l ->
+      Format.fprintf fmt "@[<hov 2>(%a@])"
+        (format_dexpr_list dgfip_flags ~sep:"||")
+        l
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
-  | Dbinop (op, de1, de2) -> begin
-      match op with
-      | ">" ->
+  | Dbinop (op, l) -> begin
+      match (op, l) with
+      | ">", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(GT_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
-      | "<" ->
+      | "<", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(LT_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
-      | ">=" ->
+      | ">=", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(GE_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
-      | "<=" ->
+      | "<=", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(LE_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
-      | "==" ->
+      | "==", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(EQ_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
-      | "!=" ->
+      | "!=", [ de1; de2 ] ->
           Format.fprintf fmt "@[<hov 2>(NEQ_E((%a),(%a))@])" format_dexpr de1
             format_dexpr de2
       | _ ->
-          Format.fprintf fmt "@[<hov 2>((%a)@ %s (%a)@])" format_dexpr de1 op
-            format_dexpr de2
+          Format.fprintf fmt "@[<hov 2>(%a@])"
+            (format_dexpr_list dgfip_flags ~sep:op)
+            l
     end
   | Dfun (funname, des) ->
       Format.fprintf fmt "@[<hov 2>%s(%a@])" funname
