@@ -133,10 +133,9 @@ let rec expand_functions_expr (p : program) (e : 'var Com.expression Pos.marked)
       let new_e1 = expand_functions_expr p e1 in
       let new_e2 = expand_functions_expr p e2 in
       Pos.same (Comparison (op, new_e1, new_e2)) e
-  | Binop (op, e1, e2) ->
-      let new_e1 = expand_functions_expr p e1 in
-      let new_e2 = expand_functions_expr p e2 in
-      Pos.same (Binop (op, new_e1, new_e2)) e
+  | Binop (op, l) ->
+      let l' = List.map (expand_functions_expr p) l in
+      Pos.same (Binop (op, l')) e
   | Unop (op, e1) ->
       let new_e1 = expand_functions_expr p e1 in
       Pos.same (Unop (op, new_e1)) e
@@ -159,8 +158,7 @@ let rec expand_functions_expr (p : program) (e : 'var Com.expression Pos.marked)
                 Some
                   (Binop
                      ( Pos.same Com.Add e,
-                       Pos.same acc e,
-                       expand_functions_expr p arg )))
+                       [ Pos.same acc e; expand_functions_expr p arg ] )))
           None args
       in
       let expr =
@@ -229,7 +227,9 @@ let rec expand_functions_expr (p : program) (e : 'var Com.expression Pos.marked)
           | None -> Some (Pos.same e'' e)
           | Some m_e' ->
               Some
-                (Pos.same (Binop (Pos.same Com.Or e, m_e', Pos.same e'' e)) e)
+                (Pos.same
+                   (Binop (Pos.same Com.Or e, [ m_e'; Pos.same e'' e ]))
+                   e)
       in
       Option.get @@ Com.CatVar.Map.fold fold cvm None
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
