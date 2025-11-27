@@ -17,7 +17,7 @@ MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
 # Add a TESTS_DIR for 2024 when available
-ifeq ($(filter $(YEAR), 2024), $(YEAR))
+ifeq ($(filter $(YEAR), 2024 2025), $(YEAR))
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing

@@ -44,7 +44,7 @@ int verifieFormat(char *chemin, T_options opts) {
         switch (irj->section) {
           case IRJ_ENTREES_PRIMITIF_DEBUT:
             if (cherche_varinfo_statique(irj->args.defVar.var) == NULL) {
-              anoVarAbs(nom);
+              anoVarAbs(irj->args.defVar.var);
               ok = -1;
               goto fin;
             }

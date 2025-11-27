@@ -122,7 +122,8 @@ int main(int argc, char **argv) {
         verifieFormat, opts,
         &nbOk, &nbKo, &nbKc
       );
-      infoNbKc(nbKc, nbOk + nbKo + nbKc);
+      infoNbOk(nbOk, nbOk + nbKc);
+      infoNbKc(nbKc, nbOk + nbKc);
       res = (nbKc == 0);
       break;
     }

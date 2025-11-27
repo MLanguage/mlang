@@ -382,7 +382,8 @@ int traitement(char *chemin, T_options opts) {
     ok = -1;
     goto fin;
   }
-  ECRIS_VAR("ANCSDED", opts->args.trt.annee);
+  ecrisVar(tgv, "ANCSDED", 1, opts->args.trt.annee);
+  ecrisVar(tgv, "V_MILLESIME", 1, anneeCalc);
   switch (opts->args.trt.mode) {
     case Primitif:
       initDefs(tgv, opts->args.trt.defs);
@@ -390,7 +391,7 @@ int traitement(char *chemin, T_options opts) {
       ok = controleResultat(tasTrt, tgv, resPrim, ctlPrim);
       break;
     case Correctif:
-      ECRIS_VAR("MODE_CORR", 1.0);
+      ecrisVar(tgv, "MODE_CORR", 1, 1.0);
       initDefs(tgv, opts->args.trt.defs);
       enchaineur_primitif(tgv);
       enchaineur_correctif(tgv);
