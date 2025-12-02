@@ -60,6 +60,12 @@ type execution_mode =
 
 type files = NonEmpty of string list
 
+type platform =
+  | Executable
+  | Server of string StrMap.t
+      (** This type represents how the interpreter is run. By default, it's as an 
+    Executable *)
+
 val get_files : files -> string list
 
 val source_files : files ref
@@ -117,6 +123,8 @@ val mpp_function : string ref
 val dgfip_flags : Dgfip_options.flags ref
 
 val execution_mode : execution_mode ref
+
+val platform : platform ref
 
 val set_all_arg_refs :
   (* files *) files ->

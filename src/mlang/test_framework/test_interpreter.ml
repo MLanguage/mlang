@@ -135,8 +135,11 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
 
 exception InterpError of int
 
+type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
+
 let check_test (program : Mir.program) (test_name : string)
-    (value_sort : Config.value_sort) (round_ops : Config.round_ops) : unit =
+    (value_sort : Config.value_sort) (round_ops : Config.round_ops) :
+    target_dbg_info list =
   let check_vars exp vars =
     let test_error_margin = 0.01 in
     let fold vname f nb =
@@ -180,15 +183,46 @@ let check_test (program : Mir.program) (test_name : string)
   Cli.debug_print "Running test %s..." t.nom;
   let insts = to_MIR_function_and_inputs program t in
   let rec check = function
-    | [] -> ()
+    | [] -> []
     | inst :: insts ->
         Cli.debug_print "Executing program %s" inst.label;
         (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
            Format_bir.format_program program; *)
-        let dbg_info = None in
-        let varMap, anoSet, _dbg_info =
+        let dbg_info = Dbg_info.empty in
+        let add_input_var_to_info var lit dbg_info =
+          let open Dbg_info in
+          let name = Com.Var.name_str var in
+          let pos = Com.Var.name var |> Pos.get in
+          let origin =
+            Origin.make (Pos.get_file pos) (Pos.get_start_line pos)
+              (Pos.get_end_line pos) Origin.Declared
+          in
+          let tick = Tick.tick () in
+          let descr =
+            match Com.Var.descr_str var with
+            | exception _ -> None
+            | descr -> Some descr
+          in
+          let runtime = Info.Runtime.make origin lit (Some name) in
+          let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
+          let static = Info.Static.make name origin true descr in
+          let statics = IntMap.add runtime.hash static dbg_info.statics in
+          let ledger = StrMap.add name tick dbg_info.ledger in
+          { dbg_info with runtimes; statics; ledger }
+        in
+        let dbg_info =
+          Com.Var.Map.fold add_input_var_to_info inst.vars dbg_info
+        in
+        let varMap, anoSet, dbg_info =
           Mir_interpreter.evaluate_program program inst.vars inst.events
-            value_sort round_ops dbg_info
+            value_sort round_ops (Some dbg_info)
+        in
+        let target_dbg_info =
+          match (!Config.platform, dbg_info) with
+          | Server _, Some dbg_info ->
+              let target_dbg_info = { dbg_info; target = inst.label } in
+              Some target_dbg_info
+          | _, _ -> None
         in
         let nbErrs =
           check_vars inst.expectedVars varMap
@@ -196,14 +230,16 @@ let check_test (program : Mir.program) (test_name : string)
         in
         if nbErrs <= 0 then (
           Cli.debug_print "OK!";
-          check insts)
+          target_dbg_info :: check insts)
         else (
           Cli.debug_print "KO!";
           raise (InterpError nbErrs))
   in
-  check insts;
+  let infos = check insts in
+  let clean_infos = List.filter_map (fun i -> i) infos in
   Config.warning_flag := dbg_warning;
-  Config.display_time := dbg_time
+  Config.display_time := dbg_time;
+  clean_infos
 
 type process_acc = string list * int StrMap.t
 
@@ -233,7 +269,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     in
     try
       Config.debug_flag := false;
-      check_test p (test_dir ^ name) value_sort round_ops;
+      ignore @@ check_test p (test_dir ^ name) value_sort round_ops;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       (name :: successes, failures)
@@ -294,7 +330,7 @@ let check_one_test (p : Mir.program) (name : string)
     in
     try
       Config.debug_flag := false;
-      check_test p name value_sort round_ops;
+      ignore @@ check_test p name value_sort round_ops;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       None
