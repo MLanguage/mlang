@@ -39,3 +39,11 @@ clean: FORCE remise_a_zero_versionnage
 	rm -f doc/doc.html
 	dune clean
 
+test:
+	_build/default/src/main.exe tests/mlang/${test}.m -A test --mpp_function test_args --dgfip_options='' --run_test tests/mlang/${test}.irj --debug
+
+c:
+	_build/default/src/main.exe tests/mlang/${test}.m -A app -b dgfip_c --mpp_function target --dgfip_options='' --output output/${test}.c --debug
+
+t:
+	dune exec src/main.exe --profile release -- -A iliad --display_time --precision double --income-year=2020 --comparison_error_margin=0.000001 --mpp_function=enchainement_primitif_interpreteur ir-calcul/sources2020m_6_5/tgvI.m ir-calcul/sources2020m_6_5/errI.m ir-calcul/sources2020m_6_5/chap-1.m ir-calcul/sources2020m_6_5/chap-2.m ir-calcul/sources2020m_6_5/chap-3.m ir-calcul/sources2020m_6_5/chap-4.m ir-calcul/sources2020m_6_5/chap-51.m ir-calcul/sources2020m_6_5/chap-52.m ir-calcul/sources2020m_6_5/chap-6.m ir-calcul/sources2020m_6_5/chap-7.m ir-calcul/sources2020m_6_5/chap-81.m ir-calcul/sources2020m_6_5/chap-82.m ir-calcul/sources2020m_6_5/chap-83.m ir-calcul/sources2020m_6_5/chap-84.m ir-calcul/sources2020m_6_5/chap-85.m ir-calcul/sources2020m_6_5/chap-86.m ir-calcul/sources2020m_6_5/chap-87.m ir-calcul/sources2020m_6_5/chap-88.m ir-calcul/sources2020m_6_5/chap-aff.m ir-calcul/sources2020m_6_5/chap-cinr.m ir-calcul/sources2020m_6_5/chap-cmajo.m ir-calcul/sources2020m_6_5/chap-cor.m ir-calcul/sources2020m_6_5/chap-ctl.m ir-calcul/sources2020m_6_5/chap-ini.m ir-calcul/sources2020m_6_5/chap-inr.m ir-calcul/sources2020m_6_5/chap-isf.m ir-calcul/sources2020m_6_5/chap-majo.m ir-calcul/sources2020m_6_5/chap-perp.m ir-calcul/sources2020m_6_5/chap-plaf.m ir-calcul/sources2020m_6_5/chap-taux.m ir-calcul/sources2020m_6_5/chap-teff.m ir-calcul/sources2020m_6_5/chap-thr.m ir-calcul/sources2020m_6_5/chap-tl.m ir-calcul/sources2020m_6_5/coc1.m ir-calcul/sources2020m_6_5/coc2.m ir-calcul/sources2020m_6_5/coc3.m ir-calcul/sources2020m_6_5/coc4.m ir-calcul/sources2020m_6_5/coc5.m ir-calcul/sources2020m_6_5/coc7.m ir-calcul/sources2020m_6_5/coi1.m ir-calcul/sources2020m_6_5/coi2.m ir-calcul/sources2020m_6_5/coi3.m ir-calcul/sources2020m_6_5/horizoc.m ir-calcul/sources2020m_6_5/horizoi.m ir-calcul/sources2020m_6_5/res-ser1.m ir-calcul/sources2020m_6_5/res-ser2.m m_ext/2020/cibles.m --run_test='tests/2020/fuzzing/fuzzer_1423.m_test' --dgfip_options='' --debug
