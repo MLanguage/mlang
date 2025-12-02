@@ -27,7 +27,7 @@ val check_all_tests :
 
 val check_test :
   Mir.program ->
-  string ->
+  Irj_file.input ->
   Config.value_sort ->
   Config.round_ops ->
   target_dbg_info list
@@ -35,3 +35,5 @@ val check_test :
 val check_one_test :
   Mir.program -> string -> Config.value_sort -> Config.round_ops -> unit
 (** Same as [check_all_tests], but for one test. *)
+
+exception InterpError of int

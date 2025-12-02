@@ -42,7 +42,7 @@ let irj_check_file (f : string) (message_format : message_format_enum)
     (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   try
-    let test_data = Irj_file.parse_file f in
+    let test_data = Irj_file.parse_file (Filename f) in
     let test_data =
       match validation_mode with
       | Primitive ->

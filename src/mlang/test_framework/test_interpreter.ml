@@ -137,7 +137,7 @@ exception InterpError of int
 
 type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
 
-let check_test (program : Mir.program) (test_name : string)
+let check_test (program : Mir.program) (test_input : Irj_file.input)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) :
     target_dbg_info list =
   let check_vars exp vars =
@@ -178,8 +178,9 @@ let check_test (program : Mir.program) (test_name : string)
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
   Config.display_time := false;
-  Cli.debug_print "Parsing %s..." test_name;
-  let t = Irj_file.parse_file test_name in
+  Cli.debug_print "Parsing %s..."
+    (match test_input with Filename s -> s | Contents _ -> "given contents");
+  let t = Irj_file.parse_file test_input in
   Cli.debug_print "Running test %s..." t.nom;
   let insts = to_MIR_function_and_inputs program t in
   let rec check = function
@@ -269,7 +270,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     in
     try
       Config.debug_flag := false;
-      ignore @@ check_test p (test_dir ^ name) value_sort round_ops;
+      let file = Irj_file.Filename (test_dir ^ name) in
+      ignore @@ check_test p file value_sort round_ops;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       (name :: successes, failures)
@@ -330,7 +332,7 @@ let check_one_test (p : Mir.program) (name : string)
     in
     try
       Config.debug_flag := false;
-      ignore @@ check_test p name value_sort round_ops;
+      ignore @@ check_test p (Irj_file.Filename name) value_sort round_ops;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       None
