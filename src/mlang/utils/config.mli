@@ -28,6 +28,12 @@ type execution_mode =
 
 type files = NonEmpty of string list
 
+type platform =
+  | Executable
+  | Server of string StrMap.t
+      (** This type represents how the interpreter is run. By default, it's as
+          an Executable *)
+
 val get_files : files -> string list
 
 val source_files : files ref
@@ -88,6 +94,8 @@ val execution_mode : execution_mode ref
 
 val no_nondet_display : bool ref
 
+val platform : platform ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -110,4 +118,5 @@ val set_opts :
   m_clean_calls:bool ->
   dgfip_options:string list option ->
   no_nondet_display:bool ->
+  execution_mode:execution_mode ->
   [ `Displayed_dgfip_help | `Error of string | `Run ]
