@@ -84,6 +84,8 @@ type execution_mode =
 
 type files = NonEmpty of string list
 
+type platform = Executable | Server of string StrMap.t
+
 (* Flags inherited from the old compiler *)
 
 let get_files = function NonEmpty l -> l
@@ -134,6 +136,8 @@ let execution_mode = ref Extraction
 let comparison_error_margin = ref 0.000001
 
 let income_year = ref 0
+
+let platform = ref Executable
 
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
