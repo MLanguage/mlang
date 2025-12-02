@@ -438,18 +438,28 @@ module Err = struct
     in
     Errors.raise_spanned_error msg pos
 
-  let forbidden_variable_check_in_switch expr case pos =
+  let forbidden_value_check_in_switch case pos =
+    let format_var_name fmt v =
+      Format.fprintf fmt "%s" (Com.get_var_name (Pos.unmark v))
+    in
+    let msg =
+      Pp.spr "switch case %a is invalid: cannot match a value in a name switch"
+        (Com.format_case format_var_name
+           (Com.format_expression format_var_name))
+        case
+    in
+    Errors.raise_spanned_error msg pos
+
+  let forbidden_variable_check_in_switch case pos =
     let format_var_name fmt v =
       Format.fprintf fmt "%s" (Com.get_var_name (Pos.unmark v))
     in
     let msg =
       Pp.spr
-        "switch case %a is invalid: cannot match a variable with expression %a"
+        "switch case %a is invalid: cannot match a variable in a value switch"
         (Com.format_case format_var_name
            (Com.format_expression format_var_name))
         case
-        (Com.format_expression format_var_name)
-        (Pos.unmark expr)
     in
     Errors.raise_spanned_error msg pos
 end
@@ -1679,6 +1689,11 @@ let rec check_instructions (env : var_env)
         let a' = Com.FieldAccess (m_sp_opt, m_i', f, id) in
         Pos.mark a' apos
   in
+  let map_switch_expr env = function
+    | Com.SEValue e -> Com.SEValue (map_expr env e)
+    | SESameVariable v ->
+        SESameVariable (check_m_access ~onlyVar:true Both env v)
+  in
   let check_case env c =
     match c with
     | Com.CDefault -> Com.CDefault
@@ -2059,32 +2074,45 @@ let rec check_instructions (env : var_env)
             let instr' = Com.ArrangeEvents (sort', filter', add', instrs') in
             aux (env, Pos.mark instr' instr_pos :: res) il
         | Com.Switch (e, l) ->
-            let e' = map_expr env e in
-            let expr_is_var =
-              match Pos.unmark e' with Var _ -> true | _ -> false
+            let e' = map_switch_expr env e in
+            let kind_is_same_var =
+              match e' with
+              | Com.SESameVariable _ -> true
+              | Com.SEValue _ -> false
             in
             let case_is_var = function
-              | Com.CVar _ -> true
-              | CValue _ | CDefault -> false
+              | Com.CVar _ | CDefault -> true
+              | CValue _ -> false
+            in
+            let case_is_val = function
+              | Com.CValue _ | CDefault -> true
+              | CVar _ -> false
             in
             let _cases, env, rev_l' =
               List.fold_left
                 (fun (cases, env, rev_l') (cl, l) ->
-                  match List.find (fun c -> List.mem c cases) cl with
-                  | c -> Err.non_exclusive_cases c instr_pos
-                  | exception Not_found ->
-                      let () =
-                        if not expr_is_var then
-                          match List.find case_is_var cases with
-                          | c ->
-                              Err.forbidden_variable_check_in_switch e c
-                                instr_pos
-                          | exception Not_found -> ()
-                      in
-                      let prog, l'elt = check_instructions env l in
-                      let env = { env with prog } in
-                      let cl' = List.map (check_case env) cl in
-                      (cl @ cases, env, (cl', l'elt) :: rev_l'))
+                  (* Check if variable checks are made in name switches only *)
+                  let () =
+                    if kind_is_same_var then
+                      match List.find (fun v -> not (case_is_var v)) cl with
+                      | case ->
+                          Err.forbidden_value_check_in_switch case instr_pos
+                      | exception Not_found -> ()
+                    else
+                      match List.find (fun v -> not (case_is_val v)) cl with
+                      | case ->
+                          Err.forbidden_variable_check_in_switch case instr_pos
+                      | exception Not_found -> ()
+                  in
+                  let () =
+                    match List.find (fun c -> List.mem c cases) cl with
+                    | c -> Err.non_exclusive_cases c instr_pos
+                    | exception Not_found -> ()
+                  in
+                  let prog, l'elt = check_instructions env l in
+                  let env = { env with prog } in
+                  let cl' = List.map (check_case env) cl in
+                  (cl @ cases, env, (cl', l'elt) :: rev_l'))
                 ([], env, []) l
             in
             let l' = List.rev rev_l' in
@@ -2162,6 +2190,13 @@ let inout_expression (env : var_env) (m_expr : int Pos.marked Com.m_expression)
     StrMap.union_snd (StrMap.one name pos) acc
   in
   fold_var_expr get_var fold_sp fold_var StrMap.empty m_expr env
+
+let inout_switch_expression (env : var_env)
+    (s_e : int Pos.marked Com.switch_expression) =
+  match s_e with
+  | SEValue v -> inout_expression env v
+  | SESameVariable m ->
+      inout_expression env (Pos.same (Com.Var (Pos.unmark m)) m)
 
 let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
     (instrs : (int Pos.marked, Mast.error_name) Com.m_instruction list) :
@@ -2269,7 +2304,7 @@ let rec inout_instrs (env : var_env) (tmps : Pos.t StrMap.t)
             in
             aux (tmps, in_vars, out_vars, def_vars) il
         | Com.Switch (e, l) ->
-            let in_expr = inout_expression env e in
+            let in_expr = inout_switch_expression env e in
             (* Reversed order, but it does not matter *)
             let in_l, out_l, def_l =
               List.fold_left

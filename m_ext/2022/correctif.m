@@ -2304,12 +2304,12 @@ aiguillage (STR) : (
 cible get_code_situation_famille:
 application: iliad;
 arguments: RESULTAT, CORR, VAR;
-aiguillage(VAR):(
-  cas est 0AM: RESULTAT = SF_MARIAGE;
-  cas est 0AC: RESULTAT = SF_CELIBAT;
-  cas est 0AD: RESULTAT = SF_DIVORCE;
-  cas est 0AO: RESULTAT = SF_PACSE;
-  cas est 0AV:
+aiguillage nom (VAR):(
+  cas 0AM: RESULTAT = SF_MARIAGE;
+  cas 0AC: RESULTAT = SF_CELIBAT;
+  cas 0AD: RESULTAT = SF_DIVORCE;
+  cas 0AO: RESULTAT = SF_PACSE;
+  cas 0AV:
     si positif(CORR) et GLOBAL.ANNEE_DECES_CONJOINT = GLOBAL.ANNEE_REVENU alors
       RESULTAT = SF_VEUVAGE_TRUE;
     sinon

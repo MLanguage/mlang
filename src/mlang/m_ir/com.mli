@@ -524,6 +524,10 @@ type stop_kind =
 
 (** {2 Instructions} *)
 
+type 'v switch_expression =
+  | SEValue of 'v m_expression
+  | SESameVariable of 'v m_access
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -561,7 +565,7 @@ type ('v, 'e) instruction =
       * 'v m_expression option
       * ('v, 'e) m_instruction list
   | Switch of
-      ('v m_expression * ('v case list * ('v, 'e) m_instruction list) list)
+      ('v switch_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors

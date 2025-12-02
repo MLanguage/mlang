@@ -612,6 +612,14 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
       let e' = expand_expression const_map loop_map e in
       ExpAccess (Pos.mark (Com.FieldAccess (m_sp_opt', e', f, i_f)) a_pos)
 
+and expand_switch_expression (const_map : const_context)
+    (loop_map : loop_context) = function
+  | Com.SEValue e -> Com.SEValue (expand_expression const_map loop_map e)
+  | SESameVariable v -> (
+      match expand_access const_map loop_map v with
+      | ExpAccess m_a -> SESameVariable m_a
+      | ExpLiteral _ -> SESameVariable v)
+
 and expand_expression (const_map : const_context) (loop_map : loop_context)
     (m_expr : Mast.expression Pos.marked) : Mast.expression Pos.marked =
   let open Com in
@@ -766,6 +774,14 @@ let expand_formula (const_map : const_context)
       let res = loop_context_provider translator in
       List.rev res @ prev
 
+let expand_switch_case const_map loop_map c =
+  match c with
+  | Com.CVar e -> (
+      match expand_access const_map loop_map e with
+      | ExpLiteral l -> Com.CValue l
+      | ExpAccess a -> Com.CVar a)
+  | CValue _ | CDefault -> c
+
 let rec expand_instruction (const_map : const_context)
     (prev : Mast.instruction Pos.marked list)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
@@ -781,9 +797,18 @@ let rec expand_instruction (const_map : const_context)
       let ielse' = expand_instructions const_map ielse in
       Pos.same (Com.IfThenElse (expr', ithen', ielse')) m_instr :: prev
   | Com.Switch (e, l) ->
-      let e' = expand_expression const_map ParamsMap.empty e in
+      let e' = expand_switch_expression const_map ParamsMap.empty e in
       let l' =
-        List.map (fun (c, l) -> (c, expand_instructions const_map l)) l
+        List.map
+          (fun (cl, l) ->
+            let cl =
+              match e with
+              | SESameVariable _ -> cl
+              | SEValue _ ->
+                  List.map (expand_switch_case const_map ParamsMap.empty) cl
+            in
+            (cl, expand_instructions const_map l))
+          l
       in
       Pos.same (Com.Switch (e', l')) m_instr :: prev
   | Com.WhenDoElse (wdl, ed) ->

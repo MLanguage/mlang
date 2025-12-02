@@ -382,7 +382,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
       | Com.Switch (expr, l) ->
-          let nbI, szI, nbRefI, tdata = aux_expr tdata expr in
+          let nbI, szI, nbRefI, tdata = aux_switch_expr tdata expr in
           List.fold_left
             (fun (mNb, mSz, mNbRef, tdata) (_, l) ->
               let nb, sz, rbRef, tdata = aux_instrs tdata l in
@@ -527,6 +527,10 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           (0, 0, 0, tdata)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
+    and aux_switch_expr tdata se =
+      match se with
+      | Com.SEValue e -> aux_expr tdata e
+      | Com.SESameVariable m -> aux_access tdata m
     and aux_expr tdata (Pos.Mark (expr, _pos)) =
       match expr with
       | Com.TestInSet (_, me, values) ->
@@ -779,6 +783,12 @@ and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
       let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
       Com.FieldAccess (m_sp_opt', i', f, ef.index)
 
+and translate_switch_expression (p : Validator.program)
+    (dict : Com.Var.t IntMap.t) = function
+  | Com.SEValue v -> Com.SEValue (translate_expression p dict v)
+  | SESameVariable v ->
+      SESameVariable (Pos.same (translate_access p dict (Pos.unmark v)) v)
+
 let translate_case (p : Validator.program) (dict : Com.Var.t IntMap.t)
     (case : int Pos.marked Com.case) : Com.Var.t Com.case =
   match case with
@@ -820,7 +830,7 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let instr' = Com.IfThenElse (expr, prog_then, prog_else) in
         aux (Pos.mark instr' pos :: res, dict) il
     | Pos.Mark (Com.Switch (e, l), pos) :: il ->
-        let e' = translate_expression p dict e in
+        let e' = translate_switch_expression p dict e in
         let revl', dict =
           List.fold_left
             (fun (revl, dict) (c, l) ->

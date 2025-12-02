@@ -59,6 +59,11 @@ BOBO3 : calculee base primrest = 0 restituee : "" ;
 BOBO4 : calculee base primrest = 0 restituee : "" ;
 BOBORES : calculee base primrest = 0 restituee : "" ;
 
+CONST0 : const = 0;
+CONST1 : const = 1;
+CONST2 : const = 2;
+CONST3 : const = 3;
+
 espace_variables ESP : categorie saisie, base;
 
 cible test_dans_domaine:
@@ -627,10 +632,20 @@ aiguillage (Y) : (
     afficher "Y = ?, echec\n";
 )
 aiguillage (Y) : (
-  cas est X:
+  cas CONST0:
+    afficher "Y = CONST0, echec\n";
+  cas CONST1:
+    afficher "Y = CONST1, OK!\n";
+  cas indefini:
+    afficher "Y = --indefini--, echec\n";
+  par_defaut:
+    afficher "Y = ?, echec\n";
+)
+aiguillage nom (Y) : (
+  cas X:
     afficher "X = Y, ah bon?\n";
-  cas est Y:
-    afficher "Y = Y, ouf";
+  cas Y:
+    afficher "Y = Y, ouf\n";
   par_defaut:
     afficher "Y = ?, echec\n";
 )

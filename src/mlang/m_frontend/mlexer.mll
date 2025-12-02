@@ -94,7 +94,6 @@ rule token = parse
     | "erreur" -> ERROR
     | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE
-    | "est" -> IS
     | "et" -> AND
     | "evenement" -> EVENT
     | "evenements" -> EVENTS
