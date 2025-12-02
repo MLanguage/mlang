@@ -58,15 +58,6 @@ let display_time =
     & info [ "display_time"; "t" ]
         ~doc:"Displays timing information (use with --debug)")
 
-let dep_graph_file =
-  let doc =
-    "Name of the file where the variable dependency graph should be output \
-     (use with --debug)"
-  in
-  Arg.(
-    value & opt file "dep_graph.dot"
-    & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
-
 let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
   Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
@@ -164,7 +155,7 @@ let comparison_error_margin_cli =
 let income_year_cli =
   Arg.(
     value
-    & opt (int) (1900 + (Unix.localtime (Unix.time())).Unix.tm_year - 1)
+    & opt int (1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1)
     & info [ "income-year" ] ~docv:"INCOME_YEAR"
         ~doc:"Set the year of the income.")
 
@@ -189,10 +180,10 @@ let dgfip_options =
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
-    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
+    $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
