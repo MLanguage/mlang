@@ -16,7 +16,11 @@
 
 module E = Errors
 
+type loc = Lexing.position * Lexing.position
+
 let mk_position sloc = Pos.make (fst sloc).Lexing.pos_fname sloc
+
+let make_loc loc = loc
 
 (** {1 Frontend variable names}*)
 
@@ -88,7 +92,7 @@ let parse_literal sloc (s : string) : Com.literal =
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
 let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
-  try Com.AtomLiteral (Com.Float (float_of_string s))
+  try Com.mk_atomlit (Com.Float (float_of_string s))
   with Failure _ ->
     Com.AtomVar (Pos.mark (parse_variable sloc s) (mk_position sloc))
 

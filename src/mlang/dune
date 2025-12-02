@@ -3,7 +3,7 @@
 (library
  (public_name mlang)
  (libraries re ANSITerminal parmap cmdliner threads dune-build-info num gmp
-   menhirLib))
+   menhirLib ocamlgraph yojson))
 
 (documentation
  (package mlang)

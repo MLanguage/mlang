@@ -43,7 +43,7 @@ let irj_checker (f : string) (message_format : message_format_enum)
     if not (Sys.file_exists f && not (Sys.is_directory f)) then
       Errors.raise_error
         (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
-    let test_data = Mlang.Irj_file.parse_file f in
+    let test_data = Mlang.Irj_file.parse_file (Filename f) in
     let test_data =
       match validation_mode with
       | Primitive ->

@@ -14,8 +14,10 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+module Dgfip_options = Config.Dgfip_options
+
 let open_file filename =
-  let folder = Filename.dirname !Cli.output_file in
+  let folder = Filename.dirname !Config.output_file in
   let oc = open_out (Filename.concat folder filename) in
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
@@ -270,7 +272,7 @@ typedef struct S_varinfo_map {
     attrs
 
 let is_valid_app apps =
-  StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
+  StrMap.exists (fun app _ -> List.mem app !Config.application_names) apps
 
 let gen_erreurs_c fmt flags (cprog : Mir.program) =
   Pp.fpr fmt {|/****** LICENCE CECIL *****/
@@ -347,7 +349,7 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
     FLG_TRACE_IRDATA\n"; *)
   if flags.flg_debug then Pp.fpr fmt "#define FLG_DEBUG\n";
   Pp.fpr fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
-  Pp.fpr fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
+  Pp.fpr fmt "#define EPSILON %f\n" !Config.comparison_error_margin;
   let count loc =
     StrMap.fold
       (fun _ var nb ->
@@ -593,7 +595,7 @@ extern void free_erreur();
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
 |};
-  Pp.fpr fmt "#define EPSILON %f" !Cli.comparison_error_margin;
+  Pp.fpr fmt "#define EPSILON %f" !Config.comparison_error_margin;
   Pp.fpr fmt
     {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)

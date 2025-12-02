@@ -21,7 +21,11 @@
 (** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Com.var_name | ParseInt of int
 
+type loc = Lexing.position * Lexing.position
+
 val mk_position : Lexing.position * Lexing.position -> Pos.t
+
+val make_loc : loc -> loc
 
 val parse_variable : Lexing.position * Lexing.position -> string -> Com.var_name
 (** Checks whether the variable contains parameters *)

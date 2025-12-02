@@ -25,7 +25,6 @@ val mlang_t :
   bool ->
   string list ->
   bool ->
-  string ->
   bool ->
   string option ->
   string option ->
@@ -37,131 +36,16 @@ val mlang_t :
   string option ->
   string option ->
   float option ->
-  int option ->
+  int ->
   bool ->
   string list option ->
+  bool ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
 
 val info : Cmdliner.Cmd.info
 (** Command-line man page for --help *)
-
-(**{2 Flags and parameters}*)
-
-(** According on the [value_sort], a specific interpreter will be called with
-    the right kind of floating-point value *)
-type value_sort =
-  | RegularFloat
-  | MPFR of int  (** bitsize of the floats *)
-  | BigInt of int  (** precision of the fixed point *)
-  | Interval
-  | Rational
-
-(** Rounding operations to use in the interpreter. They correspond to the
-    rounding operations used by the DGFiP calculator in different execution
-    contexts.
-
-    - RODefault: rounding operations used in the PC/single-thread context
-    - ROMulti: rouding operations used in the PC/multi-thread context
-    - ROMainframe rounding operations used in the mainframe context *)
-type round_ops =
-  | RODefault
-  | ROMulti
-  | ROMainframe of int  (** size of type long, either 32 or 64 *)
-
-type backend = Dgfip_c | UnknownBackend
-
-type execution_mode =
-  | SingleTest of string
-  | MultipleTests of string
-  | Extraction
-
-type files = NonEmpty of string list
-
-val get_files : files -> string list
-
-val source_files : files ref
-(** M source files to be compiled *)
-
-val application_names : string list ref
-
-val dep_graph_file : string ref
-(** Prefix for debug graph output files *)
-
-val without_dgfip_m : bool ref
-
-val verify_flag : bool ref
-(** Use Z3 to check if verif rules hold all the time *)
-
-val debug_flag : bool ref
-(** Prints debug information *)
-
-val var_info_flag : bool ref
-(** Print infomation about variables declared, defined ou used incorrectly *)
-
-val var_info_debug : string list ref
-(** Prints even more information but only about some variables members of a list
-*)
-
-val warning_flag : bool ref
-(** Print warning info *)
-
-val no_print_cycles_flag : bool ref
-(** Dump circular definitions of variables *)
-
-val display_time : bool ref
-(** Displays timing information *)
-
-val output_file : string ref
-(** Output file *)
-
-val optimize_unsafe_float : bool ref
-(** Activate unsafe floating point optimizations *)
-
-val m_clean_calls : bool ref
-(** Clean regular variables between M calls *)
-
-val comparison_error_margin : float ref
-
-val income_year : int ref
-
-val value_sort : value_sort ref
-
-val round_ops : round_ops ref
-
-val backend : backend ref
-
-val dgfip_test_filter : bool ref
-
-val mpp_function : string ref
-
-val dgfip_flags : Dgfip_options.flags ref
-
-val execution_mode : execution_mode ref
-
-val set_all_arg_refs :
-  (* files *) files ->
-  (* applications *) string list ->
-  (* without_dgfip_m *) bool ->
-  (* debug *) bool ->
-  (* var_info_debug *) string list ->
-  (* display_time *) bool ->
-  (* dbg_graph_file *) string ->
-  (* prints_cycles *) bool ->
-  (* output_file *) string option ->
-  (* optimize_unsafe_float *) bool ->
-  (* m_clean_call *) bool ->
-  (* comparison_error_margin*) float option ->
-  (* income_year *) int option ->
-  value_sort ->
-  round_ops ->
-  backend ->
-  (* dgfip_test_filter *) bool ->
-  (* mpp_function *) string ->
-  (* dgfip_flags *) Dgfip_options.flags ->
-  (* execution_mode *) execution_mode ->
-  unit
 
 val add_prefix_to_each_line : string -> (int -> string) -> string
 (** [add_prefix_to_each_line msg prefix] will print msg but each line with line
@@ -189,3 +73,9 @@ val create_progress_bar : string -> (string -> unit) * (string -> unit)
 (** Returns two functions: the first one, [current_progress], has to be called
     during the progress loop and the other one, [finish], has to be called at
     the end of the progressive task. *)
+
+val retrieve_loc_text : Pos.t -> string
+(** [retrieve_loc_text pos] reads the source file associated with [pos] and
+    returns a formatted string of the code at that location, with the exact
+    columns highlighted. This is used to display code snippets in error
+    messages. *)
