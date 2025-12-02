@@ -185,9 +185,10 @@ let check_test (program : Mir.program) (test_name : string)
         Cli.debug_print "Executing program %s" inst.label;
         (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
            Format_bir.format_program program; *)
-        let varMap, anoSet =
+        let dbg_info = None in
+        let varMap, anoSet, _dbg_info =
           Mir_interpreter.evaluate_program program inst.vars inst.events
-            value_sort round_ops
+            value_sort round_ops dbg_info
         in
         let nbErrs =
           check_vars inst.expectedVars varMap
