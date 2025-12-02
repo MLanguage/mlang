@@ -24,3 +24,11 @@
   (:standard
    (:include linking-flags-mlang.sexp)))
  (libraries mlang))
+
+(executable
+ (name server)
+ (package mlang)
+ (public_name server)
+ (preprocess
+  (pps lwt_ppx ppx_yojson_conv))
+ (libraries mlang dream))
