@@ -153,14 +153,13 @@ let parse () =
 
 let set_opts (files : string list) (application_names : string list)
     (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
-    (display_time : bool) (dep_graph_file : string) (print_cycles : bool)
-    (backend : string option) (output : string option)
-    (run_tests : string option) (dgfip_test_filter : bool)
-    (run_test : string option) (mpp_function : string)
-    (optimize_unsafe_float : bool) (precision : string option)
-    (roundops : string option) (comparison_error_margin : float option)
-    (income_year : int) (m_clean_calls : bool)
-    (dgfip_options : string list option) =
+    (display_time : bool) (print_cycles : bool) (backend : string option)
+    (output : string option) (run_tests : string option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string) (optimize_unsafe_float : bool)
+    (precision : string option) (roundops : string option)
+    (comparison_error_margin : float option) (income_year : int)
+    (m_clean_calls : bool) (dgfip_options : string list option) =
   let value_sort =
     let precision = Option.get precision in
     if precision = "double" then Config.RegularFloat
@@ -223,14 +222,14 @@ let set_opts (files : string list) (application_names : string list)
     process_dgfip_options !Config.backend ~application_names dgfip_options
   in
   Config.set_all_arg_refs files application_names without_dgfip_m debug
-    var_info_debug display_time dep_graph_file print_cycles output
-    optimize_unsafe_float m_clean_calls comparison_error_margin income_year
-    value_sort round_ops backend dgfip_test_filter mpp_function dgfip_flags
-    execution_mode
+    var_info_debug display_time print_cycles output optimize_unsafe_float
+    m_clean_calls comparison_error_margin income_year value_sort round_ops
+    backend dgfip_test_filter mpp_function dgfip_flags execution_mode
 
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;
-  Test_interpreter.check_one_test m_program test !Config.value_sort !Config.round_ops;
+  Test_interpreter.check_one_test m_program test !Config.value_sort
+    !Config.round_ops;
   Cli.result_print "Test passed!"
 
 let run_multiple_tests m_program tests =

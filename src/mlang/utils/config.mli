@@ -67,9 +67,6 @@ val source_files : files ref
 
 val application_names : string list ref
 
-val dbg_graph_file : string ref
-(** Prefix for debug graph output files *)
-
 val without_dgfip_m : bool ref
 
 val verify_flag : bool ref
@@ -128,7 +125,6 @@ val set_all_arg_refs :
   (* debug *) bool ->
   (* var_info_debug *) string list ->
   (* display_time *) bool ->
-  (* dbg_graph_file *) string ->
   (* prints_cycles *) bool ->
   (* output_file *) string option ->
   (* optimize_unsafe_float *) bool ->
@@ -143,4 +139,3 @@ val set_all_arg_refs :
   (* dgfip_flags *) Dgfip_options.flags ->
   (* execution_mode *) execution_mode ->
   unit
-
