@@ -553,7 +553,6 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Attribut (Pos.Mark (FieldAccess (_, me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1)
-      | Com.Binop (_, me0, me1)
       | Com.SameVariable
           ( Pos.Mark (TabAccess (_, _, me0), _),
             Pos.Mark (TabAccess (_, _, me1), _) )
@@ -569,6 +568,12 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
           let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
           (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)
+      | Com.Binop (_, l) ->
+          let fold (nb, sz, nbRef, tdata) me =
+            let nb', sz', nbRef', tdata = aux_expr tdata me in
+            (max nb nb', max sz sz', max nbRef nbRef', tdata)
+          in
+          List.fold_left fold (0, 0, 0, tdata) l
       | Com.Conditional (meI, meT, meEOpt) ->
           let nbI, szI, nbRefI, tdata = aux_expr tdata meI in
           let nbT, szT, nbRefT, tdata = aux_expr tdata meT in
@@ -647,7 +652,7 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let new_e1 = translate_expression p dict e1 in
         let new_e2 = translate_expression p dict e2 in
         Comparison (op, new_e1, new_e2)
-    | Binop (op, e1, e2) ->
+    | Binop (op, l) ->
         (* if
              Pos.unmark op = Mast.Mul
              && (Pos.unmark e1 = Mast.Literal (Float 0.)
@@ -657,9 +662,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
                 constant substitutions that could wrongly trigger the warning *)
              Errors.print_spanned_warning
                "Nullifying constant multiplication found." (Pos.get f);*)
-        let new_e1 = translate_expression p dict e1 in
-        let new_e2 = translate_expression p dict e2 in
-        Binop (op, new_e1, new_e2)
+        let new_l = List.map (translate_expression p dict) l in
+        Binop (op, new_l)
     | Unop (op, e) ->
         let new_e = translate_expression p dict e in
         Unop (op, new_e)

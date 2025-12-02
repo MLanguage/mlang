@@ -25,6 +25,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
+ let binop op e e' =
+   match Pos.unmark op with
+     | Com.Add | Com.Mul | Com.And | Com.Or -> (
+       match Pos.unmark e, Pos.unmark e' with
+       | _, Com.Binop (op', l) when op = op' -> Com.Binop (op, l @ [e])
+       | Com.Binop (op', l), _ when op = op' -> Com.Binop (op, l @ [e'])
+       | _ -> Com.Binop (op, [e; e'])
+     )
+     | _ -> Com.Binop (op, [e; e'])
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -1385,7 +1394,7 @@ expression:
 | e1 = with_pos(expression)
   op = with_pos(logical_binop)
   e2 = with_pos(expression) {
-    Binop (op, e1, e2)
+    binop op e1 e2
   }
 | FOR le = loop_expression { let l1, l2 = le in Loop (l1, l2) }
 | NOT e = with_pos(expression) { Unop (Not, e) }
@@ -1399,7 +1408,7 @@ sum_expression:
 | e1 = with_pos(sum_expression)
   op = with_pos(sum_operator)
   e2 = with_pos(product_expression) {
-    Com.Binop (op, e1, e2)
+    binop op e1 e2
   }
 
 %inline sum_operator:
@@ -1411,7 +1420,7 @@ product_expression:
 | e1 = with_pos(product_expression)
   op = with_pos(product_operator)
   e2 = with_pos(factor) {
-    Com.Binop (op, e1, e2)
+    binop op e1 e2
   }
 
 %inline product_operator:

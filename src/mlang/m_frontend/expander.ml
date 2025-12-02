@@ -635,10 +635,9 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       let e1' = expand_expression const_map loop_map e1 in
       let e2' = expand_expression const_map loop_map e2 in
       Pos.same (Comparison (op, e1', e2')) m_expr
-  | Binop (op, e1, e2) ->
-      let e1' = expand_expression const_map loop_map e1 in
-      let e2' = expand_expression const_map loop_map e2 in
-      Pos.same (Binop (op, e1', e2')) m_expr
+  | Binop (op, l) ->
+      let l' = List.map (expand_expression const_map loop_map) l in
+      Pos.same (Binop (op, l')) m_expr
   | Unop (op, e) ->
       let e' = expand_expression const_map loop_map e in
       Pos.same (Unop (op, e')) m_expr
@@ -678,7 +677,7 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       let loop_exprs = loop_context_provider translator in
       List.fold_left
         (fun res loop_expr ->
-          Pos.same (Binop (Pos.same Or m_expr, res, loop_expr)) m_expr)
+          Pos.same (Binop (Pos.same Or m_expr, [ res; loop_expr ])) m_expr)
         (Pos.same (Literal (Float 0.0)) m_expr)
         loop_exprs
   | Attribut (Pos.Mark (a, a_pos), attr) -> (

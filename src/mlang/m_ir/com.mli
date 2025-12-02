@@ -304,7 +304,7 @@ and 'v expression =
           flag is set to [false]) *)
   | Unop of unop * 'v m_expression
   | Comparison of comp_op Pos.marked * 'v m_expression * 'v m_expression
-  | Binop of binop Pos.marked * 'v m_expression * 'v m_expression
+  | Binop of binop Pos.marked * 'v m_expression list
   | Conditional of 'v m_expression * 'v m_expression * 'v m_expression option
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
