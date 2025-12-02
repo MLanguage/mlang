@@ -1132,8 +1132,9 @@ let format_value_typ fmt t =
     | Real -> "REEL")
 
 let format_literal fmt l =
-  Format.pp_print_string fmt
-    (match l with Float f -> string_of_float f | Undefined -> "indefini")
+  match l with
+  | Float f -> Format.fprintf fmt "%g" f
+  | Undefined -> Format.pp_print_string fmt "indefini"
 
 let format_atom form_var fmt vl =
   match vl with
