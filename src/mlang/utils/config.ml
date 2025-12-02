@@ -17,7 +17,7 @@ type execution_mode =
 
 type files = NonEmpty of string list
 
-type platform = Executable | Server of string StrMap.t
+type filesystem = Local | Contents of string StrMap.t
 
 (* Flags inherited from the old compiler *)
 
@@ -72,7 +72,7 @@ let comparison_error_margin = ref 0.000001
 
 let income_year = ref 0
 
-let platform = ref Executable
+let filesystem = ref Local
 
 let plain_output = ref true
 

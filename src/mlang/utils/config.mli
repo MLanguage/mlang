@@ -28,11 +28,10 @@ type execution_mode =
 
 type files = NonEmpty of string list
 
-type platform =
-  | Executable
-  | Server of string StrMap.t
-      (** This type represents how the interpreter is run. By default, it's as
-          an Executable *)
+type filesystem =
+  | Local
+  | Contents of string StrMap.t
+      (** This is used to know where to search for m file contents *)
 
 val get_files : files -> string list
 
@@ -94,7 +93,7 @@ val execution_mode : execution_mode ref
 
 val no_nondet_display : bool ref
 
-val platform : platform ref
+val filesystem : filesystem ref
 
 val plain_output : bool ref
 
