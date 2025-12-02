@@ -356,7 +356,11 @@ let expand_functions (p : program) : program =
           let instrs' = List.map map_instr instrs in
           Pos.same (ArrangeEvents (sort', filter', add', instrs')) m_instr
       | Switch (e, l) ->
-          let e' = expand_functions_expr p e in
+          let e' =
+            match e with
+            | Com.SEValue e -> SEValue (expand_functions_expr p e)
+            | Com.SESameVariable v -> SESameVariable v
+          in
           let l' = List.map (fun (c, l) -> (c, List.map map_instr l)) l in
           Pos.same (Switch (e', l')) m_instr
       | RaiseError _ | CleanErrors | CleanFinalizedErrors | ExportErrors

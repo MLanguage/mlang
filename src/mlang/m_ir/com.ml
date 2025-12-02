@@ -622,6 +622,10 @@ type stop_kind =
 (* Leave the iterator with the selected var
    (or the current if [None]) *)
 
+type 'v switch_expression =
+  | SEValue of 'v m_expression
+  | SESameVariable of 'v m_access
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -659,7 +663,7 @@ type ('v, 'e) instruction =
       * 'v m_expression option
       * ('v, 'e) m_instruction list
   | Switch of
-      ('v m_expression * ('v case list * ('v, 'e) m_instruction list) list)
+      ('v switch_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -810,6 +814,10 @@ and case_map_var f = function
   | CValue v -> CValue v
   | CVar acc -> CVar (m_access_map_var f acc)
 
+and switch_expr_map_var f = function
+  | SEValue e -> SEValue (m_expr_map_var f e)
+  | SESameVariable m_a -> SESameVariable (m_access_map_var f m_a)
+
 and instr_map_var f g = function
   | Affectation m_f -> Affectation (Pos.map (formula_map_var f) m_f)
   | IfThenElse (m_e0, m_il0, m_il1) ->
@@ -818,7 +826,7 @@ and instr_map_var f g = function
       let m_il1' = List.map (m_instr_map_var f g) m_il1 in
       IfThenElse (m_e0', m_il0', m_il1')
   | Switch (e, l) ->
-      let e' = m_expr_map_var f e in
+      let e' = switch_expr_map_var f e in
       let l' =
         List.map
           (fun (c, l) ->
@@ -1032,6 +1040,11 @@ and formula_fold_var f fm acc =
   | MultipleFormulaes (fl, fd) ->
       acc |> formula_loop_fold_var f fl |> formula_decl_fold_var f fd
 
+and switch_expr_fold_var f se acc =
+  match se with
+  | SEValue e -> m_expr_fold_var f e acc
+  | SESameVariable v -> m_access_fold_var Info f v acc
+
 and instr_fold_var f instr acc =
   match instr with
   | Affectation m_f -> formula_fold_var f (Pos.unmark m_f) acc
@@ -1040,7 +1053,7 @@ and instr_fold_var f instr acc =
       |> fold_list (m_instr_fold_var f) m_il0
       |> fold_list (m_instr_fold_var f) m_il1
   | Switch (e, l) ->
-      acc |> m_expr_fold_var f e
+      acc |> switch_expr_fold_var f e
       |> fold_list (fun (_, l) -> fold_list (m_instr_fold_var f) l) l
   | WhenDoElse (m_eil, m_il) ->
       let fold (m_e0, m_il0, _) accu =
@@ -1366,7 +1379,14 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
           form_expr (Pos.unmark cond) form_instrs t form_instrs f
     | Switch (e, l) ->
-        Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
+        Format.fprintf fmt "aiguillage ";
+        let () =
+          match e with
+          | SEValue e -> Format.fprintf fmt "(%a)" form_expr (Pos.unmark e)
+          | SESameVariable v ->
+              Format.fprintf fmt "nom (%a)" form_access (Pos.unmark v)
+        in
+        Format.fprintf fmt " : (@,";
         List.iter
           (fun (cl, l) ->
             List.iter

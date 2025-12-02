@@ -520,6 +520,14 @@ struct
         set_var_value_org ctx vsd var_i vorg value
       else set_var_value_org ctx vsd var vorg value
 
+  and evaluate_switch_expr (ctx : ctx) s_e =
+    match s_e with
+    | Com.SEValue e -> (
+        match evaluate_expr ctx e with
+        | Undefined -> `Undefined
+        | Number n -> `Value n)
+    | SESameVariable v -> `Var v
+
   and set_access ctx access value =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
@@ -877,34 +885,30 @@ struct
     | Com.Switch (c, l) -> (
         let exception INTERNAL_STOP_SWITCH in
         let then_ () = raise INTERNAL_STOP_SWITCH in
+        let v = evaluate_switch_expr ctx c in
+        let default = ref None in
         try
           List.iter
             (fun (cases, stmts) ->
               List.iter
                 (fun case ->
-                  match case with
-                  | Com.CDefault | CValue Undefined ->
-                      let v = evaluate_expr ctx c in
-                      if v = Undefined then
+                  match (case, v) with
+                  | Com.CDefault, _ ->
+                      (* Trigged only if all other cases fail *)
+                      default := Some stmts
+                  | CValue Undefined, `Undefined ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | CValue _, `Undefined | CValue Undefined, _ -> ()
+                  | CValue (Float f), `Value v ->
+                      if N.of_float f = v then
                         evaluate_stmts ~then_ canBlock ctx stmts
-                  | CValue (Float f) -> (
-                      let v = evaluate_expr ctx c in
-                      match v with
-                      | Number v' when v' = N.of_float f ->
-                          evaluate_stmts ~then_ canBlock ctx stmts
-                      | _ -> ())
-                  | CVar m_acc ->
-                      let compared_m_acc =
-                        match Pos.unmark c with
-                        | Var v -> Pos.same v c
-                        | c ->
-                            Format.kasprintf failwith
-                              "Invalid expression %a in switch"
-                              (Com.format_expression Com.Var.pp)
-                              c
-                      in
-                      if same_variable ctx m_acc compared_m_acc then
-                        evaluate_stmts ~then_ canBlock ctx stmts)
+                  | CValue _, `Var _ ->
+                      failwith "Cannot match value with variable"
+                  | CVar m_acc, `Var v ->
+                      if same_variable ctx m_acc v then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CVar _, (`Value _ | `Undefined) ->
+                      failwith "Cannot match variable with value")
                 cases)
             l
         with INTERNAL_STOP_SWITCH -> ())

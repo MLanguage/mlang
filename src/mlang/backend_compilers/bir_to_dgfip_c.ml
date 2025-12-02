@@ -991,23 +991,37 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let exp = fresh_c_local "exp" in
       let exp_def = exp ^ "_def" in
       let exp_val = exp ^ "_val" in
+      let is_var_switch =
+        match e with SESameVariable _ -> true | SEValue _ -> false
+      in
+      let var_of_switch () =
+        assert is_var_switch;
+        match e with SESameVariable e -> e | _ -> assert false
+      in
       pr "@;@[<v 2>{";
       pr "@;char %s;@;double %s;" exp_def exp_val;
-      generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
-      pr "@;@[<v 2>if (%s) {@;" exp_def;
+      let () =
+        (* Check is def if necessary *)
+        match e with
+        | SESameVariable _ -> pr "{@;"
+        | SEValue e ->
+            generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
+            pr "@;@[<v 2>if (%s) {@;" exp_def
+      in
       pr "// Switch cases  @;";
       (* Expression is defined *)
       let () =
         let pp_case (v, br) =
           match v with
           | `Float v ->
+              assert (not is_var_switch);
               pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
                 (generate_stmts env dgfip_flags p)
                 br
           | `Var v ->
-              let compared_var =
-                match Pos.unmark e with Com.Var v -> v | _ -> assert false
-              in
+              assert is_var_switch;
+              let e = var_of_switch () in
+              let compared_var = Pos.unmark e in
               let is_same = fresh_c_local "is_same_var" in
               let is_same_def = is_same ^ "_def" in
               let is_same_val = is_same ^ "_val" in

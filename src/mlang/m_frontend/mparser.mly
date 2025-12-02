@@ -54,7 +54,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token SAME_VARIABLE VARIABLE_SPACE IS SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
+%token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
 %token STOP MATCH CASE
 
 %token EOF
@@ -887,13 +887,29 @@ instruction:
 | STOP TARGET SEMICOLON { Some (Stop SKTarget) } 
 | STOP s = SYMBOL SEMICOLON { Some (Stop (SKId (Some s))) }
 | STOP SEMICOLON { Some (Stop (SKId None)) }
-| MATCH LPAREN e = with_pos(expression) RPAREN COLON LPAREN l = nonempty_list(switch_case) RPAREN
-  { Some (Switch (e, l)) }
+| s = switch_kind COLON LPAREN l = nonempty_list(switch_case) RPAREN
+  { Some (Switch (s, l)) }
+
+switch_kind:
+  | MATCH NAME LPAREN acc = with_pos(var_access) RPAREN { Com.SESameVariable acc }
+  | MATCH LPAREN e = with_pos(expression) RPAREN { Com.SEValue e }
+
+switch_case_kind:
+  | s = SYMBOL
+    {
+      let pos = mk_position $sloc in
+      match parse_literal $sloc s with
+      | l -> Com.CValue l
+      | exception (Errors.StructuredError _) ->
+	 match parse_variable_or_int $sloc s with
+	 | ParseVar v ->
+            Com.CVar (Pos.mark (Com.VarAccess (None, Pos.mark v pos)) pos)
+	 | ParseInt i -> Com.CValue (Float (float_of_int i))
+    }
+  | UNDEFINED { Com.CValue Com.Undefined }
 
 switch_case_value:
-| CASE s = SYMBOL COLON { Com.CValue (Com.Float (float_of_string s)) }
-| CASE UNDEFINED COLON { Com.CValue Com.Undefined }
-| CASE IS acc = with_pos(var_access) COLON { Com.CVar acc }
+| CASE sck = switch_case_kind COLON { sck }
 | BY_DEFAULT COLON { Com.CDefault }
 
 switch_cases_rev:
