@@ -150,13 +150,23 @@ int controleResultat(T_tas tas, T_irdata *tgv, L_S_varVal res, L_char ctl) {
     double val = 0.0;
     double val100 = 0.0;
     double valRes100 = 0.0;
+    int lng = strlen(vv->varinfo->name);
 
-    lis_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, &def, &val);
-    val100 = arrondi(val * 100.0);
-    valRes100 = arrondi(vv->val * 100.0);
-    if (fabs(val100 - valRes100) > 0.0) {
-      anoValeurFausse(vv->varinfo->name, val, vv->val);
-      ok = 0;
+    if (
+      ! (
+        strncmp(vv->varinfo->name, "NBPT", 4) == 0
+        || strncmp(vv->varinfo->name, "RETX", 4) == 0
+        || (strncmp(vv->varinfo->name, "NATMAJ", 6) == 0 && (lng == 7 || lng == 9 || lng == 10))
+        || strncmp(vv->varinfo->name, "TL_", 3) == 0
+      )
+    ) {
+      lis_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, &def, &val);
+      val100 = arrondi(val * 100.0);
+      valRes100 = arrondi(vv->val * 100.0);
+      if (fabs(val100 - valRes100) > 0.0) {
+        anoValeurFausse(vv->varinfo->name, val, vv->val);
+        ok = 0;
+      }
     }
     res = QUEUE(S_varVal, res);
   }

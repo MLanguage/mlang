@@ -2,21 +2,6 @@
 
 MAX_ID_EVT: calculee primrest = 0 : "" ;
 
-TMP_ARG1 : calculee primrest = 0 : "" ;
-TMP_ARG2 : calculee primrest = 0 : "" ;
-TMP_ARG3 : calculee primrest = 0 : "" ;
-TMP_ARG4 : calculee primrest = 0 : "" ;
-TMP_ARG5 : calculee primrest = 0 : "" ;
-TMP_ARG6 : calculee primrest = 0 : "" ;
-TMP_ARG7 : calculee primrest = 0 : "" ;
-TMP_ARG8 : calculee primrest = 0 : "" ;
-TMP_ARG9 : calculee primrest = 0 : "" ;
-TMP_RES : calculee primrest = 0 : "" ;
-TMP_RES1 : calculee primrest = 0 : "" ;
-TMP_RES2 : calculee primrest = 0 : "" ;
-TMP_RES3 : calculee primrest = 0 : "" ;
-TMP_RES4 : calculee primrest = 0 : "" ;
-
 N_INDEFINIE : const = 0;
 N_REVENU : const = 1;
 N_CHARGE : const = 2;
@@ -75,6 +60,40 @@ ID_CUMULE_BASE_TL_INIT : const = 2;
 ID_CUMULE_CHAMP_BASE_TL_RECT : const = 3;
 ID_TRAITE_MAJO_P : const = 4;
 
+cible clear_majo_str_tr:
+application: iliad;
+iterer : variable I : entre 0..25 increment 1 : dans (
+  MAJO_STR_TR[I] = 0;
+)
+
+cible affect_str_tr:
+application: iliad;
+CORR.STR_TR00 = MAJO_STR_TR[0];
+CORR.STR_TR01 = MAJO_STR_TR[1];
+CORR.STR_TR02 = MAJO_STR_TR[2];
+CORR.STR_TR03 = MAJO_STR_TR[3];
+CORR.STR_TR04 = MAJO_STR_TR[4];
+CORR.STR_TR05 = MAJO_STR_TR[5];
+CORR.STR_TR06 = MAJO_STR_TR[6];
+CORR.STR_TR07 = MAJO_STR_TR[7];
+CORR.STR_TR08 = MAJO_STR_TR[8];
+CORR.STR_TR09 = MAJO_STR_TR[9];
+CORR.STR_TR10 = MAJO_STR_TR[10];
+CORR.STR_TR11 = MAJO_STR_TR[11];
+CORR.STR_TR12 = MAJO_STR_TR[12];
+CORR.STR_TR13 = MAJO_STR_TR[13];
+CORR.STR_TR14 = MAJO_STR_TR[14];
+CORR.STR_TR15 = MAJO_STR_TR[15];
+CORR.STR_TR16 = MAJO_STR_TR[16];
+CORR.STR_TR17 = MAJO_STR_TR[17];
+CORR.STR_TR18 = MAJO_STR_TR[18];
+CORR.STR_TR19 = MAJO_STR_TR[19];
+CORR.STR_TR20 = MAJO_STR_TR[20];
+CORR.STR_TR21 = MAJO_STR_TR[21];
+CORR.STR_TR22 = MAJO_STR_TR[22];
+CORR.STR_TR23 = MAJO_STR_TR[23];
+CORR.STR_TR24 = MAJO_STR_TR[24];
+CORR.STR_TR25 = MAJO_STR_TR[25];
 
 cible init_variables:
 application: iliad;
@@ -214,32 +233,7 @@ GLOBAL.MAJO_D2042_P_NB = 0;
 GLOBAL.MAJO_TAUX_STRATE = 0;
 GLOBAL.MAJO_CODE_STRATE = 0;
 GLOBAL.MAJO_TARDIF_EVT2 = 0;
-GLOBAL.MAJO_STR_TR_00 = 0;
-GLOBAL.MAJO_STR_TR_01 = 0;
-GLOBAL.MAJO_STR_TR_02 = 0;
-GLOBAL.MAJO_STR_TR_03 = 0;
-GLOBAL.MAJO_STR_TR_04 = 0;
-GLOBAL.MAJO_STR_TR_05 = 0;
-GLOBAL.MAJO_STR_TR_06 = 0;
-GLOBAL.MAJO_STR_TR_07 = 0;
-GLOBAL.MAJO_STR_TR_08 = 0;
-GLOBAL.MAJO_STR_TR_09 = 0;
-GLOBAL.MAJO_STR_TR_10 = 0;
-GLOBAL.MAJO_STR_TR_11 = 0;
-GLOBAL.MAJO_STR_TR_12 = 0;
-GLOBAL.MAJO_STR_TR_13 = 0;
-GLOBAL.MAJO_STR_TR_14 = 0;
-GLOBAL.MAJO_STR_TR_15 = 0;
-GLOBAL.MAJO_STR_TR_16 = 0;
-GLOBAL.MAJO_STR_TR_17 = 0;
-GLOBAL.MAJO_STR_TR_18 = 0;
-GLOBAL.MAJO_STR_TR_19 = 0;
-GLOBAL.MAJO_STR_TR_20 = 0;
-GLOBAL.MAJO_STR_TR_21 = 0;
-GLOBAL.MAJO_STR_TR_22 = 0;
-GLOBAL.MAJO_STR_TR_23 = 0;
-GLOBAL.MAJO_STR_TR_24 = 0;
-GLOBAL.MAJO_STR_TR_25 = 0;
+calculer cible clear_majo_str_tr : espace GLOBAL;
 GLOBAL.MAJO_PREM_STR = 0;
 GLOBAL.MAJO_NB_STR_TR = 0;
 GLOBAL.MAJO_DERN_STR_TR = 0;
@@ -335,99 +329,6 @@ iterer
   GLOBAL.VAR = VAR;
 )
 stop application;
-
-cible init_majo_str_tr :
-application: iliad;
-arguments: I, B;
-aiguillage (I) : (
-  cas 0: MAJO_STR_TR_00 = B;
-  cas 1: MAJO_STR_TR_01 = B;
-  cas 2: MAJO_STR_TR_02 = B;
-  cas 3: MAJO_STR_TR_03 = B;
-  cas 4: MAJO_STR_TR_04 = B;
-  cas 5: MAJO_STR_TR_05 = B;
-  cas 6: MAJO_STR_TR_06 = B;
-  cas 7: MAJO_STR_TR_07 = B;
-  cas 8: MAJO_STR_TR_08 = B;
-  cas 9: MAJO_STR_TR_09 = B;
-  cas 10: MAJO_STR_TR_10 = B;
-  cas 11: MAJO_STR_TR_11 = B;
-  cas 12: MAJO_STR_TR_12 = B;
-  cas 13: MAJO_STR_TR_13 = B;
-  cas 14: MAJO_STR_TR_14 = B;
-  cas 15: MAJO_STR_TR_15 = B;
-  cas 16: MAJO_STR_TR_16 = B;
-  cas 17: MAJO_STR_TR_17 = B;
-  cas 18: MAJO_STR_TR_18 = B;
-  cas 19: MAJO_STR_TR_19 = B;
-  cas 20: MAJO_STR_TR_20 = B;
-  cas 21: MAJO_STR_TR_21 = B;
-  cas 22: MAJO_STR_TR_22 = B;
-  cas 23: MAJO_STR_TR_23 = B;
-  cas 24: MAJO_STR_TR_24 = B;
-  cas 25: MAJO_STR_TR_25 = B;
-)
-
-cible set_majo_str_tr:
-application: iliad;
-arguments: I;
-variables_temporaires: B;
-B = 1;
-calculer cible init_majo_str_tr : avec I, B;
-
-cible set_majo_str_tr_proc:
-application: iliad;
-variables_temporaires: I;
-I = TMP_ARG1;
-calculer cible set_majo_str_tr : avec I;
-
-cible unset_majo_str_tr:
-application: iliad;
-arguments: I;
-variables_temporaires: B;
-B = 0;
-calculer cible init_majo_str_tr : avec I, B;
-
-cible unset_majo_str_tr_proc:
-application: iliad;
-variables_temporaires: I;
-I = TMP_ARG1;
-calculer cible unset_majo_str_tr : avec I;
-
-cible clear_majo_str_tr:
-application: iliad;
-iterer : variable I : entre 0..25 increment 1 : dans (
-  calculer cible unset_majo_str_tr : avec I;
-)
-
-cible affect_str_tr:
-application: iliad;
-CORR.STR_TR00 = MAJO_STR_TR_00;
-CORR.STR_TR01 = MAJO_STR_TR_01;
-CORR.STR_TR02 = MAJO_STR_TR_02;
-CORR.STR_TR03 = MAJO_STR_TR_03;
-CORR.STR_TR04 = MAJO_STR_TR_04;
-CORR.STR_TR05 = MAJO_STR_TR_05;
-CORR.STR_TR06 = MAJO_STR_TR_06;
-CORR.STR_TR07 = MAJO_STR_TR_07;
-CORR.STR_TR08 = MAJO_STR_TR_08;
-CORR.STR_TR09 = MAJO_STR_TR_09;
-CORR.STR_TR10 = MAJO_STR_TR_10;
-CORR.STR_TR11 = MAJO_STR_TR_11;
-CORR.STR_TR12 = MAJO_STR_TR_12;
-CORR.STR_TR13 = MAJO_STR_TR_13;
-CORR.STR_TR14 = MAJO_STR_TR_14;
-CORR.STR_TR15 = MAJO_STR_TR_15;
-CORR.STR_TR16 = MAJO_STR_TR_16;
-CORR.STR_TR17 = MAJO_STR_TR_17;
-CORR.STR_TR18 = MAJO_STR_TR_18;
-CORR.STR_TR19 = MAJO_STR_TR_19;
-CORR.STR_TR20 = MAJO_STR_TR_20;
-CORR.STR_TR21 = MAJO_STR_TR_21;
-CORR.STR_TR22 = MAJO_STR_TR_22;
-CORR.STR_TR23 = MAJO_STR_TR_23;
-CORR.STR_TR24 = MAJO_STR_TR_24;
-CORR.STR_TR25 = MAJO_STR_TR_25;
 
 cible enchaine_calcul_prim:
 application: iliad;
@@ -649,7 +550,7 @@ variables_temporaires: PENA, I;
     cas indefini :
     par_defaut : stop cible;
   )
-  calculer cible set_majo_str_tr : avec I;
+  MAJO_STR_TR[I] = 1;
 
 cible remplit_tgv_d2042:
 application: iliad;
@@ -794,8 +695,9 @@ si
   ou GLOBAL.COD9AD != 0 ou GLOBAL.COD9AE != 0 ou GLOBAL.COD9BA != 0
   ou GLOBAL.COD9BB != 0 ou GLOBAL.COD9CA != 0 ou GLOBAL.COD9GF != 0
   ou GLOBAL.COD9GH != 0 ou GLOBAL.COD9GL != 0 ou GLOBAL.COD9GM != 0
-  ou GLOBAL.COD9GN != 0 ou GLOBAL.COD9NC != 0 ou GLOBAL.COD9NG != 0
-  ou GLOBAL.COD9PR != 0 ou GLOBAL.COD9PX != 0 ou GLOBAL.COD9RS != 0
+  ou GLOBAL.COD9GN != 0 ou GLOBAL.COD9GY != 0 ou GLOBAL.COD9NC != 0
+  ou GLOBAL.COD9NG != 0 ou GLOBAL.COD9PR != 0 ou GLOBAL.COD9PX != 0
+  ou GLOBAL.COD9RS != 0
   ou GLOBAL.CMAJ_ISF != 0 # 9XT
   ou GLOBAL.MOISAN_ISF != 0 # 9XU
 alors
@@ -916,64 +818,69 @@ iterer
 : dans (
   calculer cible get_nature : avec NATURE, VAR;
   si NATURE = N_REVENU alors
-  aiguillage( attribut(VAR, cotsoc) ) : (
-    cas 1:
-      si attribut(VAR, categorie_TL) dans (20, 21)
-      alors
-        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+    aiguillage (attribut(VAR, cotsoc)) : (
+      cas 1:
+        si attribut(VAR, categorie_TL) dans (20, 21) alors
+          GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        finsi
         GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
         GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
         GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
         GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-      finsi
-    cas 5:
-      si attribut(VAR, categorie_TL) dans (20, 21)
-      alors
-        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+      cas 5:
+        si attribut(VAR, categorie_TL) dans (20, 21) alors
+          GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        finsi
         GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-      finsi
-    cas 9:
-      GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-    cas 10:
-      GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
-      GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    cas 11: cas 12: cas 13: cas 14: cas 19: cas 20: cas 21:
-      GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
-    cas 16:
-      GLOBAL.MAJO_T_RABPLO = GLOBAL.MAJO_T_RABPLO + VAR;
-    cas 18:
-      si attribut(VAR, categorie_TL) dans (20, 21)
-      alors
-        GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+      cas 9:
+        GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
+      cas 10:
+        GLOBAL.MAJO_T_RABPPS = GLOBAL.MAJO_T_RABPPS + VAR;
+        GLOBAL.MAJO_T_RABPCS = GLOBAL.MAJO_T_RABPCS + VAR;
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+      cas 11: cas 12: cas 13: cas 14: cas 19: cas 20: cas 21:
+        GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
+      cas 16:
+        GLOBAL.MAJO_T_RABPLO = GLOBAL.MAJO_T_RABPLO + VAR;
+      cas 18:
+        si attribut(VAR, categorie_TL) dans (20, 21) alors
+          GLOBAL.MAJO_T_RABP = GLOBAL.MAJO_T_RABP + VAR;
+        finsi
         GLOBAL.MAJO_T_RABPRD = GLOBAL.MAJO_T_RABPRD + VAR;
         GLOBAL.MAJO_T_RABPCH = GLOBAL.MAJO_T_RABPCH + VAR;
-      finsi
-  )
+    )
   finsi
 )
 
 cible process_penalite:
 application: iliad;
 arguments: PENA_CODE, P;
-variables_temporaires: P_MAX, P_OLD, P_MULTI;
+variables_temporaires: P_MAX, P_VIEUX, P_MULTI;
 P_MAX = inf(PENA_CODE / 1000) % 100;
-P_OLD = inf(PENA_CODE / 10) % 100;
+P_VIEUX = inf(PENA_CODE / 10) % 100;
 P_MULTI = inf(PENA_CODE) % 10;
 si P >= P_MAX alors
   P_MAX = P;
 finsi
-si P != P_OLD alors
-  P_MULTI = si (P_OLD != 0 ou positif(P_MULTI)) alors (1) sinon (0) finsi;
-  P_OLD = P;
+si P != P_VIEUX alors
+  si P_VIEUX != 0 alors
+    P_MULTI = 1;
+  finsi
+  P_VIEUX = P;
 finsi
-PENA_CODE = (1000 * P_MAX) + (10 * P_OLD) + P_MULTI;
+PENA_CODE = (1000 * P_MAX) + (10 * P_VIEUX) + P_MULTI;
 
 fonction get_pMax:
 application: iliad;
 arguments: CODE;
 resultat: R;
 R = inf(CODE / 1000);
+
+fonction get_pVieux:
+application: iliad;
+arguments: CODE;
+resultat: R;
+R = inf(CODE / 10) % 100;
 
 fonction get_pMulti:
 application: iliad;
@@ -1400,8 +1307,6 @@ arguments: PENA;
 resultat: R;
 R = (PENA dans (10, 11, 12));
 
-EST_CODE_ISF : calculee primrest = 0 : "" ;
-
 cible est_code_isf:
 application: iliad;
 arguments: RESULTAT, VAR;
@@ -1775,14 +1680,6 @@ iterer
 )
 RESULTAT = TROUVE1;
 
-
-cible recherche_C22R02_proc:
-application: iliad;
-variables_temporaires: RESULTAT, INDICE_EVT;
-INDICE_EVT = TMP_ARG1;
-calculer cible recherche_C22R02 : avec RESULTAT, INDICE_EVT;
-TMP_RES = RESULTAT;
-
 cible verif_code_prem_evt:
 application: iliad;
 arguments: BRES, R;
@@ -1819,10 +1716,6 @@ sinon
     finsi
   )
 finsi
-
-cible verif_code_prem_evt_proc:
-application: iliad;
-calculer cible verif_code_prem_evt : avec TMP_RES, TMP_ARG1;
 
 cible est_code_tax_init:
 application: iliad;
@@ -2239,7 +2132,7 @@ resultat: PENA;
 aiguillage(STR):(
   cas 0: PENA = 99;
   cas 1 : PENA = -1;
-  cas 2 :
+  cas 2 : PENA = 0;
   cas 3 : PENA = 6;
   cas 4 : PENA = 12;
   cas 5 : PENA = 32;
@@ -2297,7 +2190,7 @@ aiguillage (STR) : (
   cas 23:
   cas 24:
   cas 25: TAUX = 0;
-  par_defaut: TAUX = -1;
+  par_defaut: TAUX = 0;
 )
 
 cible get_code_situation_famille:
@@ -2525,43 +2418,6 @@ finsi
 
 cible is_rappel_abat_20:
 application: iliad;
-variables_temporaires: RESULTAT, R, NATURE, ABAT;
-R = TMP_ARG1;
-si
-  champ_evenement(R, sens) = SENS_M
-  ou (
-    champ_evenement(R, sens) = SENS_C
-    et champ_evenement(R, penalite) = 0
-  )
-alors
-  calculer cible get_nature : avec NATURE, champ_evenement(R, code);
-  RESULTAT = (NATURE = N_REVENU);
-sinon_si positif(GLOBAL.LIMELIGHT) alors
-  RESULTAT = champ_evenement(R, 2042_rect);
-sinon_si positif(champ_evenement(R, 2042_rect)) alors
-  RESULTAT = 1;
-sinon
-  calculer cible get_abat : avec ABAT, champ_evenement(R, code);
-  si positif(ABAT) alors
-    RESULTAT = (
-      champ_evenement(R, penalite) = 1
-      ou (
-        champ_evenement(R, sens) = SENS_R
-        et champ_evenement(R, penalite) dans (7, 99)
-        et (
-          non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-          ou GLOBAL.CODE_PENA = 7
-        )
-      )
-    );
-  sinon
-    RESULTAT = 0;
-  finsi
-finsi
-TMP_RES = RESULTAT;
-
-cible is_rappel_abat_20_proc:
-application: iliad;
 arguments: RESULTAT, R;
 variables_temporaires: NATURE, ABAT;
 si
@@ -2595,7 +2451,6 @@ sinon
     RESULTAT = 0;
   finsi
 finsi
-
 
 cible est_code_sf_naiss:
 application: iliad;
@@ -2685,7 +2540,7 @@ sinon_si MAJ = MAJ_RAPPEL_R55 alors
 sinon_si MAJ = MAJ_1728 alors
   RESULTAT = (champ_evenement(R, penalite) dans (7, 8, 10, 11, 17, 18, 31));
 sinon_si MAJ = MAJ_ABAT_20 alors
-  calculer cible is_rappel_abat_20_proc : avec RESULTAT, R;
+  calculer cible is_rappel_abat_20 : avec RESULTAT, R;
 sinon_si MAJ = MAJ_CODE_1729_2A5 alors
   RESULTAT = (champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55));
 sinon_si MAJ = MAJ_CODE_1729_6 alors 
@@ -2757,17 +2612,6 @@ si present(MAJ3) alors
   calculer cible is_rappel_autorise_maj : avec RES3, R, MAJ3;
 finsi
 RESULTAT = (RES0 et RES1 et RES2 et RES3);
-
-cible is_rappel_autorise_proc:
-application: iliad;
-variables_temporaires: RESULTAT, R, MAJ0, MAJ1, MAJ2, MAJ3;
-R = TMP_ARG1;
-MAJ0 = TMP_ARG2;
-MAJ1 = TMP_ARG3;
-MAJ2 = TMP_ARG4;
-MAJ3 = TMP_ARG5;
-calculer cible is_rappel_autorise : avec RESULTAT, R, MAJ0, MAJ1, MAJ2, MAJ3;
-TMP_RES = RESULTAT;
 
 cible is_init_1731:
 application: iliad;
@@ -2912,8 +2756,8 @@ finsi
 
 cible cumule_base_tl_init:
 application: iliad;
-variables_temporaires: R, M_TL, M_TL_TBTC;
-R = TMP_ARG1;
+arguments: R;
+variables_temporaires: M_TL, M_TL_TBTC;
 si GLOBAL.TL_NON_ACQUISE = TL_TL_MAUVAISE_FOI alors
   M_TL = 0;
   M_TL_TBTC = 0;
@@ -2925,24 +2769,24 @@ GLOBAL.TL_BASE_TL_TBTC_INIT = GLOBAL.TL_BASE_TL_TBTC_INIT + M_TL_TBTC;
 
 cible cumule_champ_base_tl:
 application: iliad;
-variables_temporaires: R, M_TL, M_TL_TBTC;
-R = TMP_ARG1;
+arguments: R;
+variables_temporaires: M_TL, M_TL_TBTC;
 calculer cible cumule_base_tl_aux : avec M_TL, M_TL_TBTC, R;
 GLOBAL.TL_BASE_TL = GLOBAL.TL_BASE_TL + M_TL;
 GLOBAL.TL_BASE_TL_TBTC = GLOBAL.TL_BASE_TL_TBTC + M_TL_TBTC;
 
 cible cumule_champ_base_tl_rect:
 application: iliad;
-variables_temporaires: R, M_TL, M_TL_TBTC;
-R = TMP_ARG1;
+arguments: R;
+variables_temporaires: M_TL, M_TL_TBTC;
 calculer cible cumule_base_tl_aux : avec M_TL, M_TL_TBTC, R;
 GLOBAL.TL_BASE_TL_RECT = GLOBAL.TL_BASE_TL_RECT + M_TL;
 GLOBAL.TL_BASE_TL_TBTC_RECT = GLOBAL.TL_BASE_TL_TBTC_RECT + M_TL_TBTC;
 
 cible traite_majo_P:
 application: iliad;
-variables_temporaires: R, NATURE, PENA, COTSOC, MONTANT;
-R = TMP_ARG1;
+arguments: R;
+variables_temporaires: NATURE, PENA, COTSOC, MONTANT;
 calculer cible get_nature : avec NATURE, champ_evenement(R, code);
 PENA = champ_evenement(R, penalite);
 COTSOC = attribut(champ_evenement(R, code), cotsoc);
@@ -3027,12 +2871,6 @@ finsi
 si S = 4 et N = N_REVENU alors
   GLOBAL.INR_SOMMEBNCND_2 = GLOBAL.INR_SOMMEBNCND_2 + MONTANT;
 finsi
-
-cible calculer_sommes_2042_proc:
-application: iliad;
-variables_temporaires: R;
-R = TMP_ARG1;
-calculer cible calculer_sommes_2042 : avec R;
 
 cible maj_elt_2042:
 application: iliad;
@@ -3166,18 +3004,6 @@ si GLOBAL.NB_RAPPELS_RES > 0 alors
   CORR.SOMMERI_2 = GLOBAL.INR_SOMMERI_2;
 finsi
 
-cible met_a_jour_2042_INR_evt_proc:
-application: iliad;
-variables_temporaires: INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-IS_PREMIER = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_INR_evt
-: avec INDICE_EVT, IS_PREMIER, MAJ0, MAJ1, MAJ2, MAJ3;
-
 cible met_a_jour_2042_evt:
 application: iliad;
 arguments: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
@@ -3193,137 +3019,19 @@ iterer
     : espace GLOBAL;
     si positif(RAP_AUTH) alors
       calculer cible set_rappel : avec champ_evenement(R, code), R : espace GLOBAL;
-      GLOBAL.TMP_ARG1 = R;
       si F_TRAITEMENT = 1 alors
-        calculer cible cumule_champ_base_tl : espace GLOBAL;
+        calculer cible cumule_champ_base_tl : avec R : espace GLOBAL;
       sinon_si F_TRAITEMENT = 2 alors
-        calculer cible cumule_base_tl_init : espace GLOBAL;
+        calculer cible cumule_base_tl_init : avec R : espace GLOBAL;
       sinon_si F_TRAITEMENT = 3 alors
-        calculer cible cumule_champ_base_tl_rect : espace GLOBAL;
+        calculer cible cumule_champ_base_tl_rect : avec R : espace GLOBAL;
       sinon_si F_TRAITEMENT = 4 alors
-        calculer cible traite_majo_P : espace GLOBAL;
+        calculer cible traite_majo_P : avec R : espace GLOBAL;
       finsi
       GLOBAL.NB_RAPPELS_RES = GLOBAL.NB_RAPPELS_RES + 1;
     finsi
   finsi
 )
-
-cible met_a_jour_2042_evt_TL_D2042:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042;
-
-cible met_a_jour_2042_evt_TL_D2042_INIT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042_INIT;
-
-cible met_a_jour_2042_evt_TL_D2042_RECT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042_RECT;
-
-cible met_a_jour_2042_evt_TL_D2042_ABAT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042_ABAT;
-
-cible met_a_jour_2042_evt_TL_D2042_ABAT_INIT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042_ABAT_INIT;
-
-cible met_a_jour_2042_evt_TL_D2042_ABAT_RECT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace TL_D2042_ABAT_RECT;
-
-cible met_a_jour_2042_evt_D2042_RECT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace D2042_RECT;
-
-cible met_a_jour_2042_evt_D2042_ABAT:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace D2042_ABAT;
-
-cible met_a_jour_2042_evt_MAJO_D2042_P:
-application: iliad;
-variables_temporaires: INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
-INDICE_EVT = TMP_ARG1;
-F_TRAITEMENT = TMP_ARG2;
-MAJ0 = TMP_ARG3;
-MAJ1 = TMP_ARG4;
-MAJ2 = TMP_ARG5;
-MAJ3 = TMP_ARG6;
-calculer cible met_a_jour_2042_evt
-: avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
-: espace MAJO_D2042_P;
 
 cible met_a_jour_2042_strate:
 application: iliad;
@@ -3365,54 +3073,6 @@ arranger_evenements
     finsi
   )
 )
-
-cible met_a_jour_2042_strate_MAJO_D2042_P:
-application: iliad;
-variables_temporaires: NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3;
-NUM_STRATE = TMP_ARG1;
-MAJ0 = TMP_ARG2;
-MAJ1 = TMP_ARG3;
-MAJ2 = TMP_ARG4;
-MAJ3 = TMP_ARG5;
-calculer cible met_a_jour_2042_strate
-: avec NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3
-: espace MAJO_D2042_P;
-
-cible met_a_jour_2042_strate_MAJO_D2042_ABAT_P:
-application: iliad;
-variables_temporaires: NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3;
-NUM_STRATE = TMP_ARG1;
-MAJ0 = TMP_ARG2;
-MAJ1 = TMP_ARG3;
-MAJ2 = TMP_ARG4;
-MAJ3 = TMP_ARG5;
-calculer cible met_a_jour_2042_strate
-: avec NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3
-: espace MAJO_D2042_ABAT_P;
-
-cible met_a_jour_2042_strate_MAJO_D2042_STRATE:
-application: iliad;
-variables_temporaires: NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3;
-NUM_STRATE = TMP_ARG1;
-MAJ0 = TMP_ARG2;
-MAJ1 = TMP_ARG3;
-MAJ2 = TMP_ARG4;
-MAJ3 = TMP_ARG5;
-calculer cible met_a_jour_2042_strate
-: avec NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3
-: espace MAJO_D2042_STRATE;
-
-cible met_a_jour_2042_strate_MAJO_D2042_ABAT_STRATE:
-application: iliad;
-variables_temporaires: NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3;
-NUM_STRATE = TMP_ARG1;
-MAJ0 = TMP_ARG2;
-MAJ1 = TMP_ARG3;
-MAJ2 = TMP_ARG4;
-MAJ3 = TMP_ARG5;
-calculer cible met_a_jour_2042_strate
-: avec NUM_STRATE, MAJ0, MAJ1, MAJ2, MAJ3
-: espace MAJO_D2042_ABAT_STRATE;
 
 cible set_rappel_1731bis:
 application: iliad;
@@ -3508,13 +3168,6 @@ alors
   finsi
 finsi
 
-cible set_rappel_1731bis_proc:
-application: iliad;
-variables_temporaires: R, IS_PREMIER;
-R = TMP_ARG1;
-IS_PREMIER = TMP_ARG2;
-calculer cible set_rappel_1731bis : avec R, IS_PREMIER;
-
 cible prepare_1731_aux:
 application: iliad;
 arguments: R, IS_PREMIER, MAJ_TGV_COPIE;
@@ -3542,14 +3195,6 @@ finsi
 si champ_evenement(R, sens) = SENS_R et champ_evenement(R, penalite) = 10 alors
   GLOBAL.ART1731_PRESENT_R10 = 1;
 finsi
-
-cible prepare_1731_aux_proc:
-application: iliad;
-variables_temporaires: R, IS_PREMIER, MAJ_TGV_COPIE;
-R = TMP_ARG1;
-IS_PREMIER = TMP_ARG2;
-MAJ_TGV_COPIE = TMP_ARG3;
-calculer cible prepare_1731_aux : avec R, IS_PREMIER, MAJ_TGV_COPIE;
 
 cible prepare_1731_majo_aux:
 application: iliad;
@@ -3634,12 +3279,6 @@ restaurer
   calculer cible enchaine_calcul_prim;
   calculer cible calcul_1731;
 )
-
-cible prepare_1731_majo_proc:
-application: iliad;
-variables_temporaires: NUM_STRATE;
-NUM_STRATE = TMP_ARG1;
-calculer cible prepare_1731_majo : avec NUM_STRATE;
 
 cible calcul_inr_aux:
 application: iliad;
@@ -3738,14 +3377,6 @@ CORR.NBMOIS2ISF = 0;
 CORR.FLAG_INR = FLG_INR;
 calculer cible enchaine_calcul_corr;
 calculer cible signaler_erreurs;
-
-cible calcul_inr_aux_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT, FLG_INR;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-FLG_INR = TMP_ARG3;
-calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, FLG_INR;
 
 cible traite_tl:
 application: iliad;
@@ -3988,13 +3619,6 @@ alors
   : avec INDICE_EVT, F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3
   : espace TL_D2042_ABAT_RECT;
 finsi
-
-cible traite_tl_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible traite_tl : avec IS_PREMIER, INDICE_EVT;
 
 cible is_def_ret_not_8_11:
 application: iliad;
@@ -4415,14 +4039,6 @@ restaurer : variable V : categorie * : espace GLOBAL : apres (
   calculer cible enchaine_calcul_prim;
   calculer cible calcul_1731;
 )
-
-cible prepare_1731_inr_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT, CAS_INR;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-CAS_INR = TMP_ARG3;
-calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
 
 cible calcul_inr:
 application: iliad;
@@ -4970,13 +4586,6 @@ INR_FLAG = INR_FLAG_INR_TL;
 calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
 calculer cible sauve_base_inr_inter22_corr;
 
-cible calcul_inr_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible calcul_inr : avec IS_PREMIER, INDICE_EVT;
-
 cible traite_reference:
 application: iliad;
 arguments: IS_PREMIER, INDICE_EVT;
@@ -5011,13 +4620,6 @@ alors
   : espace D2042_ABAT;
 finsi
 
-cible traite_reference_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible traite_reference : avec IS_PREMIER, INDICE_EVT;
-
 cible calcul_majo_normal:
 application: iliad;
 arguments:
@@ -5046,7 +4648,7 @@ alors
   CORR.PASS_TLCS = CORR.TL_CS + 0;
   CORR.PASS_TLTAXAGA = CORR.TL_TAXAGA + 0;
   CORR.PASS_TLCDIS = CORR.TL_CDIS + 0;
-  calculer cible set_majo_str_tr : avec NUM_STRATE;
+  MAJO_STR_TR[NUM_STRATE] = 1;
   CORR.X = NUM_STRATE;
   CORR.TAUX_STRATE = TAUX_PENALITE;
   CORR.FLAG_NBSTRTR = GLOBAL.MAJO_NB_STR_TR;
@@ -5074,7 +4676,7 @@ alors
   CORR.TAUX_2042 = get_taux_penalite(GLOBAL.CODE_PENA);
   calculer cible detecte_penalites;
   si NUM_STRATE = 1 alors
-    calculer cible unset_majo_str_tr : avec NUM_STRATE;
+    MAJO_STR_TR[NUM_STRATE] = 0;
     calculer cible affect_code;
   finsi
   calculer cible affect_str_tr;
@@ -5106,19 +4708,6 @@ si NUM_STRATE = GLOBAL.NB_STRATES - 1 alors
   calculer cible enchaine_verification_corr;
   calculer cible signaler_erreurs;
 finsi
-
-cible calcul_majo_normal_proc:
-application: iliad;
-variables_temporaires:
-  IS_PREMIER, INDICE_EVT, NUM_STRATE,
-  NB_RAPPELS_STRATE, PROCHAINE_STRATE;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-NUM_STRATE = TMP_ARG3;
-NB_RAPPELS_STRATE = TMP_ARG4;
-PROCHAINE_STRATE = TMP_ARG5;
-calculer cible calcul_majo_normal
-: avec IS_PREMIER, INDICE_EVT, NUM_STRATE, NB_RAPPELS_STRATE, PROCHAINE_STRATE;
 
 cible calcul_majo_tardif:
 application: iliad;
@@ -5163,16 +4752,6 @@ si GLOBAL.D2042_NB > 0 alors
   CORR.FLAG_RETARD08 = 0;
 finsi
 calculer cible sauve_base_anterieure_corr;
-
-cible calcul_majo_tardif_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT, NUM_STRATE, TAUX_PENALITE;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-NUM_STRATE = TMP_ARG3;
-TAUX_PENALITE = TMP_ARG4;
-calculer cible calcul_majo_tardif
-: avec IS_PREMIER, INDICE_EVT, NUM_STRATE, TAUX_PENALITE;
 
 cible calcul_majo:
 application: iliad;
@@ -5407,13 +4986,6 @@ CORR.FLAG_RECTIFMAJO = GLOBAL.RECTIF_MAJO;
 calculer cible sauve_base_majo_corr;
 calculer cible sauve_base_anterieure_corr;
 
-cible calcul_majo_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible calcul_majo : avec IS_PREMIER, INDICE_EVT;
-
 cible recherche_CR02:
 application: iliad;
 arguments: RESULTAT, R;
@@ -5502,13 +5074,6 @@ sinon
   RESULTAT = 0;
 finsi
 
-cible recherche_CR02_proc:
-application: iliad;
-variables_temporaires: RESULTAT, R;
-R = TMP_ARG1;
-calculer cible recherche_CR02 : avec RESULTAT, R;
-TMP_RES = RESULTAT;
-
 cible is_code_situation_famille:
 application: iliad;
 arguments: RES_SF, VAR;
@@ -5529,13 +5094,6 @@ sinon_si meme_variable(VAR, 0AV) alors
 sinon
   RES_SF = SF_INVALIDE;
 finsi
-
-cible is_code_situation_famille_r:
-application: iliad;
-variables_temporaires: SF, R;
-R = TMP_ARG1;
-calculer cible is_code_situation_famille : avec SF, champ_evenement(R, code);
-TMP_RES = SF;
 
 cible traite_majo:
 application: iliad;
@@ -5677,13 +5235,6 @@ sinon
     finsi
   )
 finsi
-
-cible traite_majo_proc:
-application: iliad;
-variables_temporaires: IS_PREMIER, INDICE_EVT;
-IS_PREMIER = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible traite_majo : avec IS_PREMIER, INDICE_EVT;
 
 cible controle:
 application: iliad;
@@ -5983,13 +5534,6 @@ iterer
     finsi
   finsi
 )
-
-cible controle_proc:
-application: iliad;
-variables_temporaires: QUELLE_SP, INDICE_EVT;
-QUELLE_SP = TMP_ARG1;
-INDICE_EVT = TMP_ARG2;
-calculer cible controle : avec QUELLE_SP, INDICE_EVT;
 
 cible make_2042_of_tgv:
 application: iliad;
