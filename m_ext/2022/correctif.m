@@ -829,13 +829,11 @@ fonction vers_nature:
 application: iliad;
 arguments: ATTR;
 resultat: NAT;
-si ATTR = 0 alors
-  NAT = N_REVENU;
-sinon_si ATTR = 1 alors
-  NAT = N_CHARGE;
-sinon
-  NAT = N_INDEFINIE;
-finsi
+aiguillage(ATTR):(
+  cas 0: NAT = N_REVENU;
+  cas 1: NAT = N_CHARGE;
+  par_defaut: NAT = N_INDEFINIE;
+)
 
 cible get_nature:
 application: iliad;
@@ -861,19 +859,14 @@ alors
     NATURE = N_INDEFINIE;
   finsi
 sinon_si dans_domaine(VAR, saisie contexte) alors
-  si meme_variable(VAR, V_REGCO) alors
-    NATURE = N_REVENU;
-  sinon_si 
-    meme_variable(VAR, V_EAG)
-    ou meme_variable(VAR, V_EAD)
-    ou meme_variable(VAR, V_CNR)
-    ou meme_variable(VAR, V_CNR2)
-    ou meme_variable(VAR, V_CR2)
-  alors
-    NATURE = N_CHARGE;
-  sinon
-    NATURE = N_REVENU;
-  finsi
+  aiguillage nom (VAR): (
+    cas V_REGCO: NATURE = N_REVENU;
+    cas V_EAG:
+    cas V_CNR:
+    cas V_CNR2:
+    cas V_CR2: NATURE = N_CHARGE;
+    par_defaut: NATURE = N_REVENU;
+  )
 sinon_si
   dans_domaine(VAR, saisie variation)
   ou dans_domaine(VAR, saisie penalite)
@@ -2209,17 +2202,25 @@ fonction get_taux_penalite:
 application: iliad;
 arguments: PENA;
 resultat: TAUX;
-si PENA dans (2, 7, 10, 17) alors
-  TAUX = 10;
-sinon_si PENA dans (3, 8, 11, 30, 55) alors
-  TAUX = 40;
-sinon_si PENA dans (4, 5, 9, 12, 31, 32) alors
-  TAUX = 80;
-sinon_si PENA = 6 alors
-  TAUX = 100;
-sinon
-  TAUX = 0;
-finsi
+aiguillage(PENA) : (
+  cas 2:
+  cas 7:
+  cas 10:
+  cas 17: TAUX = 10;
+  cas 3:
+  cas 8:
+  cas 11:
+  cas 30:
+  cas 55: TAUX = 40;
+  cas 4:
+  cas 5:
+  cas 9:
+  cas 12:
+  cas 31:
+  cas 32: TAUX = 80;
+  cas 6: TAUX = 100;
+  par_defaut: TAUX = 0;
+)
 
 fonction is_minoration_sf:
 application: iliad;
@@ -2607,131 +2608,132 @@ cible is_rappel_autorise_maj:
 application: iliad;
 arguments: RESULTAT, R, MAJ;
 variables_temporaires: EST_SF_NAISS, EST_TAX_INIT;
-si MAJ = MAJ_TL alors
-  RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) != 10);
-sinon_si MAJ = MAJ_NON_TL alors
-  RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) = 10);
-sinon_si MAJ = MAJ_TL15 alors
-  RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) != 15);
-sinon_si MAJ = MAJ_NON_TL15 alors
-  RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) = 15);
-sinon_si MAJ = MAJ_RAPPEL_C alors
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_C
-    et (champ_evenement(R, penalite) < 1 ou champ_evenement(R, penalite) = 99)
-    et GLOBAL.CODE_PENA != 22
-  );
-sinon_si MAJ = MAJ_RAPPEL_CP alors
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_C 
-    et champ_evenement(R, penalite) > 1
-  );
-sinon_si MAJ = MAJ_RAPPEL_CP01 alors
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_C
-    et champ_evenement(R, penalite) = 1
-  );
-sinon_si MAJ = MAJ_RAPPEL_CP22 alors
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_C
-    et champ_evenement(R, penalite) = 22
-  );
-sinon_si MAJ = MAJ_RAPPEL_CP24 alors
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_C
-    et champ_evenement(R, penalite) = 24
-  );
-sinon_si MAJ = MAJ_RAPPEL_F alors
-  calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_R
-    et champ_evenement(R, penalite) = 1
-    et positif(EST_SF_NAISS)
-  );
-sinon_si MAJ = MAJ_RAPPEL_NF alors
-  calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_R
-    et champ_evenement(R, penalite) = 1
-    et (non positif(EST_SF_NAISS))
-  );
-sinon_si MAJ = MAJ_RAPPEL_M alors
-  calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
-  RESULTAT = (
-    champ_evenement(R, sens) = SENS_M
-    et (non positif(EST_SF_NAISS))
-    et non (
-      meme_variable(champ_evenement(R, code), REGCO)
-      et (GLOBAL.PENALITE_REGCO dans (1, 22, 24, 99))
-    )
-  );
-sinon_si MAJ = MAJ_RAPPEL_MF alors
-  calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
-  RESULTAT = (champ_evenement(R, sens) = SENS_M et positif(EST_SF_NAISS));
-sinon_si MAJ = MAJ_RAPPEL_NON_M alors
-  RESULTAT = (champ_evenement(R, sens) != SENS_M);
-sinon_si MAJ = MAJ_RAPPEL_P alors
-  RESULTAT = (champ_evenement(R, sens) = SENS_P);
-sinon_si MAJ = MAJ_RAPPEL_R alors
-  RESULTAT = (champ_evenement(R, sens) = SENS_R);
-sinon_si MAJ = MAJ_RAPPEL_R55 alors
-  RESULTAT = (
-    meme_variable(champ_evenement(R, code), REGCO)
-    et (GLOBAL.PENALITE_REGCO dans (1, 99))
-  );
-sinon_si MAJ = MAJ_1728 alors
-  RESULTAT = (champ_evenement(R, penalite) dans (7, 8, 10, 11, 17, 18, 31));
-sinon_si MAJ = MAJ_ABAT_20 alors
-  calculer cible is_rappel_abat_20_proc : avec RESULTAT, R;
-sinon_si MAJ = MAJ_CODE_1729_2A5 alors
-  RESULTAT = (champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55));
-sinon_si MAJ = MAJ_CODE_1729_6 alors 
-  RESULTAT = (champ_evenement(R, penalite) = 6);
-sinon_si MAJ = MAJ_CODE_22 alors
-  RESULTAT = (
-    champ_evenement(R, penalite) = 22
-    et (
+aiguillage (MAJ):(
+  cas MAJ_TL:
+    RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) != 10);
+  cas MAJ_NON_TL:
+    RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) = 10);
+  cas MAJ_TL15:
+    RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) != 15);
+  cas MAJ_NON_TL15 :
+    RESULTAT = (attribut(champ_evenement(R, code), categorie_TL) = 15);
+  cas MAJ_RAPPEL_C :
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_C
+      et (champ_evenement(R, penalite) < 1 ou champ_evenement(R, penalite) = 99)
+      et GLOBAL.CODE_PENA != 22
+    );
+  cas MAJ_RAPPEL_CP :
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_C 
+      et champ_evenement(R, penalite) > 1
+    );
+  cas MAJ_RAPPEL_CP01 :
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_C
+      et champ_evenement(R, penalite) = 1
+    );
+  cas MAJ_RAPPEL_CP22 :
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_C
+      et champ_evenement(R, penalite) = 22
+    );
+  cas MAJ_RAPPEL_CP24 :
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_C
+      et champ_evenement(R, penalite) = 24
+    );
+  cas MAJ_RAPPEL_F :
+    calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
+    RESULTAT = (
       champ_evenement(R, sens) = SENS_R
-      ou meme_variable(champ_evenement(R, code), REGCO)
-    )
-  );
-sinon_si MAJ = MAJ_CODE_24 alors
-  RESULTAT = (
-    champ_evenement(R, penalite) = 24
-    et (
+      et champ_evenement(R, penalite) = 1
+      et positif(EST_SF_NAISS)
+    );
+  cas MAJ_RAPPEL_NF :
+    calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
+    RESULTAT = (
       champ_evenement(R, sens) = SENS_R
-      ou meme_variable(champ_evenement(R, code), REGCO)
-    )
-  );
-sinon_si MAJ = MAJ_CONTEXTE_22 alors
-  calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
-  RESULTAT = (GLOBAL.CODE_PENA = 22 et positif(EST_TAX_INIT));
-sinon_si MAJ = MAJ_MENTION_EXP_99 alors
-  calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
-  RESULTAT = (
-    champ_evenement(R, penalite) = 99
-    et (non positif(GLOBAL.DEFAUT))
-    et non (
+      et champ_evenement(R, penalite) = 1
+      et (non positif(EST_SF_NAISS))
+    );
+  cas MAJ_RAPPEL_M :
+    calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
+    RESULTAT = (
+      champ_evenement(R, sens) = SENS_M
+      et (non positif(EST_SF_NAISS))
+      et non (
+        meme_variable(champ_evenement(R, code), REGCO)
+        et (GLOBAL.PENALITE_REGCO dans (1, 22, 24, 99))
+      )
+    );
+  cas MAJ_RAPPEL_MF :
+    calculer cible est_code_sf_naiss : avec EST_SF_NAISS, champ_evenement(R, code);
+    RESULTAT = (champ_evenement(R, sens) = SENS_M et positif(EST_SF_NAISS));
+  cas MAJ_RAPPEL_NON_M :
+    RESULTAT = (champ_evenement(R, sens) != SENS_M);
+  cas MAJ_RAPPEL_P :
+    RESULTAT = (champ_evenement(R, sens) = SENS_P);
+  cas MAJ_RAPPEL_R :
+    RESULTAT = (champ_evenement(R, sens) = SENS_R);
+  cas MAJ_RAPPEL_R55 :
+    RESULTAT = (
       meme_variable(champ_evenement(R, code), REGCO)
-      ou positif(EST_TAX_INIT)
-    )
-  );
-sinon_si MAJ = MAJ_MENTION_EXP_99R alors
-  calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
-  RESULTAT = (
-    champ_evenement(R, penalite) = 99
-    et GLOBAL.CODE_PENA != 22
-    et (non positif(GLOBAL.DEFAUT))
-    et (
-      meme_variable(champ_evenement(R, code), REGCO)
-      ou positif(EST_TAX_INIT)
-    )
-  );
-sinon_si MAJ = MAJ_NON_MENTION_EXP alors
-  RESULTAT = 1;
-sinon
-  RESULTAT = 0;
-finsi
+      et (GLOBAL.PENALITE_REGCO dans (1, 99))
+    );
+  cas MAJ_1728 :
+    RESULTAT = (champ_evenement(R, penalite) dans (7, 8, 10, 11, 17, 18, 31));
+  cas MAJ_ABAT_20 :
+    calculer cible is_rappel_abat_20_proc : avec RESULTAT, R;
+  cas MAJ_CODE_1729_2A5 :
+    RESULTAT = (champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55));
+  cas MAJ_CODE_1729_6 : 
+    RESULTAT = (champ_evenement(R, penalite) = 6);
+  cas MAJ_CODE_22 :
+    RESULTAT = (
+      champ_evenement(R, penalite) = 22
+      et (
+        champ_evenement(R, sens) = SENS_R
+	ou meme_variable(champ_evenement(R, code), REGCO)
+	  )
+    );
+  cas MAJ_CODE_24 :
+    RESULTAT = (
+      champ_evenement(R, penalite) = 24
+      et (
+        champ_evenement(R, sens) = SENS_R
+	ou meme_variable(champ_evenement(R, code), REGCO)
+	  )
+    );
+  cas MAJ_CONTEXTE_22 :
+    calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
+    RESULTAT = (GLOBAL.CODE_PENA = 22 et positif(EST_TAX_INIT));
+  cas MAJ_MENTION_EXP_99 :
+    calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
+    RESULTAT = (
+      champ_evenement(R, penalite) = 99
+      et (non positif(GLOBAL.DEFAUT))
+      et non (
+        meme_variable(champ_evenement(R, code), REGCO)
+	ou positif(EST_TAX_INIT)
+      )
+    );
+  cas MAJ_MENTION_EXP_99R :
+    calculer cible est_code_tax_init : avec EST_TAX_INIT, champ_evenement(R, code);
+    RESULTAT = (
+      champ_evenement(R, penalite) = 99
+      et GLOBAL.CODE_PENA != 22
+      et (non positif(GLOBAL.DEFAUT))
+      et (
+        meme_variable(champ_evenement(R, code), REGCO)
+	ou positif(EST_TAX_INIT)
+      )
+    );
+  cas MAJ_NON_MENTION_EXP :
+    RESULTAT = 1;
+  par_defaut :
+    RESULTAT = 0;
+)
 
 cible is_rappel_autorise:
 application: iliad;
@@ -5509,23 +5511,19 @@ TMP_RES = RESULTAT;
 cible is_code_situation_famille:
 application: iliad;
 arguments: RES_SF, VAR;
-si meme_variable(VAR, 0AM) alors
-  RES_SF = SF_MARIAGE;
-sinon_si meme_variable(VAR, 0AC) alors
-  RES_SF = SF_CELIBAT;
-sinon_si meme_variable(VAR, 0AD) alors
-  RES_SF = SF_DIVORCE;
-sinon_si meme_variable(VAR, 0AO) alors
-  RES_SF = SF_PACSE;
-sinon_si meme_variable(VAR, 0AV) alors
-  si GLOBAL.ANNEE_DECES_CONJOINT = GLOBAL.ANNEE_REVENU alors
-    RES_SF = SF_VEUVAGE_TRUE;
-  sinon
-    RES_SF = SF_VEUVAGE_FALSE;
-  finsi
-sinon
-  RES_SF = SF_INVALIDE;
-finsi
+aiguillage nom (VAR) : (
+  cas 0AM: RES_SF = SF_MARIAGE;
+  cas 0AC: RES_SF = SF_CELIBAT;
+  cas 0AD: RES_SF = SF_DIVORCE;
+  cas 0AO: RES_SF = SF_PACSE;
+  cas 0AV:
+    si GLOBAL.ANNEE_DECES_CONJOINT = GLOBAL.ANNEE_REVENU alors
+      RES_SF = SF_VEUVAGE_TRUE;
+    sinon
+      RES_SF = SF_VEUVAGE_FALSE;
+    finsi
+  par_defaut: RES_SF = SF_INVALIDE;
+)
 
 cible is_code_situation_famille_r:
 application: iliad;
@@ -6579,41 +6577,40 @@ si non present(GLOBAL.CMAJ) alors
   : variable R
   : entre 0..(nb_evenements() - 1) increment 1
   : dans (
-    si meme_variable(champ_evenement(R, code), 8VV) alors
-      GLOBAL.PRESENT_8VV = 1;
-    sinon_si meme_variable(champ_evenement(R, code), 8VW) alors
-      GLOBAL.PRESENT_8VW = 1;
-    sinon_si meme_variable(champ_evenement(R, code), 9YT) alors
-      GLOBAL.PRESENT_9YT = 1;
-      si champ_evenement(R, montant) = 18 alors
-        GLOBAL.MONTANT_9YT = 7;
-      sinon
-        GLOBAL.MONTANT_9YT = champ_evenement(R, montant);
-      finsi
-      GLOBAL.PENALITE_9YT = champ_evenement(R, penalite);
-      GLOBAL.NUM_EVT_9YT = champ_evenement(R, numero);
-      CORR.CMAJ2 = champ_evenement(R, montant);
-      GLOBAL.CMAJ2 = champ_evenement(R, montant);
-      si GLOBAL.MONTANT_9YT != 0 alors
-        GLOBAL.SENS_9YT = champ_evenement(R, sens);
-        GLOBAL.IND_20_9YT = champ_evenement(R, 2042_rect);
-        GLOBAL.BASE_TL_9YT = champ_evenement(R, base_tl);
-        GLOBAL.R_TARDIF = 1;
-      finsi
-    sinon_si meme_variable(champ_evenement(R, code), 9YU) alors
-      GLOBAL.PRESENT_9YU = 1;
-      GLOBAL.MONTANT_9YU = champ_evenement(R, montant);
-      GLOBAL.PENALITE_9YU = champ_evenement(R, penalite);
-      GLOBAL.NUM_EVT_9YU = champ_evenement(R, numero);
-      GLOBAL.SENS_9YU = champ_evenement(R, sens);
-      MOIS = vers_mois(champ_evenement(R, montant));
-      ANNEE = vers_annee(champ_evenement(R, montant));
-      CORR.DATEINR = ANNEE * 10000 + MOIS * 100 + 1;
-      GLOBAL.DATEINR = CORR.DATEINR;
-      CORR.MOISAN2 = champ_evenement(R, montant);
-      GLOBAL.MOISAN2 = champ_evenement(R, montant);
-      GLOBAL.DATE_9YU = vers_date(MOIS, ANNEE);
-    finsi
+    aiguillage nom (champ_evenement(R, code)) : (
+      cas 8VV: GLOBAL.PRESENT_8VV = 1;	       
+      cas 8VW: GLOBAL.PRESENT_8VW = 1;
+      cas 9YT:
+        GLOBAL.PRESENT_9YT = 1;
+        si champ_evenement(R, montant) = 18 alors
+          GLOBAL.MONTANT_9YT = 7;
+        sinon
+          GLOBAL.MONTANT_9YT = champ_evenement(R, montant);
+        finsi
+        GLOBAL.PENALITE_9YT = champ_evenement(R, penalite);
+        GLOBAL.NUM_EVT_9YT = champ_evenement(R, numero);
+        CORR.CMAJ2 = champ_evenement(R, montant);
+        GLOBAL.CMAJ2 = champ_evenement(R, montant);
+        si GLOBAL.MONTANT_9YT != 0 alors
+          GLOBAL.SENS_9YT = champ_evenement(R, sens);
+          GLOBAL.IND_20_9YT = champ_evenement(R, 2042_rect);
+          GLOBAL.BASE_TL_9YT = champ_evenement(R, base_tl);
+          GLOBAL.R_TARDIF = 1;
+        finsi
+      cas 9YU:
+        GLOBAL.PRESENT_9YU = 1;
+        GLOBAL.MONTANT_9YU = champ_evenement(R, montant);
+        GLOBAL.PENALITE_9YU = champ_evenement(R, penalite);
+        GLOBAL.NUM_EVT_9YU = champ_evenement(R, numero);
+        GLOBAL.SENS_9YU = champ_evenement(R, sens);
+        MOIS = vers_mois(champ_evenement(R, montant));
+        ANNEE = vers_annee(champ_evenement(R, montant));
+        CORR.DATEINR = ANNEE * 10000 + MOIS * 100 + 1;
+        GLOBAL.DATEINR = CORR.DATEINR;
+        CORR.MOISAN2 = champ_evenement(R, montant);
+        GLOBAL.MOISAN2 = champ_evenement(R, montant);
+        GLOBAL.DATE_9YU = vers_date(MOIS, ANNEE);
+    )
   )
 finsi
 si
