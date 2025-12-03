@@ -13,6 +13,7 @@ Bienvenue dans la documentation du langage M !
    syntax
    syntax_irj
    mlang
+   arithmetique
    
 
 Indices and tables
