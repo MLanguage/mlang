@@ -81,7 +81,7 @@ Enfin, on peut lancer mlang.
  $ mlang --without_dfgip_m test.m -A mon_application --mpp_function hello_world --run_test test.irj
  Parsing: completed!
  Bonjour, monde!
- [RESULT] my-examples/m/scratch/fuzzer_1210z.m_test
+ [RESULT] test.irj
  [RESULT] No failure!
  [RESULT] Test passed!
 ```
@@ -134,10 +134,11 @@ Et lançons le calcul :
 Parsing: completed!
 Bonjour, monde, X = indefini !
 Y = 1 !
-[RESULT] fuzzer_1210z.m_test
+[RESULT] test.irj
 [RESULT] No failure!
 [RESULT] Test passed!
 ```
 
 Pour comprendre la valeur finale de Y, référez-vous à la
 section {ref}`arithmetique`.
+
