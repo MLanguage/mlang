@@ -3,7 +3,7 @@
  (flags
   (:standard -open Utils))
  (libraries re ANSITerminal parmap cmdliner threads dune-build-info num gmp
-   menhirLib m_frontend m_ir irj_utils backend_compilers))
+   menhirLib m_frontend m_ir irj_utils backend_compilers ocamlgraph yojson))
 
 (documentation
  (package mlang)
