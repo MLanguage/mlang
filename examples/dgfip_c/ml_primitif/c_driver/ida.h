@@ -46,6 +46,7 @@ extern void anoOptsDefVarArg(char *arg);
 extern void anoLigneInvalide(int ligne, int err);
 extern void anoCodeVide(int ligne);
 extern void anoVarAbs(char *var);
+extern void anoVarNonRestituee(char *var);
 extern void anoErrEnTrop(char *err);
 extern void anoErrNonRecue(char *err);
 extern void anoValeurFausse(char *nom, double val, double valRes);

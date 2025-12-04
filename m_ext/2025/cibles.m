@@ -1134,6 +1134,10 @@ cible sauve_base_inr_r9901_corr :
 application: iliad;
 calculer cible sauve_base_inr_r9901 : espace CORR;
 
+cible sauve_base_inr_cimr24_corr :
+application: iliad;
+calculer cible sauve_base_inr_cimr24 : espace CORR;
+
 cible sauve_base_HR_corr :
 application: iliad;
 calculer cible sauve_base_HR : espace CORR;

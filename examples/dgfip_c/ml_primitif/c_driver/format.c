@@ -52,10 +52,18 @@ int verifieFormat(char *chemin, T_options opts) {
           case IRJ_RESULTATS_PRIMITIF_DEBUT:
           case IRJ_RESULTATS_CORRECTIF_DEBUT:
           case IRJ_RESULTATS_RAPPELS_DEBUT:
-            if (opts->args.fmt.strict && cherche_varinfo_statique(irj->args.defVar.var) == NULL) {
-              anoVarAbs(irj->args.defVar.var);
-              ok = -1;
-              goto fin;
+            if (opts->args.fmt.strict) {
+              T_varinfo *varinfo = cherche_varinfo_statique(irj->args.defVar.var);
+
+              if (varinfo == NULL) {
+                anoVarAbs(irj->args.defVar.var);
+                ok = -1;
+                goto fin;
+              } else if (! varinfo->est_restituee) {
+                anoVarNonRestituee(irj->args.defVar.var);
+                ok = -1;
+                goto fin;
+              }
             }
             break;
           default:

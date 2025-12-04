@@ -159,6 +159,7 @@ int controleResultat(T_tas tas, T_irdata *tgv, L_S_varVal res, L_char ctl) {
         || (strncmp(vv->varinfo->name, "NATMAJ", 6) == 0 && (lng == 7 || lng == 9 || lng == 10))
         || strncmp(vv->varinfo->name, "TL_", 3) == 0
       )
+      && vv->varinfo->est_restituee
     ) {
       lis_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, &def, &val);
       val100 = arrondi(val * 100.0);
@@ -326,7 +327,13 @@ int traitement(char *chemin, T_options opts) {
                 goto fin;
               }
             } else {
-              resRap = CONS(tasTrt, S_varVal, vv, resRap);
+              if (opts->args.trt.strict && ! vv->varinfo->est_restituee) {
+                anoVarNonRestituee(irj->args.defVar.var);
+                ok = -1; 
+                goto fin;
+              } else if (vv->varinfo->est_restituee) {
+                resRap = CONS(tasTrt, S_varVal, vv, resRap);
+              }
             }
             estCorr = VRAI;
             break;

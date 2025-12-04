@@ -205,18 +205,22 @@ void anoCodeVide(int ligne) {
 }
 
 void anoVarAbs(char *var) {
-  fprintf(stdout, "ATRT000 | variable inconnue : %s\n", var);
+  fprintf(stdout, "AFMT002 | variable inconnue : %s\n", var);
+}
+
+void anoVarNonRestituee(char *var) {
+  fprintf(stdout, "AFMT003 | variable testee non-restituee : %s\n", var);
 }
 
 void anoErrEnTrop(char *err) {
-  fprintf(stdout, "ATRT001 | KO | %s recu en trop\n", err);
+  fprintf(stdout, "ATRT000 | KO | %s recu en trop\n", err);
 }
 
 void anoErrNonRecue(char *err) {
-  fprintf(stdout, "ATRT002 | KO | %s attendue non recue\n", err);
+  fprintf(stdout, "ATRT001 | KO | %s attendue non recue\n", err);
 }
 
 void anoValeurFausse(char *nom, double val, double valRes) {
-  fprintf(stdout, "ATRT003 | KO | %s = %f au lieu de %f\n", nom, val, valRes);
+  fprintf(stdout, "ATRT002 | KO | %s = %f au lieu de %f\n", nom, val, valRes);
 }
 

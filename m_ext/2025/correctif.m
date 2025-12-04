@@ -706,7 +706,7 @@ finsi
 
 cible calcul_1731:
 application: iliad;
-calculer cible range_base_corr_corrige;
+calculer cible range_base_corr_corrige : espace GLOBAL;
 CORR.VARR30R32 = GLOBAL.ART1731_SOMME_R3032;
 CORR.VARR10 = GLOBAL.ART1731_PRESENT_R10;
 CORR.VARR30 = GLOBAL.ART1731_PRESENT_R30;
@@ -721,6 +721,7 @@ CORR.PENA994 = GLOBAL.PENA_994;
 
 cible empty_art1731:
 application: iliad;
+GLOBAL.COD_RAPPEL = 0;
 GLOBAL.ART1731_SOMME_R3032 = 0;
 GLOBAL.ART1731_PRESENT_R10 = 0;
 GLOBAL.ART1731_PRESENT_R30 = 0;
@@ -2635,12 +2636,16 @@ application: iliad;
 arguments: NB_RAPPELS_P;
 si GLOBAL.MAJO_D2042_P_NB > 0 et NB_RAPPELS_P != 0 alors
   calculer cible reset_saisie_calc;
+  CORR.TL_IR = CORR.PASS_TLIR;
+  CORR.TL_IFI = CORR.PASS_TLIFI;
+  CORR.TL_CS = CORR.PASS_TLCS;
+  CORR.TL_TAXAGA = CORR.PASS_TLTAXAGA;
   calculer cible remplit_tgv_majo_d2042_p;
-  CORR.PASS_TLIR = CORR.TL_IR + 0;
-  CORR.PASS_TLIFI = CORR.TL_IFI + 0;
-  CORR.PASS_TLCS = CORR.TL_CS + 0;
-  CORR.PASS_TLTAXAGA = CORR.TL_TAXAGA + 0;
-  CORR.PASS_TLCDIS = CORR.TL_CDIS + 0;
+  CORR.PASS_TLIR = CORR.TL_IR;
+  CORR.PASS_TLIFI = CORR.TL_IFI;
+  CORR.PASS_TLCS = CORR.TL_CS;
+  CORR.PASS_TLTAXAGA = CORR.TL_TAXAGA;
+  CORR.PASS_TLCDIS = CORR.TL_CDIS;
   si GLOBAL.MAJO_T_RABP != 0 alors
     CORR.T_RABP = GLOBAL.MAJO_T_RABP;
     CORR.T_RABP07 = GLOBAL.MAJO_T_RABP07;
@@ -4460,7 +4465,7 @@ CAS_INR = 9;
 calculer cible prepare_1731_inr : avec IS_PREMIER, INDICE_EVT, CAS_INR;
 INR_FLAG = INR_FLAG_INR_TL;
 calculer cible calcul_inr_aux : avec IS_PREMIER, INDICE_EVT, INR_FLAG;
-calculer cible sauve_base_inr_tl_corr;
+calculer cible sauve_base_inr_cimr24_corr;
 
 si non positif(DEFAUT_RETARD_PREMIER) et positif(HAS_C22R02) alors
   calculer cible contexte_2042_INR;
@@ -4640,7 +4645,12 @@ si
   ou NUM_STRATE = GLOBAL.NB_STRATES - 1
 alors
   # if taux_penalite < 0 then failwith "Taux pénalite négatif";
-  calculer cible reset_saisie_calc;
+  restaurer
+  : CORR.TL_CS, CORR.TL_TAXAGA, CORR.TL_CDIS, CORR.TL_CAP, CORR.TL_CHR,
+    CORR.TL_RSE1, CORR.TL_RSE2, CORR.TL_RSE3, CORR.TL_RSE4, CORR.TL_IFI
+  : apres (
+    calculer cible reset_saisie_calc;
+  )
   CORR.FLAG_1STRATE = GLOBAL.MAJO_PREM_STR;
   calculer cible remplit_tgv_majo_d2042_strate;
   CORR.PASS_TLIR = CORR.TL_IR + 0;
