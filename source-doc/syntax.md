@@ -5,11 +5,12 @@
 ## Introduction
 
 Un programme M se caracterise par la définition successive :
-* de types de variable avec leurs attributs ;
+* de types de variables avec leurs attributs ;
 * de domaines et d'événements ;
 * d'espaces de variables ;
 * d'applications ;
 * de variables et de constantes ;
+* des fonctions ;
 * de règles de calcul associées ou non à une application.
 
 L'exécution d'un tel programme pour une application donnée correspond à
@@ -43,7 +44,7 @@ espace_variables GLOBAL : par_defaut;
 # On définit deux domaines obligatoires:
 # * un domaine pour les règles;
 # * un domaine pour les vérificateurs.
-domaine regle mon_domaine_de_regle: par_defaut;
+domaine regle mon_domaine_de_regle: par_defaut: calculable;
 domaine verif mon_domaine_de_verifications: par_defaut;
 
 # On définit une ou plusiseurs application pour nos règles.
@@ -142,3 +143,62 @@ Y = 1 !
 Pour comprendre la valeur finale de Y, référez-vous à la
 section {ref}`arithmetique`.
 
+## Règles de calcul
+
+Les règles en M sont des unités de calcul de variables associées à une ou
+plusieurs application et optionnellement à un domaine de règles.
+%%
+Elles sont composées d'une successions d'affectations.
+%%
+Voici la définition de deux règles simples que nous rajoutons à notre fichier test :
+```
+Z : calculee mon_attribut = 1 : "Cette variable s'appelle Z";
+
+regle mon_domaine_de_regles 1:
+application : mon_application;
+Z = Y + 1;
+
+regle 2:
+application : mon_application;
+Y = X + 1;
+```
+
+La première règle est associée au domaine `mon_domaine_de_regles` tandis que la
+seconde n'étant pas spécifié, sera associée au domaine de règle par défaut.
+%%
+Dans notre exemple, il s'agissait également de `mon_domaine_de_regles`.
+
+Le calcul d'un domaine correspond au calcul de l'ensemble de ses règles.
+%%
+L'ordre d'application des règles dépend de l'ordre d'affectation des variables.
+%%
+Dans notre cas, `X` est une entrée dont `Y` dépend (règle 2), et `Z` dépend de
+`Y`.
+%%
+Par conséquent, la règle 2 sera appliquée avant la règle 1.
+%%
+On peut ainsi rajouter une cible qui calcule le domaine de règles :
+```
+cible calc_test:
+application : mon_application;
+calculer domaine mon_domaine_de_regles;
+afficher "X = ";
+afficher (X);
+afficher "\nY = ";
+afficher (Y);
+afficher "\nZ = ";
+afficher (Z);
+afficher "\n";
+```
+
+Et lancer le calcul :
+```
+ $ mlang --without_dfgip_m test.m -A mon_application --mpp_function calc_test --run_test test.irj
+ Parsing: completed!
+ X = indefini
+ Y = 1
+ Z = 2
+ [RESULT] test.irj
+ [RESULT] No failure!
+ [RESULT] Test passed!
+```
