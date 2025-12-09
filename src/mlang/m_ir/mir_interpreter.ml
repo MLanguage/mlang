@@ -936,7 +936,22 @@ struct
         | FuncCall (Pos.Mark (Func fn, _), args) ->
             let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             evaluate_function ctx fd args
-        | FuncCall (_, _) -> assert false
+        | FuncCall (Pos.Mark (AbsFunc, _), _)
+        | FuncCall (Pos.Mark (Supzero, _), _)
+        | FuncCall (Pos.Mark (PresentFunc, _), _)
+        | FuncCall (Pos.Mark (ArrFunc, _), _)
+        | FuncCall (Pos.Mark (MinFunc, _), _)
+        | FuncCall (Pos.Mark (MaxFunc, _), _)
+        | FuncCall (Pos.Mark (Multimax, _), _)
+        | FuncCall (Pos.Mark (InfFunc, _), _) ->
+            Errors.raise_error "arity error"
+        | FuncCall
+            ( Mark
+                ( ( SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber
+                  | ComplNumber ),
+                  _ ),
+              _ ) ->
+            Errors.raise_error "not implemented"
         | Attribut (m_acc, a) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) -> (
