@@ -137,43 +137,46 @@ exception InterpError of int
 
 type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
 
+type interp_error = { name : string; expected : float }
+
+let check_vars (program : Mir.program) exp vars =
+  let test_error_margin = 0.01 in
+  let fold vname f acc =
+    let f' =
+      let var =
+        match StrMap.find_opt vname program.program_vars with
+        | Some var -> var
+        | None ->
+            Cli.error_print "Variable inconnue: %s" vname;
+            raise
+              (Errors.StructuredError ("Fichier de test incorrect", [], None))
+      in
+      match Com.Var.Map.find_opt var vars with
+      | Some (Com.Float f') -> f'
+      | _ -> 0.0
+    in
+    match abs_float (f -. f') > test_error_margin with
+    | true ->
+        Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
+        { name = vname; expected = f } :: acc
+    | false -> acc
+  in
+  StrMap.fold fold exp []
+
+let check_anos exp errSet =
+  let rais =
+    let fold e res = StrSet.add (Pos.unmark e.Com.Error.name) res in
+    Com.Error.Set.fold fold errSet StrSet.empty
+  in
+  let missAnos = StrSet.diff exp rais in
+  let unexAnos = StrSet.diff rais exp in
+  StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
+  StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
+  StrSet.cardinal missAnos + StrSet.cardinal unexAnos
+
 let check_test (program : Mir.program) (test_input : Irj_file.input)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) :
     target_dbg_info list =
-  let check_vars exp vars =
-    let test_error_margin = 0.01 in
-    let fold vname f nb =
-      let f' =
-        let var =
-          match StrMap.find_opt vname program.program_vars with
-          | Some var -> var
-          | None ->
-              Cli.error_print "Variable inconnue: %s" vname;
-              raise
-                (Errors.StructuredError ("Fichier de test incorrect", [], None))
-        in
-        match Com.Var.Map.find_opt var vars with
-        | Some (Com.Float f') -> f'
-        | _ -> 0.0
-      in
-      if abs_float (f -. f') > test_error_margin then (
-        Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
-        nb + 1)
-      else nb
-    in
-    StrMap.fold fold exp 0
-  in
-  let check_anos exp errSet =
-    let rais =
-      let fold e res = StrSet.add (Pos.unmark e.Com.Error.name) res in
-      Com.Error.Set.fold fold errSet StrSet.empty
-    in
-    let missAnos = StrSet.diff exp rais in
-    let unexAnos = StrSet.diff rais exp in
-    StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
-    StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
-    StrSet.cardinal missAnos + StrSet.cardinal unexAnos
-  in
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
@@ -218,23 +221,35 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           Mir_interpreter.evaluate_program program inst.vars inst.events
             value_sort round_ops (Some dbg_info)
         in
+        let interp_errors = check_vars program inst.expectedVars varMap in
         let target_dbg_info =
           match (!Config.platform, dbg_info) with
           | Server _, Some dbg_info ->
+              let interp_errors =
+                List.fold_left
+                  (fun map error ->
+                    let tick =
+                      Dbg_info.TickMap.find error.name dbg_info.ledger
+                    in
+                    Dbg_info.Tick.Map.add tick error.expected map)
+                  Dbg_info.Tick.Map.empty interp_errors
+              in
+              let dbg_info = { dbg_info with interp_errors } in
               let target_dbg_info = { dbg_info; target = inst.label } in
               Some target_dbg_info
           | _, _ -> None
         in
         let nbErrs =
-          check_vars inst.expectedVars varMap
-          + check_anos inst.expectedAnos anoSet
+          List.length interp_errors + check_anos inst.expectedAnos anoSet
         in
         if nbErrs <= 0 then (
           Cli.debug_print "OK!";
           target_dbg_info :: check insts)
         else (
           Cli.debug_print "KO!";
-          raise (InterpError nbErrs))
+          match !Config.platform with
+          | Server _ -> target_dbg_info :: check insts
+          | _ -> raise (InterpError nbErrs))
   in
   let infos = check insts in
   let clean_infos = List.filter_map (fun i -> i) infos in
