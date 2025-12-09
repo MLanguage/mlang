@@ -22,8 +22,7 @@ module Origin = struct
       | Declared -> "declared"
       | Target s -> Format.asprintf "target-%s" s
       | Const -> "const"
-    in
-    Format.asprintf
+    in Format.asprintf
       {|"origin": {"code_orig": "%s", "file": "%s", "sline": %d, "eline": %d }|}
       code_orig origin.filename origin.sline origin.eline
 end
@@ -100,6 +99,12 @@ module TickMap = struct
   let find_opt name map = StrMap.find_opt name map
 end
 
+type interp_error = {
+  name: string;
+  value: float;
+  expected: float
+}
+
 type t = {
   graph : Graph.t;
   runtimes : Info.Runtime.t Tick.Map.t;
@@ -107,6 +112,7 @@ type t = {
   consts : Const.t IntMap.t;
   literals : string IntMap.t;
   ledger : Tick.t StrMap.t;
+  interp_errors : interp_error Tick.Map.t;
 }
 
 let empty =
@@ -117,6 +123,7 @@ let empty =
     consts = IntMap.empty;
     literals = IntMap.empty;
     ledger = StrMap.empty;
+    interp_errors = Tick.Map.empty;
   }
 
 let to_json (fmt : Format.formatter) info : unit =
@@ -191,6 +198,14 @@ let to_json (fmt : Format.formatter) info : unit =
     delim := ","
   in
   IntMap.iter print_lit info.literals;
+  delim := "";
+  let print_interp_errors tick (error: interp_error) =
+    Format.fprintf fmt {|%s"%d": {"name": %S, "value": %g, "expected": %g}|} 
+    !delim tick error.name error.value error.expected;
+    delim := ","
+  in
+  Format.fprintf fmt {|},@."interp_errors": {@.|};
+  Tick.Map.iter print_interp_errors info.interp_errors;
   Format.fprintf fmt "}}@."
 
 let write_json_file filename info =
