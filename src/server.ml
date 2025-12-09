@@ -46,6 +46,7 @@ module Msg = struct
       application : string;
       target : string;
       irj_contents : string;
+      year : string;
     }
     [@@deriving yojson]
   end
@@ -73,7 +74,7 @@ let run socket payload =
   try
     let%lwt dbg_info =
       ServerDriver.run callbacks payload.filemap payload.irj_contents
-        payload.target payload.application
+        payload.target payload.application payload.year
     in
     Format.printf "%s@." dbg_info;
     let msg = Msg.Out.run_ret @@ Ok dbg_info in
