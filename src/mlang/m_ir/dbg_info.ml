@@ -122,6 +122,7 @@ type t = {
   consts : Const.t IntMap.t;
   literals : string IntMap.t;
   ledger : Tick.t StrMap.t;
+  interp_errors : float Tick.Map.t;
 }
 
 let empty =
@@ -132,6 +133,7 @@ let empty =
     consts = IntMap.empty;
     literals = IntMap.empty;
     ledger = StrMap.empty;
+    interp_errors = Tick.Map.empty;
   }
 
 let to_json (fmt : Format.formatter) info : unit =
@@ -208,6 +210,13 @@ let to_json (fmt : Format.formatter) info : unit =
     delim := ","
   in
   IntMap.iter print_lit info.literals;
+  delim := "";
+  let print_interp_errors tick expected =
+    Format.fprintf fmt {|%s"%d": %g|} !delim tick expected;
+    delim := ","
+  in
+  Format.fprintf fmt {|},@."interp_errors": {@.|};
+  Tick.Map.iter print_interp_errors info.interp_errors;
   Format.fprintf fmt "}}@."
 
 let write_json_file filename info =
