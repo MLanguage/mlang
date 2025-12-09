@@ -548,11 +548,11 @@ struct
           (* For now, we add uninstantiated depedencies as undefined *)
           begin
             match TickMap.find name dbg_info.ledger with
-            | exception Failure msg ->
-                Format.fprintf Format.err_formatter "%s" msg;
+            | exception Failure _msg ->
+                (* Format.fprintf Format.err_formatter "%s" msg; *)
                 let tick = Tick.tick () in
-                Format.fprintf Format.err_formatter "it will have tick: %d@."
-                  tick;
+                (* Format.fprintf Format.err_formatter "it will have tick: %d@." *)
+                (*   tick; *)
                 let pos = Com.Var.name var |> Pos.get in
                 let origin = Origin.make_from_pos pos Declared in
                 let ledger = StrMap.add name tick dbg_info.ledger in
@@ -668,6 +668,7 @@ struct
               Some { dbg_info with graph; runtimes; statics; ledger })
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
+    (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
     let comparison op new_e1 new_e2 =
       match (op, new_e1, new_e2) with
       | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
@@ -1374,7 +1375,7 @@ struct
        If it is, we assume we're in a rule, and register it
        to annotate the value we'll set later in the dbg_info. *)
     let target_name = Pos.unmark target.target_name in
-    Format.printf "evaluating target: %s@." target_name;
+    (* Format.printf "evaluating target: %s@." target_name; *)
     let rule_id =
       IntMap.fold
         (fun i str acc ->
