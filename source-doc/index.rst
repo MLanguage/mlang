@@ -10,6 +10,7 @@ Bienvenue dans la documentation du langage M !
    :maxdepth: 2
    :caption: Table des matières:
 
+   intro
    syntax
    syntax_irj
    mlang
