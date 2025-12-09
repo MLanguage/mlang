@@ -110,6 +110,15 @@ else
 	OCAMLRUNPARAM=b $(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
+test_irj: FORCE build-dev
+	@for dir in $(IRJ_TESTS_DIRS); do \
+		OCAMLRUNPARAM=b dune exec -- irj_checker $$dir -mhuman; \
+		if [ $$? -ne 0 ]; \
+		then \
+			echo "Failed test $$dir"; \
+			exit 1; \
+		fi; \
+	done;
 
 ##################################################
 # Doc

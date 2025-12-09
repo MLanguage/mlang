@@ -63,6 +63,11 @@ jobs:
           eval $(opam env)
           OPTIMIZE=0 make tests
 
+      - name: Test irj-checker
+        run: |
+          eval $(opam env)
+          make test_irj
+
       - name: Test DGFIP C backend
         run: |
           eval $(opam env)
