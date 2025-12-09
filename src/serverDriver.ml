@@ -27,7 +27,15 @@ let parse_files callbacks flat_filemap =
   let t = Lwt_list.map_s (parse_file callbacks) flat_filemap in
   t
 
-let run callbacks flat_filemap irj_contents target application =
+let run callbacks flat_filemap irj_contents target application year =
+  let year =
+    match int_of_string_opt year with
+    | Some year -> year
+    | None ->
+        let msg = Format.asprintf "Year provided in a bad format: %s" year in
+        raise @@ Failure msg
+  in
+  Config.income_year := year;
   Config.mpp_function := target;
   Config.application_names := [ application ];
   Config.plain_output := true;
