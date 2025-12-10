@@ -1,3 +1,5 @@
+
+
 <div style="text-align:center">
 <div style="white-space: pre; font-family: monospace;">
   <span style="color:blue">.____.</span>  ________________________
@@ -9,9 +11,7 @@
 </div>
 </div>
 
-# Bienvenue dans la documentation du langage M !
-
-## Table des matières
+# Documentation du langage M
 
 ```{toctree}
 :maxdepth: 2
