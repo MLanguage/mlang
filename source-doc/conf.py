@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'MLang'
-copyright = '2025, Steven de Oliveira'
-author = 'Steven de Oliveira'
+copyright = '2025, Direction Générale des FInances Publiques'
+author = 'Direction Générale des FInances Publiques'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

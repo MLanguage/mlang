@@ -22,9 +22,3 @@ syntax_irj
 mlang
 arithmetique
 ```
-
-## Index et recherche
-
-* {ref}`genindex`
-* {ref}`modindex`
-* {ref}`search`
