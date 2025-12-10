@@ -508,6 +508,21 @@ Les *cibles* ont la forme suivante :
 avec :
 * `<déclaration> ::= <symbole> ([ <atome~naturel> ])?`
 
+### Commentaires
+
+Les commentaires sont précédés du caractère `#`.
+%%
+Il est possible d'inclure des commentaires multi-ligne avec les délimiteurs `#{` et
+`}#`.
+
+Exemple:
+
+```
+# Ceci est un commentaire sur une ligne
+#{ Ceci est un commentaire 
+   sur plusieurs lignes. }#
+```
+
 ## Prétraitement
 
 Le prétraitement est une opération purement syntaxique.
