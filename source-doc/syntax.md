@@ -5,9 +5,7 @@
 ## Programme M et applications
 
 Un programme M est formé d'une suite de caractères codés sur 8 bits.
-%%
 Les 128 premiers codes de caractères correspondent aux codes ASCII.
-%%
 Un programme M est constitué d'une suite d'éléments parmi lesquels on compte :
 * des déclarations d'applications ;
 * des définitions de constantes ;
@@ -25,19 +23,15 @@ Un programme M est constitué d'une suite d'éléments parmi lesquels on compte 
 * des cibles.
 
 Un programme M peut définir plusieurs applications.
-%%
 Pour être traité (compilation, interprétation, etc.), il nécessite la donnée
 d'une liste d'applications.
-%%
 Cette liste est typiquement fournie comme argument du compilateur, de
 l'interpréteur ou de tout autre outil de traitement.
-%%
 Cette liste sera appelée la liste des applications sélectionnées.
 
 ## Définitions liminaires
 Les formes de Backus-Naur étendues sont utilisées pour préciser la morphologie
 du langage.
-%%
 Un lexème est une suite de caractères et chaque forme est susceptible d'en
 reconnaître un ensemble.
 
@@ -45,10 +39,8 @@ Ces formes sont étendues avec les notations suivantes :
 
 * `<non-terminal:identifiant>` représente le non-terminal, pour lequel la
 chaîne de caractères qu'il reconnaît est représentée par identifiant ;
-%%
 * `forme 1 ^ … ^ forme n` qui représente une suite de lexèmes correspondants
 aux formes 1 à n, dans n'importe quel ordre;
-%%
 * et : `(forme 0) séparateur …` qui représente une liste non-vide de lexèmes
 reeconnus par la forme 0, tous séparés par des lexèmes correspondants au
 séparateur.
@@ -194,7 +186,6 @@ enchaineur <symbole> : <symboles> ;
 
 avec :
 `<symboles> ::= <symbole> , …` représente l'ensemble des applications incluant cet enchaîneur.
-%%
 Le `<symbole>` de l'enchaineur est le nom de l'application déclarée.
  
 
@@ -256,7 +247,6 @@ avec :
 * `<type erreur> ::= anomalie | discordance | informative`
 
 Le symbole est le nom de l'erreur.
-%%
 % A faire: documenter les <chaine>s !
 
 ### Déclaration d'une fonction externe
@@ -511,7 +501,6 @@ avec :
 ### Commentaires
 
 Les commentaires sont précédés du caractère `#`.
-%%
 Il est possible d'inclure des commentaires multi-ligne avec les délimiteurs `#{` et
 `}#`.
 
@@ -526,7 +515,6 @@ Exemple:
 ## Prétraitement
 
 Le prétraitement est une opération purement syntaxique.
-%%
 Son but est triple :
 - éliminer les constructions relatives aux applications non-sélectionnées ;
 - remplacer les constantes par leur valeur numérique ;
@@ -604,7 +592,6 @@ avec :
 
 Chaque `<indice>` associe à une lettre minuscule une série de chaînes de
 caractères de même taille.
-%%
 Cette série est composée de la succession de chaque
 <intervalle> à droite du symbole `=`.
 

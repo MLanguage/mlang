@@ -4,8 +4,7 @@
 
 ## Utiliser MLang
 
-Le binaire `mlang` prend en argument le fichier *M* à exécuter.
-%%
+Le binaire `mlang` prend en argument le fichier *M* à exécuter. 
 Il peut également prendre en argument une liste de fichiers, auquel cas leur
 traitement sera équivalent au traitement d'un seul et même fichier dans lequel
 serait concatené le contenu de chaque fichier.
@@ -19,7 +18,7 @@ Les deux options principales sont :
 
 Le mode interpreteur de `mlang` utilise un fichier *IRJ* (voir {ref}`syntax_irj`)
 pour exécuter le code *M* directement depuis sa représentation abstraite.
-%%
+
 Voici une commande simple pour invoquer l'interpreteur :
 ```
 $ mlang test.m \
@@ -34,9 +33,7 @@ $ mlang test.m \
 
 Le mode transpilation de `mlang` permet de traduire le code *M* dans un autre
 langage.
-%%
 En 2025, seul le langage C est supporté.
-%%
 Voici une commande simple pour traduire un fichier *M* en *C* :
 
 ```

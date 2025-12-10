@@ -6,8 +6,7 @@
 
 Les fichiers IRJ sont des fichiers de test faisant corespondre entrées et
 sorties du calcul d'un programme M.
-%%
-Chaque fichier IRJ est divisé en 7 parties, plus 3 parties optionnelles, 
+Chaque fichier IRJ est divisé en 7 parties, plus 3 parties optionnelles,
 et est terminé par la ligne `##`.
 
 * `NOM` : le nom du test.
@@ -47,7 +46,6 @@ Trois utilitaires sont dédiés à l'utilisation des fichiers IRJ.
 
 Les sources de mlang mettent à disposition un code de vérification de fichiers
 IRJ.
-%%
 Après compilation, il peut être exécuté via la commande :
 ```
 $ dune exec -- irj_checker
@@ -57,7 +55,6 @@ $ dune exec -- irj_checker
 
 Le binaire mlang intègre un interpreteur de M qui prend en entrée un ou
 plusieurs fichiers M ainsi qu'un fichier IRJ.
-%%
 Après compilation, l'interpreteur peut être exécuté via la commande :
 ```
 $ dune exec -- mlang test.m -A application -b interpreter --mpp_function cible_dentree  --dgfip_options='' -r test.irj
@@ -70,10 +67,8 @@ dossier complet.
 
 Il est également possible d'utiliser les fichiers IRJ comme entrée du code C
 généré à partir d'une compilation de code M par `mlang`.
-%%
 Ce traitement est effectué dans le cas du backend `dgfip_c` de mlang, dont
 le code est disponible dans `examples/dgfip_c/ml_primitif`.
-%%
 La calculette d'une année donnée peut êter compilée via :
 ```
 $ make YEAR=year compile_dgfip_c_backend
@@ -82,7 +77,6 @@ $ make YEAR=year compile_dgfip_c_backend
 Les scripts présents dans `examples/dgfip_c/ml_primitif/ml_driver` permettent
 d'interfacer les fichiers IRJ avec les valeurs `C` de type `T_irdata` contenant
 le TGV (Tableau Général des Variables).
-%%
 La commande suivante permet de tester la calculette d'une année sur l'ensemble
 des tests fuzzés de la dite année.
 

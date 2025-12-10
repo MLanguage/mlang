@@ -97,7 +97,6 @@ calculées les données.
 
 Chacune de ces catégories principales doivent être dotées d'attributs,
 un ensemble d'entiers constants pour une variable donnée.
-%%
 Ainsi, on peut rajouter à notre programme test les lignes suivantes :
 ```
 variable saisie : attribut mon_attribut;
@@ -107,10 +106,8 @@ Y : calculee mon_attribut = 1 : "Cette variable s'appelle Y";
 ```
 
 Notez que la variable `X` a un alias `ALIAS_DE_X`.
-%%
 Toutes les variables saisies doivent être parées d'un alias qui peut être
 utilisé de la même façon que son nom original.
-%%
 Cet alias existe initialement pour faire le lien entre la variable utilisée
 dans le M (nom original) et le code de la variable dans le formulaire de
 déclaration de l'impot sur le revenu tel qu'on le retrouve aujourd'hui sur
@@ -147,9 +144,7 @@ section {ref}`arithmetique`.
 
 Les règles en M sont des unités de calcul de variables associées à une ou
 plusieurs application et optionnellement à un domaine de règles.
-%%
 Elles sont composées d'une successions d'affectations.
-%%
 Voici la définition de deux règles simples que nous rajoutons à notre fichier test :
 ```
 Z : calculee mon_attribut = 1 : "Cette variable s'appelle Z";
@@ -165,18 +160,14 @@ Y = X + 1;
 
 La première règle est associée au domaine `mon_domaine_de_regles` tandis que la
 seconde n'étant pas spécifié, sera associée au domaine de règle par défaut.
-%%
 Dans notre exemple, il s'agissait également de `mon_domaine_de_regles`.
 
 Le calcul d'un domaine correspond au calcul de l'ensemble de ses règles.
-%%
 L'ordre d'application des règles dépend de l'ordre d'affectation des variables.
-%%
 Dans notre cas, `X` est une entrée dont `Y` dépend (règle 2), et `Z` dépend de
 `Y`.
-%%
+
 Par conséquent, la règle 2 sera appliquée avant la règle 1.
-%%
 On peut ainsi rajouter une cible qui calcule le domaine de règles :
 ```
 cible calc_test:
