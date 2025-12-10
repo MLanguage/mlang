@@ -13,7 +13,7 @@ Un programme M se caracterise par la définition successive :
 * des fonctions ;
 * de règles de calcul associées ou non à une application.
 
-L'exécution d'un tel programme pour une application donnée correspond à
+Exécuter d'un tel programme pour une application donnée correspond à
 exécuter l'ensemble des règles de calcul associée la dite application.
 %%
 L'ordre d'exécution des règles de calcul dépend des dépendances entre les

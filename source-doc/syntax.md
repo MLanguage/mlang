@@ -2,29 +2,27 @@
 
 # La syntaxe du M
 
-## Morphologie
-
-### Programme M et applications
+## Programme M et applications
 
 Un programme M est formé d'une suite de caractères codés sur 8 bits.
 %%
 Les 128 premiers codes de caractères correspondent aux codes ASCII.
 %%
 Un programme M est constitué d'une suite d'éléments parmi lesquels on compte :
-des déclarations d'applications ;
-des définitions de constantes ;
-des déclarations d'enchaîneurs ;
-des définitions de catégories de variables ;
-des déclarations de variables ;
-des déclarations d'erreurs ;
-des déclarations de fonctions externes ;
-des définitions de domaines de règles ;
-des définitions de domaines de vérifications ;
-des déclarations de sorties ;
-des règles ;
-des vérifications ;
-des fonctions ;
-des cibles.
+* des déclarations d'applications ;
+* des définitions de constantes ;
+* des déclarations d'enchaîneurs ;
+* des définitions de catégories de variables ;
+* des déclarations de variables ;
+* des déclarations d'erreurs ;
+* des déclarations de fonctions externes ;
+* des définitions de domaines de règles ;
+* des définitions de domaines de vérifications ;
+* des déclarations de sorties ;
+* des règles ;
+* des vérifications ;
+* des fonctions ;
+* des cibles.
 
 Un programme M peut définir plusieurs applications.
 %%
@@ -65,12 +63,14 @@ Les lexèmes suivants sont les mots réservés :
 **afficher**,
 **afficher_erreur**,
 **aiguillage**,
+**ajouter**,
 **alias**,
 **alors**,
 **anomalie**,
 **application**,
 **apres**,
 **argument**,
+**arranger_evenements**,
 **attribut**,
 **autorise**,
 **avec**,
@@ -78,30 +78,45 @@ Les lexèmes suivants sont les mots réservés :
 **calculable**,
 **calculee**,
 **calculer**,
+**cas**,
 **categorie**,
+**champ_evenement**,
 **cible**,
 **const**,
 **dans**,
+**dans_domaine**,
 **discordance**,
 **domaine**,
 **enchaineur**,
+**entre**,
 **erreur**,
+**espace**,
+**espace_variables**,
 **et**,
+**evenement**,
+**evenements**,
 **exporte_erreurs**,
-**finsi**,
+**faire**,
+**filtrer**,
 **finalise_erreurs**,
+**finquand**,
+**finsi**,
 **fonction**,
+**increment**,
 **indefini**,
 **indenter**,
 **informative**,
 **iterer**,
 **leve_erreur**,
+**meme_variable**,
+**nb_anomalies**,
 **nb_bloquantes**,
 **nb_categorie**,
-**nb_anomalies**,
 **nb_discordances**,
 **nb_informatives**,
+**neant**,
 **nettoie_erreurs**,
+**nettoie_erreurs_finalisees**,
 **nom**,
 **non**,
 **numero_compl**,
@@ -109,20 +124,26 @@ Les lexèmes suivants sont les mots réservés :
 **ou**,
 **par_defaut**,
 **pour**,
+**puis_quand**,
+**quand**,
+**reference**,
 **regle**,
 **restaurer**,
 **restituee**,
+**resultat**,
 **saisie**,
 **si**,
-**sinon_si**,
 **sinon**,
+**sinon_si**,
 **sortie**,
 **specialise**,
+**stop**,
 **tableau**,
 **taille**,
-**temporaire**,
+**trier**,
 **type**,
 **un**,
+**valeur**
 **variable**,
 **verif**,
 **verifiable**,
@@ -131,8 +152,8 @@ et **verifier**.
 Les lexèmes numériques sont définis comme suit :
 * `<naturel> ::= [0-9] [0-9 _]*`
 * `<réel> ::= <naturel> (. <naturel>)?`
-* `<symbole>` est la forme [a-z A-Z 0-9 _]+ dont sont exclus `<naturel>` et
-les mots réservés.
+* `<symbole>` est la forme `[a-z A-Z 0-9 _]+` dont sont exclus `<naturel>`s et
+les mots réservés ;
 * `<variable>` est un `<symbole>` que l'on distingue pour représenter les
 mots pouvant prendre le nom d'une constante.
 
@@ -153,7 +174,7 @@ Les *déclarations d'applications* ont la forme suivante :
 application <symbole>;
 ```
 
-où <symbole> est le nom de l'application
+où `<symbole>` est le nom de l'application
 déclarée.
 
 ### Définition d'une constante
@@ -334,12 +355,12 @@ avec :
 Les `formules` ont la forme suivante :
 ```
 <formule> ::=
-    <symbole> (`*[*` <expression~numérique> `*]*`)? `*=*` <expression~numérique>
+    <symbole> ([ <expression numérique> ])? = <expression numérique>
 ```
 
 Les `multi-formules` ont la forme suivante :
 ```
-<multi-formule> ::= `*pour*` <indices> `*:*` <formule>
+<multi-formule> ::= pour <indices> : <formule>
 ```
 
 ### Instructions
@@ -492,11 +513,11 @@ avec :
 Le prétraitement est une opération purement syntaxique.
 %%
 Son but est triple :
-- éliminer les constructions relatives aux applications non--sélectionnées ;
+- éliminer les constructions relatives aux applications non-sélectionnées ;
 - remplacer les constantes par leur valeur numérique ;
 - remplacer les expressions numériques débutant par `*somme*` avec des
   additions ;
-- éliminer les <multi-formules> en les remplaçant par des séries de <formule>.
+- éliminer les `<multi-formule>`s en les remplaçant par des séries de `<formule>`s.
 
 Toute substitution transformant un programme M syntaxiquement valide en un
 texte ne correspondant à aucun programme M provoque l'échec du traitement.
@@ -518,20 +539,20 @@ Dans les déclarations des règles spécifiant une application sélectionnée, o
 
 ### Cas des constantes
 
-Pour prétraiter un programme, on le parcourt du début à la fin* Pour chaque
-<variable> rencontrée, si elle correspond à une contante défini précédemment,
+Pour prétraiter un programme, on le parcourt du début à la fin. Pour chaque
+`<variable>` rencontrée, si elle correspond à une contante défini précédemment,
 alors il est remplacé dans le programme par la valeur numérique correspondante.
 
-Un intervalle de la forme <naturel:/début/>~`*-*`~<symbole:/const/> est
-converti par substitution de la constante /const/ en l'intervalle
-<naturel:/début/>~`****`~<naturel:/fin/>, avec /fin/ le naturel correspondant
-à /const/.
+Un intervalle de la forme `<naturel:début>..<symbole:const>` est
+converti par substitution de la constante `const` en l'intervalle
+`<naturel:début>..<naturel:fin>`, avec `fin` le naturel correspondant
+à `const`.
 
 *Exemple* : considérons le programme suivant :
 ```
 fin : const = 10;
 … 
-pour i = 9..fin :
+pour i = 9-fin :
   Bi = Bi + fin;
 ```
    
@@ -577,14 +598,14 @@ Les séries associées aux <intervalles> sont définis comme suit :
   séparément, donc de taille 1 (*par exemple* : `AXF` représente la série `A`, `X`, `F`);
 * `<majuscule:/début/>****<majuscule:/fin/>` est la série composée de toutes
   les majuscules comprises entre /début/ et /fin/, bornes comprises, suivant
-  l'ordre alphabétique, donc de taille 1 (*par exemple* : `A**D` représente la série `A`, `B`, `C`, `D`);
-* `<naturel:/début/>****<naturel:/fin/>` est la série composée de tous les
-  nombres naturels entre /début/ et /fin/, bornes comprises, la taille des
+  l'ordre alphabétique, donc de taille 1 (*par exemple* : `A..D` représente la série `A`, `B`, `C`, `D`);
+* `<naturel:début>..<naturel:fin>` est la série composée de tous les
+  nombres naturels entre `début` et `fin`, bornes comprises, la taille des
   éléments étant égale à la taille du plus grand naturel en base 10; les
   naturels trop petits pour avoir la taille requise  sont complétés par des 0 à
-  gauche (*par exemple* : `9**11` représente la série `09`, `10`, `11`);
-* `<naturel>`**`-`**`<variable>` est converti lors du prétraitement des constantes
-  en un intervalle de la forme `<naturel>`**`..`**`<naturel>`.
+  gauche (*par exemple* : `9..11` représente la série `09`, `10`, `11`);
+* `<naturel>-<variable>` est converti lors du prétraitement des constantes
+  en un intervalle de la forme `<naturel>..<naturel>`.
 
 ### Cas des expressions `somme(…)`
 
@@ -600,8 +621,8 @@ La somme ainsi générée est parenthésée.
 Une expression numérique
 `somme ( <indice:ind> ; <indices:inds> : <expression numérique:expr> )`,
 est remplacée par la somme des expressions
-*`somme`*` <indices:inds> : expr'> )` avec *expr'* prenant sa valeur
-dans la série *sub(ind, expr).
+*`somme`*` <indices:inds> : expr'> )` avec `expr'` prenant sa valeur
+dans la série `sub(ind, expr)`.
 %
 La procédure est ensuite appliquée récursivement à cette somme.
 %
@@ -665,10 +686,10 @@ pour i = XZ ; j = 9..10 :
 
 Elle est dans un premier temps remplacée par la série suivante :
 ```
-pour j = 9**10 :
+pour j = 9..10 :
   BX = BX + Bj;
  
-pour j = 9**10 :
+pour j = 9..10 :
   BZ = BZ + Bj;
 ```
 
@@ -679,7 +700,3 @@ BX = BX + B10;
 BZ = BZ + B09;
 BZ = BZ + B10;
 ````
-
-## Syntaxe
-
-## Sémantique
