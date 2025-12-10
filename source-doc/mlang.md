@@ -48,6 +48,60 @@ $ mlang test.m \
 	--output output/mon-test.c
 ```
 
+NB: le dossier `output` doit avoir été créé en amont.
+
 ### Options DGFiP
 
+Les options DGFiP sont à usage interne.
+
+```
+       -b VAL
+           Set application to "batch" (b0 = normal, b1 = with EBCDIC sort)
+
+       -D  Generate labels for output variables
+
+       -g  Generate for test (debug)
+
+       -I  Generate immediate controls
+
+       -k VAL (absent=0)
+           Number of debug files
+
+       -L  Generate calls to ticket function
+
+       -m VAL (absent=1991)
+           Income year
+
+       -O  Optimize generated code (inline min_max function)
+
+       -o  Generate overlays
+
+       -P  Primitive calculation only
+
+       -r  Pass TGV pointer as register in rules
+
+       -R  Set application to both "iliad" and "pro"
+
+       -s  Strip comments from generated output
+
+       -S  Generate separate controls
+
+       -t  Generate trace code
+
+       -U  Set application to "cfir"
+
+       -x  Generate cross references
+
+       -X  Generate global extraction
+
+       -Z  Colored output in chainings
+```
+
 ## Comportement
+
+* Traduction du code M dans l'arbre de syntaxe abstraite M_AST.
+* Extension des constructions.
+* Vérification de cohérence.
+* Selon le mode : 
+  * **Interpreteur** Lecture du fichier IRJ et interpretation du code.
+  * **Transpilation** Ecriture du code C équivalent au code M.
