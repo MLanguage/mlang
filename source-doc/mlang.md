@@ -94,9 +94,11 @@ Les options DGFiP sont à usage interne.
        -Z  Colored output in chainings
 ```
 
-## Comportement
+## Comportement de mlang
 
 ### Traduction
+
+% A faire : traduction du M en M_AST
 
 ### Pré-traitement
 
@@ -104,7 +106,7 @@ Le prétraitement est une opération purement syntaxique.
 Son but est triple :
 - éliminer les constructions relatives aux applications non-sélectionnées ;
 - remplacer les constantes par leur valeur numérique ;
-- remplacer les expressions numériques débutant par `*somme*` avec des
+- remplacer les expressions numériques débutant par `somme` avec des
   additions ;
 - éliminer les `<multi-formule>`s en les remplaçant par des séries de `<formule>`s.
 
@@ -291,10 +293,14 @@ BZ = BZ + B10;
 
 ### Vérification de cohérence
 
+% A faire : documentation de la verification
+
 ### Traitement
-* Traduction du code M dans l'arbre de syntaxe abstraite M_AST.
-* Extension des constructions.
-* Vérification de cohérence.
-* Selon le mode : 
-  * **Interpreteur** Lecture du fichier IRJ et interpretation du code.
-  * **Transpilation** Ecriture du code C équivalent au code M.
+
+#### Interpreteur
+
+Lecture du fichier IRJ et interpretation du code.
+
+#### Transpilation
+
+Ecriture du code C équivalent au code M.
