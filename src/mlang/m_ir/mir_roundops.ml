@@ -29,7 +29,7 @@ module DefaultRoundOps (N : Mir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let epsilon = !Cli.comparison_error_margin
+  let epsilon = !Config.comparison_error_margin
 
   let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
@@ -45,7 +45,7 @@ module MultiRoundOps (N : Mir_number.NumberInterface) :
   RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let epsilon = !Cli.comparison_error_margin
+  let epsilon = !Config.comparison_error_margin
 
   let truncatef (x : N.t) : N.t = N.floor N.(x +. N.of_float epsilon)
 
@@ -60,7 +60,7 @@ end)
 (N : Mir_number.NumberInterface) : RoundOpsInterface with type t = N.t = struct
   type t = N.t
 
-  let epsilon = !Cli.comparison_error_margin
+  let epsilon = !Config.comparison_error_margin
 
   let floor_g (x : N.t) : N.t =
     if N.abs x <= N.of_int !L.max_long then N.floor x else x

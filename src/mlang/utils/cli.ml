@@ -23,6 +23,10 @@
 (** The command line interface is declared using {!module Cmdliner} *)
 
 open Cmdliner
+open Config
+module Cmdliner = Cmdliner
+module Term = Cmdliner.Term
+module ANSITerminal = ANSITerminal
 
 let files =
   Arg.(
@@ -53,15 +57,6 @@ let display_time =
     value & flag
     & info [ "display_time"; "t" ]
         ~doc:"Displays timing information (use with --debug)")
-
-let dep_graph_file =
-  let doc =
-    "Name of the file where the variable dependency graph should be output \
-     (use with --debug)"
-  in
-  Arg.(
-    value & opt file "dep_graph.dot"
-    & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
 
 let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
@@ -142,6 +137,11 @@ let roundops =
            running on a mainframe. In this case, the size of the long type has \
            to be specified; it can be either 32 or 64.")
 
+let plain_output =
+  Arg.(
+    value & flag
+    & info [ "plain_output" ] ~doc:"Do not print terminal characters.")
+
 let comparison_error_margin_cli =
   Arg.(
     value
@@ -160,7 +160,7 @@ let comparison_error_margin_cli =
 let income_year_cli =
   Arg.(
     value
-    & opt (some int) None
+    & opt int (1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1)
     & info [ "income-year" ] ~docv:"INCOME_YEAR"
         ~doc:"Set the year of the income.")
 
@@ -185,10 +185,10 @@ let dgfip_options =
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
-    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
+    $ m_clean_calls $ dgfip_options $ plain_output)
 
 let info =
   let doc =
@@ -231,115 +231,6 @@ let info =
       | None -> "n/a"
       | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
-
-type value_sort =
-  | RegularFloat
-  | MPFR of int (* bitsize of the floats *)
-  | BigInt of int (* precision of the fixed point *)
-  | Interval
-  | Rational
-
-type round_ops = RODefault | ROMulti | ROMainframe of int
-(* size of type long, either 32 or 64 *)
-
-type backend = Dgfip_c | UnknownBackend
-
-type execution_mode =
-  | SingleTest of string
-  | MultipleTests of string
-  | Extraction
-
-type files = NonEmpty of string list
-
-let get_files = function NonEmpty l -> l
-
-(* This feels weird to put here, but by construction it should not happen.*)
-let source_files : files ref = ref (NonEmpty [])
-
-let application_names : string list ref = ref []
-
-let without_dgfip_m = ref false
-
-let dep_graph_file : string ref = ref "dep_graph.dot"
-
-let verify_flag = ref false
-
-let debug_flag = ref false
-
-let var_info_flag = ref false
-
-let var_info_debug = ref []
-
-let warning_flag = ref true
-
-let no_print_cycles_flag = ref false
-
-let display_time = ref false
-
-let output_file = ref ""
-
-let optimize_unsafe_float = ref false
-
-let m_clean_calls = ref false
-
-let value_sort = ref RegularFloat
-
-let round_ops = ref RODefault
-
-let backend = ref UnknownBackend
-
-let dgfip_test_filter = ref false
-
-let mpp_function = ref ""
-
-let dgfip_flags = ref Dgfip_options.default_flags
-
-let execution_mode = ref Extraction
-
-(* Default value for the epsilon slack when comparing things in the
-   interpreter *)
-let comparison_error_margin = ref 0.000001
-
-let income_year = ref 0
-
-let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
-    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
-    (dep_graph_file_ : string) (no_print_cycles_ : bool)
-    (output_file_ : string option) (optimize_unsafe_float_ : bool)
-    (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
-    (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
-    (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
-    (execution_mode_ : execution_mode) =
-  source_files := files_;
-  application_names := applications_;
-  without_dgfip_m := without_dgfip_m_;
-  debug_flag := debug_;
-  var_info_debug := var_info_debug_;
-  var_info_flag := !var_info_debug <> [];
-  display_time := display_time_;
-  dep_graph_file := dep_graph_file_;
-  no_print_cycles_flag := no_print_cycles_;
-  optimize_unsafe_float := optimize_unsafe_float_;
-  m_clean_calls := m_clean_calls_;
-  execution_mode := execution_mode_;
-  (income_year :=
-     match income_year_ with
-     | Some y -> y
-     | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
-  value_sort := value_sort_;
-  round_ops := round_ops_;
-  backend := backend_;
-  dgfip_test_filter := dgfip_test_filter_;
-  mpp_function := mpp_function_;
-  dgfip_flags := dgfip_flags_;
-  match output_file_ with
-  | None -> ()
-  | Some o -> (
-      output_file := o;
-      match comparison_error_margin_ with
-      | None -> ()
-      | Some m -> comparison_error_margin := m)
 
 (**{1 Terminal formatting}*)
 
@@ -387,8 +278,9 @@ let time_marker () =
 
 let format_with_style (styles : ANSITerminal.style list)
     (str : ('a, unit, string) format) =
-  if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
-  else Printf.sprintf str
+  if !Config.plain_output (* can depend on a stylr flag *) then
+    Printf.sprintf str
+  else ANSITerminal.sprintf styles str
 
 (** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
     since last debug *)
@@ -431,13 +323,13 @@ let debug_print ?(endline = "\n") kont =
       (fun str ->
         Format.printf "%a%s%s@?"
           (fun _ -> debug_marker)
-          !display_time str endline)
+          !Config.display_time str endline)
       kont
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
-  if !var_info_flag then
+  if !Config.var_info_flag then
     Format.kasprintf
       (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
       kont
@@ -492,3 +384,99 @@ let result_print kont =
   Format.kasprintf
     (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str)
     kont
+
+let indent_number (s : string) : int =
+  try
+    let rec aux (i : int) = if s.[i] = ' ' then aux (i + 1) else i in
+    aux 0
+  with Invalid_argument _ -> String.length s
+
+let format_matched_line pos (line : string) (line_no : int) : string =
+  let line_indent = indent_number line in
+  let error_indicator_style = [ ANSITerminal.red; ANSITerminal.Bold ] in
+  let sline = Pos.get_start_line pos in
+  let eline = Pos.get_end_line pos in
+  let line_start_col =
+    if line_no = sline then Pos.get_start_column pos else 1
+  in
+  let line_end_col =
+    if line_no = eline then Pos.get_end_column pos else String.length line + 1
+  in
+  let line_length = String.length line + 1 in
+  line
+  ^
+  if line_no >= sline && line_no <= eline then
+    "\n"
+    ^
+    if line_no = sline && line_no = eline then
+      format_with_style error_indicator_style "%*s" (line_end_col - 1)
+        (String.make (line_end_col - line_start_col) '^')
+    else if line_no = sline && line_no <> eline then
+      format_with_style error_indicator_style "%*s" (line_length - 1)
+        (String.make (line_length - line_start_col) '^')
+    else if line_no <> sline && line_no <> eline then
+      format_with_style error_indicator_style "%*s%s" line_indent ""
+        (String.make (line_length - line_indent) '^')
+    else if line_no <> sline && line_no = eline then
+      format_with_style error_indicator_style "%*s%*s" line_indent ""
+        (line_end_col - 1 - line_indent)
+        (String.make (line_end_col - line_indent) '^')
+    else assert false (* should not happen *)
+  else ""
+
+let format_lines pos lines =
+  let filename = Pos.get_file pos in
+  let sline = Pos.get_start_line pos in
+  let eline = Pos.get_end_line pos in
+  let blue_style = [ ANSITerminal.Bold; ANSITerminal.blue ] in
+  let spaces = int_of_float (log10 (float_of_int eline)) + 1 in
+  let lines =
+    List.mapi (fun i line -> format_matched_line pos line (i + sline)) lines
+  in
+  format_with_style blue_style "%*s--> %s\n%s" spaces "" filename
+    (add_prefix_to_each_line
+       (Printf.sprintf "\n%s" (String.concat "\n" lines))
+       (fun i ->
+         let cur_line = sline + i - 1 in
+         if
+           cur_line >= sline
+           && cur_line <= sline + (2 * (eline - sline))
+           && cur_line mod 2 = sline mod 2
+         then
+           format_with_style blue_style "%*d | " spaces
+             (sline + ((cur_line - sline) / 2))
+         else if cur_line >= sline && cur_line < sline then
+           format_with_style blue_style "%*d | " spaces cur_line
+         else if
+           cur_line <= sline + (2 * (eline - sline)) + 1
+           && cur_line > sline + (2 * (eline - sline)) + 1
+         then
+           format_with_style blue_style "%*d | " spaces
+             (cur_line - (eline - sline + 1))
+         else format_with_style blue_style "%*s | " spaces ""))
+
+let retrieve_loc_text (pos : Pos.t) : string =
+  let filename = Pos.get_file pos in
+  if filename = "" then "No position information"
+  else
+    let lines =
+      match !Config.platform with
+      | Server filemap -> begin
+          match StrMap.find_opt filename filemap with
+          | None -> failwith "Pos error"
+          | Some contents ->
+              let lines = String.split_on_char '\n' contents in
+              [ List.nth lines (Pos.get_start_line pos - 1) ]
+        end
+      | Executable ->
+          let get_lines =
+            match File.open_file_for_text_extraction pos with
+            | exception Sys_error _ ->
+                error_print "File not found for displaying position : \"%s\""
+                  filename;
+                failwith "Pos error"
+            | get_lines -> get_lines
+          in
+          get_lines 1
+    in
+    format_lines pos lines

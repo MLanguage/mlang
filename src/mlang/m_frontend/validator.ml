@@ -647,7 +647,7 @@ let safe_prefix (p : Mast.program) : string =
 let empty_program (p : Mast.program) main_target =
   let prog_app =
     let fold s a = StrMap.add a Pos.none s in
-    List.fold_left fold StrMap.empty !Cli.application_names
+    List.fold_left fold StrMap.empty !Config.application_names
   in
   {
     prog_prefix = safe_prefix p;
@@ -3040,8 +3040,8 @@ let eval_expr_verif (prog : program) (verif : verif)
   in
   let rec aux expr =
     match Pos.unmark expr with
-    | Com.Literal (Com.Float f) -> Some f
-    | Literal Com.Undefined -> None
+    | Com.Literal { lit = Com.Float f; _ } -> Some f
+    | Literal { lit = Com.Undefined; _ } -> None
     | Var _ -> Err.variable_forbidden_in_filter (Pos.get expr)
     | Attribut (Pos.Mark (VarAccess (_, m_v), _), m_attr) ->
         let var_name = Com.get_normal_var @@ Pos.unmark m_v in

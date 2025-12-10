@@ -685,13 +685,13 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               Attribut (Pos.mark access' pos, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-              | Some l -> Literal (Float (float (Pos.unmark l)))
-              | None -> Literal Undefined)
+              | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+              | None -> Com.mk_lit Undefined)
         | TabAccess (_, m_id, _) -> (
             let var = get_var dict m_id in
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-            | Some l -> Literal (Float (float (Pos.unmark l)))
-            | None -> Literal Undefined)
+            | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+            | None -> Com.mk_lit Undefined)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -711,8 +711,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             if Com.Var.is_ref var then
               let access' = translate_access p dict access in
               Size (Pos.mark access' pos)
-            else Literal (Float (float @@ Com.Var.size var))
-        | TabAccess _ -> Literal (Float 1.0)
+            else Com.mk_lit (Float (float @@ Com.Var.size var))
+        | TabAccess _ -> Com.mk_lit (Float 1.0)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -741,8 +741,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               InDomain (Pos.mark access' pos, cvm)
             else if
               Com.Var.is_tgv var && Com.CatVar.Map.mem (Com.Var.cat var) cvm
-            then Literal (Float 1.0)
-            else Literal (Float 0.0)
+            then Com.mk_lit (Float 1.0)
+            else Com.mk_lit (Float 0.0)
         | _ ->
             let access' = translate_access p dict access in
             InDomain (Pos.mark access' pos, cvm))

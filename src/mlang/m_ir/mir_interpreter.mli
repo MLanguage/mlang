@@ -65,6 +65,11 @@ module type S = sig
     base : value Array.t;
   }
 
+  type ctx_exec_ctx =
+    | CtxUndefined
+    | CtxTarget of string
+    | CtxRule of int  (** Marker to in which context are variables set *)
+
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
@@ -85,11 +90,14 @@ module type S = sig
     mutable ctx_nb_bloquantes : int;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_events :
+      (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_dbg_info : Dbg_info.t option;
+    mutable ctx_exec_ctx : ctx_exec_ctx;
   }
   (** Interpretation context *)
 
-  val empty_ctx : Mir.program -> ctx
+  val empty_ctx : Mir.program -> Dbg_info.t option -> ctx
 
   val literal_to_value : Com.literal -> value
 
@@ -140,53 +148,25 @@ module FloatDefInterp :
     - Multi: use the rouding operations of the PC/multi-thread context
     - Mf: use the rounding operations of the mainframe context *)
 
-module FloatMultInterp :
-  S with type custom_float = Mir_number.RegularFloatNumber.t
-
-module FloatMfInterp :
-  S with type custom_float = Mir_number.RegularFloatNumber.t
-
-module MPFRDefInterp : S with type custom_float = Mir_number.MPFRNumber.t
-
-module MPFRMultInterp : S with type custom_float = Mir_number.MPFRNumber.t
-
-module MPFRMfInterp : S with type custom_float = Mir_number.MPFRNumber.t
-
-module BigIntDefInterp : S
-
-module BigIntMultInterp : S
-
-module BigIntMfInterp : S
-
-module IntvDefInterp : S with type custom_float = Mir_number.IntervalNumber.t
-
-module IntvMultInterp : S with type custom_float = Mir_number.IntervalNumber.t
-
-module IntvMfInterp : S with type custom_float = Mir_number.IntervalNumber.t
-
-module RatDefInterp : S with type custom_float = Mir_number.RationalNumber.t
-
-module RatMultInterp : S with type custom_float = Mir_number.RationalNumber.t
-
-module RatMfInterp : S with type custom_float = Mir_number.RationalNumber.t
-
 (** {1 Generic interpretation API}*)
 
-val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
+val get_interp : Config.value_sort -> Config.round_ops -> (module S)
 
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
   (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
-  Cli.value_sort ->
-  Cli.round_ops ->
-  Com.literal Com.Var.Map.t * Com.Error.Set.t
+  Config.value_sort ->
+  Config.round_ops ->
+  Dbg_info.t option ->
+  Com.literal Com.Var.Map.t * Com.Error.Set.t * Dbg_info.t option
 (** Main interpreter function *)
 
 val evaluate_expr :
   Mir.program ->
   Mir.expression Pos.marked ->
-  Cli.value_sort ->
-  Cli.round_ops ->
+  Config.value_sort ->
+  Config.round_ops ->
+  Dbg_info.t option ->
   Com.literal
 (** Interprets only an expression *)
