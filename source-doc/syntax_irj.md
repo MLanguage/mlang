@@ -7,8 +7,8 @@
 Les fichiers IRJ sont des fichiers de test faisant corespondre entrées et
 sorties du calcul d'un programme M.
 %%
-Il sont divisés en 7 parties, plus 3 parties optionnelles, et est terminé par la
-ligne `##`.
+Chaque fichier IRJ est divisé en 7 parties, plus 3 parties optionnelles, 
+et est terminé par la ligne `##`.
 
 * `NOM` : le nom du test.
 * `ENTREES-PRIMITIF` : les valeurs des variables d'entrées au début du calcul. A chaque variable `VAR` est associée une valeur `val` entière ou décimale sur une ligne de la forme `VAR/val`. Les variables d'entrées qui ne sont pas définies dans le fichier IRJ seront initialisées à `indefini`.
@@ -22,7 +22,7 @@ ligne `##`.
 * `RESULTATS-RAPPELS` : partie optionnelle, à documenter
 
 Voici un exemple de fichier IRJ minimal
-```   
+```
    #NOM
    MON-TEST
    #ENTREES-PRIMITIF
