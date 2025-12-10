@@ -40,7 +40,10 @@ clean: FORCE remise_a_zero_versionnage
 	dune clean
 
 sphinx-doc: FORCE
+	@command -v sphinx-build >/dev/null 2>&1 || \
+	{ echo "Pour construire la documentation, vous avez besoin de sphinx-build avec \
+		l'extension 'myst-parser'."; exit 1; }
 	rm -rf _build/default/source-doc/*
-	cp -rf source-doc/* _build/default/source-doc/ 
+	cp -rf source-doc/* _build/default/source-doc/
 	sphinx-build -M html _build/default/source-doc/ doc/sphinx/
 	sphinx-build -M latexpdf _build/default/source-doc/ doc/sphinx/
