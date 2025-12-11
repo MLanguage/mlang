@@ -1,4 +1,5 @@
 # correctif
+# testé avec la révision 36674
 
 AFF : const = 0;
 CPTOTO : calculee primrest = 0 : "";

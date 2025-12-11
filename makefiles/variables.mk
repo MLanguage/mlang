@@ -18,11 +18,7 @@ MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
 # Add a TESTS_DIR for 2024 when available
 ifeq ($(filter $(YEAR), 2024 2025), $(YEAR))
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-else ifeq ($(filter $(YEAR), 2022), $(YEAR))
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
 	SOURCE_EXT_FILES?=\
 		$(SOURCE_EXT_DIR)/cibles.m \
 		$(SOURCE_EXT_DIR)/codes_1731.m \
@@ -32,7 +28,18 @@ else ifeq ($(filter $(YEAR), 2022), $(YEAR))
 		$(SOURCE_EXT_DIR)/correctif.m \
 		$(SOURCE_EXT_DIR)/main.m
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-else ifeq ($(filter $(YEAR), 2018 2019 2020 2023), $(YEAR))
+else ifeq ($(filter $(YEAR), 2022 2023), $(YEAR))
+	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+	SOURCE_EXT_FILES?=\
+		$(SOURCE_EXT_DIR)/cibles.m \
+		$(SOURCE_EXT_DIR)/codes_1731.m \
+		$(SOURCE_EXT_DIR)/commence_par_5.m \
+		$(SOURCE_EXT_DIR)/commence_par_7.m \
+		$(SOURCE_EXT_DIR)/commence_par_H.m \
+		$(SOURCE_EXT_DIR)/correctif.m \
+		$(SOURCE_EXT_DIR)/main.m
+	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 2018 2019 2020 2021), $(YEAR))
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
 	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
