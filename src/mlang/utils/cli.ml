@@ -23,6 +23,10 @@
 (** The command line interface is declared using {!module Cmdliner} *)
 
 open Cmdliner
+open Config
+module Cmdliner = Cmdliner
+module Term = Cmdliner.Term
+module ANSITerminal = ANSITerminal
 
 let files =
   Arg.(
@@ -53,15 +57,6 @@ let display_time =
     value & flag
     & info [ "display_time"; "t" ]
         ~doc:"Displays timing information (use with --debug)")
-
-let dep_graph_file =
-  let doc =
-    "Name of the file where the variable dependency graph should be output \
-     (use with --debug)"
-  in
-  Arg.(
-    value & opt file "dep_graph.dot"
-    & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
 
 let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
@@ -160,7 +155,7 @@ let comparison_error_margin_cli =
 let income_year_cli =
   Arg.(
     value
-    & opt (some int) None
+    & opt int (1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1)
     & info [ "income-year" ] ~docv:"INCOME_YEAR"
         ~doc:"Set the year of the income.")
 
@@ -185,10 +180,10 @@ let dgfip_options =
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
-    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
+    $ m_clean_calls $ dgfip_options)
 
 let info =
   let doc =
@@ -231,115 +226,6 @@ let info =
       | None -> "n/a"
       | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
-
-type value_sort =
-  | RegularFloat
-  | MPFR of int (* bitsize of the floats *)
-  | BigInt of int (* precision of the fixed point *)
-  | Interval
-  | Rational
-
-type round_ops = RODefault | ROMulti | ROMainframe of int
-(* size of type long, either 32 or 64 *)
-
-type backend = Dgfip_c | UnknownBackend
-
-type execution_mode =
-  | SingleTest of string
-  | MultipleTests of string
-  | Extraction
-
-type files = NonEmpty of string list
-
-let get_files = function NonEmpty l -> l
-
-(* This feels weird to put here, but by construction it should not happen.*)
-let source_files : files ref = ref (NonEmpty [])
-
-let application_names : string list ref = ref []
-
-let without_dgfip_m = ref false
-
-let dep_graph_file : string ref = ref "dep_graph.dot"
-
-let verify_flag = ref false
-
-let debug_flag = ref false
-
-let var_info_flag = ref false
-
-let var_info_debug = ref []
-
-let warning_flag = ref true
-
-let no_print_cycles_flag = ref false
-
-let display_time = ref false
-
-let output_file = ref ""
-
-let optimize_unsafe_float = ref false
-
-let m_clean_calls = ref false
-
-let value_sort = ref RegularFloat
-
-let round_ops = ref RODefault
-
-let backend = ref UnknownBackend
-
-let dgfip_test_filter = ref false
-
-let mpp_function = ref ""
-
-let dgfip_flags = ref Dgfip_options.default_flags
-
-let execution_mode = ref Extraction
-
-(* Default value for the epsilon slack when comparing things in the
-   interpreter *)
-let comparison_error_margin = ref 0.000001
-
-let income_year = ref 0
-
-let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
-    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
-    (dep_graph_file_ : string) (no_print_cycles_ : bool)
-    (output_file_ : string option) (optimize_unsafe_float_ : bool)
-    (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
-    (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
-    (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
-    (execution_mode_ : execution_mode) =
-  source_files := files_;
-  application_names := applications_;
-  without_dgfip_m := without_dgfip_m_;
-  debug_flag := debug_;
-  var_info_debug := var_info_debug_;
-  var_info_flag := !var_info_debug <> [];
-  display_time := display_time_;
-  dep_graph_file := dep_graph_file_;
-  no_print_cycles_flag := no_print_cycles_;
-  optimize_unsafe_float := optimize_unsafe_float_;
-  m_clean_calls := m_clean_calls_;
-  execution_mode := execution_mode_;
-  (income_year :=
-     match income_year_ with
-     | Some y -> y
-     | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
-  value_sort := value_sort_;
-  round_ops := round_ops_;
-  backend := backend_;
-  dgfip_test_filter := dgfip_test_filter_;
-  mpp_function := mpp_function_;
-  dgfip_flags := dgfip_flags_;
-  match output_file_ with
-  | None -> ()
-  | Some o -> (
-      output_file := o;
-      match comparison_error_margin_ with
-      | None -> ()
-      | Some m -> comparison_error_margin := m)
 
 (**{1 Terminal formatting}*)
 
@@ -431,13 +317,13 @@ let debug_print ?(endline = "\n") kont =
       (fun str ->
         Format.printf "%a%s%s@?"
           (fun _ -> debug_marker)
-          !display_time str endline)
+          !Config.display_time str endline)
       kont
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
-  if !var_info_flag then
+  if !Config.var_info_flag then
     Format.kasprintf
       (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
       kont

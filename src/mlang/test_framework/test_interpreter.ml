@@ -36,7 +36,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     let map_init =
       try
         let ancsded = find_var_of_name program (Pos.without "V_ANCSDED") in
-        let ancsded_val = Com.Float (float_of_int (!Cli.income_year + 1)) in
+        let ancsded_val = Com.Float (float_of_int (!Config.income_year + 1)) in
         Com.Var.Map.one ancsded ancsded_val
       with _ -> Com.Var.Map.empty
     in
@@ -136,7 +136,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
 exception InterpError of int
 
 let check_test (program : Mir.program) (test_name : string)
-    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) : unit =
+    (value_sort : Config.value_sort) (round_ops : Config.round_ops) : unit =
   let check_vars exp vars =
     let test_error_margin = 0.01 in
     let fold vname f nb =
@@ -171,10 +171,10 @@ let check_test (program : Mir.program) (test_name : string)
     StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
-  let dbg_warning = !Cli.warning_flag in
-  let dbg_time = !Cli.display_time in
-  Cli.warning_flag := false;
-  Cli.display_time := false;
+  let dbg_warning = !Config.warning_flag in
+  let dbg_time = !Config.display_time in
+  Config.warning_flag := false;
+  Config.display_time := false;
   Cli.debug_print "Parsing %s..." test_name;
   let t = Irj_file.parse_file test_name in
   Cli.debug_print "Running test %s..." t.nom;
@@ -201,13 +201,13 @@ let check_test (program : Mir.program) (test_name : string)
           raise (InterpError nbErrs))
   in
   check insts;
-  Cli.warning_flag := dbg_warning;
-  Cli.display_time := dbg_time
+  Config.warning_flag := dbg_warning;
+  Config.display_time := dbg_time
 
 type process_acc = string list * int StrMap.t
 
 let check_all_tests (p : Mir.program) (test_dir : string)
-    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops)
+    (value_sort : Config.value_sort) (round_ops : Config.round_ops)
     (filter_function : string -> bool) =
   let arr = Sys.readdir test_dir in
   let arr =
@@ -220,20 +220,20 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Mir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   Array.sort compare arr;
-  let dbg_warning = !Cli.warning_flag in
-  let dbg_time = !Cli.display_time in
-  Cli.warning_flag := false;
-  Cli.display_time := false;
-  (* let _, finish = Cli.create_progress_bar "Testing files" in*)
+  let dbg_warning = !Config.warning_flag in
+  let dbg_time = !Config.display_time in
+  Config.warning_flag := false;
+  Config.display_time := false;
+  (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
     let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
                            : Mir_interpreter.S)
     in
     try
-      Cli.debug_flag := false;
+      Config.debug_flag := false;
       check_test p (test_dir ^ name) value_sort round_ops;
-      Cli.debug_flag := true;
+      Config.debug_flag := true;
       Cli.result_print "%s" name;
       (name :: successes, failures)
     with
@@ -267,8 +267,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
 *)
   in
   (* finish "done!"; *)
-  Cli.warning_flag := dbg_warning;
-  Cli.display_time := dbg_time;
+  Config.warning_flag := dbg_warning;
+  Config.display_time := dbg_time;
   Cli.result_print "Test results: %d successes" (List.length s);
 
   if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
@@ -279,22 +279,22 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       f)
 
 let check_one_test (p : Mir.program) (name : string)
-    (value_sort : Cli.value_sort) (round_ops : Cli.round_ops) =
+    (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
   Mir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
-  let dbg_warning = !Cli.warning_flag in
-  let dbg_time = !Cli.display_time in
-  Cli.warning_flag := false;
-  Cli.display_time := false;
-  (* let _, finish = Cli.create_progress_bar "Testing files" in*)
+  let dbg_warning = !Config.warning_flag in
+  let dbg_time = !Config.display_time in
+  Config.warning_flag := false;
+  Config.display_time := false;
+  (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let is_ok =
     let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
                            : Mir_interpreter.S)
     in
     try
-      Cli.debug_flag := false;
+      Config.debug_flag := false;
       check_test p name value_sort round_ops;
-      Cli.debug_flag := true;
+      Config.debug_flag := true;
       Cli.result_print "%s" name;
       None
     with
@@ -320,8 +320,8 @@ let check_one_test (p : Mir.program) (name : string)
         raise e
   in
   (* finish "done!"; *)
-  Cli.warning_flag := dbg_warning;
-  Cli.display_time := dbg_time;
+  Config.warning_flag := dbg_warning;
+  Config.display_time := dbg_time;
   match is_ok with
   | None -> Cli.result_print "No failure!"
   | Some 0 -> Cli.error_print "Unexpected failure"

@@ -647,7 +647,7 @@ let safe_prefix (p : Mast.program) : string =
 let empty_program (p : Mast.program) main_target =
   let prog_app =
     let fold s a = StrMap.add a Pos.none s in
-    List.fold_left fold StrMap.empty !Cli.application_names
+    List.fold_left fold StrMap.empty !Config.application_names
   in
   {
     prog_prefix = safe_prefix p;

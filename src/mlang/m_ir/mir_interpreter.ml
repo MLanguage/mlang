@@ -337,7 +337,7 @@ struct
   let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
 
   let compare_numbers op i1 i2 =
-    let epsilon = N.of_float !Cli.comparison_error_margin in
+    let epsilon = N.of_float !Config.comparison_error_margin in
     let open Com in
     match op with
     | Gt -> N.(i1 >. i2 +. epsilon)
@@ -1348,7 +1348,8 @@ module RatMfInterp =
     (Mir_number.RationalNumber)
     (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 
-let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
+let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
+    (module S) =
   match (sort, roundops) with
   | RegularFloat, RODefault -> (module FloatDefInterp)
   | RegularFloat, ROMulti -> (module FloatMultInterp)
@@ -1366,7 +1367,8 @@ let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
   | Rational, ROMulti -> (module RatMultInterp)
   | Rational, ROMainframe _ -> (module RatMfInterp)
 
-let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
+let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
+    unit =
   begin
     match sort with
     | MPFR prec -> Mpfr.set_default_prec prec
@@ -1387,7 +1389,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) :
+    (sort : Config.value_sort) (roundops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
@@ -1422,7 +1424,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   (varMap, anoSet)
 
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
+    (sort : Config.value_sort) (roundops : Config.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
   try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
   with Stop_instruction _ -> Undefined
