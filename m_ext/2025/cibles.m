@@ -1,6 +1,7 @@
 # compir
 
 espace_variables CORR : categorie saisie, calculee, base;
+espace_variables PRIM_COPIE : categorie saisie, calculee, base;
 espace_variables D2042 : categorie saisie;
 espace_variables D2042_ABAT : categorie saisie;
 espace_variables D2042_RECT : categorie saisie;

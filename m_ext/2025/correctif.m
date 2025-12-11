@@ -1,5 +1,8 @@
 # correctif
 
+AFF : const = 0;
+CPTOTO : calculee primrest = 0 : "";
+
 MAX_ID_EVT: calculee primrest = 0 : "" ;
 
 N_INDEFINIE : const = 0;
@@ -330,6 +333,37 @@ iterer
 )
 stop application;
 
+cible enchaine_calcul_corr_5:
+application: iliad;
+V_ACO_MTAP = 0;
+V_NEGACO = 0;
+si positif(AFF) alors
+  afficher_erreur "prout 0 " nom(GLOBAL.CPTOTO) " = " (GLOBAL.CPTOTO + 0) "\n";
+finsi
+nettoie_erreurs;
+calculer cible traite_double_liquidation_2;
+si positif(AFF) alors
+  afficher_erreur "prout 1 " nom(DEFRI) " = " (DEFRI) "\n";
+  afficher_erreur "prout 1 " nom(RIDEFRI) " = " (RIDEFRI) "\n";
+  afficher_erreur "prout 1 " nom(RED_1) " = " (RED_1) "\n";
+  afficher_erreur "prout 1 " nom(RREHAB_1) " = " (RREHAB_1) "\n";
+  afficher_erreur "prout 1 " nom(RRI1) " = " (RRI1) "\n";
+  afficher_erreur "prout 1 " nom(IDOM11) " = " (IDOM11) "\n";
+  afficher_erreur "prout 1 " nom(ID11) " = " (ID11) "\n";
+  afficher_erreur "prout 1 " nom(ITOTDOM1) " = " (ITOTDOM1) "\n";
+  afficher_erreur "prout 1 " nom(RI1) " = " (RI1) "\n";
+  afficher_erreur "prout 1 " nom(RNG) " = " (RNG) "\n";
+  afficher_erreur "prout 1 " nom(RBG1) " = " (RBG1) "\n";
+  afficher_erreur "prout 1 " nom(RG) " = " (RG) "\n";
+  afficher_erreur "prout 1 " nom(SHBA) " = " (SHBA) "\n";
+  afficher_erreur "prout ---\n";
+finsi
+GLOBAL.CPTOTO = GLOBAL.CPTOTO + 1;
+
+cible enchaine_calcul_prim_copie:
+application: iliad;
+calculer cible enchaine_calcul_corr_5 : espace PRIM_COPIE;
+
 cible enchaine_calcul_prim:
 application: iliad;
 si GLOBAL.V_IND_TRAIT = 4 alors
@@ -357,9 +391,7 @@ si CORR.V_IND_TRAIT = 1 alors
   calculer cible sauve_base_anterieure_cor_corr;
   calculer cible sauve_base_inr_inter22_corr;
 sinon
-  CORR.V_ACO_MTAP = 0;
-  CORR.V_NEGACO = 0;
-  calculer cible traite_double_liquidation_2_corr;
+  calculer cible enchaine_calcul_corr_5 : espace CORR;
 finsi
 
 cible enchaine_verification_prim:
@@ -706,7 +738,7 @@ finsi
 
 cible calcul_1731:
 application: iliad;
-calculer cible range_base_corr_corrige : espace GLOBAL;
+calculer cible range_base_corr_corrige;
 CORR.VARR30R32 = GLOBAL.ART1731_SOMME_R3032;
 CORR.VARR10 = GLOBAL.ART1731_PRESENT_R10;
 CORR.VARR30 = GLOBAL.ART1731_PRESENT_R30;
@@ -1597,6 +1629,9 @@ si GLOBAL.TL_D2042_INIT_NB > 0 alors
     CORR.IND_TL_MF = 1;
   finsi
   calculer cible init_1731;
+  si positif(AFF) alors
+    afficher_erreur "prout 000\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible sauve_base_tl_init_corr;
 finsi
@@ -1604,6 +1639,9 @@ si GLOBAL.TL_D2042_NB > 0 alors
   calculer cible reset_saisie_calc;
   calculer cible remplit_tgv_tl_d2042;
   calculer cible init_1731;
+  si positif(AFF) alors
+    afficher_erreur "prout 111\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible signaler_erreurs;
   calculer cible sauve_base_tl_corr;
@@ -1612,6 +1650,9 @@ si GLOBAL.TL_D2042_RECT_NB > 0 alors
   calculer cible reset_saisie_calc;
   calculer cible remplit_tgv_tl_d2042_rect;
   calculer cible init_1731;
+  si positif(AFF) alors
+    afficher_erreur "prout 222\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible signaler_erreurs;
   calculer cible sauve_base_tl_rect_corr;
@@ -2724,6 +2765,9 @@ si GLOBAL.MAJO_D2042_P_NB > 0 et NB_RAPPELS_P != 0 alors
   CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
   CORR.IND_RJLJ = GLOBAL.CORR_RJLJ;
   calculer cible init_1731;
+  si positif(AFF) alors
+    afficher_erreur "333\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible verif_calcul_corrective_corr;
   calculer cible signaler_erreurs;
@@ -3099,7 +3143,7 @@ si
 alors
   CORR.SOMMERI1731 = 1;
 finsi
-MONTANT = GLOBAL.champ_evenement(R, code) + 0;
+MONTANT = champ_evenement(R, code) + 0;
 si
   (positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C)
   et (positif(GLOBAL.RETARD) ou positif(GLOBAL.DEFAUT))
@@ -3113,14 +3157,14 @@ alors
     )
     ou champ_evenement(R, sens) = SENS_M
   alors
-    GLOBAL.champ_evenement(R, code) = champ_evenement(R, montant);
+    champ_evenement(R, code) = champ_evenement(R, montant);
   sinon_si champ_evenement(R, sens) = SENS_C et NATURE = N_CHARGE alors
     si MONTANT + champ_evenement(R, montant) >= 0 alors
-      GLOBAL.champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
+      champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
     finsi
   sinon_si champ_evenement(R, sens) = SENS_C et NATURE = N_REVENU alors
     si MONTANT - champ_evenement(R, montant) >= 0 alors
-      GLOBAL.champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
+      champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
     finsi
   finsi
 finsi
@@ -3135,7 +3179,7 @@ alors
   si NATURE = N_REVENU alors
     si champ_evenement(R, sens) dans (SENS_M, SENS_C) alors
       si MONTANT - champ_evenement(R, montant) >= 0 alors
-        GLOBAL.champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
+        champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
       finsi
     sinon_si
       champ_evenement(R, sens) = SENS_R
@@ -3148,11 +3192,11 @@ alors
         )
       )
     alors
-      GLOBAL.champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
+      champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
     finsi
   sinon_si NATURE = N_CHARGE alors
     si champ_evenement(R, sens) dans (SENS_M, SENS_C) alors
-      GLOBAL.champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
+      champ_evenement(R, code) = MONTANT + champ_evenement(R, montant);
     sinon_si
       champ_evenement(R, sens) = SENS_R
       et (
@@ -3167,7 +3211,7 @@ alors
       )
     alors
       si MONTANT - champ_evenement(R, montant) >= 0 alors
-        GLOBAL.champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
+        champ_evenement(R, code) = MONTANT - champ_evenement(R, montant);
       finsi
     finsi
   finsi
@@ -3228,62 +3272,68 @@ application: iliad;
 arguments: NUM_STRATE;
 variables_temporaires: NUM_EVT_PREMIER, IS_PREMIER, NUM_STRATE_COURANTE;
 NUM_EVT_PREMIER = champ_evenement(0, numero);
-restaurer
-: variable V
-: categorie *
-: espace GLOBAL
-: apres (
-  calculer cible empty_art1731;
-  si positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD) alors
-    iterer
-    : variable R
-    : entre 0..(nb_evenements() - 1) increment 1
-    : dans (
-      IS_PREMIER = (champ_evenement(R, numero) = NUM_EVT_PREMIER);
-      si positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C alors
-        IS_PREMIER = (positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C);
-        calculer cible prepare_1731_majo_aux : avec R, IS_PREMIER;
-      finsi
-    )
-  finsi
-  arranger_evenements
-  : trier R1, R2
-  : avec
-    si (champ_evenement(R1, strate) != -1 et champ_evenement(R2, strate) = -1) alors (1)
-    sinon (si (champ_evenement(R1, strate) = -1 et champ_evenement(R2, strate) != -1) alors (0)
-    sinon (si (champ_evenement(R1, strate) < champ_evenement(R2, strate)) alors (1)
-    sinon (si (champ_evenement(R1, strate) > champ_evenement(R2, strate)) alors (0)
-    sinon (si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
-    sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
-    sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
-    sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
-    sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
-  : dans (
-    iterer
-    : variable R
-    : entre 0..(nb_evenements() - 1) increment 1
-    : dans (
-      NUM_STRATE_COURANTE = champ_evenement(R, strate);
-      IS_PREMIER = champ_evenement(R, numero) = NUM_EVT_PREMIER;
-      si 
-        (
-          (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-          et non positif(IS_PREMIER)
-          et NUM_STRATE_COURANTE <= NUM_STRATE
-          et champ_evenement(R, sens) != SENS_C
-        )
-        ou (
-          non (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD))
-          et NUM_STRATE_COURANTE <= NUM_STRATE
-        )
-      alors
-        calculer cible prepare_1731_majo_aux : avec R, IS_PREMIER;
-      finsi
-    )
-  )
-  calculer cible enchaine_calcul_prim;
-  calculer cible calcul_1731;
+calculer cible empty_art1731;
+iterer : variable V : categorie * : espace PRIM_COPIE : dans (
+  V = GLOBAL.V;
 )
+si positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD) alors
+  iterer
+  : variable R
+  : entre 0..(nb_evenements() - 1) increment 1
+  : dans (
+    IS_PREMIER = (champ_evenement(R, numero) = NUM_EVT_PREMIER);
+    si positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C alors
+      IS_PREMIER = (positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C);
+      si positif(AFF) alors
+        afficher_erreur "prout majo_aux 0\n";
+      finsi
+      calculer cible prepare_1731_majo_aux : avec R, IS_PREMIER : espace PRIM_COPIE;
+    finsi
+  )
+finsi
+arranger_evenements
+: trier R1, R2
+: avec
+  si (champ_evenement(R1, strate) != -1 et champ_evenement(R2, strate) = -1) alors (1)
+  sinon (si (champ_evenement(R1, strate) = -1 et champ_evenement(R2, strate) != -1) alors (0)
+  sinon (si (champ_evenement(R1, strate) < champ_evenement(R2, strate)) alors (1)
+  sinon (si (champ_evenement(R1, strate) > champ_evenement(R2, strate)) alors (0)
+  sinon (si (champ_evenement(R1, numero) < champ_evenement(R2, numero)) alors (1)
+  sinon (si (champ_evenement(R1, numero) > champ_evenement(R2, numero)) alors (0)
+  sinon (si (champ_evenement(R1, rappel) < champ_evenement(R2, rappel)) alors (1)
+  sinon (si (champ_evenement(R1, rappel) > champ_evenement(R2, rappel)) alors (0)
+  sinon (1) finsi) finsi) finsi) finsi) finsi) finsi) finsi) finsi
+: dans (
+  iterer
+  : variable R
+  : entre 0..(nb_evenements() - 1) increment 1
+  : dans (
+    NUM_STRATE_COURANTE = champ_evenement(R, strate);
+    IS_PREMIER = champ_evenement(R, numero) = NUM_EVT_PREMIER;
+    si positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD) alors
+      si
+        non positif(IS_PREMIER)
+        et NUM_STRATE_COURANTE <= NUM_STRATE
+        et champ_evenement(R, sens) != SENS_C
+      alors
+        si positif(AFF) alors
+          afficher_erreur "prout majo_aux 1\n";
+        finsi
+        calculer cible prepare_1731_majo_aux : espace PRIM_COPIE : avec R, IS_PREMIER;
+      finsi
+    sinon_si NUM_STRATE_COURANTE <= NUM_STRATE alors
+      si positif(AFF) alors
+        afficher_erreur "prout majo_aux 2\n";
+      finsi
+      calculer cible prepare_1731_majo_aux : espace PRIM_COPIE : avec R, IS_PREMIER;
+    finsi
+  )
+)
+si positif(AFF) alors
+  afficher_erreur "prout PRIM_COPIE MAJO\n";
+finsi
+calculer cible enchaine_calcul_prim_copie;
+calculer cible calcul_1731 : espace PRIM_COPIE;
 
 cible calcul_inr_aux:
 application: iliad;
@@ -3380,6 +3430,9 @@ CORR.NBMOISI = GLOBAL.INR_NB_MOIS;
 CORR.NBMOISI2 = GLOBAL.INR_NB_MOIS2;
 CORR.NBMOIS2ISF = 0;
 CORR.FLAG_INR = FLG_INR;
+si positif(AFF) alors
+  afficher_erreur "prout 444\n";
+finsi
 calculer cible enchaine_calcul_corr;
 calculer cible signaler_erreurs;
 
@@ -3636,6 +3689,13 @@ RESULTAT = (
   )
 );
 
+cible est_rappel_2A5:
+application: iliad;
+arguments: RESULTAT, R;
+RESULTAT = (
+  champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55)
+);
+
 cible is_code_rappel_13:
 application: iliad;
 arguments: RESULTAT, R, INDICE_EVT, IS_PREMIER;
@@ -3650,6 +3710,9 @@ RESULTAT = (
     et non positif(EST_SF_NAISS)
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 13 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_12:
 application: iliad;
@@ -3669,6 +3732,9 @@ RESULTAT = (
     et champ_evenement(R, penalite) = 24
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 12 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_11:
 application: iliad;
@@ -3703,13 +3769,18 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 11 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_10:
 application: iliad;
 arguments: RESULTAT, R, INDICE_EVT, IS_PREMIER;
-variables_temporaires: HAS_C22R02, NOT_8_11;
+variables_temporaires: NATURE, RAPPEL_2A5, NOT_8_11, TROUVE_C22R02;
+calculer cible get_nature : avec NATURE, champ_evenement(R, code);
+calculer cible est_rappel_2A5 : avec RAPPEL_2A5, R;
 calculer cible is_def_ret_not_8_11 : avec NOT_8_11, R;
-calculer cible recherche_C22R02 : avec HAS_C22R02, INDICE_EVT;
+calculer cible recherche_C22R02 : avec TROUVE_C22R02, INDICE_EVT;
 RESULTAT = (
   positif(NOT_8_11)
   ou (
@@ -3720,24 +3791,30 @@ RESULTAT = (
           (positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD)) et positif(IS_PREMIER)
         )
         et champ_evenement(R, sens) = SENS_R
+        et positif(RAPPEL_2A5)
         et (
-          # is_rappel_2A5
-          champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55)
+          NATURE = N_REVENU
+          ou (NATURE = N_CHARGE et champ_evenement(R, penalite) = 2)
         )
       )
       ou (
-        positif(HAS_C22R02)
+        positif(TROUVE_C22R02)
         et champ_evenement(R, sens) dans (SENS_R, SENS_C)
         et champ_evenement(R, penalite) dans (22, 24)
       )
     )
   )
 );
+si AFF alors
+  afficher_erreur "prout code rappel 10 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_09:
 application: iliad;
 arguments: RESULTAT, R, INDICE_EVT, IS_PREMIER;
-variables_temporaires: NOT_8_11;
+variables_temporaires: NATURE, RAPPEL_2A5, NOT_8_11;
+calculer cible get_nature : avec NATURE, champ_evenement(R, code);
+calculer cible est_rappel_2A5 : avec RAPPEL_2A5, R;
 calculer cible is_def_ret_not_8_11 : avec NOT_8_11, R;
 RESULTAT = (
   positif(NOT_8_11)
@@ -3745,23 +3822,25 @@ RESULTAT = (
     non (attribut(champ_evenement(R, code), categorie_TL) dans (10, 15))
     et (
       (
-        champ_evenement(R, sens) = SENS_C
+        champ_evenement(R, sens) dans (SENS_R, SENS_C)
         et champ_evenement(R, penalite) dans (22, 24)
       )
-      ou (
+      ou
+      (
         champ_evenement(R, sens) = SENS_R
-        et champ_evenement(R, penalite) dans (22, 24)
-      )
-      ou (
-        champ_evenement(R, sens) = SENS_R
-        et (
-          # is_rappel_2A5
-          champ_evenement(R, penalite) dans (2, 3, 4, 5, 30, 32, 35, 55)
+        et positif(RAPPEL_2A5)
+        et
+        (
+          NATURE = N_REVENU
+          ou (NATURE = N_CHARGE et champ_evenement(R, penalite) = 2)
         )
       )
     )
   )
 );
+si AFF alors
+  afficher_erreur "prout code rappel 9 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_08:
 application: iliad;
@@ -3782,6 +3861,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 8 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_07:
 application: iliad;
@@ -3802,6 +3884,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 7 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_06:
 application: iliad;
@@ -3824,6 +3909,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 6 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_05:
 application: iliad;
@@ -3841,6 +3929,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 5 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_04:
 application: iliad;
@@ -3901,6 +3992,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 4 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_03:
 application: iliad;
@@ -3920,6 +4014,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 3 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_02:
 application: iliad;
@@ -3953,6 +4050,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 2 = " (RESULTAT) "\n";
+finsi
 
 cible is_code_rappel_01:
 application: iliad;
@@ -3988,6 +4088,9 @@ RESULTAT = (
     )
   )
 );
+si positif(AFF) alors
+  afficher_erreur "prout code rappel 1 = " (RESULTAT) "\n";
+finsi
 
 cible prepare_1731_inr:
 application: iliad;
@@ -4002,48 +4105,52 @@ iterer
   finsi
 )
 NUM_EVT_PREMIER = champ_evenement(0, numero);
-restaurer : variable V : categorie * : espace GLOBAL : apres (
-  calculer cible empty_art1731;
-  iterer
-  : variable R
-  : entre 0..(nb_evenements() - 1) increment 1
-  : dans (
-    si champ_evenement(R, numero) <= NUM_PREM_RAPPEL_EVT alors
-      PREM_EVT = (champ_evenement(R, numero) = NUM_EVT_PREMIER);
-      IS_CODE = 0;
-      MAJ_TGV_COPIE = 0;
-      calculer cible is_code_rappel_13 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 13 et positif(IS_CODE)));
-      calculer cible is_code_rappel_12 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 12 et positif(IS_CODE)));
-      calculer cible is_code_rappel_11 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 11 et positif(IS_CODE)));
-      calculer cible is_code_rappel_10 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 10 et positif(IS_CODE)));
-      calculer cible is_code_rappel_09 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 9 et positif(IS_CODE)));
-      calculer cible is_code_rappel_08 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 8 et positif(IS_CODE)));
-      calculer cible is_code_rappel_07 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 7 et positif(IS_CODE)));
-      calculer cible is_code_rappel_06 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 6 et positif(IS_CODE)));
-      calculer cible is_code_rappel_05 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 5 et positif(IS_CODE)));
-      calculer cible is_code_rappel_04 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 4 et positif(IS_CODE)));
-      calculer cible is_code_rappel_03 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 3 et positif(IS_CODE)));
-      calculer cible is_code_rappel_02 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 2 et positif(IS_CODE)));
-      calculer cible is_code_rappel_01 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
-      MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 1 et positif(IS_CODE)));
-      calculer cible prepare_1731_aux : avec R, PREM_EVT, MAJ_TGV_COPIE;
-    finsi
-  )
-  calculer cible enchaine_calcul_prim;
-  calculer cible calcul_1731;
+calculer cible empty_art1731;
+iterer : variable V : categorie * : espace PRIM_COPIE : dans (
+  V = GLOBAL.V;
 )
+iterer
+: variable R
+: entre 0..(nb_evenements() - 1) increment 1
+: dans (
+  si champ_evenement(R, numero) <= NUM_PREM_RAPPEL_EVT alors
+    PREM_EVT = (champ_evenement(R, numero) = NUM_EVT_PREMIER);
+    IS_CODE = 0;
+    MAJ_TGV_COPIE = 0;
+    calculer cible is_code_rappel_13 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 13 et positif(IS_CODE)));
+    calculer cible is_code_rappel_12 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 12 et positif(IS_CODE)));
+    calculer cible is_code_rappel_11 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 11 et positif(IS_CODE)));
+    calculer cible is_code_rappel_10 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 10 et positif(IS_CODE)));
+    calculer cible is_code_rappel_09 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 9 et positif(IS_CODE)));
+    calculer cible is_code_rappel_08 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 8 et positif(IS_CODE)));
+    calculer cible is_code_rappel_07 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 7 et positif(IS_CODE)));
+    calculer cible is_code_rappel_06 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 6 et positif(IS_CODE)));
+    calculer cible is_code_rappel_05 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 5 et positif(IS_CODE)));
+    calculer cible is_code_rappel_04 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 4 et positif(IS_CODE)));
+    calculer cible is_code_rappel_03 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 3 et positif(IS_CODE)));
+    calculer cible is_code_rappel_02 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 2 et positif(IS_CODE)));
+    calculer cible is_code_rappel_01 : avec IS_CODE, R, INDICE_EVT, IS_PREMIER;
+    MAJ_TGV_COPIE = (positif(MAJ_TGV_COPIE) ou (CAS_INR >= 1 et positif(IS_CODE)));
+    calculer cible prepare_1731_aux : avec R, PREM_EVT, MAJ_TGV_COPIE : espace PRIM_COPIE;
+  finsi
+)
+si positif(AFF) alors
+  afficher_erreur "prout PRIM_COPIE INR\n";
+finsi
+calculer cible enchaine_calcul_prim_copie;
+calculer cible calcul_1731 : espace PRIM_COPIE;
 
 cible calcul_inr:
 application: iliad;
@@ -4701,6 +4808,9 @@ alors
   finsi
   calculer cible init_1731;
   calculer cible prepare_1731_majo : avec PROCHAINE_STRATE;
+  si positif(AFF) alors
+    afficher_erreur "555\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   si NUM_STRATE = GLOBAL.NB_STRATES - 1 alors
     calculer cible verif_calcul_corrective_corr;
@@ -4752,6 +4862,9 @@ si GLOBAL.D2042_NB > 0 alors
   calculer cible detecte_penalites;
   calculer cible enchaine_verification_corr;
   calculer cible signaler_erreurs;
+  si positif(AFF) alors
+    afficher_erreur "666\n";
+  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible verif_calcul_corrective_corr;
   calculer cible signaler_erreurs;
@@ -4773,6 +4886,9 @@ si non positif(GLOBAL.RETARD) alors
   calculer cible clear_majo_str_tr;
 finsi
 calculer cible remplit_tgv_d2042_rect;
+si positif(AFF) alors
+  afficher_erreur "777\n";
+finsi
 calculer cible enchaine_calcul_corr;
 si present(CORR.IRBASE) alors
   CORR.IRBASE2042_FIC = CORR.IRBASE;
