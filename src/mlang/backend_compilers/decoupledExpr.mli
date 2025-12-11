@@ -155,10 +155,7 @@ val build_expression :
 val format_local_declarations : Format.formatter -> local_decls -> unit
 
 val format_assign :
-  Config.Dgfip_options.flags -> string -> Format.formatter -> t -> unit
+  Dgfip_options.flags -> string -> Format.formatter -> t -> unit
 
 val format_set_vars :
-  Config.Dgfip_options.flags ->
-  Format.formatter ->
-  (dflag * string * t) list ->
-  unit
+  Dgfip_options.flags -> Format.formatter -> (dflag * string * t) list -> unit

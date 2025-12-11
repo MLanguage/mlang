@@ -23,33 +23,11 @@ open Mlexer
 
 exception Exit
 
-let process_dgfip_options (backend : Config.backend)
-    ~(application_names : string list) (dgfip_options : string list option) =
-  match backend with
-  | Dgfip_c -> begin
-      match dgfip_options with
-      | None ->
-          Cli.error_print
-            "when using the DGFiP backend, DGFiP options MUST be provided";
-          raise Exit
-      | Some options -> begin
-          match
-            Dgfip_options.process_dgfip_options ~application_names options
-          with
-          | None ->
-              Cli.error_print "parsing of DGFiP options failed, aborting";
-              raise Exit
-          | Some flags -> flags
-        end
-    end
-  | UnknownBackend -> Config.Dgfip_options.default_flags
-
 (* The legacy compiler plays a nasty trick on us, that we have to reproduce:
    rule 1 is modified to add assignments to APPLI_XXX variables according to the
    target application (OCEANS, BATCH and ILIAD). *)
-let patch_rule_1 (backend : Config.backend)
-    (dgfip_flags : Config.Dgfip_options.flags) (program : Mast.program) :
-    Mast.program =
+let patch_rule_1 (backend : Config.backend) (dgfip_flags : Dgfip_options.flags)
+    (program : Mast.program) : Mast.program =
   let open Mast in
   let var_exists name =
     List.exists
@@ -152,84 +130,6 @@ let parse () =
   finish "completed!";
   m_program
 
-(** Entry function for the executable. Returns a negative number in case of
-    error. *)
-
-let set_opts (files : string list) (application_names : string list)
-    (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
-    (display_time : bool) (print_cycles : bool) (backend : string option)
-    (output : string option) (run_tests : string option)
-    (dgfip_test_filter : bool) (run_test : string option)
-    (mpp_function : string) (optimize_unsafe_float : bool)
-    (precision : string option) (roundops : string option)
-    (comparison_error_margin : float option) (income_year : int)
-    (m_clean_calls : bool) (dgfip_options : string list option) =
-  let value_sort =
-    let precision = Option.get precision in
-    if precision = "double" then Config.RegularFloat
-    else
-      let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
-      if Re.Pcre.pmatch ~rex:mpfr_regex precision then
-        let mpfr_prec =
-          Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1
-        in
-        Config.MPFR (int_of_string mpfr_prec)
-      else if precision = "interval" then Config.Interval
-      else
-        let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:bigint_regex precision then
-          let fixpoint_prec =
-            Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
-          in
-          Config.BigInt (int_of_string fixpoint_prec)
-        else if precision = "mpq" then Config.Rational
-        else
-          Errors.raise_error
-            (Format.asprintf "Unkown precision option: %s" precision)
-  in
-  let round_ops =
-    match roundops with
-    | Some "default" -> Config.RODefault
-    | Some "multi" -> Config.ROMulti
-    | Some roundops ->
-        let mf_regex = Re.Pcre.regexp "^mainframe(\\d+)$" in
-        if Re.Pcre.pmatch ~rex:mf_regex roundops then
-          let mf_long_size =
-            Re.Pcre.get_substring (Re.Pcre.exec ~rex:mf_regex roundops) 1
-          in
-          match int_of_string mf_long_size with
-          | (32 | 64) as sz -> Config.ROMainframe sz
-          | _ ->
-              Errors.raise_error
-                (Format.asprintf "Invalid long size for mainframe: %s"
-                   mf_long_size)
-        else
-          Errors.raise_error
-            (Format.asprintf "Unknown roundops option: %s" roundops)
-    | None -> Errors.raise_error @@ Format.asprintf "Unspecified roundops@."
-  in
-  let backend =
-    match backend with Some "dgfip_c" -> Config.Dgfip_c | _ -> UnknownBackend
-  in
-  let execution_mode =
-    match (run_tests, run_test) with
-    | Some s, _ -> Config.MultipleTests s
-    | None, Some s -> Config.SingleTest s
-    | None, None -> Config.Extraction
-  in
-  let files =
-    match List.length files with
-    | 0 -> Errors.raise_error "please provide at least one M source file"
-    | _ -> Config.NonEmpty files
-  in
-  let dgfip_flags =
-    process_dgfip_options backend ~application_names dgfip_options
-  in
-  Config.set_all_arg_refs files application_names without_dgfip_m debug
-    var_info_debug display_time print_cycles output optimize_unsafe_float
-    m_clean_calls comparison_error_margin income_year value_sort round_ops
-    backend dgfip_test_filter mpp_function dgfip_flags execution_mode
-
 let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;
   Test_interpreter.check_one_test m_program test !Config.value_sort
@@ -277,8 +177,38 @@ let driver () =
     (match kont with None -> () | Some kont -> kont ());
     raise e
 
-let main () =
-  let opt_code =
-    Cmdliner.Cmd.eval @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t set_opts)
+let set_opts (files : string list) (application_names : string list)
+    (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
+    (display_time : bool) (print_cycles : bool) (backend : string option)
+    (output : string option) (run_tests : string option)
+    (dgfip_test_filter : bool) (run_test : string option)
+    (mpp_function : string option) (optimize_unsafe_float : bool)
+    (precision : string option) (roundops : string option)
+    (comparison_error_margin : float option) (income_year : int)
+    (m_clean_calls : bool) (dgfip_options : string list option) =
+  Config.set_opts ~files ~application_names ~without_dgfip_m ~debug
+    ~var_info_debug ~display_time ~print_cycles ~backend ~output ~run_tests
+    ~dgfip_test_filter ~run_test ~mpp_function ~optimize_unsafe_float ~precision
+    ~roundops ~comparison_error_margin ~income_year ~m_clean_calls
+    ~dgfip_options
+
+let run () =
+  let eval_cli =
+    Cmdliner.Cmd.eval_value @@ Cmdliner.Cmd.v Cli.info (Cli.mlang_t set_opts)
   in
-  match opt_code with 0 -> driver () | i -> exit i
+  match eval_cli with
+  | Ok `Help | Ok `Version | Ok (`Ok `Displayed_dgfip_help) -> ()
+  | Ok (`Ok `Run) -> driver ()
+  | Ok (`Ok (`Error m)) -> Errors.raise_error m
+  | Error `Exn ->
+      Errors.raise_error
+        "Uncaught exception while reading command line arguments"
+  | Error `Parse -> Errors.raise_error "Parsing command line arguments failed"
+  | Error `Term -> Errors.raise_error "Term evaluation error"
+
+let main () =
+  try run ()
+  with Errors.StructuredError (msg, pos_list, kont) as e ->
+    Cli.error_print "%a" Errors.format_structured_error (msg, pos_list);
+    (match kont with None -> () | Some kont -> kont ());
+    raise e
