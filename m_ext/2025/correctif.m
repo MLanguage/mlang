@@ -333,29 +333,51 @@ iterer
 )
 stop application;
 
+cible aff:
+application: iliad;
+arguments: VAR;
+si positif(AFF) alors
+  afficher_erreur "prout " nom(VAR) " = " (VAR) "\n";
+finsi
+
 cible enchaine_calcul_corr_5:
 application: iliad;
 V_ACO_MTAP = 0;
 V_NEGACO = 0;
 si positif(AFF) alors
   afficher_erreur "prout 0 " nom(GLOBAL.CPTOTO) " = " (GLOBAL.CPTOTO + 0) "\n";
+  calculer cible aff : avec TL_MF;
+  calculer cible aff : avec MFIR;
+  calculer cible aff : avec FLAG_RETARD;
+  calculer cible aff : avec FLAG_DEFAUT;
+  calculer cible aff : avec PASS_TLIR;
+  calculer cible aff : avec NUM_IR_TL;
+  calculer cible aff : avec DEN_IR_TL;
+  calculer cible aff : avec RAP_RNI;
+  calculer cible aff : avec RAP_EFF;
+  calculer cible aff : avec RAP_PVQ;
+  calculer cible aff : avec RAP_PV;
+  calculer cible aff : avec RAP_RI;
+  calculer cible aff : avec RAP_CI;
+
+  afficher_erreur "prout\n";
 finsi
 nettoie_erreurs;
 calculer cible traite_double_liquidation_2;
 si positif(AFF) alors
-  afficher_erreur "prout 1 " nom(DEFRI) " = " (DEFRI) "\n";
-  afficher_erreur "prout 1 " nom(RIDEFRI) " = " (RIDEFRI) "\n";
-  afficher_erreur "prout 1 " nom(RED_1) " = " (RED_1) "\n";
-  afficher_erreur "prout 1 " nom(RREHAB_1) " = " (RREHAB_1) "\n";
-  afficher_erreur "prout 1 " nom(RRI1) " = " (RRI1) "\n";
-  afficher_erreur "prout 1 " nom(IDOM11) " = " (IDOM11) "\n";
-  afficher_erreur "prout 1 " nom(ID11) " = " (ID11) "\n";
-  afficher_erreur "prout 1 " nom(ITOTDOM1) " = " (ITOTDOM1) "\n";
-  afficher_erreur "prout 1 " nom(RI1) " = " (RI1) "\n";
-  afficher_erreur "prout 1 " nom(RNG) " = " (RNG) "\n";
-  afficher_erreur "prout 1 " nom(RBG1) " = " (RBG1) "\n";
-  afficher_erreur "prout 1 " nom(RG) " = " (RG) "\n";
-  afficher_erreur "prout 1 " nom(SHBA) " = " (SHBA) "\n";
+  calculer cible aff : avec TL_MF;
+  calculer cible aff : avec MFIR;
+  calculer cible aff : avec FLAG_RETARD;
+  calculer cible aff : avec FLAG_DEFAUT;
+  calculer cible aff : avec PASS_TLIR;
+  calculer cible aff : avec NUM_IR_TL;
+  calculer cible aff : avec DEN_IR_TL;
+  calculer cible aff : avec RAP_RNI;
+  calculer cible aff : avec RAP_EFF;
+  calculer cible aff : avec RAP_PVQ;
+  calculer cible aff : avec RAP_PV;
+  calculer cible aff : avec RAP_RI;
+  calculer cible aff : avec RAP_CI;
   afficher_erreur "prout ---\n";
 finsi
 GLOBAL.CPTOTO = GLOBAL.CPTOTO + 1;
@@ -1628,12 +1650,16 @@ si GLOBAL.TL_D2042_INIT_NB > 0 alors
   si GLOBAL.TL_NON_ACQUISE != TL_TL_ACQUISE alors
     CORR.IND_TL_MF = 1;
   finsi
+calculer cible aff : avec GLOBAL.TL_NON_ACQUISE;
+calculer cible aff : avec CORR.IND_TL_MF;
   calculer cible init_1731;
   si positif(AFF) alors
     afficher_erreur "prout 000\n";
   finsi
   calculer cible enchaine_calcul_corr;
+calculer cible aff : avec CORR.TL_MF;
   calculer cible sauve_base_tl_init_corr;
+calculer cible aff : avec CORR.TL_MF;
 finsi
 si GLOBAL.TL_D2042_NB > 0 alors
   calculer cible reset_saisie_calc;
@@ -1931,24 +1957,27 @@ iterer
       champ_evenement(R, sens) != SENS_P
       et non (champ_evenement(R, penalite) dans (0, 2, 22, 24, 99))
     alors
-      MONTANT_RECT = present(D2042_RECT.champ_evenement(R, code));
+      MONTANT_RECT = D2042_RECT.champ_evenement(R, code) + 0;
       calculer cible get_nature : avec NATURE, champ_evenement(R, code);
       si NATURE = N_CHARGE alors
-        MONTANT = present(D2042.champ_evenement(R, code));
-        si inf(MONTANT_RECT) < inf (MONTANT) alors
+        MONTANT = D2042.champ_evenement(R, code) + 0;
+        si MONTANT_RECT < MONTANT alors
           MF_DEF = 1;
-        sinon_si inf(MONTANT_RECT) = 0 alors
+        sinon_si MONTANT_RECT = 0 alors
           MF_DEF = -1;
         finsi
       sinon_si NATURE = N_REVENU alors
         MONTANT = 0;
-        si inf(MONTANT_RECT) > inf(MONTANT) alors
+        si MONTANT_RECT > MONTANT alors
           MF_DEF = 1;
-        sinon_si inf (MONTANT_RECT) = 0 alors
+        sinon_si MONTANT_RECT = 0 alors
           MF_DEF = -1;
         finsi
       finsi
     finsi
+si positif(AFF) alors
+  afficher_erreur "prout MF_DEF = " (MF_DEF) "\n";
+finsi
     si MF_DEF != 0 alors
       calculer cible alias_commence_par_7 : avec COMMENCE_PAR_7, champ_evenement(R, code);
       calculer cible alias_commence_par_H : avec COMMENCE_PAR_H, champ_evenement(R, code);
@@ -1974,58 +2003,58 @@ iterer
         GLOBAL.TL_MF_MFIFI = GLOBAL.TL_MF_MFIFI + MF_DEF;
       sinon
         aiguillage (attribut(champ_evenement(R, code), cotsoc)) : (
+          cas 1:
+            GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+            GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+            GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+            GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
           cas 2: GLOBAL.TL_MF_MFCDIS = GLOBAL.TL_MF_MFCDIS + MF_DEF;
-	  cas 3: GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
-	  cas 4: GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
-	  cas 5: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-	  cas 6: GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
-	  cas 7: GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
-	  cas 8: GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
-	  cas 9: GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
-	  cas 10 :
-	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-	  cas 11:
-	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 12:
-	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 13:
-	    GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 14:
-	    GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 16: GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
-	  cas 17: GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-	  cas 18:
-	    GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
-	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	    GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
-	  cas 19:
-	    GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 20:
-	    GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
-	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 21:
-	    GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
-	    GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 22:
-	    GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	  cas 1:
-	    GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
-	    GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
-	    GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
-	    GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
-	    GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+          cas 3: GLOBAL.TL_MF_MFTAXAGA = GLOBAL.TL_MF_MFTAXAGA + MF_DEF;
+          cas 4: GLOBAL.TL_MF_MFCSAL = GLOBAL.TL_MF_MFCSAL + MF_DEF;
+          cas 5: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+          cas 6: GLOBAL.TL_MF_MFGAIN = GLOBAL.TL_MF_MFGAIN + MF_DEF;
+          cas 7: GLOBAL.TL_MF_MFREGV = GLOBAL.TL_MF_MFREGV + MF_DEF;
+          cas 8: GLOBAL.TL_MF_MFCHR = GLOBAL.TL_MF_MFCHR + MF_DEF;
+          cas 9: GLOBAL.TL_MF_MFPCAP = GLOBAL.TL_MF_MFPCAP + MF_DEF;
+          cas 10 :
+            GLOBAL.TL_MF_MFCS = GLOBAL.TL_MF_MFCS + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+            GLOBAL.TL_MF_MFPS = GLOBAL.TL_MF_MFPS + MF_DEF;
+            GLOBAL.TL_MF_MFPSOL = GLOBAL.TL_MF_MFPSOL + MF_DEF;
+          cas 11:
+            GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 12:
+            GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 13:
+            GLOBAL.TL_MF_MFRSE3 = GLOBAL.TL_MF_MFRSE3 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 14:
+            GLOBAL.TL_MF_MFRSE4 = GLOBAL.TL_MF_MFRSE4 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 16: GLOBAL.TL_MF_MFLOY = GLOBAL.TL_MF_MFLOY + MF_DEF;
+          cas 17: GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+          cas 18:
+            GLOBAL.TL_MF_MFGLO = GLOBAL.TL_MF_MFGLO + MF_DEF;
+            GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+            GLOBAL.TL_MF_MFCVN = GLOBAL.TL_MF_MFCVN + MF_DEF;
+          cas 19:
+            GLOBAL.TL_MF_MFRSE5 = GLOBAL.TL_MF_MFRSE5 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 20:
+            GLOBAL.TL_MF_MFRSE1 = GLOBAL.TL_MF_MFRSE1 + MF_DEF;
+            GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 21:
+            GLOBAL.TL_MF_MFRSE2 = GLOBAL.TL_MF_MFRSE2 + MF_DEF;
+            GLOBAL.TL_MF_MFRSE6 = GLOBAL.TL_MF_MFRSE6 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
+          cas 22:
+            GLOBAL.TL_MF_MFRSE7 = GLOBAL.TL_MF_MFRSE7 + MF_DEF;
+            GLOBAL.TL_MF_MFRD = GLOBAL.TL_MF_MFRD + MF_DEF;
           par_defaut: GLOBAL.TL_MF_MFIR = GLOBAL.TL_MF_MFIR + MF_DEF;
         )
       finsi
@@ -3221,7 +3250,14 @@ cible prepare_1731_aux:
 application: iliad;
 arguments: R, IS_PREMIER, MAJ_TGV_COPIE;
 si positif(MAJ_TGV_COPIE) alors
+  si positif(AFF) alors
+    afficher_erreur "prout 0 set_rappel\n";
+    afficher_erreur "prout 0 " alias(champ_evenement(R, code)) " = " (champ_evenement(R, code)) "\n";
+  finsi
   calculer cible set_rappel_1731bis : avec R, IS_PREMIER;
+  si positif(AFF) alors
+    afficher_erreur "prout 1 " alias(champ_evenement(R, code)) " = " (champ_evenement(R, code)) "\n";
+  finsi
 finsi
 si champ_evenement(R, penalite) = 30 alors
   si champ_evenement(R, sens) != SENS_R alors
@@ -3248,21 +3284,12 @@ finsi
 cible prepare_1731_majo_aux:
 application: iliad;
 arguments: R, IS_PREMIER;
-variables_temporaires: NATURE, MAJ_TGV_COPIE;
-calculer cible get_nature : avec NATURE, champ_evenement(R, code);
+variables_temporaires: MAJ_TGV_COPIE;
 MAJ_TGV_COPIE = (
   champ_evenement(R, sens) dans (SENS_M, SENS_C)
   ou (
     champ_evenement(R, sens) = SENS_R
     et champ_evenement(R, penalite) dans (1, 2, 7, 10, 17, 18, 22, 24, 99)
-  )
-  ou (
-    NATURE = N_CHARGE
-    et champ_evenement(R, sens) = SENS_R
-    et champ_evenement(R, penalite) dans (
-      1, 2, 7, 10, 17, 18, 22, 24, 99, 3,
-      4, 5, 6, 8, 11, 30, 31, 32, 35, 55
-    )
   )
 );
 calculer cible prepare_1731_aux : avec R, IS_PREMIER, MAJ_TGV_COPIE;
@@ -3441,23 +3468,21 @@ application: iliad;
 arguments: IS_PREMIER, INDICE_EVT;
 variables_temporaires: F_TRAITEMENT, MAJ0, MAJ1, MAJ2, MAJ3;
 calculer cible mauvaise_foi : avec INDICE_EVT;
-GLOBAL.TL_MF_MFCDIS = si (GLOBAL.TL_MF_MFCDIS > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFIR = si (GLOBAL.TL_MF_MFIR > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFCS = si (GLOBAL.TL_MF_MFCS > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFRD = si (GLOBAL.TL_MF_MFRD > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFPS = si (GLOBAL.TL_MF_MFPS > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFPSOL = si (GLOBAL.TL_MF_MFPSOL > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFTAXAGA = si (GLOBAL.TL_MF_MFTAXAGA > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFPCAP = si (GLOBAL.TL_MF_MFPCAP > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFLOY = si (GLOBAL.TL_MF_MFLOY > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFGLO = si (GLOBAL.TL_MF_MFGLO > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFCHR = si (GLOBAL.TL_MF_MFCHR > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFCHR7 = si (GLOBAL.TL_MF_MFCHR7 > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFCS = si (GLOBAL.TL_MF_MFCS > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFCSAL = si (GLOBAL.TL_MF_MFCSAL > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFCVN = si (GLOBAL.TL_MF_MFCVN > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFGAIN = si (GLOBAL.TL_MF_MFGAIN > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFGLO = si (GLOBAL.TL_MF_MFGLO > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFIFI = si (GLOBAL.TL_MF_MFIFI > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFIR = si (GLOBAL.TL_MF_MFIR > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFLOY = si (GLOBAL.TL_MF_MFLOY > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFMCSG820 = si (GLOBAL.TL_MF_MFMCSG820 > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFPCAP = si (GLOBAL.TL_MF_MFPCAP > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFPS = si (GLOBAL.TL_MF_MFPS > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFPSOL = si (GLOBAL.TL_MF_MFPSOL > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFRD = si (GLOBAL.TL_MF_MFRD > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFREGV = si (GLOBAL.TL_MF_MFREGV > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFCDIS = si (GLOBAL.TL_MF_MFCDIS > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE1 = si (GLOBAL.TL_MF_MFRSE1 > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE2 = si (GLOBAL.TL_MF_MFRSE2 > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE3 = si (GLOBAL.TL_MF_MFRSE3 > 0) alors (1) sinon (0) finsi;
@@ -3465,17 +3490,35 @@ GLOBAL.TL_MF_MFRSE4 = si (GLOBAL.TL_MF_MFRSE4 > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE5 = si (GLOBAL.TL_MF_MFRSE5 > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE6 = si (GLOBAL.TL_MF_MFRSE6 > 0) alors (1) sinon (0) finsi;
 GLOBAL.TL_MF_MFRSE7 = si (GLOBAL.TL_MF_MFRSE7 > 0) alors (1) sinon (0) finsi;
-GLOBAL.TL_MF_MFTAXAGA = si (GLOBAL.TL_MF_MFTAXAGA > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFIFI = si (GLOBAL.TL_MF_MFIFI > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFMCSG820 = si (GLOBAL.TL_MF_MFMCSG820 > 0) alors (1) sinon (0) finsi;
+GLOBAL.TL_MF_MFREGV = si (GLOBAL.TL_MF_MFREGV > 0) alors (1) sinon (0) finsi;
 si
-  GLOBAL.TL_MF_MFCDIS > 0 ou GLOBAL.TL_MF_MFCHR > 0 ou GLOBAL.TL_MF_MFCHR7 > 0
-  ou GLOBAL.TL_MF_MFCS > 0 ou GLOBAL.TL_MF_MFCSAL > 0 ou GLOBAL.TL_MF_MFCVN > 0
-  ou GLOBAL.TL_MF_MFGAIN > 0 ou GLOBAL.TL_MF_MFGLO > 0 ou GLOBAL.TL_MF_MFIFI > 0
-  ou GLOBAL.TL_MF_MFIR > 0 ou GLOBAL.TL_MF_MFLOY > 0 ou GLOBAL.TL_MF_MFMCSG820 > 0
-  ou GLOBAL.TL_MF_MFPCAP > 0 ou GLOBAL.TL_MF_MFPS > 0 ou GLOBAL.TL_MF_MFPSOL > 0
-  ou GLOBAL.TL_MF_MFRD > 0 ou GLOBAL.TL_MF_MFREGV > 0 ou GLOBAL.TL_MF_MFRSE1 > 0
-  ou GLOBAL.TL_MF_MFRSE2 > 0 ou GLOBAL.TL_MF_MFRSE3 > 0 ou GLOBAL.TL_MF_MFRSE4 > 0
-  ou GLOBAL.TL_MF_MFRSE5 > 0 ou GLOBAL.TL_MF_MFRSE6 > 0 ou GLOBAL.TL_MF_MFRSE7 > 0
+  GLOBAL.TL_MF_MFIR > 0
+  ou GLOBAL.TL_MF_MFCS > 0
+  ou GLOBAL.TL_MF_MFRD > 0
+  ou GLOBAL.TL_MF_MFPS > 0
+  ou GLOBAL.TL_MF_MFPSOL > 0
   ou GLOBAL.TL_MF_MFTAXAGA > 0
+  ou GLOBAL.TL_MF_MFPCAP > 0
+  ou GLOBAL.TL_MF_MFLOY > 0 
+  ou GLOBAL.TL_MF_MFGLO > 0
+  ou GLOBAL.TL_MF_MFCHR > 0
+  ou GLOBAL.TL_MF_MFCSAL > 0
+  ou GLOBAL.TL_MF_MFCVN > 0
+  ou GLOBAL.TL_MF_MFGAIN > 0
+  ou GLOBAL.TL_MF_MFCDIS > 0 
+  ou GLOBAL.TL_MF_MFRSE1 > 0
+  ou GLOBAL.TL_MF_MFRSE2 > 0 
+  ou GLOBAL.TL_MF_MFRSE3 > 0
+  ou GLOBAL.TL_MF_MFRSE4 > 0
+  ou GLOBAL.TL_MF_MFRSE5 > 0 
+  ou GLOBAL.TL_MF_MFRSE6 > 0 
+  ou GLOBAL.TL_MF_MFRSE7 > 0
+  # ou GLOBAL.TL_MF_MFCHR7 > 0
+  ou GLOBAL.TL_MF_MFIFI > 0
+  ou GLOBAL.TL_MF_MFMCSG820 > 0
+  ou GLOBAL.TL_MF_MFREGV > 0
 alors
   GLOBAL.TL_NON_ACQUISE = TL_TL_MAUVAISE_FOI;
 sinon_si GLOBAL.TL_NON_ACQUISE != TL_TL_DEFAUT_2042 alors
@@ -3805,7 +3848,7 @@ RESULTAT = (
     )
   )
 );
-si AFF alors
+si positif(AFF) alors
   afficher_erreur "prout code rappel 10 = " (RESULTAT) "\n";
 finsi
 
@@ -3838,7 +3881,7 @@ RESULTAT = (
     )
   )
 );
-si AFF alors
+si positif(AFF) alors
   afficher_erreur "prout code rappel 9 = " (RESULTAT) "\n";
 finsi
 
