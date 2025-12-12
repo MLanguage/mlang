@@ -137,7 +137,7 @@ exception InterpError of int
 
 type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
 
-type interp_error = { name : string; expected : float }
+type interp_error = { name : string; value: float; expected : float }
 
 let check_vars (program : Mir.program) exp vars =
   let test_error_margin = 0.01 in
@@ -158,7 +158,7 @@ let check_vars (program : Mir.program) exp vars =
     match abs_float (f -. f') > test_error_margin with
     | true ->
         Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
-        { name = vname; expected = f } :: acc
+        { name = vname; value = f'; expected = f } :: acc
     | false -> acc
   in
   StrMap.fold fold exp []
@@ -227,11 +227,12 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           | Server _, Some dbg_info ->
               let interp_errors =
                 List.fold_left
-                  (fun map error ->
+                  (fun map {name; value; expected } ->
                     let tick =
-                      Dbg_info.TickMap.find error.name dbg_info.ledger
+                      Dbg_info.TickMap.find name dbg_info.ledger
                     in
-                    Dbg_info.Tick.Map.add tick error.expected map)
+                    let error = Dbg_info.{name; value; expected} in
+                    Dbg_info.Tick.Map.add tick error map)
                   Dbg_info.Tick.Map.empty interp_errors
               in
               let dbg_info = { dbg_info with interp_errors } in

@@ -22,8 +22,7 @@ module Origin = struct
       | Declared -> "Declared"
       | Target s -> Format.asprintf "target-%s" s
       | Const -> "const"
-    in
-    Format.asprintf
+    in Format.asprintf
       {|"origin": {"code_orig": "%s", "file": "%s", "sline": %d, "eline": %d }|}
       code_orig origin.filename origin.sline origin.eline
 end
@@ -115,6 +114,12 @@ module TickMap = struct
     | Some tick -> tick
 end
 
+type interp_error = {
+  name: string;
+  value: float;
+  expected: float
+}
+
 type t = {
   graph : Graph.t;
   runtimes : Info.Runtime.t Tick.Map.t;
@@ -122,7 +127,7 @@ type t = {
   consts : Const.t IntMap.t;
   literals : string IntMap.t;
   ledger : Tick.t StrMap.t;
-  interp_errors : float Tick.Map.t;
+  interp_errors : interp_error Tick.Map.t;
 }
 
 let empty =
@@ -211,8 +216,9 @@ let to_json (fmt : Format.formatter) info : unit =
   in
   IntMap.iter print_lit info.literals;
   delim := "";
-  let print_interp_errors tick expected =
-    Format.fprintf fmt {|%s"%d": %g|} !delim tick expected;
+  let print_interp_errors tick (error: interp_error) =
+    Format.fprintf fmt {|%s"%d": {"name": %S, "value": %g, "expected": %g}|} 
+    !delim tick error.name error.value error.expected;
     delim := ","
   in
   Format.fprintf fmt {|},@."interp_errors": {@.|};
