@@ -521,7 +521,7 @@ Les valeurs de type booléen sont représentées par les flottants `0` et
 `1`, respectivement pour `faux` et `vrai`.
 
 Les résultats suivants peuvent être observés en exécutant le script disponible
-dans l'exemple sur le {ref}`exemples/valeurs`
+dans l'exemple sur le {ref}`exemples/valeurs`.
 
 ### Calcul booléen 
 
