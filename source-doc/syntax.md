@@ -511,3 +511,64 @@ Exemple:
 #{ Ceci est un commentaire 
    sur plusieurs lignes. }#
 ```
+
+(valeurs)=
+## Les valeurs
+
+Les variables en M prennent soit leur valeur sur les flottants, soit ont la
+valeur `indefini`.
+Les valeurs de type booléen sont représentées par les flottants `0` et
+`1`, respectivement pour `faux` et `vrai`.
+
+Les résultats suivants peuvent être observés en exécutant le script disponible
+dans l'exemple sur le {ref}`exemples/valeurs`
+
+### Calcul booléen 
+
+Les opérations booléennes standard (`et`, `ou`, `non`) comportent sur les
+flottants de façon standard.
+Toute valeur flottante différente de `0` sera considerée comme `vrai`e dans
+le cas d'un calcul booléen (`10 ou 0 = 1`).
+Les calculs booléens impliquant la valeur `indefini` ont un comportement
+spécifique :
+
+* `indefini ou indefini = indefini`
+* `indefini ou b = (0 si b = 0, 1 sinon)`
+* `b ou indefini = (0 si b = 0, 1 sinon)`
+* `indefini et indefini = indefini`
+* `b et indefini = indefini`
+* `indefini et b = indefini`
+* `non indefini = indefini`
+
+Les comparaisons (`=`, `<`, `>`, `<=`, `>=`) renvoient soit `0` soit `1`
+lorsque des valeurs definies sont comparées.
+Si l'une des valeurs comparée est `indéfini`e, alors le résultat est également
+`indefini`.
+
+**Note**: même l'égalité `indefini = indefini` renvoie `indefini`.
+Pour vérifier si une valeur est définie ou non, il faut utiliser la fonction
+`present` qui renvoie `0` si la valeur est indéfinie et `1` sinon.
+
+### Calcul numérique
+
+Les opérations arithmétiques standard (`+`, `-`, `*`, `/`) se comportent sur 
+les flottants de façon standard, à l'exception de la division d'un flottant par
+zero qui renvoie toujours `0`.
+Les calculs impliquant la valeur `indefini` ont un comportement spécifique :
+
+* `indefini + indefini = indefini`
+* `indefini + n = n`
+* `n + indefini = n`
+* `indefini - indefini = indefini`
+* `indefini - n = -n`
+* `n - indefini = n`
+* `indefini * indefini = indefini`
+* `indefini * n = indefini`
+* `n * indefini = indefini`
+* `indefini / indefini = indefini`
+* `indefini / n = indefini`
+* `n / indefini = indefini`
+
+Pour résumer, seules les opérations d'addition et de soustraction avec une
+valeur renvoient autre chose que `indefini`.
+

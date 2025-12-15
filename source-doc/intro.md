@@ -138,7 +138,7 @@ Y = 1 !
 ```
 
 Pour comprendre la valeur finale de Y, référez-vous à la
-section {ref}`arithmetique`.
+section {ref}`valeurs`.
 
 ## Règles de calcul
 

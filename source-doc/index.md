@@ -13,6 +13,8 @@
 
 # Documentation du langage M
 
+## Le langage M
+
 ```{toctree}
 :maxdepth: 2
 
@@ -20,5 +22,15 @@ intro
 syntax
 syntax_irj
 mlang
-arithmetique
 ```
+
+## Exemples
+
+```{toctree}
+:maxdepth: 1
+
+exemples/valeurs
+```
+
+
+
