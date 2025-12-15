@@ -1,70 +1,3 @@
-module Dgfip_options = struct
-  type flags = {
-    (* -m *) annee_revenu : int;
-    (* -P *) flg_correctif : bool;
-    (* flg_correctif true by default, -P makes it false *)
-    (* -R *) flg_iliad : bool;
-    (* also implied by "iliad" in !Cli.application_names; disabled by -U *)
-    (* -R *) flg_pro : bool;
-    (* also implied by "pro" in !Cli.application_names; disabled by -U *)
-    (* -U *) flg_cfir : bool;
-    (* disabled by -R *)
-    (* -b *) flg_gcos : bool;
-    (* -b0 and -b1 ; disabled by -U and -R *)
-    (* -b *) flg_tri_ebcdic : bool;
-    (* -b1 only *)
-    (* -s *) flg_short : bool;
-    (* -r *) flg_register : bool;
-    (* -O *) flg_optim_min_max : bool;
-    (* -X *) flg_extraction : bool;
-    (* -D *) flg_genere_libelle_restituee : bool;
-    (* -S *) flg_controle_separe : bool;
-    (* -I *) flg_controle_immediat : bool;
-    (* unused *)
-    (* -o *) flg_overlays : bool;
-    (* -Z *) flg_colors : bool;
-    (* -L *) flg_ticket : bool;
-    (* -t *) flg_trace : bool;
-    (* -g *) flg_debug : bool;
-    (* also implied by -t *)
-    (* -k *) nb_debug_c : int;
-    (* -x *)
-    xflg : bool;
-        (* Flags to deal with in a particular way : -c compilation mode -l link
-           mode -v specify the variable file (tgv.m) -e specify the error file
-           (err.m) *)
-        (* Other flags, not used in makefiles -h dir_var_h -i flg_ident
-           -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
-           flag_phase -f flg_ench_init -E cvt_file -g flg_debug -a flg_api -T
-           flg_trace_irdata *)
-  }
-
-  let default_flags =
-    {
-      annee_revenu = 1991;
-      flg_correctif = true;
-      flg_iliad = false;
-      flg_pro = false;
-      flg_cfir = false;
-      flg_gcos = false;
-      flg_tri_ebcdic = false;
-      flg_short = false;
-      flg_register = false;
-      flg_optim_min_max = false;
-      flg_extraction = false;
-      flg_genere_libelle_restituee = false;
-      flg_controle_separe = false;
-      flg_controle_immediat = false;
-      flg_overlays = false;
-      flg_colors = false;
-      flg_ticket = false;
-      flg_trace = false;
-      flg_debug = false;
-      nb_debug_c = 0;
-      xflg = false;
-    }
-end
-
 type value_sort =
   | RegularFloat
   | MPFR of int (* bitsize of the floats *)
@@ -168,3 +101,113 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
       match comparison_error_margin_ with
       | None -> ()
       | Some m -> comparison_error_margin := m)
+
+let process_dgfip_options (backend : backend) ~(application_names : string list)
+    (dgfip_options : string list option) =
+  (* Parsing dgfip options even if we don't need them, because we may be in the case
+     --dgfip_options=--help. *)
+  let opts =
+    Option.map
+      (Dgfip_options.process_dgfip_options ~application_names)
+      dgfip_options
+  in
+  match (backend, opts) with
+  | Dgfip_c, None ->
+      `Error "When using the DGFiP backend, DGFiP options MUST be provided."
+  | Dgfip_c, Some (Ok (`Ok v)) -> `Dgfip_options v
+  | UnknownBackend, None -> `Dgfip_options Dgfip_options.default_flags
+  | UnknownBackend, Some (Ok (`Ok _)) ->
+      (* warning_print "Backend unknown, discarding dgfip_options."; *)
+      `Dgfip_options Dgfip_options.default_flags
+  | _, Some (Ok `Help) | _, Some (Ok `Version) -> `Dgfip_options_version
+  | _, Some (Error `Term) -> `Error "Invalid term in --dgfip_options"
+  | _, Some (Error `Parse) -> `Error "Failed parsing of --dgfip_options"
+  | _, Some (Error `Exn) ->
+      `Error "Uncaught exception while reading --dgfip_options"
+
+let set_opts ~(files : string list) ~(application_names : string list)
+    ~(without_dgfip_m : bool) ~(debug : bool) ~(var_info_debug : string list)
+    ~(display_time : bool) ~(print_cycles : bool) ~(backend : string option)
+    ~(output : string option) ~(run_tests : string option)
+    ~(dgfip_test_filter : bool) ~(run_test : string option)
+    ~(mpp_function : string option) ~(optimize_unsafe_float : bool)
+    ~(precision : string option) ~(roundops : string option)
+    ~(comparison_error_margin : float option) ~(income_year : int)
+    ~(m_clean_calls : bool) ~(dgfip_options : string list option) :
+    [ `Run | `Displayed_dgfip_help | `Error of string ] =
+  let exception INTERNAL_FAIL of string in
+  let exception DGFIP_HELP in
+  let err m = Format.kasprintf (fun s -> raise (INTERNAL_FAIL s)) m in
+  try
+    (* Reading backend first because we need it for parsing dgfip_flags *)
+    let backend =
+      match backend with Some "dgfip_c" -> Dgfip_c | _ -> UnknownBackend
+    in
+    let dgfip_flags =
+      match process_dgfip_options backend ~application_names dgfip_options with
+      | `Dgfip_options_help -> raise DGFIP_HELP
+      | `Dgfip_options_version -> raise DGFIP_HELP
+      | `Error m -> err "%s" m
+      | `Dgfip_options f -> f
+    in
+    let mpp_function =
+      match mpp_function with
+      | None -> err "Option --mpp_function required"
+      | Some m -> m
+    in
+    let value_sort =
+      let precision = Option.get precision in
+      if precision = "double" then RegularFloat
+      else
+        let mpfr_regex = Re.Pcre.regexp "^mpfr(\\d+)$" in
+        if Re.Pcre.pmatch ~rex:mpfr_regex precision then
+          let mpfr_prec =
+            Re.Pcre.get_substring (Re.Pcre.exec ~rex:mpfr_regex precision) 1
+          in
+          MPFR (int_of_string mpfr_prec)
+        else if precision = "interval" then Interval
+        else
+          let bigint_regex = Re.Pcre.regexp "^fixed(\\d+)$" in
+          if Re.Pcre.pmatch ~rex:bigint_regex precision then
+            let fixpoint_prec =
+              Re.Pcre.get_substring (Re.Pcre.exec ~rex:bigint_regex precision) 1
+            in
+            BigInt (int_of_string fixpoint_prec)
+          else if precision = "mpq" then Rational
+          else err "Unkown precision option: %s" precision
+    in
+    let round_ops =
+      match roundops with
+      | Some "default" -> RODefault
+      | Some "multi" -> ROMulti
+      | Some roundops ->
+          let mf_regex = Re.Pcre.regexp "^mainframe(\\d+)$" in
+          if Re.Pcre.pmatch ~rex:mf_regex roundops then
+            let mf_long_size =
+              Re.Pcre.get_substring (Re.Pcre.exec ~rex:mf_regex roundops) 1
+            in
+            match int_of_string mf_long_size with
+            | (32 | 64) as sz -> ROMainframe sz
+            | _ -> err "Invalid long size for mainframe: %s" mf_long_size
+          else err "Unknown roundops option: %s" roundops
+      | None -> err "Unspecified roundops@."
+    in
+    let execution_mode =
+      match (run_tests, run_test) with
+      | Some s, _ -> MultipleTests s
+      | None, Some s -> SingleTest s
+      | None, None -> Extraction
+    in
+    let files =
+      match List.length files with
+      | 0 -> err "please provide at least one M source file"
+      | _ -> NonEmpty files
+    in
+    set_all_arg_refs files application_names without_dgfip_m debug
+      var_info_debug display_time print_cycles output optimize_unsafe_float
+      m_clean_calls comparison_error_margin income_year value_sort round_ops
+      backend dgfip_test_filter mpp_function dgfip_flags execution_mode;
+    `Run
+  with
+  | INTERNAL_FAIL m -> `Error m
+  | DGFIP_HELP -> `Displayed_dgfip_help

@@ -1,35 +1,3 @@
-(**{2 Flags and parameters}*)
-
-(** Special dgfip options for the compirateur *)
-
-module Dgfip_options : sig
-  type flags = {
-    annee_revenu : int;
-    flg_correctif : bool;
-    flg_iliad : bool;
-    flg_pro : bool;
-    flg_cfir : bool;
-    flg_gcos : bool;
-    flg_tri_ebcdic : bool;
-    flg_short : bool;
-    flg_register : bool;
-    flg_optim_min_max : bool;
-    flg_extraction : bool;
-    flg_genere_libelle_restituee : bool;
-    flg_controle_separe : bool;
-    flg_controle_immediat : bool;
-    flg_overlays : bool;
-    flg_colors : bool;
-    flg_ticket : bool;
-    flg_trace : bool;
-    flg_debug : bool;
-    nb_debug_c : int;
-    xflg : bool;
-  }
-
-  val default_flags : flags
-end
-
 (** According on the [value_sort], a specific interpreter will be called with
     the right kind of floating-point value *)
 type value_sort =
@@ -42,7 +10,7 @@ type value_sort =
 (** Rounding operations to use in the interpreter. They correspond to the
     rounding operations used by the DGFiP calculator in different execution
     contexts.
-
+    
     - RODefault: rounding operations used in the PC/single-thread context
     - ROMulti: rouding operations used in the PC/multi-thread context
     - ROMainframe rounding operations used in the mainframe context *)
@@ -79,8 +47,8 @@ val var_info_flag : bool ref
 (** Print infomation about variables declared, defined ou used incorrectly *)
 
 val var_info_debug : string list ref
-(** Prints even more information but only about some variables members of a list
-*)
+(** Prints even more information but only about some variables members of a
+    list *)
 
 val warning_flag : bool ref
 (** Print warning info *)
@@ -118,24 +86,25 @@ val dgfip_flags : Dgfip_options.flags ref
 
 val execution_mode : execution_mode ref
 
-val set_all_arg_refs :
-  (* files *) files ->
-  (* applications *) string list ->
-  (* without_dgfip_m *) bool ->
-  (* debug *) bool ->
-  (* var_info_debug *) string list ->
-  (* display_time *) bool ->
-  (* prints_cycles *) bool ->
-  (* output_file *) string option ->
-  (* optimize_unsafe_float *) bool ->
-  (* m_clean_call *) bool ->
-  (* comparison_error_margin*) float option ->
-  (* income_year *) int ->
-  value_sort ->
-  round_ops ->
-  backend ->
-  (* dgfip_test_filter *) bool ->
-  (* mpp_function *) string ->
-  (* dgfip_flags *) Dgfip_options.flags ->
-  (* execution_mode *) execution_mode ->
-  unit
+val set_opts :
+  files:string list ->
+  application_names:string list ->
+  without_dgfip_m:bool ->
+  debug:bool ->
+  var_info_debug:string list ->
+  display_time:bool ->
+  print_cycles:bool ->
+  backend:string option ->
+  output:string option ->
+  run_tests:string option ->
+  dgfip_test_filter:bool ->
+  run_test:string option ->
+  mpp_function:string option ->
+  optimize_unsafe_float:bool ->
+  precision:string option ->
+  roundops:string option ->
+  comparison_error_margin:float option ->
+  income_year:int ->
+  m_clean_calls:bool ->
+  dgfip_options:string list option ->
+  [ `Displayed_dgfip_help | `Error of string | `Run ]

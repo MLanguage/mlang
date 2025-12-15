@@ -30,12 +30,11 @@ module ANSITerminal = ANSITerminal
 
 let files =
   Arg.(
-    non_empty & pos_all file []
+    value & pos_all file []
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
 let applications =
-  Arg.(
-    non_empty & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
+  Arg.(value & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
 
 let without_dgfip_m =
   Arg.(
@@ -77,7 +76,7 @@ let backend =
 
 let mpp_function =
   Arg.(
-    required
+    value
     & opt (some string) None
     & info [ "mpp_function" ] ~docv:"MPP_FUNCTION" ~doc:"M++ file main function")
 

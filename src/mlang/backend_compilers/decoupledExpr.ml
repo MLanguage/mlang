@@ -1,5 +1,4 @@
 module VID = Dgfip_varid
-module Dgfip_options = Config.Dgfip_options
 
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
