@@ -572,3 +572,4 @@ Les calculs impliquant la valeur `indefini` ont un comportement spécifique :
 Pour résumer, seules les opérations d'addition et de soustraction avec une
 valeur renvoient autre chose que `indefini`.
 
+% A faire : les fonctions prédéfinies devraient avoir leur chapitre dedié

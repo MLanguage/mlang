@@ -20,6 +20,7 @@
 
 intro
 syntax
+fonctions
 syntax_irj
 mlang
 ```
