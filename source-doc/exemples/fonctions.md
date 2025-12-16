@@ -314,5 +314,9 @@ MON-TEST
 ## Commande
 
 ```
-mlang --without_dfgip_m test.m -A mon_application --mpp_function fun_test --run_test test.irj
+mlang test.m \
+	--without_dfgip_m \
+	-A mon_application \
+	--mpp_function fun_test \
+	--run_test test.irj
 ```
