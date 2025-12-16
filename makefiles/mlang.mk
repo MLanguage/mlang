@@ -124,11 +124,29 @@ test_irj: FORCE build-dev
 # Doc
 ##################################################
 
-doc: FORCE build
+doc-deps: FORCE
+	python3 -m venv .venv
+	.venv/bin/pip install sphinx myst-parser
+
+dune-doc: FORCE build
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	dune build @doc
-	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
+	mkdir -p examples/doc/mlang_dev_doc
+	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html examples/doc/mlang_dev_doc/doc.html
 endif
+
+sphinx-doc: FORCE doc-deps doc/
+	@command -v .venv/bin/sphinx-build >/dev/null 2>&1 || \
+	{ echo "Pour construire la documentation, vous avez besoin de sphinx-build avec \
+		l'extension 'myst-parser'. Lancez `make doc-deps`."; exit 1; }
+	rm -rf _build/default/doc/*
+	cp -rf doc/* _build/default/doc/
+	mkdir -p examples/doc
+	.venv/bin/sphinx-build -M html _build/default/doc/ examples/doc
+	.venv/bin/sphinx-build -M latexpdf _build/default/doc/ examples/doc
+
+
+doc: FORCE build dune-doc sphinx-doc
 

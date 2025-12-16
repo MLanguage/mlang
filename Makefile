@@ -38,13 +38,3 @@ clean: FORCE remise_a_zero_versionnage
 	$(call make_in,$(DGFIP_DIR),clean_backend_all)
 	rm -f doc/doc.html
 	dune clean
-
-sphinx-doc: FORCE
-	@command -v sphinx-build >/dev/null 2>&1 || \
-	{ echo "Pour construire la documentation, vous avez besoin de sphinx-build avec \
-		l'extension 'myst-parser'."; exit 1; }
-	rm -rf _build/default/doc/*
-	cp -rf doc/* _build/default/doc/
-	mkdir -p examples/doc
-	sphinx-build -M html _build/default/doc/ examples/doc
-	sphinx-build -M latexpdf _build/default/doc/ examples/doc
