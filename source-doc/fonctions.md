@@ -1,6 +1,10 @@
 (fonctions)=
 # Les fonctions
 
+Voici la liste de toutes les fonctions standard du M.
+Leur utilisation est présentée dans l'exemple sur 
+{ref}`exemples/fonctions`.
+
 ## abs(X)
 
 Cette fonction prend un argument et renvoie sa valeur absolue.

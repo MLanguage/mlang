@@ -2,7 +2,7 @@
 
 # Calcul des valeurs
 
-  ## Fichier test : test.m
+## Fichier test : test.m
 ```
 espace_variables GLOBAL : par_defaut;
 domaine regle mon_domaine_de_regle: par_defaut;

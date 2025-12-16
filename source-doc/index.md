@@ -31,6 +31,7 @@ mlang
 :maxdepth: 1
 
 exemples/valeurs
+exemples/fonctions
 ```
 
 
