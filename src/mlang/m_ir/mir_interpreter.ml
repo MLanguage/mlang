@@ -425,6 +425,11 @@ struct
 
   exception BlockingError
 
+  type zone_mem =
+    | ZoneVar of Com.variable_space * Com.Var.t
+    | ZoneField of int * int
+    | ZoneNil
+
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) ->
@@ -466,7 +471,7 @@ struct
     | Com.VarAccess (m_sp_opt, v) ->
         let vsd_opt = get_var_space_from ctx m_sp_opt in
         let vsd, v, _ = get_var ctx vsd_opt v in
-        Some (vsd, v)
+        ZoneVar (vsd, v)
     | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
@@ -475,10 +480,10 @@ struct
             let i = Int64.to_int @@ N.to_int z in
             if 0 <= i && i < Com.Var.size v then
               if Com.Var.is_table v then
-                Some (vsd, ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i))
-              else Some (vsd, v)
-            else None
-        | Undefined -> None)
+                ZoneVar (vsd, ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i))
+              else ZoneVar (vsd, v)
+            else ZoneNil
+        | Undefined -> ZoneNil)
     | Com.FieldAccess (m_sp_opt, m_e, _, j) -> (
         match evaluate_expr ctx m_e with
         | Number z ->
@@ -487,10 +492,10 @@ struct
             let events = List.hd ctx.ctx_events in
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
-              | Com.RefVar v -> Some (get_var_space ctx vsd_opt, v)
-              | Com.Numeric _ -> None
-            else None
-        | _ -> None)
+              | Com.RefVar v -> ZoneVar (get_var_space ctx vsd_opt, v)
+              | Com.Numeric _ -> ZoneField (i, j)
+            else ZoneNil
+        | _ -> ZoneNil)
 
   and set_var_value_org (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
       (org : int) (value : value) : unit =
@@ -523,8 +528,13 @@ struct
 
   and set_access ctx access vexpr =
     match get_access_var ctx access with
-    | Some (vsd, v) -> set_var_value ctx (Some vsd) v @@ evaluate_expr ctx vexpr
-    | None -> ()
+    | ZoneVar (vsd, v) ->
+        set_var_value ctx (Some vsd) v @@ evaluate_expr ctx vexpr
+    | ZoneField (i, j) ->
+        let events = List.hd ctx.ctx_events in
+        let value = evaluate_expr ctx vexpr in
+        events.(i).(j) <- Com.Numeric value
+    | ZoneNil -> ()
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     let comparison op new_e1 new_e2 =
@@ -660,11 +670,11 @@ struct
                 let var_arg2_opt =
                   match Pos.unmark arg2 with
                   | Var access -> get_access_var ctx access
-                  | _ -> None
+                  | _ -> ZoneNil
                 in
                 match var_arg2_opt with
-                | None -> Undefined
-                | Some (vsd, var_arg2) -> (
+                | ZoneField _ | ZoneNil -> Undefined
+                | ZoneVar (vsd, var_arg2) -> (
                     let cast_to_int (v : value) : Int64.t option =
                       match v with
                       | Number f -> Some (N.to_int @@ roundf f)
@@ -706,32 +716,34 @@ struct
         | FuncCall (_, _) -> assert false
         | Attribut (m_acc, a) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) -> (
+            | ZoneVar (vsd, v) -> (
                 let _, v', _ = get_var ctx (Some vsd) v in
                 match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs v') with
                 | Some l -> Number (N.of_float (float (Pos.unmark l)))
                 | None -> Undefined)
-            | None -> Undefined)
+            | ZoneField _ | ZoneNil -> Undefined)
         | Size m_acc -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) ->
+            | ZoneVar (vsd, v) ->
                 let _, v', _ = get_var ctx (Some vsd) v in
                 Number (N.of_float @@ float @@ Com.Var.size v')
-            | None -> Undefined)
+            | ZoneField _ -> Number (N.one ())
+            | ZoneNil -> Undefined)
         | Type (m_acc, m_typ) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) ->
+            | ZoneVar (vsd, v) ->
                 let _, v', _ = get_var ctx (Some vsd) v in
                 if Com.Var.is_tgv v' && Com.Var.typ v' = Some (Pos.unmark m_typ)
                 then Number (N.one ())
                 else Number (N.zero ())
-            | None -> Undefined)
+            | ZoneField _ -> Undefined
+            | ZoneNil -> Undefined)
         | SameVariable (m_acc0, m_acc1) -> (
             match get_access_var ctx (Pos.unmark m_acc0) with
-            | Some (vsd0, v0) -> (
+            | ZoneVar (vsd0, v0) -> (
                 let _, v0', _ = get_var ctx (Some vsd0) v0 in
                 match get_access_var ctx (Pos.unmark m_acc1) with
-                | Some (vsd1, v1) -> (
+                | ZoneVar (vsd1, v1) -> (
                     let _, v1', _ = get_var ctx (Some vsd1) v1 in
                     if Com.Var.name_str v0' = Com.Var.name_str v1' then
                       Number (N.one ())
@@ -741,16 +753,22 @@ struct
                         when Pos.unmark m_a0 = Pos.unmark m_a1 ->
                           Number (N.one ())
                       | _ -> Number (N.zero ()))
-                | None -> Number (N.zero ()))
-            | None -> Number (N.zero ()))
+                | ZoneField _ | ZoneNil -> Number (N.zero ()))
+            | ZoneField (i0, j0) -> (
+                match get_access_var ctx (Pos.unmark m_acc1) with
+                | ZoneField (i1, j1) ->
+                    if i0 = j0 && i1 = j1 then Number (N.one ())
+                    else Number (N.zero ())
+                | ZoneVar _ | ZoneNil -> Number (N.zero ()))
+            | ZoneNil -> Number (N.zero ()))
         | InDomain (m_acc, cvm) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) ->
+            | ZoneVar (vsd, v) ->
                 let _, v', _ = get_var ctx (Some vsd) v in
                 if Com.Var.is_tgv v' && Com.CatVar.Map.mem (Com.Var.cat v') cvm
                 then Number (N.one ())
                 else Number (N.zero ())
-            | None -> Number (N.zero ()))
+            | ZoneField _ | ZoneNil -> Number (N.zero ()))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
         | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
@@ -904,10 +922,10 @@ struct
                 pr_flush ()
             | PrintAccess (info, m_a) -> (
                 match get_access_var ctx @@ Pos.unmark m_a with
-                | Some (vsd, var) ->
+                | ZoneVar (vsd, var) ->
                     pr_info info vsd var;
                     pr_flush ()
-                | None -> ())
+                | ZoneField _ | ZoneNil -> ())
             | PrintIndent e -> (
                 match evaluate_expr ctx e with
                 | Undefined -> ()
@@ -924,11 +942,11 @@ struct
           List.iter
             (fun m_a ->
               match get_access_var ctx @@ Pos.unmark m_a with
-              | Some (vsd, v) ->
+              | ZoneVar (vsd, v) ->
                   let vsd, v, vorg = get_var ctx (Some vsd) v in
                   set_var_ref ctx var vsd v vorg;
                   evaluate_stmts canBlock ctx stmts
-              | None -> ())
+              | ZoneField _ | ZoneNil -> ())
             al;
           List.iter
             (fun (vcs, expr, m_sp_opt) ->
@@ -987,7 +1005,7 @@ struct
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
         let backup backup_vars access =
           match get_access_var ctx access with
-          | Some (vsd, var) ->
+          | ZoneVar (vsd, var) ->
               let vsd, var, vorg = get_var ctx (Some vsd) var in
               if Com.Var.is_table var then
                 let sz = Com.Var.size var in
@@ -1002,7 +1020,7 @@ struct
               else
                 let value = get_var_value ctx (Some vsd) var in
                 (vsd, var, vorg, value) :: backup_vars
-          | None -> backup_vars
+          | ZoneField _ | ZoneNil -> backup_vars
         in
         let backup_vars = List.fold_left backup [] (List.map Pos.unmark al) in
         let backup_vars =
@@ -1234,13 +1252,13 @@ struct
       | v :: vl', m_a :: al' -> (
           ctx.ctx_ref.(ctx.ctx_ref_org + n).var <- v;
           match get_access_var ctx (Pos.unmark m_a) with
-          | Some (vsd, ref_var) ->
+          | ZoneVar (vsd, ref_var) ->
               let vsd, ref_var, org = get_var ctx (Some vsd) ref_var in
               ctx.ctx_ref.(ctx.ctx_ref_org + n).var_space <- vsd;
               ctx.ctx_ref.(ctx.ctx_ref_org + n).ref_var <- ref_var;
               ctx.ctx_ref.(ctx.ctx_ref_org + n).org <- org;
               set_args (n + 1) vl' al'
-          | None -> ())
+          | ZoneField _ | ZoneNil -> ())
       | [], [] -> evaluate_target_aux ~is_fun:false canBlock ctx target
       | _ -> assert false
     in
