@@ -136,27 +136,32 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
 exception InterpError of int
 
 let check_test (program : Mir.program) (test_name : string)
-    (value_sort : Config.value_sort) (round_ops : Config.round_ops) : unit =
+    (value_sort : Config.value_sort) (round_ops : Config.round_ops)
+    (ign_vars : StrSet.t) : unit =
   let check_vars exp vars =
     let test_error_margin = 0.01 in
     let fold vname f nb =
-      let f' =
-        let var =
-          match StrMap.find_opt vname program.program_vars with
-          | Some var -> var
-          | None ->
-              Cli.error_print "Variable inconnue: %s" vname;
-              raise
-                (Errors.StructuredError ("Fichier de test incorrect", [], None))
+      if StrSet.mem vname ign_vars then (
+        Cli.warning_print "OK | %s ignored" vname;
+        nb)
+      else
+        let f' =
+          let var =
+            match StrMap.find_opt vname program.program_vars with
+            | Some var -> var
+            | None ->
+                Cli.error_print "Variable inconnue: %s" vname;
+                raise
+                  (Errors.StructuredError ("Fichier de test incorrect", [], None))
+          in
+          match Com.Var.Map.find_opt var vars with
+          | Some (Com.Float f') -> f'
+          | _ -> 0.0
         in
-        match Com.Var.Map.find_opt var vars with
-        | Some (Com.Float f') -> f'
-        | _ -> 0.0
-      in
-      if abs_float (f -. f') > test_error_margin then (
-        Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
-        nb + 1)
-      else nb
+        if abs_float (f -. f') > test_error_margin then (
+          Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
+          nb + 1)
+        else nb
     in
     StrMap.fold fold exp 0
   in
@@ -204,22 +209,32 @@ let check_test (program : Mir.program) (test_name : string)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time
 
+let ignored_vars_set (p : Mir.program) (sl : string list) =
+  let str_list = [ "^\\("; String.concat "\\|" sl; "\\)$" ] in
+  let regexp = Str.regexp @@ String.concat "" str_list in
+  let fold vn _ set =
+    if Str.string_match regexp vn 0 then StrSet.add vn set else set
+  in
+  StrSet.empty
+  |> StrMap.fold fold p.program_vars
+  |> StrMap.fold fold p.program_alias
+
+let ignored_vars_list =
+  [ "NBPT"; "RETX"; "NATMAJ."; "NATMAJ..."; "NATMAJ...."; "TL_.*" ]
+
 type process_acc = string list * int StrMap.t
 
 let check_all_tests (p : Mir.program) (test_dir : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops)
     (filter_function : string -> bool) =
-  let arr = Sys.readdir test_dir in
   let arr =
-    Array.of_list
-    @@ List.filter filter_function
-    @@ List.filter
-         (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x))
-         (Array.to_list arr)
+    test_dir |> Sys.readdir |> Array.to_list
+    |> List.filter (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x))
+    |> List.filter filter_function
+    |> List.sort String.compare |> Array.of_list
   in
+  let ign_vars = ignored_vars_set p ignored_vars_list in
   Mir_interpreter.exit_on_rte := false;
-  (* sort by increasing size, hoping that small files = simple tests *)
-  Array.sort compare arr;
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
@@ -232,7 +247,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     in
     try
       Config.debug_flag := false;
-      check_test p (test_dir ^ name) value_sort round_ops;
+      check_test p (test_dir ^ name) value_sort round_ops ign_vars;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       (name :: successes, failures)
@@ -270,7 +285,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
   Cli.result_print "Test results: %d successes" (List.length s);
-
   if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
   else (
     Cli.warning_print "Failures:";
@@ -280,6 +294,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
 
 let check_one_test (p : Mir.program) (name : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
+  let ign_vars = ignored_vars_set p ignored_vars_list in
   Mir_interpreter.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   let dbg_warning = !Config.warning_flag in
@@ -293,7 +308,7 @@ let check_one_test (p : Mir.program) (name : string)
     in
     try
       Config.debug_flag := false;
-      check_test p name value_sort round_ops;
+      check_test p name value_sort round_ops ign_vars;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       None

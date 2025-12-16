@@ -9,7 +9,7 @@
  (public_name mlang.irj_utils)
  (flags
   (:standard -open Utils -open M_ir))
- (libraries m_frontend m_ir utils menhirLib parmap))
+ (libraries m_frontend m_ir utils menhirLib parmap str))
 
 ;; This section deals with the .messages file.
 
