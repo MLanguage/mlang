@@ -2,12 +2,12 @@
 
 <div style="text-align:center">
 <div style="white-space: pre; font-family: monospace;">
-  <span style="color:blue">.____.</span>  ________________________
-  <span style="color:blue">|</span> ._ <span style="color:blue">'</span> |                        |
-  <span style="color:blue">|</span> | \  | Direction Générale des |
-<span style="color:blue">.-+-+-'</span>  |                        |
-  <span style="color:blue">|</span> |    |   Finances Publiques   |
-  <span style="color:blue">!</span> !    !________________________!
+<span style="color:blue">  .____.</span>  ________________________
+<span style="color:blue">   |</span> <span style="color:olive">._</span> <span style="color:blue">'</span> |                        |
+<span style="color:blue">   |</span> <span style="color:olive">| \</span>  | Direction Générale des |
+ <span style="color:blue">.-+-+-'</span>  |                        |
+ <span style="color:blue">  |</span> <span style="color:olive">|</span>    |   Finances Publiques   |
+ <span style="color:blue">  !</span> <span style="color:olive">!</span>    !________________________!
 </div>
 </div>
 
