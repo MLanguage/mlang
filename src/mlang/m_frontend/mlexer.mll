@@ -94,7 +94,6 @@ rule token = parse
     | "erreur" -> ERROR
     | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE
-    | "meme_variable" -> SAME_VARIABLE
     | "et" -> AND
     | "evenement" -> EVENT
     | "evenements" -> EVENTS
@@ -111,9 +110,10 @@ rule token = parse
     | "informative" -> INFORMATIVE
     | "iterer" -> ITERATE
     | "leve_erreur" -> RAISE_ERROR
+    | "meme_variable" -> SAME_VARIABLE
+    | "nb_anomalies" -> NB_ANOMALIES
     | "nb_bloquantes" -> NB_BLOCKING
     | "nb_categorie" -> NB_CATEGORY
-    | "nb_anomalies" -> NB_ANOMALIES
     | "nb_discordances" -> NB_DISCORDANCES
     | "nb_informatives" -> NB_INFORMATIVES
     | "neant" -> NOTHING
