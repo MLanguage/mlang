@@ -125,31 +125,104 @@ exception InterpError of int
 
 type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
 
-type interp_error = { name : string; value: float; expected : float }
+type interp_error = {
+  name : string;
+  value : Com.literal;
+  expected : Com.literal;
+}
 
-let check_vars (program : Mir.program) exp vars =
+let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
   let test_error_margin = 0.01 in
-  let fold vname f acc =
-    let f' =
-      let var =
-        match StrMap.find_opt vname program.program_vars with
-        | Some var -> var
-        | None ->
-            Cli.error_print "Variable inconnue: %s" vname;
-            raise
-              (Errors.StructuredError ("Fichier de test incorrect", [], None))
-      in
-      match Com.Var.Map.find_opt var vars with
-      | Some (Com.Float f') -> f'
-      | _ -> 0.0
-    in
-    match abs_float (f -. f') > test_error_margin with
-    | true ->
-        Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
-        { name = vname; value = f'; expected = f } :: acc
-    | false -> acc
+  let fold vname expected acc =
+    if StrSet.mem vname ign_vars then (
+      Cli.warning_print "OK | %s ignoree" vname;
+      acc)
+    else
+      match StrMap.find_opt vname program.program_vars with
+      | Some var ->
+          if Com.Var.is_tgv var then
+            if Com.Var.is_given_back var then (
+              let calc =
+                match Com.Var.Map.find_opt var vars with
+                | Some f' -> f'
+                | None -> Com.Undefined
+              in
+              let ok =
+                match (expected, calc) with
+                | Com.Undefined, Com.Undefined -> None
+                | Com.Float 0., Com.Undefined ->
+                    (* For compatibility with fuzzer tests *)
+                    None
+                | Com.Float _, Com.Undefined | Com.Undefined, Com.Float _ ->
+                    Some { name = vname; value = calc; expected }
+                | Com.Float e, Com.Float c -> (
+                    match abs_float (e -. c) <= test_error_margin with
+                    | false -> Some { name = vname; value = calc; expected }
+                    | true -> None)
+              in
+              match ok with
+              | None -> acc
+              | Some err ->
+                  Cli.error_print "KO | %s attendue: %a - evaluee %a" vname
+                    Com.format_literal err.value Com.format_literal err.expected;
+                  err :: acc)
+            else (
+              Cli.warning_print "OK | %s ignoree car non-restituee" vname;
+              acc)
+          else (
+            Cli.warning_print "Variable inconnue dans le TGV: %s" vname;
+            acc)
+      | None ->
+          Cli.warning_print "Variable inconnue: %s" vname;
+          acc
   in
   StrMap.fold fold exp []
+(* let fold vname f acc = *)
+(*   if StrSet.mem vname ign_vars then ( *)
+(*     Cli.warning_print "OK | %s ignoree" vname; *)
+(*     acc   *)
+(*   ) *)
+(*   else *)
+(*   let f' = *)
+(*     let var = *)
+(*       match StrMap.find_opt vname program.program_vars with *)
+(*       | Some var ->  *)
+(*           if Com.Var.is_tgv var then *)
+(*             if Com.Var.is_given_back var then *)
+(*               let calc = *)
+(*                 match Com.Var.Map.find_opt var vars with *)
+(*                 | Some f' -> f' *)
+(*                 | None -> Com.Undefined *)
+(*               in *)
+(*               let ok = *)
+(*                 match (expected, calc) with *)
+(*                 | Com.Undefined, Com.Undefined -> true *)
+(*                 | Com.Float 0, Com.Undefined -> true *)
+(*                 | Com.Float _, Com.Undefined | Com.Undefined, Com.Float _ -> *)
+(*                     false *)
+(*                 | Com.Float e, Com.Float c -> *)
+(*                     abs_float (e -. c) <= test_error_margin *)
+(*               in *)
+(*               if ok then nb *)
+(*               else ( *)
+(*                  *)
+(*               ) *)
+(*       | None -> *)
+(*           Cli.error_print "Variable inconnue: %s" vname; *)
+(*           raise *)
+(*             (Errors.StructuredError ("Fichier de test incorrect", [], None)) *)
+(*     in *)
+(*     match Com.Var.Map.find_opt var vars with *)
+(*     | Some (Com.Float f') -> f' *)
+(*     | _ -> 0.0 *)
+(*   in *)
+(*   match abs_float (f -. f') > test_error_margin with *)
+(*   | true -> *)
+(*       Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f'; *)
+(*       { name = vname; value = f'; expected = f } :: acc *)
+(*   | false -> acc *)
+(* in *)
+(* StrMap.fold fold exp [] *)
 
 let check_anos exp errSet =
   let rais =
@@ -165,50 +238,6 @@ let check_anos exp errSet =
 let check_test (program : Mir.program) (test_input : Irj_file.input)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops)
     (ign_vars : StrSet.t) : target_dbg_info list =
-  let check_vars exp vars =
-    let test_error_margin = 0.01 in
-    let fold vname expected nb =
-      if StrSet.mem vname ign_vars then (
-        Cli.warning_print "OK | %s ignoree" vname;
-        nb)
-      else
-        match StrMap.find_opt vname program.program_vars with
-        | Some var ->
-            if Com.Var.is_tgv var then
-              if Com.Var.is_given_back var then
-                let calc =
-                  match Com.Var.Map.find_opt var vars with
-                  | Some f' -> f'
-                  | None -> Com.Undefined
-                in
-                let ok =
-                  match (expected, calc) with
-                  | Com.Undefined, Com.Undefined -> true
-                  | Com.Float 0., Com.Undefined ->
-                      (* For compatibility with fuzzer tests *)
-                      true
-                  | Com.Float _, Com.Undefined | Com.Undefined, Com.Float _ ->
-                      false
-                  | Com.Float e, Com.Float c ->
-                      abs_float (e -. c) <= test_error_margin
-                in
-                if ok then nb
-                else (
-                  Cli.error_print "KO | %s attendue: %a - evaluee: %a" vname
-                    Com.format_literal expected Com.format_literal calc;
-                  nb + 1)
-              else (
-                Cli.warning_print "OK | %s ignoree car non-restituee" vname;
-                nb)
-            else (
-              Cli.warning_print "Variable inconnue dans le TGV: %s" vname;
-              nb)
-        | None ->
-            Cli.warning_print "Variable inconnue: %s" vname;
-            nb
-    in
-    StrMap.fold fold exp 0
-  in
   let check_anos exp errSet =
     let rais =
       let fold e res = StrSet.add (Pos.unmark e.Com.Error.name) res in
@@ -264,17 +293,21 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           Mir_interpreter.evaluate_program program inst.vars inst.events
             value_sort round_ops (Some dbg_info)
         in
-        let interp_errors = check_vars program inst.expectedVars varMap in
+        let interp_errors =
+          check_vars program inst.expectedVars varMap ign_vars
+        in
         let target_dbg_info =
           match (!Config.platform, dbg_info) with
           | Server _, Some dbg_info ->
               let interp_errors =
                 List.fold_left
-                  (fun map {name; value; expected } ->
+                  (fun map { name; value; expected } ->
                     let tick =
-                      Dbg_info.TickMap.find name dbg_info.ledger
+                      match Dbg_info.TickMap.find name dbg_info.ledger with
+                      | exception Failure _ -> Dbg_info.Tick.tick ()
+                      | tick -> tick
                     in
-                    let error = Dbg_info.{name; value; expected} in
+                    let error = Dbg_info.{ name; value; expected } in
                     Dbg_info.Tick.Map.add tick error map)
                   Dbg_info.Tick.Map.empty interp_errors
               in
@@ -402,7 +435,8 @@ let check_one_test (p : Mir.program) (name : string)
     in
     try
       Config.debug_flag := false;
-      ignore @@ check_test p (Irj_file.Filename name) value_sort round_ops ign_vars;
+      ignore
+      @@ check_test p (Irj_file.Filename name) value_sort round_ops ign_vars;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
       None

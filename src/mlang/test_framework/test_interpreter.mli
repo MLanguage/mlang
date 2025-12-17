@@ -30,6 +30,7 @@ val check_test :
   Irj_file.input ->
   Config.value_sort ->
   Config.round_ops ->
+  StrSet.t ->
   target_dbg_info list
 
 val check_one_test :
