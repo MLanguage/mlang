@@ -521,7 +521,20 @@ struct
         | LocBase ->
             if Array.length var_space.base > 0 then var_space.base.(vi) <- value
         )
-    | Com.Var.Temp _ -> ctx.ctx_tmps.(vi).value <- value
+    | Com.Var.Temp _ ->
+        begin
+          match ctx.ctx_dbg_info with
+          | None -> ()
+          | Some dbg_info ->
+              let open Dbg_info in
+              let tick = Tick.tick () in
+              let rule = get_rule ctx in
+              let value = value_to_literal value in
+              let info = Info.make_from_var tick var rule value None false in
+              let dbg_info = Dbg_info.register dbg_info info in
+              ctx.ctx_dbg_info <- Some dbg_info
+        end;
+        ctx.ctx_tmps.(vi).value <- value
     | Com.Var.Ref -> assert false
 
   and set_var_value (ctx : ctx) (vsd_opt : Com.variable_space option)
@@ -553,14 +566,10 @@ struct
                 let tick = Tick.tick () in
                 (* Format.fprintf Format.err_formatter "it will have tick: %d@." *)
                 (*   tick; *)
-                let pos = Com.Var.name var |> Pos.get in
-                let origin = Origin.make_from_pos pos Declared in
-                let ledger = StrMap.add name tick dbg_info.ledger in
-                let runtime = Info.Runtime.make origin Undefined (Some name) in
-                let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-                let static = Info.Static.make name origin false None in
-                let statics = IntMap.add runtime.hash static dbg_info.statics in
-                let dbg_info = { dbg_info with ledger; runtimes; statics } in
+                let rule = Origin.Declared in
+                let value = Com.Undefined in
+                let info = Info.make_from_var tick var rule value None false in
+                let dbg_info = Dbg_info.register dbg_info info in
                 (tick :: ticks, dbg_info)
             | tick -> (tick :: ticks, dbg_info)
           end
@@ -587,14 +596,12 @@ struct
             match TickMap.find name dbg_info.ledger with
             | exception Failure _ ->
                 let tick = Tick.tick () in
-                let pos = Com.Var.name var |> Pos.get in
-                let origin = Origin.make_from_pos pos Declared in
-                let ledger = StrMap.add name tick dbg_info.ledger in
-                let runtime = Info.Runtime.make origin Undefined (Some name) in
-                let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-                let static = Info.Static.make name origin false None in
-                let statics = IntMap.add runtime.hash static dbg_info.statics in
-                let dbg_info = { dbg_info with ledger; runtimes; statics } in
+                let rule = Origin.Declared in
+                let lit_value = Com.Undefined in
+                let info =
+                  Info.make_from_var tick var rule lit_value None false
+                in
+                let dbg_info = Dbg_info.register dbg_info info in
                 (tick :: ticks, dbg_info)
             | tick -> (tick :: ticks, dbg_info)
           end
@@ -602,6 +609,13 @@ struct
     in
 
     List.fold_left trace_dep ([], dbg_info) deps
+
+  and get_rule ctx =
+    match ctx.ctx_exec_ctx with
+    | CtxRule i -> Dbg_info.Origin.Rule i
+    | CtxTarget s -> Dbg_info.Origin.Target s
+    (* FIXME: This is a debug failure, do not release as-if *)
+    | CtxUndefined -> raise @@ Failure "no rule id"
 
   and set_access ctx access vexpr =
     match get_access_var ctx access with
@@ -638,24 +652,15 @@ struct
               | (exception Failure _) | _ -> false
             in
             let pos = Pos.get vexpr in
-            let rule_id =
-              match ctx.ctx_exec_ctx with
-              | CtxRule i -> Dbg_info.Origin.Rule i
-              | CtxTarget s -> Dbg_info.Origin.Target s
-              (* FIXME: This is a debug failure, do not release as-if *)
-              | CtxUndefined -> raise @@ Failure "no rule id"
-            in
-            let lit_value = value_to_literal value in
+            let rule_id = get_rule ctx in
+            let value = value_to_literal value in
             let descr =
               match Com.Var.descr_str v with
               | exception _ -> None
               | descr -> Some descr
             in
-            let origin = Origin.make_from_pos pos rule_id in
-            let runtime = Info.Runtime.make origin lit_value (Some name) in
-            let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-            let static = Info.Static.make name origin is_input descr in
-            let statics = IntMap.add runtime.hash static dbg_info.statics in
+            let info = Info.make tick name pos rule_id value descr is_input in
+            let dbg_info = Dbg_info.register dbg_info info in
             let vert = Dbg_info.Graph.V.create tick in
             let graph = dbg_info.graph in
             let add_edge graph deptick =
@@ -663,9 +668,7 @@ struct
               Dbg_info.Graph.add_edge graph vert dep_vert
             in
             let graph = List.fold_left add_edge graph ticks in
-            let ledger = TickMap.add name tick dbg_info.ledger in
-            ctx.ctx_dbg_info <-
-              Some { dbg_info with graph; runtimes; statics; ledger })
+            ctx.ctx_dbg_info <- Some { dbg_info with graph })
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)

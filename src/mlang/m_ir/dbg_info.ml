@@ -22,7 +22,8 @@ module Origin = struct
       | Declared -> "Declared"
       | Target s -> Format.asprintf "target-%s" s
       | Const -> "const"
-    in Format.asprintf
+    in
+    Format.asprintf
       {|"origin": {"code_orig": "%s", "file": "%s", "sline": %d, "eline": %d }|}
       code_orig origin.filename origin.sline origin.eline
 end
@@ -43,14 +44,24 @@ end
 
 module Info = struct
   type t = {
+    tick : Tick.t;
     name : string;
-    var : Com.Var.t;
+    pos : Pos.t;
+    rule : Origin.code;
     value : Com.literal;
-    origin : Origin.t;
+    descr : string option;
+    is_input : bool;
   }
-  (* We've removed idx_opt, it may be needed for tables. *)
 
-  let make name var value origin = { name; var; value; origin }
+  let make tick name pos rule value descr is_input =
+    { tick; name; pos; rule; value; descr; is_input }
+
+  let make_from_var tick var rule value descr is_input =
+    let name = Com.Var.name_str var in
+    let pos = Com.Var.name var |> Pos.get in
+    make tick name pos rule value descr is_input
+
+  (* We've removed idx_opt, it may be needed for tables. *)
 
   module Runtime = struct
     type t = { hash : int; value : Com.literal; name : string option }
@@ -114,11 +125,7 @@ module TickMap = struct
     | Some tick -> tick
 end
 
-type interp_error = {
-  name: string;
-  value: float;
-  expected: float
-}
+type interp_error = { name : string; value : float; expected : float }
 
 type t = {
   graph : Graph.t;
@@ -140,6 +147,16 @@ let empty =
     ledger = StrMap.empty;
     interp_errors = Tick.Map.empty;
   }
+
+let register dbg_info Info.{ tick; name; pos; rule; value; descr; is_input } =
+  let origin = Origin.make_from_pos pos rule in
+  let runtime = Info.Runtime.make origin value (Some name) in
+  let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
+  let static = Info.Static.make name origin is_input descr in
+  let statics = IntMap.add runtime.hash static dbg_info.statics in
+  let ledger = TickMap.add name tick dbg_info.ledger in
+  let dbg_info = { dbg_info with runtimes; statics; ledger } in
+  dbg_info
 
 let to_json (fmt : Format.formatter) info : unit =
   let open Format in
@@ -216,9 +233,9 @@ let to_json (fmt : Format.formatter) info : unit =
   in
   IntMap.iter print_lit info.literals;
   delim := "";
-  let print_interp_errors tick (error: interp_error) =
-    Format.fprintf fmt {|%s"%d": {"name": %S, "value": %g, "expected": %g}|} 
-    !delim tick error.name error.value error.expected;
+  let print_interp_errors tick (error : interp_error) =
+    Format.fprintf fmt {|%s"%d": {"name": %S, "value": %g, "expected": %g}|}
+      !delim tick error.name error.value error.expected;
     delim := ","
   in
   Format.fprintf fmt {|},@."interp_errors": {@.|};

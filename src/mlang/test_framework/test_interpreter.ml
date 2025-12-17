@@ -137,7 +137,7 @@ exception InterpError of int
 
 type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
 
-type interp_error = { name : string; value: float; expected : float }
+type interp_error = { name : string; value : float; expected : float }
 
 let check_vars (program : Mir.program) exp vars =
   let test_error_margin = 0.01 in
@@ -227,11 +227,13 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           | Server _, Some dbg_info ->
               let interp_errors =
                 List.fold_left
-                  (fun map {name; value; expected } ->
+                  (fun map { name; value; expected } ->
                     let tick =
-                      Dbg_info.TickMap.find name dbg_info.ledger
+                      match Dbg_info.TickMap.find name dbg_info.ledger with
+                      | exception Failure _ -> Dbg_info.Tick.tick ()
+                      | tick -> tick
                     in
-                    let error = Dbg_info.{name; value; expected} in
+                    let error = Dbg_info.{ name; value; expected } in
                     Dbg_info.Tick.Map.add tick error map)
                   Dbg_info.Tick.Map.empty interp_errors
               in
