@@ -845,7 +845,9 @@ let generate_m_assign (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
 let generate_var_def (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t)
     (vexpr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
-  generate_m_assign p dgfip_flags m_sp_opt var oc vexpr
+  match Pos.unmark vexpr with
+  | Var (VarAccess (space, v)) when space = m_sp_opt && v = var -> ()
+  | _ -> generate_m_assign p dgfip_flags m_sp_opt var oc vexpr
 
 let generate_var_def_tab (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) (vidx : Mir.m_expression)
@@ -1064,82 +1066,122 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let print = fresh_c_local "print" in
       let print_def = print ^ "_def" in
       let print_val = print ^ "_val" in
-      pr "@;@[<v 2>{";
-      pr "@;char %s;@;double %s;@;int %s;" print_def print_val print;
-      List.iter
-        (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
-          match Pos.unmark arg with
-          | PrintString s ->
-              pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
-                (str_escape s)
-          | PrintAccess (info, m_a) -> (
-              let pr_sp m_sp_opt v_opt =
-                let vsd_id =
-                  match v_opt with
-                  | Some v -> VID.gen_var_space_id m_sp_opt v
-                  | None -> "irdata->var_space"
+      (* The [print*] variables only are needed in a few cases. *)
+      let print_var_is_needed = ref false in
+      let print_def_val_are_needed = ref false in
+      (* Iterating on the arguments and saving the associated printers in a
+         list to check as we build it if we will need the print_var; in which
+         case, we set the previous reference to true. *)
+      let printers =
+        List.map
+          (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
+            match Pos.unmark arg with
+            | PrintString s ->
+                fun () ->
+                  pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
+                    (str_escape s)
+            | PrintAccess (info, m_a) -> (
+                let pr_sp m_sp_opt v_opt =
+                  let vsd_id =
+                    match v_opt with
+                    | Some v -> VID.gen_var_space_id m_sp_opt v
+                    | None -> "irdata->var_space"
+                  in
+                  let vsd = Pp.spr "irdata->var_spaces[%s]" vsd_id in
+                  pr "@;@[<v 2>if (%s.is_default == 0) {" vsd;
+                  pr "@;print_string(%s, %s, %s.name);" print_std pr_ctx vsd;
+                  pr "@;print_string(%s, %s, \".\");" print_std pr_ctx;
+                  pr "@]@;}@;"
                 in
-                let vsd = Pp.spr "irdata->var_spaces[%s]" vsd_id in
-                pr "@;@[<v 2>if (%s.is_default == 0) {" vsd;
-                pr "@;print_string(%s, %s, %s.name);" print_std pr_ctx vsd;
-                pr "@;print_string(%s, %s, \".\");" print_std pr_ctx;
-                pr "@]@;}@;"
-              in
-              match Pos.unmark m_a with
-              | VarAccess (m_sp_opt, v) ->
-                  pr_sp m_sp_opt (Some v);
-                  let ptr = VID.gen_info_ptr v in
-                  let fld =
-                    match info with Com.Name -> "name" | Com.Alias -> "alias"
-                  in
-                  pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr fld
-              | TabAccess (m_sp_opt, v, m_idx) ->
-                  pr_sp m_sp_opt (Some v);
-                  pr "@;@[<v 2>{";
-                  pr "T_varinfo *info;";
-                  let idx_tab = Com.Var.loc_tab_idx v in
+                match Pos.unmark m_a with
+                | VarAccess (m_sp_opt, v) ->
+                    fun () ->
+                      pr_sp m_sp_opt (Some v);
+                      let ptr = VID.gen_info_ptr v in
+                      let fld =
+                        match info with
+                        | Com.Name -> "name"
+                        | Com.Alias -> "alias"
+                      in
+                      pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr
+                        fld
+                | TabAccess (m_sp_opt, v, m_idx) ->
+                    print_def_val_are_needed := true;
+                    fun () ->
+                      pr_sp m_sp_opt (Some v);
+                      pr "@;@[<v 2>{";
+                      pr "T_varinfo *info;";
+                      let idx_tab = Com.Var.loc_tab_idx v in
+                      generate_expr_with_res_in p dgfip_flags oc print_def
+                        print_val m_idx;
+                      pr "info = lis_tabaccess_varinfo(irdata, %d, %s, %s);"
+                        idx_tab print_def print_val;
+                      let fld =
+                        match info with
+                        | Com.Name -> "name"
+                        | Com.Alias -> "alias"
+                      in
+                      pr
+                        "@;\
+                         print_string(%s, %s, (info == NULL ? \"\" : \
+                         info->%s));"
+                        print_std pr_ctx fld;
+                      pr "@]@;}"
+                | FieldAccess (m_sp_opt, e, f, _) ->
+                    let fld =
+                      match info with
+                      | Com.Name -> "name"
+                      | Com.Alias -> "alias"
+                    in
+                    let ef =
+                      StrMap.find (Pos.unmark f) p.program_event_fields
+                    in
+                    print_var_is_needed := ef.is_var;
+                    print_def_val_are_needed := ef.is_var;
+                    fun () ->
+                      pr_sp m_sp_opt None;
+                      if ef.is_var then (
+                        generate_expr_with_res_in p dgfip_flags oc print_def
+                          print_val e;
+                        pr "@;%s = (int)%s;" print print_val;
+                        pr
+                          "@;\
+                           @[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) \
+                           {"
+                          print_def print print;
+                        pr
+                          "@;\
+                           print_string(%s, %s, \
+                           irdata->events[%s]->field_%s_var->%s);"
+                          print_std pr_ctx print (Pos.unmark f) fld;
+                        pr "@]@;}"))
+            | PrintIndent e ->
+                print_def_val_are_needed := true;
+                fun () ->
                   generate_expr_with_res_in p dgfip_flags oc print_def print_val
-                    m_idx;
-                  pr "info = lis_tabaccess_varinfo(irdata, %d, %s, %s);" idx_tab
-                    print_def print_val;
-                  let fld =
-                    match info with Com.Name -> "name" | Com.Alias -> "alias"
-                  in
-                  pr "@;print_string(%s, %s, (info == NULL ? \"\" : info->%s));"
-                    print_std pr_ctx fld;
+                    e;
+                  pr "@;@[<v 2>if (%s) {" print_def;
+                  pr "@;set_print_indent(%s, %s, %s);" print_std pr_ctx
+                    print_val;
                   pr "@]@;}"
-              | FieldAccess (m_sp_opt, e, f, _) ->
-                  pr_sp m_sp_opt None;
-                  let fld =
-                    match info with Com.Name -> "name" | Com.Alias -> "alias"
-                  in
-                  let ef = StrMap.find (Pos.unmark f) p.program_event_fields in
-                  if ef.is_var then (
-                    generate_expr_with_res_in p dgfip_flags oc print_def
-                      print_val e;
-                    pr "@;%s = (int)%s;" print print_val;
-                    pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {"
-                      print_def print print;
-                    pr
-                      "@;\
-                       print_string(%s, %s, \
-                       irdata->events[%s]->field_%s_var->%s);"
-                      print_std pr_ctx print (Pos.unmark f) fld;
-                    pr "@]@;}"))
-          | PrintIndent e ->
-              generate_expr_with_res_in p dgfip_flags oc print_def print_val e;
-              pr "@;@[<v 2>if (%s) {" print_def;
-              pr "@;set_print_indent(%s, %s, %s);" print_std pr_ctx print_val;
-              pr "@]@;}"
-          | PrintExpr (e, min, max) ->
-              generate_expr_with_res_in p dgfip_flags oc print_def print_val e;
-              pr "@;@[<v 2>if (%s) {" print_def;
-              pr "@;print_double(%s, %s, %s, %d, %d);" print_std pr_ctx
-                print_val min max;
-              pr "@]@;@[<v 2>} else {";
-              pr "@;print_string(%s, %s, \"indefini\");" print_std pr_ctx;
-              pr "@]@;}")
-        args;
+            | PrintExpr (e, min, max) ->
+                print_def_val_are_needed := true;
+                fun () ->
+                  generate_expr_with_res_in p dgfip_flags oc print_def print_val
+                    e;
+                  pr "@;@[<v 2>if (%s) {" print_def;
+                  pr "@;print_double(%s, %s, %s, %d, %d);" print_std pr_ctx
+                    print_val min max;
+                  pr "@]@;@[<v 2>} else {";
+                  pr "@;print_string(%s, %s, \"indefini\");" print_std pr_ctx;
+                  pr "@]@;}")
+          args
+      in
+      pr "@;@[<v 2>{";
+      if !print_def_val_are_needed then
+        pr "@;char %s;@;double %s;" print_def print_val;
+      if !print_var_is_needed then pr "@;int %s;" print;
+      List.iter (fun f -> f ()) printers;
       pr "@]@;}"
   | ComputeTarget (Pos.Mark (tn, _), targs, m_sp_opt) ->
       let target = StrMap.find tn p.program_targets in
@@ -1378,7 +1420,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let nb_events_sav = fresh_c_local "nb_events_sav" in
       let nb_add = fresh_c_local "nb_add" in
       let cpt_i = fresh_c_local "i" in
-      let cpt_j = fresh_c_local "j" in
       let evt = fresh_c_local "evt" in
       let pp_sanitize () =
         pr "@;free(irdata->events);";
@@ -1392,7 +1433,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@;int %s = 0;" nb_add;
       pr "@;T_event **%s = NULL;" events_tmp;
       pr "@;int %s = 0;" cpt_i;
-      pr "@;int %s = 0;" cpt_j;
       (match add with
       | Some expr ->
           pr "@;@[<v 2>{";
@@ -1433,6 +1473,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             nb_events_sav);
       (match filter with
       | Some (var, expr) ->
+          let cpt_j = fresh_c_local "j" in
+          pr "@;int %s = 0;" cpt_j;
           pr "@;@[<v 2>while(%s < %s) {" cpt_j nb_events_sav;
           let ref_def = VID.gen_def None var in
           (* !!! *)
@@ -1725,7 +1767,6 @@ let generate_function_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
   let nb_args = List.length tf.target_args in
   pr "@;@[<v 2>{";
   pr "@;int i;";
-  pr "@;T_varinfo *info;";
   pr "@;irdata->tmps[irdata->tmps_org].def = 0;";
   pr "@;irdata->tmps[irdata->tmps_org].val = 0.0;";
   pr "@;irdata->tmps[irdata->tmps_org].info = NULL;";
@@ -1830,7 +1871,7 @@ let generate_cible_tmp_decls (oc : Format.formatter) (tf : Mir.target) =
   if tf.target_sz_tmps > 0 then (
     pr "@;@[<v 2>{";
     pr "@;int i;";
-    pr "@;T_varinfo *info;";
+    (* pr "@;T_varinfo *info;"; *)
     pr "@;@[<v 2>@[<hov 2>for (i = 0;@ i < %d;@ i++) {@]" tf.target_sz_tmps;
     pr "@;irdata->tmps[irdata->tmps_org + i].def = 0;";
     pr "@;irdata->tmps[irdata->tmps_org + i].val = 0.0;";

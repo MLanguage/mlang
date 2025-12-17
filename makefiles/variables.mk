@@ -77,7 +77,7 @@ endif
 
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
-COMMON_CFLAGS?=-std=c89 -pedantic
+COMMON_CFLAGS?=-std=c89 -pedantic -Wall -Wno-unused-label
 ifeq ($(CC), clang)
   COMPILER_SPECIFIC_CFLAGS=-O2
 #  COMPILER_SPECIFIC_CFLAGS=
