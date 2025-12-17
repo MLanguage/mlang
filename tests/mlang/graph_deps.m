@@ -31,6 +31,9 @@ MULTILINE = X
 + Y;
 VARTMP = 1;
 A = VARTMP;
+iterer : variable I : entre 0..10 increment 1 : dans (
+  X = X+I;
+)
 cible target:
 application: app;
 calculer domaine primitive;
