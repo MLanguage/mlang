@@ -14,12 +14,12 @@ FLOAT: calculee primrest = 0: "float";
 BLABLA: saisie revenu acompte = 0 avfisc = 0 categorie_TL = 0 classe = 0 cotsoc = 0 ind_abat = 0 modcat = 0 nat_code = 0 primrest = 0 priorite = 0 rapcat = 0 sanction = 0 alias V_BLA: "blabla";
 INPUT_UNDEFINED: saisie revenu acompte = 0 avfisc = 0 categorie_TL = 0 classe = 0 cotsoc = 0 ind_abat = 0 modcat = 0 nat_code = 0 primrest = 0 priorite = 0 rapcat = 0 sanction = 0 alias IUND: "blabla";
 INPUT_DEFINED: saisie revenu acompte = 0 avfisc = 0 categorie_TL = 0 classe = 0 cotsoc = 0 ind_abat = 0 modcat = 0 nat_code = 0 primrest = 0 priorite = 0 rapcat = 0 sanction = 0 alias IDEF: "blabla";
-TAB: tableau[10] calculee primrest = 0 base : "tableau";
+TAB: tableau[7] calculee primrest = 0 base : "tableau";
 
 regle 1337:
 application: app;
 
-VARTMP = 0;
+VARTMP = TAB[1];
 TAB[0] = TAB[0] + VARTMP;
 Z = INPUT_UNDEFINED;
 FLOAT = 0.1230;
@@ -31,6 +31,21 @@ MULTILINE = X
 + Y;
 VARTMP = 1;
 A = VARTMP;
+iterer : variable I : entre 0..10 increment 1 : dans (
+  X = X+I;
+)
+# forbidden (interdit)
+# iterer : variable IT : categorie calculee base : dans (
+#   IT = 0;
+# )
 cible target:
 application: app;
 calculer domaine primitive;
+
+cible other:
+application: app;
+TAB[1] = 37;
+iterer : variable IT : categorie calculee base : dans (
+  IT = X;
+)
+calculer cible target;

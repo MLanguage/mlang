@@ -6,8 +6,8 @@ Y : calculee restituee primrest = 0 base : "y";
 
 regle 1337:
 application: app;
-X = 3;
-Y = X;
+Y = 3;
+X = Y;
 
 cible target:
 application: app;
