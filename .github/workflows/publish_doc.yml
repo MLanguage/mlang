@@ -5,6 +5,8 @@ on:
     workflows: [binary-releases]
     types:
       - completed
+  push:
+    branches: ["new-gh-pages"]
 
 jobs:
   deploy:
@@ -44,11 +46,11 @@ jobs:
       - name: Build
         run: |
           eval $(opam env)
-          make build-doc
+          make doc
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         # if: ${{ github.ref == 'refs/heads/main' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _build/default/_doc/_html/
+          publish_dir: examples/doc/
