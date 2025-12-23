@@ -3,96 +3,88 @@
 The Mlang compiler has a traditionnal architecture consisting of various
 intermediate representations going from the source code to the target backend.
 
-{1 M Frontend}
+{1 Frontend}
 
-First, the source code is parsed according to the Menhir grammar specified in
-{!module: Mlang.Mparser}. The grammar is not exactly LR(1) so we rely on {!module: Mlang.Parse_utils}
-to backtrack, especially on symbol parsing. The target intermediate representation
-is {!module: Mlang.Mast}, which is very close to the concrete syntax and can be
-printed using {!module: Mlang.Format_mast}.
+First, the source code is parsed according to the Menhir grammar specified in {!module: Mlang.M_frontend.Mparser}.
+The grammar is not exactly LR(1) so we rely on {!module: Mlang.M_frontend.Parse_utils} to backtrack, especially on symbol parsing. The target intermediate representation is {!module: Mlang.M_frontend.Mast}, which is very close to the concrete syntax and can be printed using {!module: Mlang.M_frontend.Format_mast}.
+The frontend also handles ast expansion with {!module: Mlang.M_frontend.Expander} and validation with {!module: Mlang.M_frontend.Validator}.
 
-{!modules: Mlang.Mast Mlang.Format_mast Mlang.Mparser Mlang.Parse_utils }
+{!modules:
+  Mlang.M_frontend.Expander
+  Mlang.M_frontend.Mast
+  Mlang.M_frontend.Mlexer
+  Mlang.M_frontend.Mparser
+  Mlang.M_frontend.Parse_utils
+  Mlang.M_frontend.Validator }
 
-{1 M Intermediate representation}
+{1 Intermediate Representation}
 
 The M language has a lot of weird syntactic sugars and constructs linked to its
-usage inside multiple DGFiP applications. {!module: Mlang.Mast_to_mir } extracts from the
-AST the computational core corresponding to a DGFiP application into the M Variable
-Graph ({!module: Mlang.Mir}), which consists basically of a flat map of all the definitions of
+usage inside multiple DGFiP applications. {!module: Mlang.M_frontend.Mast_to_mir} extracts from the AST of {!module: Mlang.M_frontend.Mast} the computational core corresponding to a DGFiP application into the M Variable Graph ({!module: Mlang.M_ir.Mir}), which consists basically of a flat map of all the definitions of
 the variables used in the application. The type system of M is very primitive,
-and basically all programs typecheck ; however {!module: Mlang.Mir_typechecker} provides a top-down typechecking algorithm to split simple variables from tables.
+and basically all programs typecheck ; however {!module: Mlang.M_frontend.Validator} provides a top-down typechecking algorithm to split simple variables from tables.
 
+{!modules:
+  Mlang.M_ir.Com
+  Mlang.M_ir.Format_mir
+  Mlang.M_ir.Mir
+  Mlang.M_ir.Mir_interpreter
+  Mlang.M_ir.Mir_number
+  Mlang.M_ir.Mir_roundops }
 
-At this point, the {!module: Mlang.Mir_dependency_graph} modules interprets the MIR as a first-class
-graph and computes various reachability and cycle analysis in order to determine
-the computational flow inside the program. This dependency order is encapsulated
-with the program in {!module: Mlang.Mir_interface}.
-Some typechecking and macro expansion is performed
-by {!module: Mlang.Mir_typechecker}.
+{1 Testing}
 
-{!modules: Mlang.Mir Mlang.Mast_to_mir Mlang.Format_mir Mlang.Mir_typechecker Mlang.Mir_interface Mlang.Mir_dependency_graph }
-
-{1 M++ Frontend }
-
-The M code can be called several times through a sort of driver that saves
-some variables between calls. This driver is encoded in the M++ domain-specific
-language that Mlang handles together with the M. M++ is parsed with
-{!module: Mlang.Mpp_parser}
-
-{!modules: Mlang.Mpp_parser Mlang.Mpp_ast}
-
-{1 M++ Intermediate representation }
-
-From the M++ AST, {!module: Mlang.Mpp_frontend} translates to {!module: Mlang.Mpp_ir}
-by eliminating some syntactic sugars.
-
-{!modules: Mlang.Mpp_frontend Mlang.Mpp_ir Mlang.Mpp_format}
-
-{1 M/M++ Common backend intermediate representation}
-
-The module {!module: Mlang.Mpp_ir_to_bir} performs the inlining of all the M
-calls in the M++ programs and yields a single program in a new common intermediate
-representation, {!module: Mlang.Bir}. Inputs and outputs for this representation
-can be specified using {!module: Mlang.Bir_interface}.
-
-The BIR representation is equipped with a fully fledged interpreter,
-{!module: Mlang.Bir_interpreter}. The interpreter is instrumented for code coverage
-via {!module: Mlang.Bir_instrumentation}, and can be parametrized via multiple
-sorts of custom floating point values for precision testing ({!module: Mlang.Bir_number}).
-
-{!modules: Mlang.Bir_instrumentation Mlang.Bir_interface Mlang.Bir_interpreter Mlang.Bir_number Mlang.Bir Mlang.Format_bir}
-
-{1 Optimizations }
-
-While BIR is an AST-based representation, {!module: Mlang.Oir} defines a dual
-of BIR in a control-flow-graph (CFG) for. You can go back and forth between
-those two implementations using {!module: Mpp.Bir_to_oir}.
-
-OIR is the right place to perform some basic program optimizations. {!module: Mlang.Inlining}
-expands some of the small rules into their full expressions, while
-{!module: Mlang.Partial_evaluation} and {!module: Mlang.Dead_code_removal} simplify the
-program depending on the inputs and outputs. The main optimizing loop is
-implemented in {!module: Mlang.Oir_optimizations}.
-
-{!modules: Mlang.Oir_optimizations Mlang.Inlining Mlang.Partial_evaluation Mlang.Dead_code_removal}
-
-{1 Testing M and M++ programs }
-
-Mlang comes with a testing framework for M and M++ programs that is based on
+Mlang comes with a testing framework for M programs that is based on
 the test format used by the DGFiP. The test files are parsed with
-{!module: Mlang.Test_parser} into {!module: Mlang.Test_ast}. Then, single
-or batch testing can be performed using {!module: Mlang.Test_interpreter}.
+{!module: Mlang.Irj_utils.Irj_file}. Then, single
+or batch testing can be performed using {!module: Mlang.Irj_utils.Test_interpreter}.
 
-{!modules: Mlang.Test_ast Mlang.Test_interpreter Mlang.Test_parser}
+{!modules:
+  Mlang.Irj_utils.Irj_ast
+  Mlang.Irj_utils.Irj_file
+  Mlang.Irj_utils.Irj_lexer
+  Mlang.Irj_utils.Irj_parser
+  Mlang.Irj_utils.ParserMessages
+  Mlang.Irj_utils.Test_interpreter }
 
-{1 Compiling M and M++ programs}
+{1 Compiling}
 
 M/M++ programs can be compiled to other programming languages using
 several backends that take BIR and produce source code files in their
 respective languages.
 
-{!modules: Mlang.Bir_to_python Mlang.Bir_to_c Mlang.Bir_to_dgfip_c}
+{!modules:
+  Mlang.Backend_compilers.Bir_to_dgfip_c
+  Mlang.Backend_compilers.DecoupledExpr
+  Mlang.Backend_compilers.Dgfip_compir_files
+  Mlang.Backend_compilers.Dgfip_gen_files
+  Mlang.Backend_compilers.Dgfip_varid
+  Mlang.Backend_compilers.Prelude
+  }
 
 {1 Utils }
 
-{!modules: Mlang.Cli Mlang.Errors Mlang.Pos}
+{!modules:
+  Mlang.Utils.CharMap
+  Mlang.Utils.Cli
+  Mlang.Utils.Config
+  Mlang.Utils.Dgfip_m
+  Mlang.Utils.Dgfip_options
+  Mlang.Utils.Dict
+  Mlang.Utils.Errors
+  Mlang.Utils.IntMap
+  Mlang.Utils.IntSet
+  Mlang.Utils.IntSetMap
+  Mlang.Utils.MapExt
+  Mlang.Utils.Pos
+  Mlang.Utils.Pp
+  Mlang.Utils.SetExt
+  Mlang.Utils.SetSetExt
+  Mlang.Utils.Sorting
+  Mlang.Utils.StrMap
+  Mlang.Utils.StrSet
+  Mlang.Utils.StrSetMap
+  Mlang.Utils.StrSetSet
+  Mlang.Utils.Strings
+  Mlang.Utils.TopologicalSorting
+ }
