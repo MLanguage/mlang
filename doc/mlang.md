@@ -155,20 +155,27 @@ l'option `--dgfip_options`.
 
 ## Comportement de Mlang
 
+% A faire : des modules sont référencés plus bas.
+% Ca serait bien d'avoir des liens vers les docs de ces modules.
+
 Le compilateur Mlang effectue son traitement en quatre étapes :
 * la traduction dans un format abstrait interne;
 * un pré-traitement pour le simplifier;
 * une vérification pour analyser la cohérence du code;
 * le traitement du code M, que ce soit son interprétation ou sa compilation.
 
+Le module `Driver` (et plus précisément la fonction `Driver.main`) correspond au
+point d'entrée de mlang.
+
 ### Traduction
 
 Le langage M est parsé selon les règles spécifiées dans {ref}`syntax`.
+Elle est effecuée par les modules `Mparser`, `Mlexer` et `Parse_utils`.
 
 ### Pré-traitement
 
-Le prétraitement est une opération purement syntaxique.
-Son but est triple :
+Le prétraitement est une opération purement syntaxique. Elle est effectuée par
+les modules `Expander` et `Mir`. Son but est triple :
 - éliminer les constructions relatives aux applications non-sélectionnées ;
 - remplacer les constantes par leur valeur numérique ;
 - remplacer les expressions numériques débutant par `somme` avec des
@@ -354,21 +361,31 @@ BX = BX + B09;
 BX = BX + B10;
 BZ = BZ + B09;
 BZ = BZ + B10;
-````
+```
 
 ### Vérification de cohérence
 
 De nombreuses constructions sont valides à la traduction, mais brisent
-certains invariants nécessaires à la bonne exécution du code.
+certains invariants nécessaires à la bonne exécution du code : double 
+déclaration d'attributs, nom de variable déjà utilisé, variable mal 
+typée...
+L'ensemble de ces vérifications est accessible dans le module 
+`Validator` du frontend. Le sous module `Validator.Err` définit l'ensemble 
+des erreurs levées par cette étape de vérification.
 
-% A faire : documentation de la verification
+**NB** : seule la première erreur rencontrée par le validateur est levée.
 
 ### Traitement
 
 #### Interpreteur
 
-Lecture du fichier IRJ et interpretation du code.
+L'interpréteur utilise la représentation interne du code M
+pour lancer le calcul à partir d'un fichier IRJ 
+(voir {ref}`syntax_irj`).
+L'interprétation est effecuée par le module `Test_interpreter`.
 
 #### Transpilation
 
-Ecriture du code C équivalent au code M.
+La transpilation traduit le code dans le langage spécifié (en 2025, seul le C 
+est transpilable). La transpilation est effecutée dans le module 
+`Bir_to_dgfip_c`.
