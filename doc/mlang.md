@@ -2,6 +2,63 @@
 
 # Le compilateur MLang
 
+## Installer
+
+Mlang est implanté en OCaml. L'utilisation du gestionnaire de paquets OCaml `opam`
+est fortement recommandée.
+Vous pouvez l'installer via votre gestionnaire de paquet préféré s'il distribue
+`opam`, ou bien en vous referant à la [documentation d'opam](https://opam.ocaml.org/doc/Install.html).
+Mlang a également quelques autres dépendances, dont une vers la librairie de calcul
+de flotants MPFR. Si vous êtes sous Debian, vous pouvez simplement utiliser la commande
+suivante pour installer toutes les dépendances externes à OCaml :
+
+```
+$ sudo apt install \
+	libgmp-dev \
+	libmpfr-dev \
+	git \
+	patch \
+	unzip \
+	bubblewrap \
+	bzip2 \
+	opam
+```
+
+Si vous n'avez jamais utilisé `opam`, commencez par lancer :
+
+```
+$ opam init
+$ opam update
+```
+
+Enfin, vous pouvre initialiser le projet `mlang` avec 
+
+```
+$ make init
+```
+
+**Note pour les utilisateurs d'opam confirmés** : la commande `make init` crée 
+un switch local où seront installées les dépendances OCaml de mlang. 
+
+Cette commande initialise le dossier `ir-calcul` dans lequel sont poussés
+le code de calcul primitif de l'impot sur le revenu.
+
+Si besoin, la commande
+```
+$ make deps
+```
+réinstallera les dépendances OCaml et mettra à jour le dossier `ir-calcul`.
+
+Une fois compilé, vous pouvez soit appeler mlang via la commande :
+```
+$ opam exec -- mlang
+```
+tant que vous êtes dans le dossier depuis lequel vous avez compilé, soit
+l'installer localement avec la commande :
+```
+opam install ./mlang.opam
+```
+
 ## Utiliser MLang
 
 Le binaire `mlang` prend en argument le fichier *M* à exécuter. 
@@ -10,8 +67,9 @@ traitement sera équivalent au traitement d'un seul et même fichier dans lequel
 serait concatené le contenu de chaque fichier.
 %%
 
-Les deux options principales sont : 
+Les options principales sont : 
 * `-A`: le nom de l'application à traiter;
+* `-b`: le mode d'utilisation, ou `backend`;
 * `--mpp_function`: le nom de la fonction principale à traiter.
 
 ### Mode interpreteur
@@ -49,7 +107,8 @@ NB: le dossier `output` doit avoir été créé en amont.
 
 ### Options DGFiP
 
-Les options DGFiP sont à usage interne.
+Les options DGFiP sont à usage interne. Elles sont spécifiées dans
+l'option `--dgfip_options`.
 
 ```
        -b VAL
@@ -94,11 +153,17 @@ Les options DGFiP sont à usage interne.
        -Z  Colored output in chainings
 ```
 
-## Comportement de mlang
+## Comportement de Mlang
+
+Le compilateur Mlang effectue son traitement en quatre étapes :
+* la traduction dans un format abstrait interne;
+* un pré-traitement pour le simplifier;
+* une vérification pour analyser la cohérence du code;
+* le traitement du code M, que ce soit son interprétation ou sa compilation.
 
 ### Traduction
 
-% A faire : traduction du M en M_AST
+Le langage M est parsé selon les règles spécifiées dans {ref}`syntax`.
 
 ### Pré-traitement
 
@@ -292,6 +357,9 @@ BZ = BZ + B10;
 ````
 
 ### Vérification de cohérence
+
+De nombreuses constructions sont valides à la traduction, mais brisent
+certains invariants nécessaires à la bonne exécution du code.
 
 % A faire : documentation de la verification
 
