@@ -68,6 +68,10 @@ let parse_files socket payload =
   let callbacks = make_callbacks socket in
   ServerDriver.parse_files callbacks filemap
 
+let send_log socket msg =
+  Dream.log "[sending] %s" msg;
+  Dream.send socket msg
+
 let run socket payload =
   let payload : Msg.In.run = Msg.In.run_of_yojson payload in
   let callbacks = make_callbacks socket in
@@ -78,20 +82,21 @@ let run socket payload =
     in
     Format.printf "%s@." dbg_info;
     let msg = Msg.Out.run_ret @@ Ok dbg_info in
-    Dream.send socket msg
+    send_log socket msg
   with
   | Errors.StructuredError (a, b, _) ->
       let msg = asf "%a@." Errors.format_structured_error (a, b) in
       let msg = Msg.Out.run_ret @@ Err msg in
-      Dream.send socket msg
+      send_log socket msg
   | e ->
       let msg = Printexc.to_string e in
       let msg = Msg.Out.run_ret @@ Err msg in
-      let%lwt () = Dream.send socket msg in
+      let%lwt () = send_log socket msg in
       raise e
 
 let () =
   Dream.run ~port:4242
+  @@ Dream.logger
   @@ Dream.router
        [
          Dream.get "/websocket" (fun _ ->
@@ -99,7 +104,7 @@ let () =
                  let rec loop () =
                    match%lwt Dream.receive socket with
                    | Some msg ->
-                       print_endline msg;
+                       Dream.log "received msg: %s" msg;
                        let json = Yojson.Safe.from_string msg in
                        let id = Json.member "id" json in
                        let payload = Json.member "payload" json in
