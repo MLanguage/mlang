@@ -247,3 +247,12 @@ more details.
 ## License
 
 The compiler is released under the GPL license (version 3).
+
+# The Mlang server backend
+
+Mlang now ships with a backend for Marple, a way to debug and trace execution of M programs.
+
+## Launch
+
+You can launch the server by doing `dune exec src/server.exe`. This will show you an url,
+that you can then input into Marple, starting with the host: ie. `localhost:4242`.
