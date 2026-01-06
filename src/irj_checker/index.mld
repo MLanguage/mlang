@@ -1,0 +1,31 @@
+{0 Irj checker}
+
+The Irj_checker Module is a simple entry point to use the Mlang IRJ file
+parser in order to perform syntactic checks on test files or produce other
+IR test formats.
+
+{1 Usage}
+       irj_checker \[--message-format=VAL\] \[--validation-mode=VAL\] \[OPTION\]…
+       \[FILE\] \[TARGET\]
+
+{1 Arguments}
+       - FILE : Test file (usually with the .irj extension)
+
+       - TARGET (absent=none) :
+       	   Transformation  target, among the following list: none (only checks
+           test  syntax),  pasp  (API  PAS-CALC  for   primitive   computation
+           resources),   pasc   (API   PAS-CALC   for  corrective  computation
+           resources).
+
+{1 Options}
+       - -m VAL, --message-format=VAL (absent=human) :
+           Selects the format of error and warning  messages  emitted  by  the
+           compiler.  If  set  to human, the messages will be nicely displayed
+           and meant to be read by a human. If set to gnu, the  messages  will
+           be rendered according to the GNU coding standards.
+
+       - -v VAL, --validation-mode=VAL (absent=strict) :
+           Select the validation criteria. If set to strict, the whole grammar
+           is   applied.   If   set  to  corrective  or  primitive,  only  the
+           corresponding files are accepted, for instance  primitive  file  in
+           corrective mode will raise an error.
