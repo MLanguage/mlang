@@ -37,18 +37,5 @@ all: FORCE quick_test tests test_dgfip_c_backend
 clean: FORCE remise_a_zero_versionnage
 	$(call make_in,$(DGFIP_DIR),clean_backend_all)
 	rm -f doc/doc.html
+	rm -rf examples/doc 
 	dune clean
-
-doc-deps: FORCE
-	python3 -m venv .venv
-	.venv/bin/pip install sphinx myst-parser
-
-sphinx-doc: FORCE
-	@command -v .venv/bin/sphinx-build >/dev/null 2>&1 || \
-	{ echo "Pour construire la documentation, vous avez besoin de sphinx-build avec \
-		l'extension 'myst-parser'. Lancez `make doc-deps`."; exit 1; }
-	rm -rf _build/default/doc/*
-	cp -rf doc/* _build/default/doc/
-	mkdir -p examples/doc
-	.venv/bin/sphinx-build -M html _build/default/doc/ examples/doc
-	.venv/bin/sphinx-build -M latexpdf _build/default/doc/ examples/doc
