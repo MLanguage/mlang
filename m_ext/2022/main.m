@@ -19,7 +19,12 @@ calculer cible calcul;
 
 cible enchainement_primitif_interpreteur:
 application: iliad;
-V_IND_TRAIT = 4; # primitif
-calculer cible enchainement_primitif;
-exporte_erreurs;
+si MODE_CORR + 0 = 1 alors
+  calculer cible enchaineur_primitif;
+  calculer cible enchaineur_correctif;
+sinon
+  V_IND_TRAIT = 4; # primitif
+  calculer cible enchainement_primitif;
+  exporte_erreurs;
+finsi
 

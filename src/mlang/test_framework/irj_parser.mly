@@ -59,16 +59,14 @@ irj_file:
   endmark {
     let nom =
       match nom with
-      | [n] -> if String.length n > 80 then
-               error $loc(nom) "Name too big for autotest"
-               else n
       | [] -> error $loc(nom) "Missing name in section #NOM"
-      | _ -> error $loc(nom) "Extra line(s) in section #NOM"
+      | l -> String.concat "" l
     in
     { nom; prim; rapp } }
 | EOF { error $loc "Empty test file" }
 
 endmark:
+| ENDSHARP EOF { () }
 | ENDSHARP NL EOF { () }
 | EOF { error $loc "Unexpected end on file, missing ##"}
 
@@ -109,6 +107,7 @@ rappels:
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (Pos.mark var (mk_position $loc(var)), Pos.mark value (mk_position $loc(value))) }
+| var = SYMBOL SLASH? NL { (Pos.mark var (mk_position $loc(var)), Pos.without (F 0.0)) }
 
 calc_error:
 | error = SYMBOL NL { Pos.mark error (mk_position $sloc) }

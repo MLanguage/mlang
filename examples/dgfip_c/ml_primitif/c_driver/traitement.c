@@ -410,8 +410,7 @@ int traitement(char *chemin, T_options opts) {
     case Correctif:
       ecrisVar(tgv, "MODE_CORR", 1, 1.0);
       initDefs(tgv, opts->args.trt.defs);
-      enchaineur_primitif(tgv);
-      enchaineur_correctif(tgv);
+      enchainement_primitif_interpreteur(tgv);
       ok = controleResultat(tasTrt, tgv, resRap, ctlRap);
       break;
   }

@@ -32,23 +32,21 @@ type instance = {
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     instance list =
+  let add_var name value map =
+    try
+      let var = find_var_of_name program (Pos.without name) in
+      Com.Var.Map.add var (Com.Float value) map
+    with _ -> map
+  in
   let vars =
     let map_init =
-      try
-        let ancsded = find_var_of_name program (Pos.without "V_ANCSDED") in
-        let ancsded_val = Com.Float (float_of_int (!Config.income_year + 1)) in
-        Com.Var.Map.one ancsded ancsded_val
-      with _ -> Com.Var.Map.empty
+      Com.Var.Map.empty
+      |> add_var "V_ANCSDED" (float (!Config.income_year + 1))
+      |> add_var "V_MILLESIME" (float !Config.income_year)
     in
     List.fold_left
-      (fun in_f (Pos.Mark (var, var_pos), Pos.Mark (value, _value_pos)) ->
-        let var = find_var_of_name program (Pos.mark var var_pos) in
-        let lit =
-          match value with
-          | Irj_ast.I i -> Com.Float (float i)
-          | F f -> Com.Float f
-        in
-        Com.Var.Map.add var lit in_f)
+      (fun in_f (Pos.Mark (var, _var_pos), Pos.Mark (value, _value_pos)) ->
+        add_var var (match value with Irj_ast.I i -> float i | F f -> f) in_f)
       map_init t.prim.entrees
   in
   let eventsList rappels =
@@ -65,9 +63,9 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     in
     let fromDirection = function
       | "R" -> Com.Numeric (Com.Float 0.0)
-      | "C" -> Com.Numeric (Com.Float 1.0)
-      | "M" -> Com.Numeric (Com.Float 2.0)
-      | "P" -> Com.Numeric (Com.Float 3.0)
+      | "M" -> Com.Numeric (Com.Float 1.0)
+      | "P" -> Com.Numeric (Com.Float 2.0)
+      | "C" -> Com.Numeric (Com.Float 3.0)
       | s ->
           Cli.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
             s;
@@ -89,6 +87,9 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       |> StrMap.add "base_tl" (optToNum rappel.base_tolerance_legale)
       |> StrMap.add "date" (toNum rappel.month_year)
       |> StrMap.add "2042_rect" (optToNum rappel.decl_2042_rect)
+      |> StrMap.add "anc_penalite" (optToNum None)
+      |> StrMap.add "id_evt" (optToNum None)
+      |> StrMap.add "strate" (optToNum None)
     in
     List.map toEvent rappels
   in
@@ -103,35 +104,17 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     let fold res ano = StrSet.add ano res in
     List.fold_left fold StrSet.empty (List.map Pos.unmark anos_init)
   in
-  let set_trait f vars =
-    try
-      let ind_trait = find_var_of_name program (Pos.without "V_IND_TRAIT") in
-      Com.Var.Map.add ind_trait (Com.Float f) vars
-    with _ -> vars
-  in
   match t.rapp with
   | None ->
-      let vars = set_trait 4.0 vars in
       let expectedVars = expVars t.prim.resultats_attendus in
       let expectedAnos = expAnos t.prim.controles_attendus in
       [ { label = "primitif"; vars; events = []; expectedVars; expectedAnos } ]
   | Some rapp ->
-      let corr =
-        let vars = set_trait 5.0 vars in
-        let events = eventsList rapp.entrees_rappels in
-        let expectedVars = expVars rapp.resultats_attendus in
-        let expectedAnos = expAnos rapp.controles_attendus in
-        { label = "correctif"; vars; events; expectedVars; expectedAnos }
-      in
-      let expectedVars = expVars t.prim.resultats_attendus in
-      let expectedAnos = expAnos t.prim.controles_attendus in
-      if not (StrMap.is_empty expectedVars && StrSet.is_empty expectedAnos) then
-        let vars = set_trait 4.0 vars in
-        let prim =
-          { label = "primitif"; vars; events = []; expectedVars; expectedAnos }
-        in
-        [ prim; corr ]
-      else [ corr ]
+      let vars = add_var "MODE_CORR" 1.0 vars in
+      let events = eventsList rapp.entrees_rappels in
+      let expectedVars = expVars rapp.resultats_attendus in
+      let expectedAnos = expAnos rapp.controles_attendus in
+      [ { label = "correctif"; vars; events; expectedVars; expectedAnos } ]
 
 exception InterpError of int
 
@@ -252,7 +235,9 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       Cli.result_print "%s" name;
       (name :: successes, failures)
     with
-    | InterpError nbErr -> (successes, StrMap.add name nbErr failures)
+    | InterpError nbErr ->
+        Cli.error_print "%s" name;
+        (successes, StrMap.add name nbErr failures)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
@@ -279,8 +264,9 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         (new_s @ old_s, StrMap.union (fun _ x1 x2 -> Some (x1 + x2)) old_f new_f))
     (*
     Array.fold_left (fun acc name -> process name acc) ([], StrMap.empty) arr
-*)
+    *)
   in
+
   (* finish "done!"; *)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;

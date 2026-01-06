@@ -78,11 +78,11 @@ module type S = sig
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_old_anos : StrSet.t;
     mutable ctx_nb_anos : int;
     mutable ctx_nb_discos : int;
     mutable ctx_nb_infos : int;
     mutable ctx_nb_bloquantes : int;
+    mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
