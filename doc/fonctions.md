@@ -140,6 +140,11 @@ S'il s'agit d'une variable, `taille` renvoie `1`, sinon elle renvoie la taille d
 tableau.
 Elle échoue si l'argument est une constante ou une valeur.
 
+## type(V, type)
+
+Cette fonction prend en argument une variable et un type. Elle
+renvoie 1 si V est du type donné, 0 sinon.
+
 % TODO
 
 % ## numero_compil()

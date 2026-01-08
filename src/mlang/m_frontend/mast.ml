@@ -164,7 +164,7 @@ type computed_variable = {
       (** The variable's categories (which define the variable's attributes). *)
   comp_typ : Com.value_typ Pos.marked option;
       (** An optional type for the variable. By default, it will be treated as a
-          real. *)
+          real, but tests on types will always result to 0. *)
   comp_is_givenback : bool;  (** Whether it is "restituee" or not. *)
   comp_description : string Pos.marked;
       (** The documentation of the variable. *)
