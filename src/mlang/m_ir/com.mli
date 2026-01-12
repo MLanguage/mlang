@@ -12,13 +12,13 @@
 
 (** {2 Categories} *)
 
-(** High level representation of categories of variable.
-    In practice, there only are two types of categories:
-    * "calculee" (Input) variables, with several sub categories;
-    * "saisie" (Computed) variable, that can either be base or non-base.
+(** High level representation of categories of variable. In practice, there only
+    are two types of categories: * "calculee" (Input) variables, with several
+    sub categories; * "saisie" (Computed) variable, that can either be base or
+    non-base.
 
-    Such representation allows to manipulate sets of variable (for example
-    in iterations). *)
+    Such representation allows to manipulate sets of variable (for example in
+    iterations). *)
 module CatVar : sig
   type t =
     | Input of StrSet.t
@@ -30,10 +30,12 @@ module CatVar : sig
   (** A category containing all inputs. *)
 
   val is_input : t -> bool
-  (** Returns [true] if the category in argument is an input variable category. *)
+  (** Returns [true] if the category in argument is an input variable category.
+  *)
 
   val is_computed : t -> bool
-  (** Returns [true] if the category in argument is a computed variable category. *)
+  (** Returns [true] if the category in argument is a computed variable
+      category. *)
 
   val pp : Format.formatter -> t -> unit
   (** Pretty printer. *)
@@ -49,10 +51,9 @@ module CatVar : sig
     (** [from_string_list l]
 
         From a category identifier [l] seen as a list of strings (for example
-        [\["saisie"; "revenu"; "corrective"\]] for the category
-        ["saisie revenu corrective"]),
-        returns a map binding all [CatVar.t] values refered by [l] to the location
-        of [l]. *)
+        [["saisie"; "revenu"; "corrective"]] for the category
+        ["saisie revenu corrective"]), returns a map binding all [CatVar.t]
+        values refered by [l] to the location of [l]. *)
   end
 
   type loc = LocComputed | LocBase | LocInput
@@ -85,11 +86,11 @@ type value_typ =
 
 (** {2 Variables} *)
 
-(** Note: TGV stands for "Tableau Général des Variables".
-    This is where the variables are declared. *)
+(** Note: TGV stands for "Tableau Général des Variables". This is where the
+    variables are declared. *)
 
 type loc_tgv = {
-  loc_cat : CatVar.loc;  (** Its category kind  *)
+  loc_cat : CatVar.loc;  (** Its category kind *)
   loc_idx : int;  (** TODO *)
   loc_tab_idx : int;  (** TODO *)
   loc_cat_id : CatVar.t;  (** Full details on its category *)
@@ -156,8 +157,8 @@ module Var : sig
   (** Same as [name] without the mark. *)
 
   val get_table : t -> t Array.t option
-  (** Returns the table represented by the variable, if relevant.
-      Returns [None] on references. *)
+  (** Returns the table represented by the variable, if relevant. Returns [None]
+      on references. *)
 
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
@@ -166,30 +167,34 @@ module Var : sig
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
-  (** Returns the category of a TGV variable; fails if it is not a TGV variable.  *)
+  (** Returns the category of a TGV variable; fails if it is not a TGV variable.
+  *)
 
   val size : t -> int
   (** Returns the size of a variable: the size of the array if it is a table; 1
       otherwise. *)
 
   val alias : t -> string Pos.marked option
-  (** Returns the variable's alias if any, otherwise returns None.
-      Aliases only are set for input variables. *)
+  (** Returns the variable's alias if any, otherwise returns None. Aliases only
+      are set for input variables. *)
 
   val alias_str : t -> string
   (** Same as [alias] without the mark, or "" if no alias was given. *)
 
   val descr : t -> string Pos.marked
-  (** Returns the description of the variable; fails if it is not a TGV variable. *)
+  (** Returns the description of the variable; fails if it is not a TGV
+      variable. *)
 
   val descr_str : t -> string
   (** Same as [descr] without the mark. *)
 
   val attrs : t -> int Pos.marked StrMap.t
-  (** Returns the attributes of a TGV variable; fails if it is not a TGV variable. *)
+  (** Returns the attributes of a TGV variable; fails if it is not a TGV
+      variable. *)
 
   val cat : t -> CatVar.t
-  (** Returns the category of a TGV variable; fails if it is not a TGV variable. *)
+  (** Returns the category of a TGV variable; fails if it is not a TGV variable.
+  *)
 
   val typ : t -> value_typ option
   (** Returns the type of a TGV variable; fails if it is not a TGV variable. *)
@@ -329,19 +334,17 @@ type unop = Not | Minus
 (** Binary operators. *)
 type binop = And | Or | Add | Sub | Mul | Div | Mod
 
-(** Comparison operators.
-    Comparison always return 0 or 1 when the compared values are both
-    defined; otherwise, it returns 'undefined'.
+(** Comparison operators. Comparison always return 0 or 1 when the compared
+    values are both defined; otherwise, it returns 'undefined'.
 
-    Note that this is even true when comparing undefined with undefined:
-    the proper way to test if a value is undefined is through the function
+    Note that this is even true when comparing undefined with undefined: the
+    proper way to test if a value is undefined is through the function
     'PresentFunc' (present). *)
 type comp_op = Gt | Gte | Lt | Lte | Eq | Neq
 
-(** Functions callable in M.
-    There is only a subset of the whole M functions; some are translated
-    into dedicated expressions at parsing (champ_evenement for example
-    is directly transformed into an {!access} to a variable). *)
+(** Functions callable in M. There is only a subset of the whole M functions;
+    some are translated into dedicated expressions at parsing (champ_evenement
+    for example is directly transformed into an {!access} to a variable). *)
 type func =
   | SumFunc  (** Sums the arguments *)
   | AbsFunc  (** Absolute value *)
@@ -380,8 +383,8 @@ type var_name = Normal of string | Generic of var_name_generic
 type m_var_name = var_name Pos.marked
 
 type var_space = (m_var_name * int) option
-(** The prefix of a variable that defines its space.
-    No space is equivalent to the default space. *)
+(** The prefix of a variable that defines its space. No space is equivalent to
+    the default space. *)
 
 (** A generic representation of an access to a variable, read or write. *)
 type 'v access =
@@ -517,8 +520,7 @@ type stop_kind =
   | SKTarget  (** Leave the current target *)
   | SKFun  (** Leave the current function *)
   | SKId of string option
-      (** Leave the iterator with the selected var
-    (or the current if [None]) *)
+      (** Leave the iterator with the selected var (or the current if [None]) *)
 
 (** {2 Instructions} *)
 
@@ -580,8 +582,8 @@ type ('v, 'e) target = {
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
 }
-(** A target is a list of instructions. They are very similar to rules,
-    except targets are entrypoints of the M program. *)
+(** A target is a list of instructions. They are very similar to rules, except
+    targets are entrypoints of the M program. *)
 (* TODO: target doc *)
 
 (** {2 Utils} *)
