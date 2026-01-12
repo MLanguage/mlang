@@ -55,7 +55,7 @@ type stats = {
   nb_all_tables : int;
   sz_all_tables : int;
   max_nb_args : int;
-  table_map : Com.Var.t IntMap.t;
+  table_map : Com.Var.t array;
 }
 
 type program = {

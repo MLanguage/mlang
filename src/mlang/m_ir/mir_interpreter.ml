@@ -177,10 +177,7 @@ struct
         org = -1;
       }
     in
-    let ctx_tab_map =
-      let init i = IntMap.find i p.program_stats.table_map in
-      Array.init (IntMap.cardinal p.program_stats.table_map) init
-    in
+    let ctx_tab_map = p.program_stats.table_map in
     let ctx_var_spaces =
       let init i =
         let vsd = IntMap.find i p.program_var_spaces_idx in

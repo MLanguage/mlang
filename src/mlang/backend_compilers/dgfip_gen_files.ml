@@ -91,8 +91,8 @@ let gen_table_tmp_varinfo (cprog : Mir.program) fmt =
 let gen_table_tab_varinfo (cprog : Mir.program) fmt =
   let table_map = cprog.program_stats.table_map in
   Pp.fpr fmt "T_varinfo *tab_varinfo[TAILLE_TAB_VARINFO + 1] = {\n";
-  IntMap.iter
-    (fun _ var ->
+  Array.iter
+    (fun var ->
       let idx = Com.Var.loc_cat_idx var in
       let name = Com.Var.name_str var in
       if Com.Var.is_tgv var then
@@ -662,7 +662,7 @@ let gen_lib fmt (cprog : Mir.program) flags =
   Pp.fpr fmt "#define TAILLE_TMP_VARS %d\n" cprog.program_stats.sz_all_tmps;
   Pp.fpr fmt "#define TAILLE_REFS %d\n" cprog.program_stats.nb_all_refs;
   Pp.fpr fmt "#define TAILLE_TAB_VARINFO %d\n"
-    (IntMap.cardinal cprog.program_stats.table_map);
+    (Array.length cprog.program_stats.table_map);
 
   Pp.fpr fmt
     {|#define ANOMALIE     1
