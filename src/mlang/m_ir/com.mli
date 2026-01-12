@@ -568,8 +568,6 @@ type ('v, 'e) instruction =
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
-(** A target is a list of instructions. They are very similar to rules,
-    except targets are entrypoints of the M program. *)
 type ('v, 'e) target = {
   target_name : string Pos.marked;
   target_file : string option;
@@ -582,6 +580,8 @@ type ('v, 'e) target = {
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
 }
+(** A target is a list of instructions. They are very similar to rules,
+    except targets are entrypoints of the M program. *)
 (* TODO: target doc *)
 
 (** {2 Utils} *)

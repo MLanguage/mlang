@@ -14,6 +14,6 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-(** {!module: Mast} to {!module: Mir} translation of M programs. *)
+(** {!module: Mast} to {!module: M_ir.Mir} translation of M programs. *)
 
 val translate : Validator.program -> Mir.program
