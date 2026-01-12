@@ -205,7 +205,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
         nb_all_tables = 0;
         sz_all_tables = 0;
         max_nb_args = 0;
-        table_map = IntMap.empty;
+        table_map = [||];
       }
   in
   (prog, stats)
@@ -286,36 +286,45 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
 
 let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
-  let prog_dict, table_map, nb_all_tables, sz_all_tables =
-    let map_add var map = IntMap.add (IntMap.cardinal map) var map in
-    let fold_vars id v (prog_dict, map, nb_all, sz_all) =
+  let prog_dict, num_vars, rev_vars, nb_all_tables, sz_all_tables =
+    let fold_vars id v (prog_dict, num_vars, rev_vars, nb_all, sz_all) =
       match Com.Var.get_table v with
-      | None -> (prog_dict, map, nb_all, sz_all)
+      | None -> (prog_dict, num_vars, rev_vars, nb_all, sz_all)
       | Some tab ->
           let nb_all = nb_all + 1 in
           let vsz = Com.Var.size v in
-          let v = Com.Var.set_loc_tab_idx v (IntMap.cardinal map) in
-          let map = map_add v map in
-          let map, tab =
+          let v = Com.Var.set_loc_tab_idx v num_vars in
+          let new_num_vars = num_vars + 1 in
+          let map = v :: rev_vars in
+          let map, tab, num_iVars =
             let rec loop map tab i =
-              if i = vsz then (map, tab)
+              if i = vsz then (map, tab, i)
               else
                 let iVar = IntMap.find tab.(i).Com.Var.id prog_dict in
-                let map = map_add iVar map in
+                let map = iVar :: map in
                 tab.(i) <- iVar;
                 loop map tab (i + 1)
             in
             loop map tab 0
           in
+          let new_num_vars' = new_num_vars + num_iVars in
           let v = Com.Var.set_table v (Some tab) in
           let prog_dict = IntMap.add id v prog_dict in
           let sz_all = sz_all + vsz in
-          (prog_dict, map, nb_all, sz_all)
+          (prog_dict, new_num_vars', map, nb_all, sz_all)
     in
-    IntMap.fold fold_vars prog.prog_dict (prog.prog_dict, IntMap.empty, 0, 0)
+    IntMap.fold fold_vars prog.prog_dict (prog.prog_dict, 0, [], 0, 0)
   in
+  assert (List.length rev_vars = num_vars);
   let prog = { prog with prog_dict } in
-  let stats = { stats with nb_all_tables; sz_all_tables; table_map } in
+  let stats =
+    {
+      stats with
+      nb_all_tables;
+      sz_all_tables;
+      table_map = Array.of_list @@ List.rev rev_vars;
+    }
+  in
   (prog, stats)
 
 let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
