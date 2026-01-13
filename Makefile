@@ -21,7 +21,7 @@ include $(ROOT_DIR)/makefiles/c_backend.mk
   create-switch init-without-switch init deps \
   format dune build build-static \
   doc \
-  test tests quick_test test_one \
+  test tests quick_test test_one test_cram \
   calc_dir info_c calc_o dgfip_c_backend compile_dgfip_c_backend \
   backend_tests test_dgfip_c_backend \
   clean_backend clean_backend_c clean_backend_exe clean_backend_tmp clean_backend_res clean_backend_all
