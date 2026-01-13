@@ -1,7 +1,6 @@
 # correctif
 # testé avec la révision 36674
 
-AFF : const = 0;
 CPTOTO : calculee primrest = 0 : "";
 
 MAX_ID_EVT: calculee primrest = 0 : "" ;
@@ -334,53 +333,12 @@ iterer
 )
 stop application;
 
-cible aff:
-application: iliad;
-arguments: VAR;
-si positif(AFF) alors
-  afficher_erreur "prout " nom(VAR) " = " (VAR) "\n";
-finsi
-
 cible enchaine_calcul_corr_5:
 application: iliad;
 V_ACO_MTAP = 0;
 V_NEGACO = 0;
-si positif(AFF) alors
-  afficher_erreur "prout 0 " nom(GLOBAL.CPTOTO) " = " (GLOBAL.CPTOTO + 0) "\n";
-  calculer cible aff : avec TL_MF;
-  calculer cible aff : avec MFIR;
-  calculer cible aff : avec FLAG_RETARD;
-  calculer cible aff : avec FLAG_DEFAUT;
-  calculer cible aff : avec PASS_TLIR;
-  calculer cible aff : avec NUM_IR_TL;
-  calculer cible aff : avec DEN_IR_TL;
-  calculer cible aff : avec RAP_RNI;
-  calculer cible aff : avec RAP_EFF;
-  calculer cible aff : avec RAP_PVQ;
-  calculer cible aff : avec RAP_PV;
-  calculer cible aff : avec RAP_RI;
-  calculer cible aff : avec RAP_CI;
-
-  afficher_erreur "prout\n";
-finsi
 nettoie_erreurs;
 calculer cible traite_double_liquidation_2;
-si positif(AFF) alors
-  calculer cible aff : avec TL_MF;
-  calculer cible aff : avec MFIR;
-  calculer cible aff : avec FLAG_RETARD;
-  calculer cible aff : avec FLAG_DEFAUT;
-  calculer cible aff : avec PASS_TLIR;
-  calculer cible aff : avec NUM_IR_TL;
-  calculer cible aff : avec DEN_IR_TL;
-  calculer cible aff : avec RAP_RNI;
-  calculer cible aff : avec RAP_EFF;
-  calculer cible aff : avec RAP_PVQ;
-  calculer cible aff : avec RAP_PV;
-  calculer cible aff : avec RAP_RI;
-  calculer cible aff : avec RAP_CI;
-  afficher_erreur "prout ---\n";
-finsi
 GLOBAL.CPTOTO = GLOBAL.CPTOTO + 1;
 
 cible enchaine_calcul_prim_copie:
@@ -1651,24 +1609,14 @@ si GLOBAL.TL_D2042_INIT_NB > 0 alors
   si GLOBAL.TL_NON_ACQUISE != TL_TL_ACQUISE alors
     CORR.IND_TL_MF = 1;
   finsi
-calculer cible aff : avec GLOBAL.TL_NON_ACQUISE;
-calculer cible aff : avec CORR.IND_TL_MF;
   calculer cible init_1731;
-  si positif(AFF) alors
-    afficher_erreur "prout 000\n";
-  finsi
   calculer cible enchaine_calcul_corr;
-calculer cible aff : avec CORR.TL_MF;
   calculer cible sauve_base_tl_init_corr;
-calculer cible aff : avec CORR.TL_MF;
 finsi
 si GLOBAL.TL_D2042_NB > 0 alors
   calculer cible reset_saisie_calc;
   calculer cible remplit_tgv_tl_d2042;
   calculer cible init_1731;
-  si positif(AFF) alors
-    afficher_erreur "prout 111\n";
-  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible signaler_erreurs;
   calculer cible sauve_base_tl_corr;
@@ -1677,9 +1625,6 @@ si GLOBAL.TL_D2042_RECT_NB > 0 alors
   calculer cible reset_saisie_calc;
   calculer cible remplit_tgv_tl_d2042_rect;
   calculer cible init_1731;
-  si positif(AFF) alors
-    afficher_erreur "prout 222\n";
-  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible signaler_erreurs;
   calculer cible sauve_base_tl_rect_corr;
@@ -1976,9 +1921,6 @@ iterer
         finsi
       finsi
     finsi
-si positif(AFF) alors
-  afficher_erreur "prout MF_DEF = " (MF_DEF) "\n";
-finsi
     si MF_DEF != 0 alors
       calculer cible alias_commence_par_7 : avec COMMENCE_PAR_7, champ_evenement(R, code);
       calculer cible alias_commence_par_H : avec COMMENCE_PAR_H, champ_evenement(R, code);
@@ -2795,9 +2737,6 @@ si GLOBAL.MAJO_D2042_P_NB > 0 et NB_RAPPELS_P != 0 alors
   CORR.FLAG_RETARD0718 = GLOBAL.RETARD0718;
   CORR.IND_RJLJ = GLOBAL.CORR_RJLJ;
   calculer cible init_1731;
-  si positif(AFF) alors
-    afficher_erreur "333\n";
-  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible verif_calcul_corrective_corr;
   calculer cible signaler_erreurs;
@@ -3251,14 +3190,7 @@ cible prepare_1731_aux:
 application: iliad;
 arguments: R, IS_PREMIER, MAJ_TGV_COPIE;
 si positif(MAJ_TGV_COPIE) alors
-  si positif(AFF) alors
-    afficher_erreur "prout 0 set_rappel\n";
-    afficher_erreur "prout 0 " alias(champ_evenement(R, code)) " = " (champ_evenement(R, code)) "\n";
-  finsi
   calculer cible set_rappel_1731bis : avec R, IS_PREMIER;
-  si positif(AFF) alors
-    afficher_erreur "prout 1 " alias(champ_evenement(R, code)) " = " (champ_evenement(R, code)) "\n";
-  finsi
 finsi
 si champ_evenement(R, penalite) = 30 alors
   si champ_evenement(R, sens) != SENS_R alors
@@ -3312,9 +3244,6 @@ si positif(GLOBAL.DEFAUT) ou positif(GLOBAL.RETARD) alors
     IS_PREMIER = (champ_evenement(R, numero) = NUM_EVT_PREMIER);
     si positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C alors
       IS_PREMIER = (positif(IS_PREMIER) ou champ_evenement(R, sens) = SENS_C);
-      si positif(AFF) alors
-        afficher_erreur "prout majo_aux 0\n";
-      finsi
       calculer cible prepare_1731_majo_aux : avec R, IS_PREMIER : espace PRIM_COPIE;
     finsi
   )
@@ -3344,22 +3273,13 @@ arranger_evenements
         et NUM_STRATE_COURANTE <= NUM_STRATE
         et champ_evenement(R, sens) != SENS_C
       alors
-        si positif(AFF) alors
-          afficher_erreur "prout majo_aux 1\n";
-        finsi
         calculer cible prepare_1731_majo_aux : espace PRIM_COPIE : avec R, IS_PREMIER;
       finsi
     sinon_si NUM_STRATE_COURANTE <= NUM_STRATE alors
-      si positif(AFF) alors
-        afficher_erreur "prout majo_aux 2\n";
-      finsi
       calculer cible prepare_1731_majo_aux : espace PRIM_COPIE : avec R, IS_PREMIER;
     finsi
   )
 )
-si positif(AFF) alors
-  afficher_erreur "prout PRIM_COPIE MAJO\n";
-finsi
 calculer cible enchaine_calcul_prim_copie;
 calculer cible calcul_1731 : espace PRIM_COPIE;
 
@@ -3458,9 +3378,6 @@ CORR.NBMOISI = GLOBAL.INR_NB_MOIS;
 CORR.NBMOISI2 = GLOBAL.INR_NB_MOIS2;
 CORR.NBMOIS2ISF = 0;
 CORR.FLAG_INR = FLG_INR;
-si positif(AFF) alors
-  afficher_erreur "prout 444\n";
-finsi
 calculer cible enchaine_calcul_corr;
 calculer cible signaler_erreurs;
 
@@ -3754,9 +3671,6 @@ RESULTAT = (
     et non positif(EST_SF_NAISS)
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 13 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_12:
 application: iliad;
@@ -3776,9 +3690,6 @@ RESULTAT = (
     et champ_evenement(R, penalite) = 24
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 12 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_11:
 application: iliad;
@@ -3813,9 +3724,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 11 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_10:
 application: iliad;
@@ -3849,9 +3757,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 10 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_09:
 application: iliad;
@@ -3882,9 +3787,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 9 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_08:
 application: iliad;
@@ -3905,9 +3807,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 8 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_07:
 application: iliad;
@@ -3928,9 +3827,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 7 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_06:
 application: iliad;
@@ -3953,9 +3849,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 6 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_05:
 application: iliad;
@@ -3973,9 +3866,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 5 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_04:
 application: iliad;
@@ -4036,9 +3926,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 4 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_03:
 application: iliad;
@@ -4058,9 +3945,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 3 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_02:
 application: iliad;
@@ -4094,9 +3978,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 2 = " (RESULTAT) "\n";
-finsi
 
 cible is_code_rappel_01:
 application: iliad;
@@ -4132,9 +4013,6 @@ RESULTAT = (
     )
   )
 );
-si positif(AFF) alors
-  afficher_erreur "prout code rappel 1 = " (RESULTAT) "\n";
-finsi
 
 cible prepare_1731_inr:
 application: iliad;
@@ -4190,9 +4068,6 @@ iterer
     calculer cible prepare_1731_aux : avec R, PREM_EVT, MAJ_TGV_COPIE : espace PRIM_COPIE;
   finsi
 )
-si positif(AFF) alors
-  afficher_erreur "prout PRIM_COPIE INR\n";
-finsi
 calculer cible enchaine_calcul_prim_copie;
 calculer cible calcul_1731 : espace PRIM_COPIE;
 
@@ -4852,9 +4727,6 @@ alors
   finsi
   calculer cible init_1731;
   calculer cible prepare_1731_majo : avec PROCHAINE_STRATE;
-  si positif(AFF) alors
-    afficher_erreur "555\n";
-  finsi
   calculer cible enchaine_calcul_corr;
   si NUM_STRATE = GLOBAL.NB_STRATES - 1 alors
     calculer cible verif_calcul_corrective_corr;
@@ -4906,9 +4778,6 @@ si GLOBAL.D2042_NB > 0 alors
   calculer cible detecte_penalites;
   calculer cible enchaine_verification_corr;
   calculer cible signaler_erreurs;
-  si positif(AFF) alors
-    afficher_erreur "666\n";
-  finsi
   calculer cible enchaine_calcul_corr;
   calculer cible verif_calcul_corrective_corr;
   calculer cible signaler_erreurs;
@@ -4930,9 +4799,6 @@ si non positif(GLOBAL.RETARD) alors
   calculer cible clear_majo_str_tr;
 finsi
 calculer cible remplit_tgv_d2042_rect;
-si positif(AFF) alors
-  afficher_erreur "777\n";
-finsi
 calculer cible enchaine_calcul_corr;
 si present(CORR.IRBASE) alors
   CORR.IRBASE2042_FIC = CORR.IRBASE;

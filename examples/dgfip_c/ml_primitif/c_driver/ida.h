@@ -50,5 +50,6 @@ extern void anoVarNonRestituee(char *var);
 extern void anoErrEnTrop(char *err);
 extern void anoErrNonRecue(char *err);
 extern void anoValeurFausse(char *nom, double val, double valRes);
+extern void anoTesteeNonRestituee(char *var);
 
 #endif /* __IDA_H__ */

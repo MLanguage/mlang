@@ -224,3 +224,7 @@ void anoValeurFausse(char *nom, double val, double valRes) {
   fprintf(stdout, "ATRT002 | KO | %s = %f au lieu de %f\n", nom, val, valRes);
 }
 
+void anoTesteeNonRestituee(char *var) {
+  fprintf(stdout, "ATRT003 | variable testee non-restituee : %s\n", var);
+}
+

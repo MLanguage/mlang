@@ -111,8 +111,9 @@ L_char erreursVersListe(T_tas tas, T_irdata *tgv) {
   return res;
 }
 
-int controleResultat(T_tas tas, T_irdata *tgv, L_S_varVal res, L_char ctl) {
+int controleResultat(T_tas tas, T_options opts, T_irdata *tgv, L_S_varVal res, L_char ctl) {
   L_char errs = NULL;
+  L_S_varVal resTmp = NULL;
   int cas = 0; /* 0: OK, 1: KO trop, 2: KO non recue*/
   int ok = 1;
 
@@ -144,8 +145,22 @@ int controleResultat(T_tas tas, T_irdata *tgv, L_S_varVal res, L_char ctl) {
     }
   }
 
-  while (res != NIL(S_varVal)) {
-    S_varVal *vv = TETE(S_varVal, res);
+  if (opts->args.trt.strict) {
+    resTmp = res;
+    while (resTmp != NIL(S_varVal)) {
+      S_varVal *vv = TETE(S_varVal, resTmp);
+
+      if (! vv->varinfo->est_restituee) {
+        anoTesteeNonRestituee(vv->varinfo->name);
+        return 0;
+      }
+      resTmp = QUEUE(S_varVal, resTmp);
+    }
+  }
+
+  resTmp = res;
+  while (resTmp != NIL(S_varVal)) {
+    S_varVal *vv = TETE(S_varVal, resTmp);
     char def = 0;
     double val = 0.0;
     double val100 = 0.0;
@@ -159,17 +174,18 @@ int controleResultat(T_tas tas, T_irdata *tgv, L_S_varVal res, L_char ctl) {
         || (strncmp(vv->varinfo->name, "NATMAJ", 6) == 0 && (lng == 7 || lng == 9 || lng == 10))
         || strncmp(vv->varinfo->name, "TL_", 3) == 0
       )
-      && vv->varinfo->est_restituee
     ) {
-      lis_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, &def, &val);
-      val100 = arrondi(val * 100.0);
-      valRes100 = arrondi(vv->val * 100.0);
-      if (fabs(val100 - valRes100) > 0.0) {
-        anoValeurFausse(vv->varinfo->name, val, vv->val);
-        ok = 0;
+      if (vv->varinfo->est_restituee) {
+        lis_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, &def, &val);
+        val100 = arrondi(val * 100.0);
+        valRes100 = arrondi(vv->val * 100.0);
+        if (fabs(val100 - valRes100) > 0.0) {
+          anoValeurFausse(vv->varinfo->name, val, vv->val);
+          ok = 0;
+        }
       }
     }
-    res = QUEUE(S_varVal, res);
+    resTmp = QUEUE(S_varVal, resTmp);
   }
 
   return ok;
@@ -405,13 +421,13 @@ int traitement(char *chemin, T_options opts) {
     case Primitif:
       initDefs(tgv, opts->args.trt.defs);
       enchainement_primitif_interpreteur(tgv);
-      ok = controleResultat(tasTrt, tgv, resPrim, ctlPrim);
+      ok = controleResultat(tasTrt, opts, tgv, resPrim, ctlPrim);
       break;
     case Correctif:
       ecrisVar(tgv, "MODE_CORR", 1, 1.0);
       initDefs(tgv, opts->args.trt.defs);
       enchainement_primitif_interpreteur(tgv);
-      ok = controleResultat(tasTrt, tgv, resRap, ctlRap);
+      ok = controleResultat(tasTrt, opts, tgv, resRap, ctlRap);
       break;
   }
 

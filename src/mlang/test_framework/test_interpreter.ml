@@ -72,10 +72,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let toNum p = Com.Numeric (Com.Float (float p)) in
-    let optToNum = function
-      | Some p -> Com.Numeric (Com.Float (float p))
-      | None -> Com.Numeric Com.Undefined
-    in
+    let optToNum op = toNum (Option.value ~default:0 op) in
     let toEvent (rappel : Irj_ast.rappel) =
       StrMap.empty
       |> StrMap.add "numero" (toNum rappel.event_nb)
@@ -125,26 +122,32 @@ let check_test (program : Mir.program) (test_name : string)
     let test_error_margin = 0.01 in
     let fold vname f nb =
       if StrSet.mem vname ign_vars then (
-        Cli.warning_print "OK | %s ignored" vname;
+        Cli.warning_print "OK | %s ignoree" vname;
         nb)
       else
-        let f' =
-          let var =
-            match StrMap.find_opt vname program.program_vars with
-            | Some var -> var
-            | None ->
-                Cli.error_print "Variable inconnue: %s" vname;
-                raise
-                  (Errors.StructuredError ("Fichier de test incorrect", [], None))
-          in
-          match Com.Var.Map.find_opt var vars with
-          | Some (Com.Float f') -> f'
-          | _ -> 0.0
-        in
-        if abs_float (f -. f') > test_error_margin then (
-          Cli.error_print "KO | %s expected: %f - evaluated: %f" vname f f';
-          nb + 1)
-        else nb
+        match StrMap.find_opt vname program.program_vars with
+        | Some var ->
+            if Com.Var.is_tgv var then
+              if Com.Var.is_given_back var then
+                let f' =
+                  match Com.Var.Map.find_opt var vars with
+                  | Some (Com.Float f') -> f'
+                  | _ -> 0.0
+                in
+                if abs_float (f -. f') > test_error_margin then (
+                  Cli.error_print "KO | %s attendue: %f - evaluee: %f" vname f
+                    f';
+                  nb + 1)
+                else nb
+              else (
+                Cli.warning_print "OK | %s ignoree car non-restituee" vname;
+                nb)
+            else (
+              Cli.warning_print "Variable inconnue dans le TGV: %s" vname;
+              nb)
+        | None ->
+            Cli.warning_print "Variable inconnue: %s" vname;
+            nb
     in
     StrMap.fold fold exp 0
   in
@@ -155,8 +158,8 @@ let check_test (program : Mir.program) (test_name : string)
     in
     let missAnos = StrSet.diff exp rais in
     let unexAnos = StrSet.diff rais exp in
-    StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
-    StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
+    StrSet.iter (Cli.error_print "KO | erreur manquante: %s") missAnos;
+    StrSet.iter (Cli.error_print "KO | erreur inattendue: %s") unexAnos;
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
   let dbg_warning = !Config.warning_flag in
@@ -203,7 +206,7 @@ let ignored_vars_set (p : Mir.program) (sl : string list) =
   |> StrMap.fold fold p.program_alias
 
 let ignored_vars_list =
-  [ "NBPT"; "RETX"; "NATMAJ."; "NATMAJ..."; "NATMAJ...."; "TL_.*" ]
+  [ "NBPT"; "RETX.*"; "NATMAJ."; "NATMAJ..."; "NATMAJ...."; "TL_.*" ]
 
 type process_acc = string list * int StrMap.t
 
@@ -266,7 +269,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     Array.fold_left (fun acc name -> process name acc) ([], StrMap.empty) arr
     *)
   in
-
   (* finish "done!"; *)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;

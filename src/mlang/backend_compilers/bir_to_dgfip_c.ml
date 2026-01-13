@@ -1077,10 +1077,11 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                 let vsd_id =
                   match v_opt with
                   | Some v -> VID.gen_var_space_id m_sp_opt v
-                  | None -> "irdata->var_space"
+                  | None -> VID.gen_var_space_id_opt m_sp_opt
                 in
                 let vsd = Pp.spr "irdata->var_spaces[%s]" vsd_id in
-                pr "@;@[<v 2>if (%s.is_default == 0) {" vsd;
+                let vsd0 = Pp.spr "irdata->var_spaces[irdata->var_space]" in
+                pr "@;@[<v 2>if (%s.id != %s.id) {" vsd vsd0;
                 pr "@;print_string(%s, %s, %s.name);" print_std pr_ctx vsd;
                 pr "@;print_string(%s, %s, \".\");" print_std pr_ctx;
                 pr "@]@;}@;"
