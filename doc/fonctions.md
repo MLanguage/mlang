@@ -10,9 +10,22 @@ Leur utilisation est présentée dans l'exemple sur
 Cette fonction prend un argument et renvoie sa valeur absolue.
 Si `X` est `indefini`, alors `abs(X) = indefini`.
 
-## afficher(X) / afficher "texte"
+## afficher
 
 Cette fonction affiche sur la sortie standard la valeur de l'expression en argument.
+Elle accepte trois types d'arguments.
+* Les chaines de caractères, encadrées par des guillemets : `afficher "Bonjour, monde!"`
+* Les expressions numériques, encadrées de parentheses: `afficher (X)`. Il est possible d'indiquer la précision minimale (`afficher (X):2`) et la précision maximale (`afficher (X):2..4`).
+* L'indentation à rajouter à l'affichage de la prochaine ligne : `afficher indenter(3)`. Un compteur interne sauvegarde l'indentation courante. Si le compteur est négatif, il est
+immédiatement réinitialisé à zero.
+
+Ses arguments s'ajoutent les uns après les autres sans parentheses et sans séparateur.
+Exemple:
+```
+afficher indenter(1) "X =" (X):2..4 "\n" indenter(-1);
+```
+
+Les caractères sont echappés avec '\\':
 
 ## arr(X)
 

@@ -32,303 +32,220 @@ iterer : variable I : entre 0..(taille(TAB) - 1) increment 1 : dans (
 
 cible test_abs:
 application : mon_application;
-afficher "\n__ABS__";
-afficher indenter(2);
-afficher "\nabs(indefini) = ";
-afficher (abs(indefini));
-afficher "\nabs(1) = ";
-afficher  (abs(1));
-afficher "\nabs(-1) = ";
-afficher  (abs(-1));
-afficher "\n";
-afficher indenter(-2);
+afficher "__ABS__\n" indenter(2);
+afficher "abs(indefini) = " (abs(indefini)) "\n";
+afficher "abs(1) = "        (abs(1))        "\n";
+afficher "abs(-1) = "       (abs(-1))       "\n";
+afficher "\n" indenter(-2);
+
+cible test_afficher:
+application : mon_application;
+afficher "__AFFICHER__\n" indenter(2);
+afficher "afficher \"Bonjour, monde!\" : ";
+afficher "Bonjour, monde!";
+afficher "\nafficher (0) : ";
+afficher (0);
+afficher "\nafficher (3.1415926535):2 : ";
+afficher (3.1415926535):2;
+afficher "\nafficher (3.1415926535):2..4 : ";
+afficher (3.1415926535):2..4;
+afficher "\n\n" indenter (-2);
 
 cible test_arr:
 application : mon_application;
-afficher "\n__ARR__";
-afficher indenter(2);
-afficher "\narr(indefini) = ";
-afficher  (arr(indefini));
-afficher "\narr(1.8) = ";
-afficher  (arr(1.8));
-afficher "\ arr(-1.7) = ";
-afficher  (arr(-1.7));
-afficher "\n";
-afficher indenter(-2);
+afficher "__ARR__\n" indenter(2);
+afficher "arr(indefini) = " (arr(indefini)) "\n";
+afficher "arr(1.8) = "      (arr(1.8))      "\n";
+afficher "arr(-1.7) = "     (arr(-1.7))     "\n";
+afficher "\n" indenter(-2);
 
 cible test_attribut:
 application : mon_application;
-afficher "\n__ATTRIBUT__";
-afficher indenter(2);
-afficher "\nattribut(X, mon_attribut) = ";
-afficher  (attribut(X, mon_attribut));
-afficher "\nattribut(TAB, mon_attribut) = ";
-afficher  (attribut(TAB, mon_attribut));
-afficher "\n";
-afficher indenter(-2);
+afficher "__ATTRIBUT__\n" indenter(2);
+afficher "attribut(X, mon_attribut) = "   (attribut(X, mon_attribut))   "\n";
+afficher "attribut(TAB, mon_attribut) = " (attribut(TAB, mon_attribut)) "\n";
+afficher "\n" indenter(-2);
 
 cible test_champ_evenement_base:
 application : mon_application;
 afficher indenter(2);
-afficher "\nchamp_evenement(0, ev_val) = ";
-afficher (champ_evenement (0,ev_val));
-afficher "\nchamp_evenement(0, ev_var) = ";
-afficher (champ_evenement (0,ev_var));
-afficher "\n";
+afficher "champ_evenement(0, ev_val) = " (champ_evenement (0,ev_val)) "\n";
+afficher "champ_evenement(0, ev_var) = " (champ_evenement (0,ev_var)) "\n";
 afficher indenter(-2);
 
 cible test_champ_evenement:
 application : mon_application;
-afficher "\n__CHAMP_EVENEMENT__";
-afficher indenter(2);
+afficher "__CHAMP_EVENEMENT__\n" indenter(2);
 arranger_evenements
   : ajouter 1
   : dans (
-      afficher "\nAvant d'initialiser les champs de l'événement:";
+      afficher "Avant d'initialiser les champs de l'événement:\n";
       calculer cible test_champ_evenement_base;
       champ_evenement (0,ev_var) reference X;      
       champ_evenement (0,ev_val) = 42;
       X = 2;
-      afficher "\nAprès avoir initialisé les champs de l'événement:";
+      afficher "Après avoir initialisé les champs de l'événement:\n";
       calculer cible test_champ_evenement_base;
       X = indefini;
     )
-afficher indenter(-2);
+afficher "\n" indenter(-2);
 
 cible test_inf:
 application : mon_application;
-afficher "\n__INF__";
-afficher indenter(2);
-afficher "\ninf(indefini) = ";
-afficher  (inf(indefini));
-afficher "\ninf(1.8) = ";
-afficher  (inf(1.8));
-afficher "\ninf(-1.7) = ";
-afficher  (inf(-1.7));
-afficher "\n";
-afficher indenter(-2);
+afficher "__INF__\n" indenter(2);
+afficher "inf(indefini) = " (inf(indefini)) "\n";
+afficher "inf(1.8) = "      (inf(1.8))      "\n";
+afficher "inf(-1.7) = "     (inf(-1.7))     "\n";
+afficher "\n" indenter(-2);
 
 cible test_max:
 application : mon_application;
-afficher "\n__MAX__";
-afficher indenter(2);
-afficher "\nmax(indefini, indefini) = ";
-afficher   (max(indefini, indefini));
-afficher "\nmax(-1, indefini) = ";
-afficher   (max(-1, indefini));
-afficher "\nmax(indefini, -1) = ";
-afficher   (max(indefini, -1));
-afficher "\nmax(1, indefini) = ";
-afficher   (max(1, indefini));
-afficher "\n";
-afficher indenter(-2);
+afficher "__MAX__\n" indenter(2);
+afficher "max(indefini, indefini) = " (max(indefini, indefini)) "\n";
+afficher "max(-1, indefini) = "       (max(-1, indefini))       "\n";
+afficher "max(indefini, -1) = "       (max(indefini, -1))       "\n";
+afficher "max(1, indefini) = "        (max(1, indefini))        "\n";
+afficher "\n" indenter(-2);
 
 cible test_meme_variable:
 application : mon_application;
-afficher "\n__MEME_VARIABLE__";
-afficher indenter(2);
-afficher "\nmeme_variable(X,X) = ";
-afficher (meme_variable(X,X));
-afficher "\nmeme_variable(X,TAB) = ";
-afficher (meme_variable(X,TAB));
-afficher "\nmeme_variable(TAB[0],TAB) = ";
-afficher (meme_variable(TAB[0],TAB));
-afficher "\n";
-afficher indenter(-2);
+afficher "__MEME_VARIABLE__\n" indenter(2);
+afficher "meme_variable(X,X) = "        (meme_variable(X,X))        "\n";
+afficher "meme_variable(X,TAB) = "      (meme_variable(X,TAB))      "\n";
+afficher "meme_variable(TAB[0],TAB) = " (meme_variable(TAB[0],TAB)) "\n";
+afficher "\n" indenter(-2);
 
 cible test_min:
 application : mon_application;
-afficher "\n__MIN__";
-afficher indenter(2);
-afficher "\nmin(indefini, indefini) = ";
-afficher (min(indefini, indefini));
-afficher "\nmin(1, indefini) = ";
-afficher (min(1, indefini));
-afficher "\nmin(indefini, 1) = ";
-afficher (min(indefini, 1));
-afficher "\nmin(-1, indefini) = ";
-afficher (min(-1, indefini));
-afficher "\n";
-afficher indenter(-2);
+afficher "__MIN__" indenter(2);
+afficher "min(indefini, indefini) = " (min(indefini, indefini)) "\n";
+afficher "min(1, indefini) = "        (min(1, indefini))        "\n";
+afficher "min(indefini, 1) = "        (min(indefini, 1))        "\n";
+afficher "min(-1, indefini) = "       (min(-1, indefini))       "\n";
+afficher "\n" indenter(-2);
 
 cible test_multimax_base:
 application : mon_application;
 afficher indenter(2);
-afficher "\nmultimax(indefini, TAB) = ";
-afficher (multimax(indefini, TAB));
-afficher "\nmultimax(7, TAB) = ";
-afficher (multimax(7, TAB));
-afficher "\nmultimax(taille(TAB) + 1, TAB) = ";  
-afficher (multimax(taille(TAB) + 1, TAB));
-afficher "\nmultimax(0, TAB) = ";  
-afficher (multimax(0, TAB));
-afficher "\nmultimax(-1, TAB) = ";  
-afficher (multimax(-1, TAB));
+afficher "multimax(indefini, TAB) = " (multimax(indefini, TAB)) "\n";
+afficher "multimax(7, TAB) = " (multimax(7, TAB)) "\n";
+afficher "multimax(taille(TAB) + 1, TAB) = " (multimax(taille(TAB) + 1, TAB)) "\n";
+afficher "multimax(0, TAB) = "  (multimax(0, TAB))  "\n";
+afficher "multimax(-1, TAB) = " (multimax(-1, TAB)) "\n";
 afficher indenter(-2);
 
 cible test_multimax:
 application : mon_application;
-afficher "\n__MULTIMAX__";
-afficher indenter(2);
-afficher "\nAvant initialisation du tableau :";
+afficher "__MULTIMAX__\n" indenter(2);
+afficher "Avant initialisation du tableau :\n";
 calculer cible test_multimax_base;
 calculer cible init_tab;
-afficher "\nAprès initialisation du tableau :";
+afficher "Après initialisation du tableau :\n";
 calculer cible test_multimax_base;
 calculer cible reinit_tab;
-afficher "\n";
-afficher indenter(-2);
+afficher "\n" indenter(-2);
 
 cible test_nb_evenements_base:
 application : mon_application;
 afficher indenter(2);
-afficher "\nnb_evenements() = ";
-afficher (nb_evenements ());
-afficher "\n";
+afficher "nb_evenements() = " (nb_evenements ()) "\n";
 afficher indenter(-2);
 
 cible test_nb_evenements:
 application : mon_application;
-afficher "\n__NB_EVENEMENTS__";
-afficher indenter(2);
-afficher "\nAvant la définition d'un événement :";
+afficher "__NB_EVENEMENTS__\n" indenter(2);
+afficher "Avant la définition d'un événement :\n";
 calculer cible test_nb_evenements_base;
 arranger_evenements
   : ajouter 1
   : dans (
-      afficher "\nPendant la définition d'un événement :";
+      afficher "Pendant la définition d'un événement :\n";
       calculer cible test_nb_evenements_base;
     )
-afficher "\nAprès la définition d'un événement :";
+afficher "Après la définition d'un événement :\n";
 calculer cible test_nb_evenements_base;
-afficher indenter(-2);
+afficher "\n" indenter(-2);
 
 cible test_null:
 application : mon_application;
-afficher "\n__NULL__";
-afficher indenter(2);
-afficher "\nnull(indefini) = ";
-afficher  (null(indefini));
-afficher "\nnull(0) = ";
-afficher  (null(0));
-afficher "\nnull(1) = ";
-afficher  (null(1));
-afficher "\n";
-afficher indenter(-2);
+afficher "__NULL__\n" indenter(2);
+afficher "null(indefini) = " (null(indefini)) "\n";
+afficher "null(0) = "        (null(0))        "\n";
+afficher "null(1) = "        (null(1))        "\n";
+afficher "\n" indenter(-2);
 
 cible test_positif:
 application : mon_application;
-afficher "\n__POSITIF__";
-afficher indenter(2);
-afficher "\npositif(indefini) = ";
-afficher (positif(indefini));
-afficher "\npositif(0) = ";
-afficher (positif(0));
-afficher "\npositif(1) = ";
-afficher (positif(1));
-afficher "\npositif(-1) = ";
-afficher (positif(-1));
+afficher "__POSITIF__\n" indenter(2);
+afficher "positif(indefini) = " (positif(indefini)) "\n";
+afficher "positif(0) = "        (positif(0))        "\n";
+afficher "positif(1) = "        (positif(1))        "\n";
+afficher "positif(-1) = "       (positif(-1))       "\n";
 afficher "\n";
 afficher indenter(-2);
 
 cible test_positif_ou_nul:
 application : mon_application;
-afficher "\n__POSITIF OU NUL__";
-afficher indenter(2);
-afficher "\npositif_ou_nul(indefini) = ";
-afficher (positif_ou_nul(indefini));
-afficher "\npositif_ou_nul(0) = ";
-afficher (positif_ou_nul(0));
-afficher "\npositif_ou_nul(1) = ";
-afficher (positif_ou_nul(1));
-afficher "\npositif_ou_nul(-1) = ";
-afficher (positif_ou_nul(-1));
-afficher "\n";
-afficher indenter(-2);
+afficher "__POSITIF OU NUL__\n" indenter(2);
+afficher "positif_ou_nul(indefini) = " (positif_ou_nul(indefini)) "\n";
+afficher "positif_ou_nul(0) = "        (positif_ou_nul(0))        "\n";
+afficher "positif_ou_nul(1) = "        (positif_ou_nul(1))        "\n";
+afficher "positif_ou_nul(-1) = "       (positif_ou_nul(-1))       "\n";
+afficher "\n" indenter(-2);
 
 cible test_present:
 application : mon_application;
-afficher "\n__PRESENT__";
-afficher indenter(2);
-afficher "\npresent(indefini) = ";
-afficher  (present(indefini));
-afficher "\npresent(0) = ";
-afficher  (present(0));
-afficher "\npresent(1) = ";
-afficher  (present(1));
-afficher "\n";
-afficher indenter(-2);
+afficher "__PRESENT__\n" indenter(2);
+afficher "present(indefini) = " (present(indefini)) "\n";
+afficher "present(0) = "        (present(0))        "\n";
+afficher "present(1) = "        (present(1))        "\n";
+afficher "\n" indenter(-2);
 
 cible test_somme:
 application : mon_application;
-afficher "\n__SOMME__";
-afficher indenter(2);
-afficher "\nsomme() = ";
-afficher (somme());
-afficher "\nsomme(indefini) = ";
-afficher (somme(indefini));
-afficher "\nsomme(1, indefini) = ";
-afficher (somme(1, indefini));
-afficher "\nsomme(1, 2, 3, 4, 5) = ";
-afficher (somme(1, 2, 3, 4, 5));
-afficher "\n";
-afficher indenter(-2);
+afficher "__SOMME__\n" indenter(2);
+afficher "somme() = "              (somme())              "\n";
+afficher "somme(indefini) = "      (somme(indefini))      "\n";
+afficher "somme(1, indefini) = "   (somme(1, indefini))   "\n";
+afficher "somme(1, 2, 3, 4, 5) = " (somme(1, 2, 3, 4, 5)) "\n";
+afficher "\n" indenter(-2);
 
 cible test_supzero:
 application : mon_application;
-afficher "\n__SUPZERO__";
-afficher indenter(2);
-afficher "\nsupzero(indefini) = ";
-afficher (supzero(indefini));
-afficher "\nsupzero(42) = ";
-afficher (supzero(42));
-afficher "\nsupzero(-1) = ";
-afficher (supzero(-1));
-afficher "\nsupzero(0) = ";
-afficher (supzero(0));
-afficher "\n";
-afficher indenter(-2);
+afficher "__SUPZERO__\n" indenter(2);
+afficher "supzero(indefini) = " (supzero(indefini)) "\n";
+afficher "supzero(42) = "       (supzero(42))       "\n";
+afficher "supzero(-1) = "       (supzero(-1))       "\n";
+afficher "supzero(0) = "        (supzero(0))        "\n";
+afficher "\n" indenter(-2);
 
 cible test_taille:
 application : mon_application;
-afficher "\n__TAILLE__";
-afficher indenter(2);
-afficher "\ntaille(TAB) = ";
-afficher (taille(TAB));
-afficher "\ntaille(X) = ";
-afficher (taille(X));
-afficher "\n";
-afficher indenter(-2);
+afficher "__TAILLE__\n" indenter(2);
+afficher "taille(TAB) = " (taille(TAB)) "\n";
+afficher "taille(X) = "   (taille(X))   "\n";
+afficher "\n" indenter(-2);
 
 cible test_type:
 application : mon_application;
-afficher "\n__TYPE__";
-afficher indenter(2);
-afficher "\ntype(X, REEL) = ";
-afficher (type(X, REEL));
-afficher "\ntype(X, ENTIER) = ";
-afficher (type(X, ENTIER));
-afficher "\ntype(TAB, ENTIER) = ";
-afficher (type(TAB, ENTIER));
-afficher "\ntype(Y, ENTIER) = ";
-afficher (type(Y, ENTIER));
-afficher "\ntype(Y, REEL) = ";
-afficher (type(Y, REEL));
-afficher "\ntype(Y, BOOLEEN) = ";
-afficher (type(Y, BOOLEEN));
-afficher "\ntype(Y, DATE_AAAA) = ";
-afficher (type(Y, DATE_AAAA));
-afficher "\ntype(Y, DATE_JJMMAAAA) = ";
-afficher (type(Y, DATE_JJMMAAAA));
-afficher "\ntype(Y, DATE_MM) = ";
-afficher (type(Y, DATE_MM));
-afficher "\n";
-afficher indenter(-2);
+afficher "__TYPE__\n" indenter(2);
+afficher "type(X, REEL) = "          (type(X, REEL))          "\n";
+afficher "type(X, ENTIER) = "        (type(X, ENTIER))        "\n";
+afficher "type(TAB, ENTIER) = "      (type(TAB, ENTIER))      "\n";
+afficher "type(Y, ENTIER) = "        (type(Y, ENTIER))        "\n";
+afficher "type(Y, REEL) = "          (type(Y, REEL))          "\n";
+afficher "type(Y, BOOLEEN) = "       (type(Y, BOOLEEN))       "\n";
+afficher "type(Y, DATE_AAAA) = "     (type(Y, DATE_AAAA))     "\n";
+afficher "type(Y, DATE_JJMMAAAA) = " (type(Y, DATE_JJMMAAAA)) "\n";
+afficher "type(Y, DATE_MM) = "       (type(Y, DATE_MM))       "\n";
+afficher "\n" indenter(-2);
 
 cible fun_test:
 application : mon_application;
 # Abs
 calculer cible test_abs;
+# Afficher
+calculer cible test_afficher;
 # Arr
 calculer cible test_arr;
 # Attribut

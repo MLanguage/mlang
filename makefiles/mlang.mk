@@ -137,8 +137,8 @@ sphinx-doc: FORCE build dev-doc
 		l'extension 'myst-parser'. Lancez `make doc-deps`."; exit 1; }
 	rm -rf $(TARGET_DIR_SPHINX_DOC_SRC)/*
 	cp -r doc $(TARGET_DIR_SPHINX_DOC_SRC)
-	mkdir -p $(TARGET_DIR_DOC_BUILD)/html/_static/dev
-	cp -r $(shell pwd)/_build/default/_doc/_html $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
+	mkdir -p $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
+	cp -r $(shell pwd)/_build/default/_doc/_html/* $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
 	.venv/bin/sphinx-build -M html $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
 	.venv/bin/sphinx-build -M latexpdf $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
 
