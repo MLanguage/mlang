@@ -53,7 +53,7 @@ rule token = parse
 | '<' { LT }
 | ">=" { GTE }
 | "<=" { LTE }
-| '"' [^'"']* '"' as s { STRING s }
+| '"' { string (Buffer.create 16) lexbuf }
 | (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0'-'9']+ '.' ['0'-'9']+) as s {
     match s with
     | "BOOLEEN" -> BOOLEAN
@@ -183,3 +183,23 @@ and multiline_comment level = parse
 | '\n' { new_line lexbuf; multiline_comment level lexbuf }
 | _ { multiline_comment level lexbuf }
 
+and string buf = parse
+| '"' { STRING (Buffer.contents buf) }
+| '\\' '"'  { Buffer.add_char buf '"'; string buf lexbuf }
+| '\\' '\\' { Buffer.add_char buf '\\'; string buf lexbuf }
+| '\\' 'n'  { Buffer.add_char buf '\n'; string buf lexbuf }
+| '\\' 't'  { Buffer.add_char buf '\t'; string buf lexbuf }
+| '\\' ' '  { Buffer.add_char buf ' '; string buf lexbuf }
+| '\\' _ as esc {
+    Format.ksprintf Errors.raise_error "Unknown escape: \\'%s' while parsing string %s" esc (Buffer.contents buf)
+  }
+| '\n' {
+    Format.ksprintf Errors.raise_error "Unterminated string literal %S" (Buffer.contents buf)
+  }
+| _ as c {
+    Buffer.add_char buf c;
+    string buf lexbuf
+  }
+| eof {
+    Format.ksprintf Errors.raise_error "Unterminated string literal %S" (Buffer.contents buf)
+  }

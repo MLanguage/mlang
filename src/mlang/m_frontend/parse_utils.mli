@@ -31,9 +31,6 @@ val parse_variable_name : Lexing.position * Lexing.position -> string -> string
 
 val parse_parameter : Lexing.position * Lexing.position -> string -> char
 
-val parse_string : string -> string
-(** Removes the quotes *)
-
 val parse_variable_or_int :
   Lexing.position * Lexing.position -> string -> parse_val
 
