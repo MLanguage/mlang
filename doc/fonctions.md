@@ -25,7 +25,11 @@ Exemple:
 afficher indenter(1) "X =" (X):2..4 "\n" indenter(-1);
 ```
 
-Les caractères sont echappés avec '\\':
+Les caractères spéciaux sont echappés avec ' \\ ' : 
+
+```
+afficher "Je dis \"Bonjour, monde!\"";
+```
 
 ## arr(X)
 
