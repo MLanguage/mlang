@@ -26,27 +26,32 @@ type instance = {
   label : string;
   vars : Com.literal Com.Var.Map.t;
   events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list;
-  expectedVars : float StrMap.t;
+  expectedVars : Com.literal StrMap.t;
   expectedAnos : StrSet.t;
 }
+
+let irj_lit_to_com_lit = function
+  | Irj_ast.I i -> Com.Float (float i)
+  | F f -> Com.Float f
+  | U -> Com.Undefined
 
 let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     instance list =
   let add_var name value map =
     try
       let var = find_var_of_name program (Pos.without name) in
-      Com.Var.Map.add var (Com.Float value) map
+      Com.Var.Map.add var value map
     with _ -> map
   in
   let vars =
     let map_init =
       Com.Var.Map.empty
-      |> add_var "V_ANCSDED" (float (!Config.income_year + 1))
-      |> add_var "V_MILLESIME" (float !Config.income_year)
+      |> add_var "V_ANCSDED" (Com.Float (float (!Config.income_year + 1)))
+      |> add_var "V_MILLESIME" (Com.Float (float !Config.income_year))
     in
     List.fold_left
       (fun in_f (Pos.Mark (var, _var_pos), Pos.Mark (value, _value_pos)) ->
-        add_var var (match value with Irj_ast.I i -> float i | F f -> f) in_f)
+        add_var var (irj_lit_to_com_lit value) in_f)
       map_init t.prim.entrees
   in
   let eventsList rappels =
@@ -72,7 +77,10 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
     in
     let toNum p = Com.Numeric (Com.Float (float p)) in
-    let optToNum op = toNum (Option.value ~default:0 op) in
+    let optToNum = function
+      | Some p -> Com.Numeric (Com.Float (float p))
+      | None -> Com.Numeric Com.Undefined
+    in
     let toEvent (rappel : Irj_ast.rappel) =
       StrMap.empty
       |> StrMap.add "numero" (toNum rappel.event_nb)
@@ -92,7 +100,12 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   in
   let expVars vars_init =
     let fold res (Pos.Mark (var, _), Pos.Mark (value, _)) =
-      let fVal = match value with Irj_ast.I i -> float i | Irj_ast.F f -> f in
+      let fVal =
+        match value with
+        | Irj_ast.I i -> Com.Float (float i)
+        | Irj_ast.F f -> Com.Float f
+        | Irj_ast.U -> Com.Undefined
+      in
       StrMap.add var fVal res
     in
     List.fold_left fold StrMap.empty vars_init
@@ -107,7 +120,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       let expectedAnos = expAnos t.prim.controles_attendus in
       [ { label = "primitif"; vars; events = []; expectedVars; expectedAnos } ]
   | Some rapp ->
-      let vars = add_var "MODE_CORR" 1.0 vars in
+      let vars = add_var "MODE_CORR" (Com.Float 1.0) vars in
       let events = eventsList rapp.entrees_rappels in
       let expectedVars = expVars rapp.resultats_attendus in
       let expectedAnos = expAnos rapp.controles_attendus in
@@ -120,7 +133,7 @@ let check_test (program : Mir.program) (test_name : string)
     (ign_vars : StrSet.t) : unit =
   let check_vars exp vars =
     let test_error_margin = 0.01 in
-    let fold vname f nb =
+    let fold vname expected nb =
       if StrSet.mem vname ign_vars then (
         Cli.warning_print "OK | %s ignoree" vname;
         nb)
@@ -129,16 +142,27 @@ let check_test (program : Mir.program) (test_name : string)
         | Some var ->
             if Com.Var.is_tgv var then
               if Com.Var.is_given_back var then
-                let f' =
+                let calc =
                   match Com.Var.Map.find_opt var vars with
-                  | Some (Com.Float f') -> f'
-                  | _ -> 0.0
+                  | Some f' -> f'
+                  | None -> Com.Undefined
                 in
-                if abs_float (f -. f') > test_error_margin then (
-                  Cli.error_print "KO | %s attendue: %f - evaluee: %f" vname f
-                    f';
+                let ok =
+                  match (expected, calc) with
+                  | Com.Undefined, Com.Undefined -> true
+                  | Com.Float 0., Com.Undefined ->
+                      (* For compatibility with fuzzer tests *)
+                      true
+                  | Com.Float _, Com.Undefined | Com.Undefined, Com.Float _ ->
+                      false
+                  | Com.Float e, Com.Float c ->
+                      abs_float (e -. c) <= test_error_margin
+                in
+                if ok then nb
+                else (
+                  Cli.error_print "KO | %s attendue: %a - evaluee: %a" vname
+                    Com.format_literal expected Com.format_literal calc;
                   nb + 1)
-                else nb
               else (
                 Cli.warning_print "OK | %s ignoree car non-restituee" vname;
                 nb)

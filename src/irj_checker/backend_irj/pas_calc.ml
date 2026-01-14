@@ -14,6 +14,7 @@ let format_value fmt (value : literal) =
   match value with
   | I i -> Format.fprintf fmt "%d" i
   | F f -> Format.fprintf fmt "%f" f
+  | U -> Format.fprintf fmt "indefini"
 
 let format_code_revenu fmt
     ((Pos.Mark (var, _), Pos.Mark (value, _)) : var_value) =
