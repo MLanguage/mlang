@@ -14,7 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-module type NumberInterface = sig
+module type NumberInterfaceNoCompare = sig
   type t
 
   val format_t : Format.formatter -> t -> unit
@@ -72,7 +72,28 @@ module type NumberInterface = sig
   val is_zero : t -> bool
 end
 
-module RegularFloatNumber : NumberInterface = struct
+module type NumberInterface = sig
+  include NumberInterfaceNoCompare
+
+  val compare : Com.comp_op -> t -> t -> bool
+end
+
+module MakeComparable (N : NumberInterfaceNoCompare) : NumberInterface = struct
+  include N
+
+  let compare op i1 i2 =
+    let epsilon = of_float !Config.comparison_error_margin in
+    let open Com in
+    match op with
+    | Gt -> i1 >. i2 +. epsilon
+    | Gte -> i1 >. i2 -. epsilon
+    | Lt -> i1 +. epsilon <. i2
+    | Lte -> i1 -. epsilon <. i2
+    | Eq -> abs (i1 -. i2) <. epsilon
+    | Neq -> abs (i1 -. i2) >=. epsilon
+end
+
+module RegularFloatNumber : NumberInterface = MakeComparable (struct
   type t = float
 
   let format_t fmt f = Format.fprintf fmt "%f" f
@@ -138,7 +159,7 @@ module RegularFloatNumber : NumberInterface = struct
   let is_nan_or_inf x = not (Float.is_finite x)
 
   let is_zero x = x = 0.
-end
+end)
 
 let mpfr_abs (x : Mpfrf.t) : Mpfrf.t =
   let out = Mpfr.init2 (Mpfr.get_prec x) in
@@ -155,7 +176,7 @@ let mpfr_ceil (x : Mpfrf.t) : Mpfrf.t =
   ignore (Mpfr.ceil out x);
   Mpfrf.of_mpfr out
 
-module MPFRNumber : NumberInterface = struct
+module MPFRNumber : NumberInterface = MakeComparable (struct
   type t = Mpfrf.t
 
   let rounding : Mpfr.round = Near
@@ -214,9 +235,9 @@ module MPFRNumber : NumberInterface = struct
   let is_zero x = x =. zero ()
 
   let is_nan_or_inf x = not (Mpfrf.number_p x)
-end
+end)
 
-module IntervalNumber : NumberInterface = struct
+module IntervalNumber : NumberInterface = MakeComparable (struct
   type t = { down : Mpfrf.t; up : Mpfrf.t }
 
   let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
@@ -335,9 +356,9 @@ module IntervalNumber : NumberInterface = struct
   let is_zero x = x =. zero ()
 
   let is_nan_or_inf x = not (Mpfrf.number_p x.down && Mpfrf.number_p x.up)
-end
+end)
 
-module RationalNumber : NumberInterface = struct
+module RationalNumber : NumberInterface = MakeComparable (struct
   type t = Mpqf.t
 
   let format_t fmt f = Mpqf.print fmt f
@@ -407,11 +428,11 @@ module RationalNumber : NumberInterface = struct
     || Mpzf.cmp (Mpqf.get_den x) max > 0
     || Mpzf.cmp (Mpqf.get_num x) min < 0
     || Mpzf.cmp (Mpqf.get_den x) min < 0
-end
+end)
 
 module BigIntFixedPointNumber (P : sig
   val scaling_factor_bits : int ref
-end) : NumberInterface = struct
+end) : NumberInterface = MakeComparable (struct
   type t = Mpzf.t
 
   let precision_modulo () =
@@ -498,4 +519,4 @@ end) : NumberInterface = struct
   let max x y = if x >. y then x else y
 
   let is_nan_or_inf _ = false
-end
+end)

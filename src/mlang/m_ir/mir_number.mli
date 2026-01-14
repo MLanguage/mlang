@@ -68,6 +68,10 @@ module type NumberInterface = sig
   val is_nan_or_inf : t -> bool
 
   val is_zero : t -> bool
+
+  val compare : Com.comp_op -> t -> t -> bool
+  (** Returns the comparison between two numbers in the precision context
+    of the current configuration. *)
 end
 
 module RegularFloatNumber : NumberInterface
