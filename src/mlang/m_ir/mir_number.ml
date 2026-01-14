@@ -75,14 +75,14 @@ end
 module type NumberInterface = sig
   include NumberInterfaceNoCompare
 
-  val compare : Com.comp_op -> t -> t -> bool
+  val compare : ?epsilon:float -> Com.comp_op -> t -> t -> bool
 end
 
 module MakeComparable (N : NumberInterfaceNoCompare) : NumberInterface = struct
   include N
 
-  let compare op i1 i2 =
-    let epsilon = of_float !Config.comparison_error_margin in
+  let compare ?(epsilon = !Config.comparison_error_margin) op i1 i2 =
+    let epsilon = of_float epsilon in
     let open Com in
     match op with
     | Gt -> i1 >. i2 +. epsilon

@@ -177,8 +177,8 @@ let check_test (program : Mir.program) (test_name : string)
         (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
            Format_bir.format_program program; *)
         let varMap, anoSet =
-          M_interpreter.Eval.evaluate_program program inst.vars inst.events
-            value_sort round_ops
+          M_interpreter.Eval.evaluate_program ~p:program ~inputs:inst.vars
+            ~events:inst.events ~sort:value_sort ~round_ops
         in
         let nbErrs =
           check_vars inst.expectedVars varMap

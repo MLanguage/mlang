@@ -21,10 +21,68 @@ exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
-let repl_debug = ref false
+let empty_ctx (p : Mir.program) : 'a ctx =
+  let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
+  let init_tmp_var _i = { var = dummy_var; value = Undefined } in
+  let init_ref _i =
+    {
+      var = dummy_var;
+      var_space = p.program_var_space_def;
+      ref_var = dummy_var;
+      org = -1;
+    }
+  in
+  let ctx_tab_map =
+    let init i = IntMap.find i p.program_stats.table_map in
+    Array.init (IntMap.cardinal p.program_stats.table_map) init
+  in
+  let ctx_var_spaces =
+    let init i =
+      let vsd = IntMap.find i p.program_var_spaces_idx in
+      let input =
+        if Com.CatVar.LocMap.mem Com.CatVar.LocInput vsd.vs_cats then
+          Array.make p.program_stats.sz_input Undefined
+        else Array.make 0 Undefined
+      in
+      let computed =
+        if Com.CatVar.LocMap.mem Com.CatVar.LocComputed vsd.vs_cats then
+          Array.make p.program_stats.sz_computed Undefined
+        else Array.make 0 Undefined
+      in
+      let base =
+        if Com.CatVar.LocMap.mem Com.CatVar.LocBase vsd.vs_cats then
+          Array.make p.program_stats.sz_base Undefined
+        else Array.make 0 Undefined
+      in
+      { input; computed; base }
+    in
+    Array.init (IntMap.cardinal p.program_var_spaces_idx) init
+  in
+  {
+    ctx_prog = p;
+    ctx_target = snd (StrMap.min_binding p.program_targets);
+    ctx_var_space = p.program_var_space_def.vs_id;
+    ctx_var_spaces;
+    ctx_tmps = Array.init p.program_stats.sz_all_tmps init_tmp_var;
+    ctx_tmps_org = 0;
+    ctx_ref = Array.init p.program_stats.nb_all_refs init_ref;
+    ctx_ref_org = 0;
+    ctx_tab_map;
+    ctx_pr_out = { indent = 0; is_newline = true };
+    ctx_pr_err = { indent = 0; is_newline = true };
+    ctx_anos = [];
+    ctx_nb_anos = 0;
+    ctx_nb_discos = 0;
+    ctx_nb_infos = 0;
+    ctx_nb_bloquantes = 0;
+    ctx_archived_anos = StrSet.empty;
+    ctx_finalized_anos = [];
+    ctx_exported_anos = [];
+    ctx_events = [];
+  }
 
 module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) :
-  S = struct
+  S with type custom_float = N.t = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
@@ -34,16 +92,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
 
   type nonrec value = custom_float value
 
-  type nonrec ctx_tmp_var = custom_float ctx_tmp_var
-
   type nonrec ctx = custom_float ctx
 
-  type pctx = {
-    std : Com.print_std;
-    ctx : ctx;
-    std_fmt : Format.formatter;
-    ctx_pr : print_ctx;
-  }
+  type nonrec pctx = custom_float pctx
 
   exception RuntimeError of run_error * ctx
 
@@ -65,66 +116,6 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
-
-  let empty_ctx (p : Mir.program) : ctx =
-    let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
-    let init_tmp_var _i = { var = dummy_var; value = Undefined } in
-    let init_ref _i =
-      {
-        var = dummy_var;
-        var_space = p.program_var_space_def;
-        ref_var = dummy_var;
-        org = -1;
-      }
-    in
-    let ctx_tab_map =
-      let init i = IntMap.find i p.program_stats.table_map in
-      Array.init (IntMap.cardinal p.program_stats.table_map) init
-    in
-    let ctx_var_spaces =
-      let init i =
-        let vsd = IntMap.find i p.program_var_spaces_idx in
-        let input =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocInput vsd.vs_cats then
-            Array.make p.program_stats.sz_input Undefined
-          else Array.make 0 Undefined
-        in
-        let computed =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocComputed vsd.vs_cats then
-            Array.make p.program_stats.sz_computed Undefined
-          else Array.make 0 Undefined
-        in
-        let base =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocBase vsd.vs_cats then
-            Array.make p.program_stats.sz_base Undefined
-          else Array.make 0 Undefined
-        in
-        { input; computed; base }
-      in
-      Array.init (IntMap.cardinal p.program_var_spaces_idx) init
-    in
-    {
-      ctx_prog = p;
-      ctx_target = snd (StrMap.min_binding p.program_targets);
-      ctx_var_space = p.program_var_space_def.vs_id;
-      ctx_var_spaces;
-      ctx_tmps = Array.init p.program_stats.sz_all_tmps init_tmp_var;
-      ctx_tmps_org = 0;
-      ctx_ref = Array.init p.program_stats.nb_all_refs init_ref;
-      ctx_ref_org = 0;
-      ctx_tab_map;
-      ctx_pr_out = { indent = 0; is_newline = true };
-      ctx_pr_err = { indent = 0; is_newline = true };
-      ctx_anos = [];
-      ctx_nb_anos = 0;
-      ctx_nb_discos = 0;
-      ctx_nb_infos = 0;
-      ctx_nb_bloquantes = 0;
-      ctx_archived_anos = StrSet.empty;
-      ctx_finalized_anos = [];
-      ctx_exported_anos = [];
-      ctx_events = [];
-    }
 
   let literal_to_value (l : Com.literal) : value =
     match l with
@@ -305,6 +296,45 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
         | Undefined -> false
         | Number n -> N.compare Eq n (N.one ()))
     | None -> false
+
+  let comparison op new_e1 new_e2 =
+    match (op, new_e1, new_e2) with
+    | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
+    | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
+        Undefined
+    | op, Number i1, Number i2 -> Number (real_of_bool @@ N.compare op i1 i2)
+
+  let unop op new_e1 =
+    match (op, new_e1) with
+    | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
+    | Minus, Number f1 -> Number N.(zero () -. f1)
+    | (Not | Minus), Undefined -> Undefined
+
+  let binop (op : Com.binop) new_e1 new_e2 =
+    match (op, new_e1, new_e2) with
+    | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+    | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+    | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
+    | Add, Undefined, Undefined -> Undefined
+    | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+    | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+    | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
+    | Sub, Undefined, Undefined -> Undefined
+    | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
+    | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
+    | Div, Undefined, _ | Div, _, Undefined -> Undefined
+    | Div, _, l2 when is_zero l2 -> Number (N.zero ()) (* yes... *)
+    | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+    | Mod, Undefined, _ | Mod, _, Undefined -> Undefined
+    | Mod, _, l2 when is_zero l2 -> Number (N.zero ()) (* yes... *)
+    | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
+    | And, Undefined, _ | And, _, Undefined -> Undefined
+    | Or, Undefined, Undefined -> Undefined
+    | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
+    | And, Number i1, Number i2 ->
+        Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
+    | Or, Number i1, Number i2 ->
+        Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
 
   exception BlockingError
 
@@ -494,46 +524,6 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
   (* interpret *)
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
-    let comparison op new_e1 new_e2 =
-      match (op, new_e1, new_e2) with
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
-          Undefined
-      | op, Number i1, Number i2 -> Number (real_of_bool @@ N.compare op i1 i2)
-    in
-    let unop op new_e1 =
-      match (op, new_e1) with
-      | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
-      | Com.Minus, Number f1 -> Number N.(zero () -. f1)
-      | Com.(Not | Minus), Undefined -> Undefined
-    in
-    let binop op new_e1 new_e2 =
-      let open Com in
-      match (op, new_e1, new_e2) with
-      | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
-      | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
-      | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
-      | Add, Undefined, Undefined -> Undefined
-      | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
-      | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
-      | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
-      | Sub, Undefined, Undefined -> Undefined
-      | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
-      | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
-      | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
-      | Div, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-      | Mod, Undefined, _ | Mod, _, Undefined -> Undefined (* yes... *)
-      | Mod, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
-      | And, Undefined, _ | And, _, Undefined -> Undefined
-      | Or, Undefined, Undefined -> Undefined
-      | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
-      | And, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
-      | Or, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
-    in
     let out =
       try
         match Pos.unmark e with
@@ -1297,13 +1287,13 @@ let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
-    (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Config.value_sort) (roundops : Config.round_ops) :
+let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
+    ~(events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
+    ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
-  prepare_interp sort roundops;
-  let module Interp = (val get_interp sort roundops : S) in
-  let ctx = Interp.empty_ctx p in
+  prepare_interp sort round_ops;
+  let module Interp = (val get_interp sort round_ops : S) in
+  let ctx = empty_ctx p in
   Interp.evaluate_program ~inputs ~events ctx;
   Format.pp_print_flush Format.std_formatter ();
   Format.pp_print_flush Format.err_formatter ();
@@ -1331,8 +1321,8 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   in
   (varMap, anoSet)
 
-let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Config.value_sort) (roundops : Config.round_ops) : Com.literal =
-  let module Interp = (val get_interp sort roundops : S) in
-  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+let evaluate_expr ~(p : Mir.program) ~(e : Mir.expression Pos.marked)
+    ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) : Com.literal =
+  let module Interp = (val get_interp sort round_ops : S) in
+  try Interp.value_to_literal (Interp.evaluate_expr (empty_ctx p) e)
   with Stop_instruction _ -> Undefined

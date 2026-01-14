@@ -2,7 +2,7 @@
 
 module Com = M_ir.Com
 
-(** A type of values *)
+(** The type values used in the interpreter. *)
 type 'f value = Number of 'f | Undefined
 
 type 'f ctx_tmp_var = { mutable var : Com.Var.t; mutable value : 'f value }
@@ -47,6 +47,13 @@ type 'f ctx = {
     ('f value, Com.Var.t) Com.event_value Array.t Array.t list;
 }
 
+type 'f pctx = {
+  std : Com.print_std;
+  ctx : 'f ctx;
+  std_fmt : Format.formatter;
+  ctx_pr : print_ctx;
+}
+
 type run_error =
   | NanOrInf of string * M_ir.Mir.expression Pos.marked
   | StructuredError of
@@ -55,18 +62,12 @@ type run_error =
 module type S = sig
   type custom_float
 
-  type nonrec value = custom_float value
-
-  type nonrec ctx_tmp_var = custom_float ctx_tmp_var
-
   type nonrec ctx = custom_float ctx
 
   exception RuntimeError of run_error * ctx
 
-  val empty_ctx : M_ir.Mir.program -> ctx
-  (** Builds an evaluation context from a given program. *)
-
-  val evaluate_expr : ctx -> M_ir.Mir.expression Pos.marked -> value
+  val evaluate_expr :
+    ctx -> M_ir.Mir.expression Pos.marked -> custom_float value
   (** Evaluates an expression. *)
 
   val evaluate_program :
@@ -78,7 +79,7 @@ module type S = sig
       is required before calling this function (through [update_ctx_with_inputs]
       and [update_ctx_with_events]. *)
 
-  val literal_to_value : Com.literal -> value
+  val literal_to_value : Com.literal -> custom_float value
 
-  val value_to_literal : value -> Com.literal
+  val value_to_literal : custom_float value -> Com.literal
 end
