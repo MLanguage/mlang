@@ -14,86 +14,17 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+open M_ir
+open Types
+
 exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
 let repl_debug = ref false
 
-module type S = sig
-  type custom_float
-
-  type value = Number of custom_float | Undefined
-
-  val format_value : Format.formatter -> value -> unit
-
-  val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
-
-  type ctx_ref_var = {
-    mutable var : Com.Var.t;
-    mutable var_space : Com.variable_space;
-    mutable ref_var : Com.Var.t;
-    mutable org : int;
-  }
-
-  type print_ctx = { mutable indent : int; mutable is_newline : bool }
-
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
-  type ctx = {
-    ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target;
-    mutable ctx_var_space : int;
-    ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : ctx_tmp_var Array.t;
-    mutable ctx_tmps_org : int;
-    ctx_ref : ctx_ref_var Array.t;
-    mutable ctx_ref_org : int;
-    ctx_tab_map : Com.Var.t Array.t;
-    ctx_pr_out : print_ctx;
-    ctx_pr_err : print_ctx;
-    mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_nb_anos : int;
-    mutable ctx_nb_discos : int;
-    mutable ctx_nb_infos : int;
-    mutable ctx_nb_bloquantes : int;
-    mutable ctx_archived_anos : StrSet.t;
-    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
-    mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
-  }
-
-  val empty_ctx : Mir.program -> ctx
-
-  val literal_to_value : Com.literal -> value
-
-  val value_to_literal : value -> Com.literal
-
-  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
-
-  val update_ctx_with_events :
-    ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
-
-  type run_error =
-    | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
-
-  exception RuntimeError of run_error * ctx
-
-  val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
-
-  val evaluate_program : ctx -> unit
-end
-
-module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) =
-struct
+module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) :
+  S = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
@@ -101,17 +32,30 @@ struct
 
   type custom_float = N.t
 
+  type nonrec value = custom_float value
+
+  type nonrec ctx_tmp_var = custom_float ctx_tmp_var
+
+  type nonrec ctx = custom_float ctx
+
+  type pctx = {
+    std : Com.print_std;
+    ctx : ctx;
+    std_fmt : Format.formatter;
+    ctx_pr : print_ctx;
+  }
+
+  exception RuntimeError of run_error * ctx
+
   let truncatef (x : N.t) : N.t = R.truncatef x
 
   let roundf (x : N.t) = R.roundf x
-
-  type value = Number of N.t | Undefined
 
   let false_value () = Number (N.zero ())
 
   let true_value () = Number (N.one ())
 
-  let format_value (fmt : Format.formatter) (x : value) =
+  let _format_value (fmt : Format.formatter) (x : value) =
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_t fmt x
@@ -121,53 +65,6 @@ struct
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
-
-  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
-
-  type ctx_ref_var = {
-    mutable var : Com.Var.t;
-    mutable var_space : Com.variable_space;
-    mutable ref_var : Com.Var.t;
-    mutable org : int;
-  }
-
-  type print_ctx = { mutable indent : int; mutable is_newline : bool }
-
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
-  type ctx = {
-    ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target;
-    mutable ctx_var_space : int;
-    ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : ctx_tmp_var Array.t;
-    mutable ctx_tmps_org : int;
-    ctx_ref : ctx_ref_var Array.t;
-    mutable ctx_ref_org : int;
-    ctx_tab_map : Com.Var.t Array.t;
-    ctx_pr_out : print_ctx;
-    ctx_pr_err : print_ctx;
-    mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_nb_anos : int;
-    mutable ctx_nb_discos : int;
-    mutable ctx_nb_infos : int;
-    mutable ctx_nb_bloquantes : int;
-    mutable ctx_archived_anos : StrSet.t;
-    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
-    mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
-  }
-
-  type pctx = {
-    std : Com.print_std;
-    ctx : ctx;
-    std_fmt : Format.formatter;
-    ctx_pr : print_ctx;
-  }
 
   let empty_ctx (p : Mir.program) : ctx =
     let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
@@ -315,13 +212,6 @@ struct
        done;*)
     ctx.ctx_events <- [ ctx_event_tab ]
 
-  type run_error =
-    | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
-
-  exception RuntimeError of run_error * ctx
-
   let raise_runtime_as_structured (e : run_error) =
     match e with
     | NanOrInf (v, e) ->
@@ -338,17 +228,6 @@ struct
   let real_of_bool (b : bool) = if b then N.one () else N.zero ()
 
   let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
-
-  let compare_numbers op i1 i2 =
-    let epsilon = N.of_float !Config.comparison_error_margin in
-    let open Com in
-    match op with
-    | Gt -> N.(i1 >. i2 +. epsilon)
-    | Gte -> N.(i1 >. i2 -. epsilon)
-    | Lt -> N.(i1 +. epsilon <. i2)
-    | Lte -> N.(i1 -. epsilon <. i2)
-    | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
-    | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
   let get_var_space (ctx : ctx) (m_sp_opt : Com.var_space) =
     let i_sp =
@@ -424,7 +303,7 @@ struct
         let _, var, vorg = get_var ctx None var in
         match get_var_value_org ctx vsd var vorg with
         | Undefined -> false
-        | Number n -> compare_numbers Eq n (N.one ()))
+        | Number n -> N.compare Eq n (N.one ()))
     | None -> false
 
   exception BlockingError
@@ -432,7 +311,7 @@ struct
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
-    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
+    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -455,7 +334,7 @@ struct
     | Com.VarAccess (m_sp_opt, v) ->
         let vsd, v, vorg = get_var ctx m_sp_opt v in
         Some (vsd, v, vorg)
-    | Com.TabAccess ((m_sp_opt, m_v), m_i) -> (
+    | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
             let vsd, v, vorg = get_var ctx m_sp_opt m_v in
@@ -516,18 +395,10 @@ struct
         set_var_value_org ctx vsd var_i vorg value
       else set_var_value_org ctx vsd var vorg value
 
-  and evaluate_switch_expr (ctx : ctx) s_e =
-    match s_e with
-    | Com.SEValue e -> (
-        match evaluate_expr ctx e with
-        | Undefined -> `Undefined
-        | Number n -> `Value n)
-    | SESameVariable v -> `Var v
-
   and set_access ctx access value =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
-    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
+    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -628,8 +499,7 @@ struct
       | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
       | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
           Undefined
-      | op, Number i1, Number i2 ->
-          Number (real_of_bool @@ compare_numbers op i1 i2)
+      | op, Number i1, Number i2 -> Number (real_of_bool @@ N.compare op i1 i2)
     in
     let unop op new_e1 =
       match (op, new_e1) with
@@ -731,7 +601,7 @@ struct
             match evaluate_expr ctx arg with
             | Undefined -> Undefined
             | Number f as n ->
-                if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
+                if N.compare Com.Lte f (N.zero ()) then Undefined else n)
         | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
             | Undefined -> Undefined
@@ -777,8 +647,7 @@ struct
                           loop res (i + 1)
                       in
                       loop Undefined 0
-                    else if nb >= 1 then get_var_value_org ctx vsd var vorg
-                    else Undefined))
+                    else get_var_value_org ctx vsd var vorg))
         | FuncCall (Pos.Mark (NbEvents, _), _) ->
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
@@ -804,9 +673,15 @@ struct
                 then Number (N.one ())
                 else Number (N.zero ())
             | None -> Undefined)
-        | SameVariable (m_acc0, m_acc1) ->
-            if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
-            else Number (N.zero ())
+        | SameVariable (m_acc0, m_acc1) -> (
+            let v0_opt = get_access_var ctx (Pos.unmark m_acc0) in
+            let v1_opt = get_access_var ctx (Pos.unmark m_acc1) in
+            match (v0_opt, v1_opt) with
+            | Some (_, v0, _), Some (_, v1, _) ->
+                if Com.Var.name_str v0 = Com.Var.name_str v1 then
+                  Number (N.one ())
+                else Number (N.zero ())
+            | _, _ -> Number (N.zero ()))
         | InDomain (m_acc, cvm) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) ->
@@ -845,14 +720,6 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
-  and same_variable ctx m_acc m_acc' : bool =
-    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
-    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
-    match (v0_opt, v1_opt) with
-    | Some (_, v0, _), Some (_, v1, _) ->
-        Com.Var.name_str v0 = Com.Var.name_str v1
-    | _, _ -> false
-
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =
     match Pos.unmark stmt with
@@ -879,32 +746,21 @@ struct
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
     | Com.Switch (c, l) -> (
+        let v = evaluate_expr ctx c in
         let exception INTERNAL_STOP_SWITCH in
         let then_ () = raise INTERNAL_STOP_SWITCH in
-        let v = evaluate_switch_expr ctx c in
-        let default = ref None in
         try
           List.iter
             (fun (cases, stmts) ->
               List.iter
                 (fun case ->
                   match (case, v) with
-                  | Com.CDefault, _ ->
-                      (* Trigged only if all other cases fail *)
-                      default := Some stmts
-                  | CValue Undefined, `Undefined ->
+                  | Com.Default, _ | Value Undefined, Undefined ->
                       evaluate_stmts ~then_ canBlock ctx stmts
-                  | CValue _, `Undefined | CValue Undefined, _ -> ()
-                  | CValue (Float f), `Value v ->
-                      if N.of_float f = v then
-                        evaluate_stmts ~then_ canBlock ctx stmts
-                  | CValue _, `Var _ ->
-                      failwith "Cannot match value with variable"
-                  | CVar m_acc, `Var v ->
-                      if same_variable ctx m_acc v then
-                        evaluate_stmts ~then_ canBlock ctx stmts
-                  | CVar _, (`Value _ | `Undefined) ->
-                      failwith "Cannot match variable with value")
+                  | Value (Float f), Number n when N.compare Eq n (N.of_float f)
+                    ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | _ -> ())
                 cases)
             l
         with INTERNAL_STOP_SWITCH -> ())
@@ -1320,7 +1176,9 @@ struct
     in
     ctx.ctx_target <- sav_target
 
-  let evaluate_program (ctx : ctx) : unit =
+  let evaluate_program ~inputs ~events (ctx : ctx) : unit =
+    update_ctx_with_inputs ctx inputs;
+    update_ctx_with_events ctx events;
     try
       let main_target =
         match
@@ -1446,9 +1304,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
   let ctx = Interp.empty_ctx p in
-  Interp.update_ctx_with_inputs ctx inputs;
-  Interp.update_ctx_with_events ctx events;
-  Interp.evaluate_program ctx;
+  Interp.evaluate_program ~inputs ~events ctx;
   Format.pp_print_flush Format.std_formatter ();
   Format.pp_print_flush Format.err_formatter ();
   let varMap =
