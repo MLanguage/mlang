@@ -295,7 +295,7 @@ comp_variable_table:
 | TABLE LBRACKET size = SYMBOL RBRACKET { parse_table_size size }
 
 comp_variable_descr:
-| descr = STRING { parse_string descr }
+| descr = STRING { descr }
 
 comp_attr:
 | BASE { "base" }
@@ -339,7 +339,7 @@ input_variable_name:
 | name = SYMBOL COLON { parse_variable_name $sloc name }
 
 input_descr:
-descr = STRING { parse_string descr }
+descr = STRING { descr }
 
 input_attr_or_category:
 | attr = variable_attribute { (None, Some attr, false) }
@@ -941,7 +941,7 @@ instruction_then_when_branch:
 | ENDWHEN { ([], (Pos.without [])) }
 
 print_argument:
-| s = STRING { Com.PrintString (parse_string s) }
+| s = STRING { Com.PrintString s }
 | f = with_pos(print_function) LPAREN m_a = with_pos(var_access) RPAREN {
     match Pos.unmark f with
     | "nom" -> Com.PrintAccess (Com.Name, m_a)
@@ -1236,7 +1236,7 @@ error_name:
 n = SYMBOL COLON { n }
 
 error_descr:
-s = STRING { parse_string s }
+s = STRING { s }
 
 error_message:
 | COLON  s = with_pos(error_descr) { s }
