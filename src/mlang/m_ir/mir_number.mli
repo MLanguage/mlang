@@ -69,7 +69,7 @@ module type NumberInterface = sig
 
   val is_zero : t -> bool
 
-  val compare : Com.comp_op -> t -> t -> bool
+  val compare : ?epsilon:float -> Com.comp_op -> t -> t -> bool
   (** Returns the comparison between two numbers in the precision context
     of the current configuration. *)
 end
