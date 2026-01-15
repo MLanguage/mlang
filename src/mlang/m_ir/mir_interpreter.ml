@@ -773,7 +773,8 @@ struct
                           loop res (i + 1)
                       in
                       loop Undefined 0
-                    else get_var_value_org ctx vsd var vorg))
+                    else if nb >= 1 then get_var_value_org ctx vsd var vorg
+                    else Undefined))
         | FuncCall (Pos.Mark (NbEvents, _), _) ->
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)

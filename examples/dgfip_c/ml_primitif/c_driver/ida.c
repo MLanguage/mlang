@@ -45,27 +45,27 @@ void infoKc(char *fich) {
 void infoNbOk(int ok, int tot) {
   fprintf(stdout, "IACT009 | %d/%d ", ok, tot);
   if (ok == 1) {
-    fprintf(stdout, "fichier correct\n", ok, tot);
+    fprintf(stdout, "fichier correct\n");
   } else {
-    fprintf(stdout, "fichiers corrects\n", ok, tot);
+    fprintf(stdout, "fichiers corrects\n");
   }
 }
 
 void infoNbKo(int ko, int tot) {
   fprintf(stdout, "IACT010 | %d/%d ", ko, tot);
   if (ko == 1) {
-    fprintf(stdout, "fichier incorrect\n", ko, tot);
+    fprintf(stdout, "fichier incorrect\n");
   } else {
-    fprintf(stdout, "fichiers incorrects\n", ko, tot);
+    fprintf(stdout, "fichiers incorrects\n");
   }
 }
 
 void infoNbKc(int kc, int tot) {
   fprintf(stdout, "IACT011 | %d/%d ", kc, tot);
   if (kc == 1) {
-    fprintf(stdout, "fichier invalide\n", kc, tot);
+    fprintf(stdout, "fichier invalide\n");
   } else {
-    fprintf(stdout, "fichiers invalides\n", kc, tot);
+    fprintf(stdout, "fichiers invalides\n");
   }
 }
 

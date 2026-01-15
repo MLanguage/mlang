@@ -1129,11 +1129,15 @@ int multimax_varinfo(
   double val;
   *res_def = 0;
   *res_val = 0.0;
-  if (irdata == NULL || info == NULL || info->tab_idx < 0 || nb_def == 0) return *res_def;
-  for (i = 0; i < nb && i < info->size; i++) {
-    lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
-    if (def == 1) *res_def = 1;
-    if (val >= *res_val) *res_val = val;
+  if (irdata == NULL || info == NULL || nb_def == 0) return *res_def;
+  if (info->tab_idx >= 0) {
+    for (i = 0; i < nb && i < info->size; i++) {
+      lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
+      if (def == 1) *res_def = 1;
+      if (val >= *res_val) *res_val = val;
+    }
+  } else if (nb >= 1) {
+    lis_varinfo(irdata, var_space, info, res_def, res_val);
   }
   return *res_def;
 }

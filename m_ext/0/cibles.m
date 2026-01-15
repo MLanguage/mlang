@@ -657,17 +657,43 @@ cible apres_stop_application_code_mort:
 application : iliad;
 afficher "[ERREUR] Cette cible ne doit pas s'exécuter!\n";
 
+# Test multimax
+cible test_multimax:
+application : iliad;
+variables_temporaires: TAB tableau[3];
+afficher_erreur "DEBUT test_multimax\n" indenter(2);
+afficher_erreur nom(TAB) " = { ";
+iterer : variable I : entre 0..(taille(TAB) - 1) increment 1 : dans (
+  TAB[I] = I;
+  afficher_erreur (TAB[I]) " ";
+)
+afficher_erreur "}\n";
+iterer : variable NB : entre -1..4 increment 1 : dans (
+  afficher_erreur "multimax(" (NB) ", " nom(TAB) ") = " (multimax(NB, TAB)) "\n";
+)
+TAB[1] = indefini;
+afficher_erreur nom(TAB) " = { ";
+iterer : variable I : entre 0..(taille(TAB) - 1) increment 1 : dans (
+  afficher_erreur (TAB[I]) " ";
+)
+afficher_erreur "}\n";
+iterer : variable NB : entre -1..4 increment 1 : dans (
+  afficher_erreur "multimax(" (NB) ", " nom(TAB) ") = " (multimax(NB, TAB)) "\n";
+)
+afficher_erreur "multimax(" (indefini) ", " nom(TAB) ") = " (multimax(indefini, TAB)) "\n";
+afficher_erreur  indenter(-2) "FIN test_multimax\n";
+
 cible enchainement_primitif_interpreteur:
 application: iliad;
 calculer cible enchainement_primitif;
 calculer cible compter_calculee;
 calculer cible compter_calculee_restaurer;
+calculer cible test_multimax;
 calculer cible test_aiguillage;
 calculer cible test_stop_fonction;
 calculer cible test_stop_cible;
 calculer cible test_stop_application;
 calculer cible apres_stop_application_code_mort;
-
 afficher_erreur "FIN\n";
 
 # cibles bidonnes pour correctif
