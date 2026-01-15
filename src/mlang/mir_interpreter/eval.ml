@@ -14,108 +14,34 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+open M_ir
+open Types
+
 exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
-let repl_debug = ref false
-
-module type S = sig
-  type custom_float
-
-  type value = Number of custom_float | Undefined
-
-  val format_value : Format.formatter -> value -> unit
-
-  val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
-
-  type ctx_ref_var = {
-    mutable var : Com.Var.t;
-    mutable var_space : Com.variable_space;
-    mutable ref_var : Com.Var.t;
-    mutable org : int;
-  }
-
-  type print_ctx = { mutable indent : int; mutable is_newline : bool }
-
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
-  type ctx = {
-    ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target;
-    mutable ctx_var_space : int;
-    ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : ctx_tmp_var Array.t;
-    mutable ctx_tmps_org : int;
-    ctx_ref : ctx_ref_var Array.t;
-    mutable ctx_ref_org : int;
-    ctx_tab_map : Com.Var.t Array.t;
-    ctx_pr_out : print_ctx;
-    ctx_pr_err : print_ctx;
-    mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_nb_anos : int;
-    mutable ctx_nb_discos : int;
-    mutable ctx_nb_infos : int;
-    mutable ctx_nb_bloquantes : int;
-    mutable ctx_archived_anos : StrSet.t;
-    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
-    mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
-  }
-
-  val empty_ctx : Mir.program -> ctx
-
-  val literal_to_value : Com.literal -> value
-
-  val value_to_literal : value -> Com.literal
-
-  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
-
-  val update_ctx_with_events :
-    ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
-
-  type run_error =
-    | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
-
-  exception RuntimeError of run_error * ctx
-
-  val raise_runtime_as_structured : run_error -> 'a
-
-  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
-
-  val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
-
-  val evaluate_program : ctx -> unit
-end
-
-module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) =
-struct
+module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) :
+  S with type custom_float = N.t = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
   module R = RF (N)
+  module Funs = Functions.Make (N) (R)
 
   type custom_float = N.t
 
-  let truncatef (x : N.t) : N.t = R.truncatef x
+  type nonrec value = custom_float value
+
+  type nonrec ctx = custom_float ctx
+
+  type nonrec pctx = custom_float pctx
+
+  exception InternalRuntimeError of run_error * ctx
 
   let roundf (x : N.t) = R.roundf x
 
-  type value = Number of N.t | Undefined
-
-  let false_value () = Number (N.zero ())
-
-  let true_value () = Number (N.one ())
-
-  let format_value (fmt : Format.formatter) (x : value) =
+  let _format_value (fmt : Format.formatter) (x : value) =
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_t fmt x
@@ -125,113 +51,6 @@ struct
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
-
-  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
-
-  type ctx_ref_var = {
-    mutable var : Com.Var.t;
-    mutable var_space : Com.variable_space;
-    mutable ref_var : Com.Var.t;
-    mutable org : int;
-  }
-
-  type print_ctx = { mutable indent : int; mutable is_newline : bool }
-
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
-  type ctx = {
-    ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target;
-    mutable ctx_var_space : int;
-    ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : ctx_tmp_var Array.t;
-    mutable ctx_tmps_org : int;
-    ctx_ref : ctx_ref_var Array.t;
-    mutable ctx_ref_org : int;
-    ctx_tab_map : Com.Var.t Array.t;
-    ctx_pr_out : print_ctx;
-    ctx_pr_err : print_ctx;
-    mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_nb_anos : int;
-    mutable ctx_nb_discos : int;
-    mutable ctx_nb_infos : int;
-    mutable ctx_nb_bloquantes : int;
-    mutable ctx_archived_anos : StrSet.t;
-    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
-    mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
-  }
-
-  type pctx = {
-    std : Com.print_std;
-    ctx : ctx;
-    std_fmt : Format.formatter;
-    ctx_pr : print_ctx;
-  }
-
-  let empty_ctx (p : Mir.program) : ctx =
-    let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
-    let init_tmp_var _i = { var = dummy_var; value = Undefined } in
-    let init_ref _i =
-      {
-        var = dummy_var;
-        var_space = p.program_var_space_def;
-        ref_var = dummy_var;
-        org = -1;
-      }
-    in
-    let ctx_tab_map =
-      let init i = IntMap.find i p.program_stats.table_map in
-      Array.init (IntMap.cardinal p.program_stats.table_map) init
-    in
-    let ctx_var_spaces =
-      let init i =
-        let vsd = IntMap.find i p.program_var_spaces_idx in
-        let input =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocInput vsd.vs_cats then
-            Array.make p.program_stats.sz_input Undefined
-          else Array.make 0 Undefined
-        in
-        let computed =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocComputed vsd.vs_cats then
-            Array.make p.program_stats.sz_computed Undefined
-          else Array.make 0 Undefined
-        in
-        let base =
-          if Com.CatVar.LocMap.mem Com.CatVar.LocBase vsd.vs_cats then
-            Array.make p.program_stats.sz_base Undefined
-          else Array.make 0 Undefined
-        in
-        { input; computed; base }
-      in
-      Array.init (IntMap.cardinal p.program_var_spaces_idx) init
-    in
-    {
-      ctx_prog = p;
-      ctx_target = snd (StrMap.min_binding p.program_targets);
-      ctx_var_space = p.program_var_space_def.vs_id;
-      ctx_var_spaces;
-      ctx_tmps = Array.init p.program_stats.sz_all_tmps init_tmp_var;
-      ctx_tmps_org = 0;
-      ctx_ref = Array.init p.program_stats.nb_all_refs init_ref;
-      ctx_ref_org = 0;
-      ctx_tab_map;
-      ctx_pr_out = { indent = 0; is_newline = true };
-      ctx_pr_err = { indent = 0; is_newline = true };
-      ctx_anos = [];
-      ctx_nb_anos = 0;
-      ctx_nb_discos = 0;
-      ctx_nb_infos = 0;
-      ctx_nb_bloquantes = 0;
-      ctx_archived_anos = StrSet.empty;
-      ctx_finalized_anos = [];
-      ctx_exported_anos = [];
-      ctx_events = [];
-    }
 
   let literal_to_value (l : Com.literal) : value =
     match l with
@@ -243,88 +62,10 @@ struct
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
 
-  let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
-      unit =
-    let value_inputs =
-      Com.Var.Map.mapi
-        (fun v l ->
-          match l with
-          | Com.Undefined -> Undefined
-          | Com.Float f -> Number (N.of_float_input v f))
-        inputs
-    in
-    let default_space =
-      ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
-    in
-    Com.Var.Map.iter
-      (fun (var : Com.Var.t) value ->
-        match Com.Var.cat_var_loc var with
-        | LocInput -> default_space.input.(Com.Var.loc_idx var) <- value
-        | LocComputed -> default_space.computed.(Com.Var.loc_idx var) <- value
-        | LocBase -> default_space.base.(Com.Var.loc_idx var) <- value)
-      value_inputs
-
-  let update_ctx_with_events (ctx : ctx)
-      (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list) : unit =
-    let nbEvt = List.length events in
-    let ctx_event_tab = Array.make nbEvt [||] in
-    let fold idx (evt : (Com.literal, Com.Var.t) Com.event_value StrMap.t) =
-      let nbProgFields = StrMap.cardinal ctx.ctx_prog.program_event_fields in
-      let map = Array.make nbProgFields (Com.Numeric Undefined) in
-      for id = 0 to nbProgFields - 1 do
-        let fname = IntMap.find id ctx.ctx_prog.program_event_field_idxs in
-        let ef = StrMap.find fname ctx.ctx_prog.program_event_fields in
-        if ef.is_var then
-          map.(id) <-
-            Com.RefVar (snd (StrMap.min_binding ctx.ctx_prog.program_vars))
-      done;
-      let iter' fname ev =
-        match StrMap.find_opt fname ctx.ctx_prog.program_event_fields with
-        | Some ef -> (
-            match (ev, ef.is_var) with
-            | Com.Numeric Com.Undefined, false ->
-                map.(ef.index) <- Com.Numeric Undefined
-            | Com.Numeric (Com.Float f), false ->
-                map.(ef.index) <- Com.Numeric (Number (N.of_float f))
-            | Com.RefVar v, true -> map.(ef.index) <- Com.RefVar v
-            | _ -> Errors.raise_error "wrong event field type")
-        | None -> Errors.raise_error "unknown event field"
-      in
-      StrMap.iter iter' evt;
-      ctx_event_tab.(idx) <- map;
-      idx + 1
-    in
-    ignore (List.fold_left fold 0 events);
-    (* let max_field_length =
-         StrMap.fold
-           (fun s _ r -> max r (String.length s))
-           ctx.ctx_prog.program_event_fields 0
-       in
-       let pp_field fmt s =
-         let l = String.length s in
-         Format.fprintf fmt "%s%s" s (String.make (max_field_length - l + 1) ' ')
-       in
-       let pp_ev fmt = function
-         | Com.Numeric Undefined -> Pp.string fmt "indefini"
-         | Com.Numeric (Number v) -> N.format_t fmt v
-         | Com.RefVar v -> Pp.string fmt (Com.Var.name_str v)
-       in
-       for i = 0 to Array.length ctx_event_tab - 1 do
-         Format.eprintf "%d@." i;
-         let map = ctx_event_tab.(i) in
-         for j = 0 to Array.length map - 1 do
-           let s = IntMap.find j ctx.ctx_prog.program_event_field_idxs in
-           Format.eprintf "  %a%a@." pp_field s pp_ev map.(j)
-         done
-       done;*)
-    ctx.ctx_events <- [ ctx_event_tab ]
-
-  type run_error =
-    | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
-
-  exception RuntimeError of run_error * ctx
+  let literal_event_to_value_event = function
+    | Com.Numeric Com.Undefined -> Com.Numeric Undefined
+    | Com.Numeric (Com.Float f) -> Com.Numeric (Number (N.of_float f))
+    | Com.RefVar v -> Com.RefVar v
 
   let raise_runtime_as_structured (e : run_error) =
     match e with
@@ -342,17 +83,6 @@ struct
   let real_of_bool (b : bool) = if b then N.one () else N.zero ()
 
   let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
-
-  let compare_numbers op i1 i2 =
-    let epsilon = N.of_float !Config.comparison_error_margin in
-    let open Com in
-    match op with
-    | Gt -> N.(i1 >. i2 +. epsilon)
-    | Gte -> N.(i1 >. i2 -. epsilon)
-    | Lt -> N.(i1 +. epsilon <. i2)
-    | Lte -> N.(i1 -. epsilon <. i2)
-    | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
-    | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
   let get_var_space (ctx : ctx) (m_sp_opt : Com.var_space) =
     let i_sp =
@@ -428,8 +158,47 @@ struct
         let _, var, vorg = get_var ctx None var in
         match get_var_value_org ctx vsd var vorg with
         | Undefined -> false
-        | Number n -> compare_numbers Eq n (N.one ()))
+        | Number n -> N.compare Eq n (N.one ()))
     | None -> false
+
+  let comparison op new_e1 new_e2 =
+    match (op, new_e1, new_e2) with
+    | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
+    | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
+        Undefined
+    | op, Number i1, Number i2 -> Number (real_of_bool @@ N.compare op i1 i2)
+
+  let unop op new_e1 =
+    match (op, new_e1) with
+    | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
+    | Minus, Number f1 -> Number N.(zero () -. f1)
+    | (Not | Minus), Undefined -> Undefined
+
+  let binop (op : Com.binop) new_e1 new_e2 =
+    match (op, new_e1, new_e2) with
+    | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+    | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+    | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
+    | Add, Undefined, Undefined -> Undefined
+    | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+    | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+    | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
+    | Sub, Undefined, Undefined -> Undefined
+    | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
+    | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
+    | Div, Undefined, _ | Div, _, Undefined -> Undefined
+    | Div, _, l2 when is_zero l2 -> Number (N.zero ()) (* yes... *)
+    | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+    | Mod, Undefined, _ | Mod, _, Undefined -> Undefined
+    | Mod, _, l2 when is_zero l2 -> Number (N.zero ()) (* yes... *)
+    | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
+    | And, Undefined, _ | And, _, Undefined -> Undefined
+    | Or, Undefined, Undefined -> Undefined
+    | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
+    | And, Number i1, Number i2 ->
+        Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
+    | Or, Number i1, Number i2 ->
+        Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
 
   exception BlockingError
 
@@ -619,47 +388,6 @@ struct
   (* interpret *)
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
-    let comparison op new_e1 new_e2 =
-      match (op, new_e1, new_e2) with
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
-          Undefined
-      | op, Number i1, Number i2 ->
-          Number (real_of_bool @@ compare_numbers op i1 i2)
-    in
-    let unop op new_e1 =
-      match (op, new_e1) with
-      | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
-      | Com.Minus, Number f1 -> Number N.(zero () -. f1)
-      | Com.(Not | Minus), Undefined -> Undefined
-    in
-    let binop op new_e1 new_e2 =
-      let open Com in
-      match (op, new_e1, new_e2) with
-      | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
-      | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
-      | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
-      | Add, Undefined, Undefined -> Undefined
-      | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
-      | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
-      | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
-      | Sub, Undefined, Undefined -> Undefined
-      | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
-      | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
-      | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
-      | Div, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-      | Mod, Undefined, _ | Mod, _, Undefined -> Undefined (* yes... *)
-      | Mod, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
-      | And, Undefined, _ | And, _, Undefined -> Undefined
-      | Or, Undefined, Undefined -> Undefined
-      | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
-      | And, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
-      | Or, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
-    in
     let out =
       try
         match Pos.unmark e with
@@ -711,39 +439,20 @@ struct
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
-        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (roundf x)
-            | Undefined -> Undefined (*nope:Float 0.*))
-        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (truncatef x)
-            | Undefined -> Undefined (*Float 0.*))
-        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> false_value ()
-            | _ -> true_value ())
-        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f as n ->
-                if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
-        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f -> Number (N.abs f))
-        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.min (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.min fl fr))
-        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.max (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.max fl fr))
+        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) ->
+            Funs.arr (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) ->
+            Funs.inf (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) ->
+            Funs.present (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) ->
+            Funs.supzero (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) ->
+            Funs.abs (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) ->
+            Funs.min (evaluate_expr ctx arg1) (evaluate_expr ctx arg2)
+        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) ->
+            Funs.max (evaluate_expr ctx arg1) (evaluate_expr ctx arg2)
         | FuncCall (Pos.Mark (Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx arg1 with
             | Undefined -> Undefined
@@ -775,9 +484,7 @@ struct
                       loop Undefined 0
                     else if nb >= 1 then get_var_value_org ctx vsd var vorg
                     else Undefined))
-        | FuncCall (Pos.Mark (NbEvents, _), _) ->
-            let card = Array.length (List.hd ctx.ctx_events) in
-            Number (N.of_int @@ Int64.of_int @@ card)
+        | FuncCall (Pos.Mark (NbEvents, _), _) -> Funs.nb_events ctx
         | FuncCall (Pos.Mark (Func fn, _), args) ->
             let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             evaluate_function ctx fd args
@@ -822,9 +529,9 @@ struct
         | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
         | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
       with
-      | RuntimeError (e, ctx) ->
+      | InternalRuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
-          else raise (RuntimeError (e, ctx))
+          else raise (InternalRuntimeError (e, ctx))
       | Errors.StructuredError (msg, pos, kont) ->
           if !exit_on_rte then
             raise
@@ -832,7 +539,8 @@ struct
                  ( msg,
                    pos @ [ (Some "Expression raising the error:", Pos.get e) ],
                    kont ))
-          else raise (RuntimeError (StructuredError (msg, pos, kont), ctx))
+          else
+            raise (InternalRuntimeError (StructuredError (msg, pos, kont), ctx))
     in
     if match out with Undefined -> false | Number out -> N.is_nan_or_inf out
     then
@@ -844,7 +552,7 @@ struct
             e )
       in
       if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
+      else raise (InternalRuntimeError (e, ctx))
     else out
 
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
@@ -884,8 +592,8 @@ struct
                   match (case, v) with
                   | Com.Default, _ | Value Undefined, Undefined ->
                       evaluate_stmts ~then_ canBlock ctx stmts
-                  | Value (Float f), Number n
-                    when compare_numbers Eq n (N.of_float f) ->
+                  | Value (Float f), Number n when N.compare Eq n (N.of_float f)
+                    ->
                       evaluate_stmts ~then_ canBlock ctx stmts
                   | _ -> ())
                 cases)
@@ -1319,9 +1027,9 @@ struct
       evaluate_target false ctx main_target [] vsd;
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
     with
-    | RuntimeError (e, ctx) ->
+    | InternalRuntimeError (e, ctx) ->
         if !exit_on_rte then raise_runtime_as_structured e
-        else raise (RuntimeError (e, ctx))
+        else raise (InternalRuntimeError (e, ctx))
     | Stop_instruction SKApplication ->
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
@@ -1422,16 +1130,23 @@ let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
-    (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Config.value_sort) (roundops : Config.round_ops) :
+let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
+    ~(events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
+    ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
-  prepare_interp sort roundops;
-  let module Interp = (val get_interp sort roundops : S) in
-  let ctx = Interp.empty_ctx p in
-  Interp.update_ctx_with_inputs ctx inputs;
-  Interp.update_ctx_with_events ctx events;
-  Interp.evaluate_program ctx;
+  prepare_interp sort round_ops;
+  let module Interp = (val get_interp sort round_ops : S) in
+  let ctx =
+    let inputs = Com.Var.Map.map Interp.literal_to_value inputs in
+    let events =
+      List.map (StrMap.map Interp.literal_event_to_value_event) events
+    in
+    Context.empty_ctx ~inputs ~events p
+  in
+  let () =
+    try Interp.evaluate_program ctx
+    with Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)
+  in
   Format.pp_print_flush Format.std_formatter ();
   Format.pp_print_flush Format.err_formatter ();
   let varMap =
@@ -1458,8 +1173,11 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   in
   (varMap, anoSet)
 
-let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Config.value_sort) (roundops : Config.round_ops) : Com.literal =
-  let module Interp = (val get_interp sort roundops : S) in
-  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
-  with Stop_instruction _ -> Undefined
+let evaluate_expr ~(p : Mir.program) ~(e : Mir.expression Pos.marked)
+    ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) : Com.literal =
+  let module Interp = (val get_interp sort round_ops : S) in
+  try
+    Interp.value_to_literal (Interp.evaluate_expr (Context.empty_ctx p) e)
+  with
+  | Stop_instruction _ -> Undefined
+  | Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)

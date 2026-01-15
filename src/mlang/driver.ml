@@ -131,7 +131,6 @@ let parse () =
   m_program
 
 let run_single_test m_program test =
-  Mir_interpreter.repl_debug := true;
   Test_interpreter.check_one_test m_program test !Config.value_sort
     !Config.round_ops;
   Cli.result_print "Test passed!"
