@@ -205,8 +205,7 @@ let ignored_vars_set (p : Mir.program) (sl : string list) =
   |> StrMap.fold fold p.program_vars
   |> StrMap.fold fold p.program_alias
 
-let ignored_vars_list =
-  [ "NBPT"; "RETX.*"; "NATMAJ."; "NATMAJ..."; "NATMAJ...."; "TL_.*" ]
+let ignored_vars_list = [ "NBPT"; "RETX.*"; "NATMAJ.*"; "TL_.*" ]
 
 type process_acc = string list * int StrMap.t
 

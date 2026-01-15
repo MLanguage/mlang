@@ -169,9 +169,9 @@ int controleResultat(T_tas tas, T_options opts, T_irdata *tgv, L_S_varVal res, L
 
     if (
       ! (
-        strncmp(vv->varinfo->name, "NBPT", 4) == 0
+        (strncmp(vv->varinfo->name, "NBPT", 4) == 0 && lng == 4)
         || strncmp(vv->varinfo->name, "RETX", 4) == 0
-        || (strncmp(vv->varinfo->name, "NATMAJ", 6) == 0 && (lng == 7 || lng == 9 || lng == 10))
+        || strncmp(vv->varinfo->name, "NATMAJ", 6) == 0
         || strncmp(vv->varinfo->name, "TL_", 3) == 0
       )
     ) {
