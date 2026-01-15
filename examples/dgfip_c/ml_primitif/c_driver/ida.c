@@ -43,15 +43,30 @@ void infoKc(char *fich) {
 }
 
 void infoNbOk(int ok, int tot) {
-  fprintf(stdout, "IACT009 | %d/%d fichiers corrects\n", ok, tot);
+  fprintf(stdout, "IACT009 | %d/%d ", ok, tot);
+  if (ok == 1) {
+    fprintf(stdout, "fichier correct\n", ok, tot);
+  } else {
+    fprintf(stdout, "fichiers corrects\n", ok, tot);
+  }
 }
 
 void infoNbKo(int ko, int tot) {
-  fprintf(stdout, "IACT010 | %d/%d fichiers incorrects\n", ko, tot);
+  fprintf(stdout, "IACT010 | %d/%d ", ko, tot);
+  if (ko == 1) {
+    fprintf(stdout, "fichier incorrect\n", ko, tot);
+  } else {
+    fprintf(stdout, "fichiers incorrects\n", ko, tot);
+  }
 }
 
 void infoNbKc(int kc, int tot) {
-  fprintf(stdout, "IACT011 | %d/%d fichiers invalides\n", kc, tot);
+  fprintf(stdout, "IACT011 | %d/%d ", kc, tot);
+  if (kc == 1) {
+    fprintf(stdout, "fichier invalide\n", kc, tot);
+  } else {
+    fprintf(stdout, "fichiers invalides\n", kc, tot);
+  }
 }
 
 void infoNonRec(char *dir) {
