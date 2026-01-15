@@ -219,7 +219,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     |> List.sort String.compare |> Array.of_list
   in
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  Mir_interpreter.exit_on_rte := false;
+  M_interpreter.Eval.exit_on_rte := false;
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
@@ -227,9 +227,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
-    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
-                           : Mir_interpreter.S)
-    in
     try
       Config.debug_flag := false;
       check_test p (test_dir ^ name) value_sort round_ops ign_vars;
@@ -245,14 +242,14 @@ let check_all_tests (p : Mir.program) (test_dir : string)
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures)
-    | Interp.RuntimeError (run_error, _) -> (
+    | M_interpreter.Types.RuntimeError run_error -> (
         match run_error with
-        | Interp.StructuredError (msg, pos, kont) ->
+        | StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
-        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
+        | NanOrInf (msg, Pos.Mark (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             (successes, failures))
@@ -282,7 +279,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
 let check_one_test (p : Mir.program) (name : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  Mir_interpreter.exit_on_rte := false;
+  M_interpreter.Eval.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
@@ -290,9 +287,6 @@ let check_one_test (p : Mir.program) (name : string)
   Config.display_time := false;
   (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let is_ok =
-    let module Interp = (val Mir_interpreter.get_interp value_sort round_ops
-                           : Mir_interpreter.S)
-    in
     try
       Config.debug_flag := false;
       check_test p name value_sort round_ops ign_vars;
@@ -306,14 +300,14 @@ let check_one_test (p : Mir.program) (name : string)
           Errors.format_structured_error (msg, pos);
         (match kont with None -> () | Some kont -> kont ());
         Some 0
-    | Interp.RuntimeError (run_error, _) -> (
+    | M_interpreter.Types.RuntimeError run_error -> (
         match run_error with
-        | Interp.StructuredError (msg, pos, kont) ->
+        | StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
             (match kont with None -> () | Some kont -> kont ());
             Some 0
-        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
+        | NanOrInf (msg, Pos.Mark (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             Some 0)

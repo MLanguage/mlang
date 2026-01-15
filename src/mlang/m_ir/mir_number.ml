@@ -34,8 +34,6 @@ module type NumberInterfaceNoCompare = sig
 
   val of_float : float -> t
 
-  val of_float_input : Com.Var.t -> float -> t
-
   val to_float : t -> float
   (** Warning: lossy *)
 
@@ -124,8 +122,6 @@ module RegularFloatNumber : NumberInterface = MakeComparable (struct
 
   let of_float f = f
 
-  let of_float_input _ f = f
-
   let to_float f = f
 
   let zero () = 0.
@@ -197,8 +193,6 @@ module MPFRNumber : NumberInterface = MakeComparable (struct
 
   let of_float f = Mpfrf.of_float f rounding
 
-  let of_float_input _ f = Mpfrf.of_float f rounding
-
   let to_float f = Mpfrf.to_float ~round:rounding f
 
   let zero () = Mpfrf.of_int 0 rounding
@@ -266,9 +260,6 @@ module IntervalNumber : NumberInterface = MakeComparable (struct
     v (Mpfrf.of_int (Int64.to_int i) Down) (Mpfrf.of_int (Int64.to_int i) Up)
 
   let of_float (f : float) = v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
-
-  let of_float_input (_v : Com.Var.t) (f : float) =
-    v (Mpfrf.of_float f Down) (Mpfrf.of_float f Up)
 
   let to_float (f : t) : float =
     let fd = Mpfrf.to_float ~round:Down f.down in
@@ -383,8 +374,6 @@ module RationalNumber : NumberInterface = MakeComparable (struct
 
   let of_float f = Mpqf.of_float f
 
-  let of_float_input _ f = Mpqf.of_float f
-
   let to_float f = Mpqf.to_float f
 
   let zero () = Mpqf.of_int 0
@@ -477,8 +466,6 @@ end) : NumberInterface = MakeComparable (struct
     Mpzf.add
       (Mpzf.of_float frac_part_scaled)
       (Mpzf.mul (Mpzf.of_float int_part) (precision_modulo ()))
-
-  let of_float_input _ (f : float) : t = of_float f
 
   let to_float f =
     let frac_part, int_part = modf f in
