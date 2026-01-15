@@ -33,8 +33,6 @@ module type NumberInterface = sig
 
   val of_float : float -> t
 
-  val of_float_input : Com.Var.t -> float -> t
-
   val to_float : t -> float
 
   val zero : unit -> t

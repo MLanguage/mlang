@@ -21,72 +21,13 @@ exception Stop_instruction of Com.stop_kind
 
 let exit_on_rte = ref true
 
-let empty_ctx (p : Mir.program) : 'a ctx =
-  let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
-  let init_tmp_var _i = { var = dummy_var; value = Undefined } in
-  let init_ref _i =
-    {
-      var = dummy_var;
-      var_space = p.program_var_space_def;
-      ref_var = dummy_var;
-      org = -1;
-    }
-  in
-  let ctx_tab_map =
-    let init i = IntMap.find i p.program_stats.table_map in
-    Array.init (IntMap.cardinal p.program_stats.table_map) init
-  in
-  let ctx_var_spaces =
-    let init i =
-      let vsd = IntMap.find i p.program_var_spaces_idx in
-      let input =
-        if Com.CatVar.LocMap.mem Com.CatVar.LocInput vsd.vs_cats then
-          Array.make p.program_stats.sz_input Undefined
-        else Array.make 0 Undefined
-      in
-      let computed =
-        if Com.CatVar.LocMap.mem Com.CatVar.LocComputed vsd.vs_cats then
-          Array.make p.program_stats.sz_computed Undefined
-        else Array.make 0 Undefined
-      in
-      let base =
-        if Com.CatVar.LocMap.mem Com.CatVar.LocBase vsd.vs_cats then
-          Array.make p.program_stats.sz_base Undefined
-        else Array.make 0 Undefined
-      in
-      { input; computed; base }
-    in
-    Array.init (IntMap.cardinal p.program_var_spaces_idx) init
-  in
-  {
-    ctx_prog = p;
-    ctx_target = snd (StrMap.min_binding p.program_targets);
-    ctx_var_space = p.program_var_space_def.vs_id;
-    ctx_var_spaces;
-    ctx_tmps = Array.init p.program_stats.sz_all_tmps init_tmp_var;
-    ctx_tmps_org = 0;
-    ctx_ref = Array.init p.program_stats.nb_all_refs init_ref;
-    ctx_ref_org = 0;
-    ctx_tab_map;
-    ctx_pr_out = { indent = 0; is_newline = true };
-    ctx_pr_err = { indent = 0; is_newline = true };
-    ctx_anos = [];
-    ctx_nb_anos = 0;
-    ctx_nb_discos = 0;
-    ctx_nb_infos = 0;
-    ctx_nb_bloquantes = 0;
-    ctx_archived_anos = StrSet.empty;
-    ctx_finalized_anos = [];
-    ctx_exported_anos = [];
-    ctx_events = [];
-  }
-
 module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) :
   S with type custom_float = N.t = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
   module R = RF (N)
+  module Funs = Functions.Make (N) (R)
 
   type custom_float = N.t
 
@@ -96,15 +37,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
 
   type nonrec pctx = custom_float pctx
 
-  exception RuntimeError of run_error * ctx
-
-  let truncatef (x : N.t) : N.t = R.truncatef x
+  exception InternalRuntimeError of run_error * ctx
 
   let roundf (x : N.t) = R.roundf x
-
-  let false_value () = Number (N.zero ())
-
-  let true_value () = Number (N.one ())
 
   let _format_value (fmt : Format.formatter) (x : value) =
     match x with
@@ -126,82 +61,6 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     match l with
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
-
-  let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
-      unit =
-    let value_inputs =
-      Com.Var.Map.mapi
-        (fun v l ->
-          match l with
-          | Com.Undefined -> Undefined
-          | Com.Float f -> Number (N.of_float_input v f))
-        inputs
-    in
-    let default_space =
-      ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
-    in
-    Com.Var.Map.iter
-      (fun (var : Com.Var.t) value ->
-        match Com.Var.cat_var_loc var with
-        | LocInput -> default_space.input.(Com.Var.loc_idx var) <- value
-        | LocComputed -> default_space.computed.(Com.Var.loc_idx var) <- value
-        | LocBase -> default_space.base.(Com.Var.loc_idx var) <- value)
-      value_inputs
-
-  let update_ctx_with_events (ctx : ctx)
-      (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list) : unit =
-    let nbEvt = List.length events in
-    let ctx_event_tab = Array.make nbEvt [||] in
-    let fold idx (evt : (Com.literal, Com.Var.t) Com.event_value StrMap.t) =
-      let nbProgFields = StrMap.cardinal ctx.ctx_prog.program_event_fields in
-      let map = Array.make nbProgFields (Com.Numeric Undefined) in
-      for id = 0 to nbProgFields - 1 do
-        let fname = IntMap.find id ctx.ctx_prog.program_event_field_idxs in
-        let ef = StrMap.find fname ctx.ctx_prog.program_event_fields in
-        if ef.is_var then
-          map.(id) <-
-            Com.RefVar (snd (StrMap.min_binding ctx.ctx_prog.program_vars))
-      done;
-      let iter' fname ev =
-        match StrMap.find_opt fname ctx.ctx_prog.program_event_fields with
-        | Some ef -> (
-            match (ev, ef.is_var) with
-            | Com.Numeric Com.Undefined, false ->
-                map.(ef.index) <- Com.Numeric Undefined
-            | Com.Numeric (Com.Float f), false ->
-                map.(ef.index) <- Com.Numeric (Number (N.of_float f))
-            | Com.RefVar v, true -> map.(ef.index) <- Com.RefVar v
-            | _ -> Errors.raise_error "wrong event field type")
-        | None -> Errors.raise_error "unknown event field"
-      in
-      StrMap.iter iter' evt;
-      ctx_event_tab.(idx) <- map;
-      idx + 1
-    in
-    ignore (List.fold_left fold 0 events);
-    (* let max_field_length =
-         StrMap.fold
-           (fun s _ r -> max r (String.length s))
-           ctx.ctx_prog.program_event_fields 0
-       in
-       let pp_field fmt s =
-         let l = String.length s in
-         Format.fprintf fmt "%s%s" s (String.make (max_field_length - l + 1) ' ')
-       in
-       let pp_ev fmt = function
-         | Com.Numeric Undefined -> Pp.string fmt "indefini"
-         | Com.Numeric (Number v) -> N.format_t fmt v
-         | Com.RefVar v -> Pp.string fmt (Com.Var.name_str v)
-       in
-       for i = 0 to Array.length ctx_event_tab - 1 do
-         Format.eprintf "%d@." i;
-         let map = ctx_event_tab.(i) in
-         for j = 0 to Array.length map - 1 do
-           let s = IntMap.find j ctx.ctx_prog.program_event_field_idxs in
-           Format.eprintf "  %a%a@." pp_field s pp_ev map.(j)
-         done
-       done;*)
-    ctx.ctx_events <- [ ctx_event_tab ]
 
   let raise_runtime_as_structured (e : run_error) =
     match e with
@@ -575,39 +434,20 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
         | Literal Undefined -> Undefined
         | Literal (Float f) -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
-        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (roundf x)
-            | Undefined -> Undefined (*nope:Float 0.*))
-        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (truncatef x)
-            | Undefined -> Undefined (*Float 0.*))
-        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> false_value ()
-            | _ -> true_value ())
-        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f as n ->
-                if N.compare Com.Lte f (N.zero ()) then Undefined else n)
-        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f -> Number (N.abs f))
-        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.min (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.min fl fr))
-        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.max (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.max fl fr))
+        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) ->
+            Funs.arr (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) ->
+            Funs.inf (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) ->
+            Funs.present (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) ->
+            Funs.supzero (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) ->
+            Funs.abs (evaluate_expr ctx arg)
+        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) ->
+            Funs.min (evaluate_expr ctx arg1) (evaluate_expr ctx arg2)
+        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) ->
+            Funs.max (evaluate_expr ctx arg1) (evaluate_expr ctx arg2)
         | FuncCall (Pos.Mark (Multimax, _), [ arg1; arg2 ]) -> (
             match evaluate_expr ctx arg1 with
             | Undefined -> Undefined
@@ -637,10 +477,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
                           loop res (i + 1)
                       in
                       loop Undefined 0
-                    else get_var_value_org ctx vsd var vorg))
-        | FuncCall (Pos.Mark (NbEvents, _), _) ->
-            let card = Array.length (List.hd ctx.ctx_events) in
-            Number (N.of_int @@ Int64.of_int @@ card)
+                    else if nb >= 1 then get_var_value_org ctx vsd var vorg
+                    else Undefined))
+        | FuncCall (Pos.Mark (NbEvents, _), _) -> Funs.nb_events ctx
         | FuncCall (Pos.Mark (Func fn, _), args) ->
             let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             evaluate_function ctx fd args
@@ -685,9 +524,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
         | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
         | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
       with
-      | RuntimeError (e, ctx) ->
+      | InternalRuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
-          else raise (RuntimeError (e, ctx))
+          else raise (InternalRuntimeError (e, ctx))
       | Errors.StructuredError (msg, pos, kont) ->
           if !exit_on_rte then
             raise
@@ -695,7 +534,8 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
                  ( msg,
                    pos @ [ (Some "Expression raising the error:", Pos.get e) ],
                    kont ))
-          else raise (RuntimeError (StructuredError (msg, pos, kont), ctx))
+          else
+            raise (InternalRuntimeError (StructuredError (msg, pos, kont), ctx))
     in
     if match out with Undefined -> false | Number out -> N.is_nan_or_inf out
     then
@@ -707,7 +547,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
             e )
       in
       if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
+      else raise (InternalRuntimeError (e, ctx))
     else out
 
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
@@ -1167,8 +1007,11 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     ctx.ctx_target <- sav_target
 
   let evaluate_program ~inputs ~events (ctx : ctx) : unit =
-    update_ctx_with_inputs ctx inputs;
-    update_ctx_with_events ctx events;
+    let () =
+      let value_inputs = Com.Var.Map.map literal_to_value inputs in
+      Context.update_ctx_with_inputs ctx value_inputs
+    in
+    Context.update_ctx_with_events ctx events;
     try
       let main_target =
         match
@@ -1184,9 +1027,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
       evaluate_target false ctx main_target [] vsd;
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
     with
-    | RuntimeError (e, ctx) ->
+    | InternalRuntimeError (e, ctx) ->
         if !exit_on_rte then raise_runtime_as_structured e
-        else raise (RuntimeError (e, ctx))
+        else raise (InternalRuntimeError (e, ctx))
     | Stop_instruction SKApplication ->
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
@@ -1294,7 +1137,10 @@ let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
   prepare_interp sort round_ops;
   let module Interp = (val get_interp sort round_ops : S) in
   let ctx = empty_ctx p in
-  Interp.evaluate_program ~inputs ~events ctx;
+  let () =
+    try Interp.evaluate_program ~inputs ~events ctx
+    with Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)
+  in
   Format.pp_print_flush Format.std_formatter ();
   Format.pp_print_flush Format.err_formatter ();
   let varMap =
@@ -1324,5 +1170,6 @@ let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
 let evaluate_expr ~(p : Mir.program) ~(e : Mir.expression Pos.marked)
     ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) : Com.literal =
   let module Interp = (val get_interp sort round_ops : S) in
-  try Interp.value_to_literal (Interp.evaluate_expr (empty_ctx p) e)
-  with Stop_instruction _ -> Undefined
+  try Interp.value_to_literal (Interp.evaluate_expr (empty_ctx p) e) with
+  | Stop_instruction _ -> Undefined
+  | Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)

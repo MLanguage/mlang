@@ -59,12 +59,14 @@ type run_error =
   | StructuredError of
       (string * (string option * Pos.t) list * (unit -> unit) option)
 
+exception RuntimeError of run_error
+
 module type S = sig
   type custom_float
 
   type nonrec ctx = custom_float ctx
 
-  exception RuntimeError of run_error * ctx
+  exception InternalRuntimeError of run_error * ctx
 
   val evaluate_expr :
     ctx -> M_ir.Mir.expression Pos.marked -> custom_float value
