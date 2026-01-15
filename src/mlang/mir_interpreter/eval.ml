@@ -62,6 +62,11 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     | Undefined -> Com.Undefined
     | Number f -> Com.Float (N.to_float f)
 
+  let literal_event_to_value_event = function
+    | Com.Numeric Com.Undefined -> Com.Numeric Undefined
+    | Com.Numeric (Com.Float f) -> Com.Numeric (Number (N.of_float f))
+    | Com.RefVar v -> Com.RefVar v
+
   let raise_runtime_as_structured (e : run_error) =
     match e with
     | NanOrInf (v, e) ->
@@ -1006,12 +1011,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     in
     ctx.ctx_target <- sav_target
 
-  let evaluate_program ~inputs ~events (ctx : ctx) : unit =
-    let () =
-      let value_inputs = Com.Var.Map.map literal_to_value inputs in
-      Context.update_ctx_with_inputs ctx value_inputs
-    in
-    Context.update_ctx_with_events ctx events;
+  let evaluate_program (ctx : ctx) : unit =
     try
       let main_target =
         match
@@ -1136,9 +1136,15 @@ let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
   prepare_interp sort round_ops;
   let module Interp = (val get_interp sort round_ops : S) in
-  let ctx = empty_ctx p in
+  let ctx =
+    let inputs = Com.Var.Map.map Interp.literal_to_value inputs in
+    let events =
+      List.map (StrMap.map Interp.literal_event_to_value_event) events
+    in
+    Context.empty_ctx ~inputs ~events p
+  in
   let () =
-    try Interp.evaluate_program ~inputs ~events ctx
+    try Interp.evaluate_program ctx
     with Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)
   in
   Format.pp_print_flush Format.std_formatter ();
@@ -1170,6 +1176,8 @@ let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
 let evaluate_expr ~(p : Mir.program) ~(e : Mir.expression Pos.marked)
     ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) : Com.literal =
   let module Interp = (val get_interp sort round_ops : S) in
-  try Interp.value_to_literal (Interp.evaluate_expr (empty_ctx p) e) with
+  try
+    Interp.value_to_literal (Interp.evaluate_expr (Context.empty_ctx p) e)
+  with
   | Stop_instruction _ -> Undefined
   | Interp.InternalRuntimeError (r, _) -> raise (RuntimeError r)

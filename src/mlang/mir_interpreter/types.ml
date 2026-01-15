@@ -68,20 +68,26 @@ module type S = sig
 
   exception InternalRuntimeError of run_error * ctx
 
+  (** {2 M Evaluation} *)
+
   val evaluate_expr :
     ctx -> M_ir.Mir.expression Pos.marked -> custom_float value
   (** Evaluates an expression. *)
 
-  val evaluate_program :
-    inputs:Com.literal Com.Var.Map.t ->
-    events:(Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
-    ctx ->
-    unit
+  val evaluate_program : ctx -> unit
   (** Evaluates a whole program. Proper initialisation of inputs and events
       is required before calling this function (through [update_ctx_with_inputs]
       and [update_ctx_with_events]. *)
 
+  (** {2 Helpers} *)
+
+  (** These helpers are here for compatibility with {!module: Context}. *)
+
   val literal_to_value : Com.literal -> custom_float value
 
   val value_to_literal : custom_float value -> Com.literal
+
+  val literal_event_to_value_event :
+    (Com.literal, Com.Var.t) Com.event_value ->
+    (custom_float value, Com.Var.t) Com.event_value
 end

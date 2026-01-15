@@ -2,7 +2,7 @@
 
 (name mlang)
 
-(version 186-81-gd54b08dc-dirty)
+(version %%VERSION%%)
 
 (generate_opam_files true)
 
