@@ -776,19 +776,14 @@ alors
     NATURE = N_INDEFINIE;
   finsi
 sinon_si dans_domaine(VAR, saisie contexte) alors
-  si meme_variable(VAR, V_REGCO) alors
-    NATURE = N_REVENU;
-  sinon_si 
-    meme_variable(VAR, V_EAG)
-    ou meme_variable(VAR, V_EAD)
-    ou meme_variable(VAR, V_CNR)
-    ou meme_variable(VAR, V_CNR2)
-    ou meme_variable(VAR, V_CR2)
-  alors
-    NATURE = N_CHARGE;
-  sinon
-    NATURE = N_REVENU;
-  finsi
+  aiguillage nom (VAR): (
+    cas V_REGCO: NATURE = N_REVENU;
+    cas V_EAG:
+    cas V_CNR:
+    cas V_CNR2:
+    cas V_CR2: NATURE = N_CHARGE;
+    par_defaut: NATURE = N_REVENU;
+  )
 sinon_si
   dans_domaine(VAR, saisie variation)
   ou dans_domaine(VAR, saisie penalite)
