@@ -58,6 +58,11 @@ jobs:
           eval $(opam env)
           make build
 
+      - name: Cram tests
+        run: |
+          eval $(opam env)
+          make test_cram
+
       - name: Test interpreter
         run: |
           eval $(opam env)
@@ -72,4 +77,3 @@ jobs:
         run: |
           eval $(opam env)
           make test_dgfip_c_backend
-

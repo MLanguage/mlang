@@ -86,6 +86,8 @@ val dgfip_flags : Dgfip_options.flags ref
 
 val execution_mode : execution_mode ref
 
+val no_nondet_display : bool ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -107,4 +109,5 @@ val set_opts :
   income_year:int ->
   m_clean_calls:bool ->
   dgfip_options:string list option ->
+  no_nondet_display:bool ->
   [ `Displayed_dgfip_help | `Error of string | `Run ]

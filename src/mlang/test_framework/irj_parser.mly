@@ -107,7 +107,7 @@ rappels:
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (Pos.mark var (mk_position $loc(var)), Pos.mark value (mk_position $loc(value))) }
-| var = SYMBOL SLASH? NL { (Pos.mark var (mk_position $loc(var)), Pos.without (F 0.0)) }
+| var = SYMBOL SLASH? NL { (Pos.mark var (mk_position $loc(var)), Pos.without U) }
 
 calc_error:
 | error = SYMBOL NL { Pos.mark error (mk_position $sloc) }

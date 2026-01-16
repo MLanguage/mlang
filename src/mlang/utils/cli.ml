@@ -176,13 +176,21 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
+let no_nondet_display =
+  Arg.(
+    value & flag
+    & info [ "no_nondet_display" ] ~docv:""
+        ~doc:
+          "Hides all non deterministic displays (display time, progress bar). \
+           Used for cram tests.")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
     $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
-    $ m_clean_calls $ dgfip_options)
+    $ m_clean_calls $ dgfip_options $ no_nondet_display)
 
 let info =
   let doc =
@@ -335,34 +343,36 @@ let error_print kont =
     kont
 
 let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
-  let step_ticks = 5 in
-  let ticks = ref 0 in
-  let msg = ref task in
-  let stop = ref false in
-  let timer () =
-    while true do
-      if !stop then Thread.exit ();
-      ticks := !ticks + 1;
-      clock_marker (!ticks / step_ticks);
-      Format.printf "%s" !msg;
-      flush_all ();
-      flush_all ();
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
-      Unix.sleepf 0.05
-    done
-  in
-  let _ = Thread.create timer () in
-  ( (fun current_progress_msg ->
-      msg := Format.sprintf "%s: %s" task current_progress_msg),
-    fun finish_msg ->
-      stop := true;
-      debug_marker false;
-      Format.printf "%s: %s" task finish_msg;
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
-      Format.printf "\n";
-      time_marker () )
+  if !Config.no_nondet_display then (ignore, ignore)
+  else
+    let step_ticks = 5 in
+    let ticks = ref 0 in
+    let msg = ref task in
+    let stop = ref false in
+    let timer () =
+      while true do
+        if !stop then Thread.exit ();
+        ticks := !ticks + 1;
+        if !Config.display_time then clock_marker (!ticks / step_ticks);
+        Format.printf "%s" !msg;
+        flush_all ();
+        flush_all ();
+        ANSITerminal.erase ANSITerminal.Below;
+        ANSITerminal.move_bol ();
+        Unix.sleepf 0.05
+      done
+    in
+    let _ = Thread.create timer () in
+    ( (fun current_progress_msg ->
+        msg := Format.sprintf "%s: %s" task current_progress_msg),
+      fun finish_msg ->
+        stop := true;
+        result_marker ();
+        Format.printf "%s: %s" task finish_msg;
+        ANSITerminal.erase ANSITerminal.Below;
+        ANSITerminal.move_bol ();
+        Format.printf "\n";
+        time_marker () )
 
 let warning_print kont =
   ANSITerminal.erase ANSITerminal.Eol;

@@ -185,12 +185,13 @@ let set_opts (files : string list) (application_names : string list)
     (mpp_function : string option) (optimize_unsafe_float : bool)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int)
-    (m_clean_calls : bool) (dgfip_options : string list option) =
+    (m_clean_calls : bool) (dgfip_options : string list option)
+    (no_nondet_display : bool) =
   Config.set_opts ~files ~application_names ~without_dgfip_m ~debug
     ~var_info_debug ~display_time ~print_cycles ~backend ~output ~run_tests
     ~dgfip_test_filter ~run_test ~mpp_function ~optimize_unsafe_float ~precision
     ~roundops ~comparison_error_margin ~income_year ~m_clean_calls
-    ~dgfip_options
+    ~dgfip_options ~no_nondet_display
 
 let run () =
   let eval_cli =

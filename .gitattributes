@@ -1,1 +1,2 @@
-tests/**/* binary
+tests/*0*/**/* binary
+tests/cram/**/* -binary
