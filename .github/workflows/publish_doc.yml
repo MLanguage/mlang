@@ -1,10 +1,11 @@
 name: Publish documentation on GitHub Pages
 
 on:
-  workflow_run:
-    workflows: [binary-releases]
-    types:
-      - completed
+  push:
+    branches:
+      - master
+      - dev
+      - gen-doc # Temporary 
 
 jobs:
   deploy:
@@ -33,7 +34,7 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           # Version of the OCaml compiler to initialise
-          ocaml-compiler: 4.11.2
+          ocaml-compiler: 4.13.1
 
       - name: Install dependencies
         run: |
