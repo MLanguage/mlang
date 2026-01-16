@@ -58,13 +58,22 @@ jobs:
           eval $(opam env)
           make build
 
+      - name: Cram tests
+        run: |
+          eval $(opam env)
+          make test_cram
+
       - name: Test interpreter
         run: |
           eval $(opam env)
           OPTIMIZE=0 make tests
 
+      - name: Test irj-checker
+        run: |
+          eval $(opam env)
+          make test_irj
+
       - name: Test DGFIP C backend
         run: |
           eval $(opam env)
           make test_dgfip_c_backend
-

@@ -56,6 +56,10 @@ define source_dir
 $(shell find $(1) -name tgvI.m) $(shell find $(1) -name errI.m) $(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m | sort)
 endef
 
+define source_dir_sans_cibles_m
+$(shell find $(1) -name tgvI.m) $(shell find $(1) -name errI.m) $(shell find $(1) -name \*.m ! -name err\*.m ! -name tgv\*.m ! -name cibles.m | sort)
+endef
+
 define source_dir_ext
 $(shell find $(1) -name \*.m | sort)
 endef

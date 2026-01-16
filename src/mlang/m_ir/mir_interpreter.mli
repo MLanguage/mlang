@@ -78,11 +78,11 @@ module type S = sig
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_old_anos : StrSet.t;
     mutable ctx_nb_anos : int;
     mutable ctx_nb_discos : int;
     mutable ctx_nb_infos : int;
     mutable ctx_nb_bloquantes : int;
+    mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
@@ -172,21 +172,21 @@ module RatMfInterp : S with type custom_float = Mir_number.RationalNumber.t
 
 (** {1 Generic interpretation API}*)
 
-val get_interp : Cli.value_sort -> Cli.round_ops -> (module S)
+val get_interp : Config.value_sort -> Config.round_ops -> (module S)
 
 val evaluate_program :
   Mir.program ->
   Com.literal Com.Var.Map.t ->
   (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
-  Cli.value_sort ->
-  Cli.round_ops ->
+  Config.value_sort ->
+  Config.round_ops ->
   Com.literal Com.Var.Map.t * Com.Error.Set.t
 (** Main interpreter function *)
 
 val evaluate_expr :
   Mir.program ->
   Mir.expression Pos.marked ->
-  Cli.value_sort ->
-  Cli.round_ops ->
+  Config.value_sort ->
+  Config.round_ops ->
   Com.literal
 (** Interprets only an expression *)

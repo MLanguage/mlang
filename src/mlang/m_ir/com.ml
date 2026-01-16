@@ -1,6 +1,12 @@
 module CatVar = struct
   type t = Input of StrSet.t | Computed of { is_base : bool }
 
+  let all_inputs = Input (StrSet.one "*")
+
+  let is_input = function Input _ -> true | _ -> false
+
+  let is_computed = function Computed _ -> true | _ -> false
+
   let pp fmt = function
     | Input id ->
         let pp fmt set = StrSet.iter (Format.fprintf fmt " %s") set in
@@ -47,11 +53,11 @@ module CatVar = struct
 
     let from_string_list = function
       | Pos.Mark ([ Pos.Mark ("*", _) ], id_pos) ->
-          one (Input (StrSet.one "*")) id_pos
+          one all_inputs id_pos
           |> add (Computed { is_base = false }) id_pos
           |> add (Computed { is_base = true }) id_pos
       | Pos.Mark ([ Pos.Mark ("saisie", _); Pos.Mark ("*", _) ], id_pos) ->
-          one (Input (StrSet.one "*")) id_pos
+          one all_inputs id_pos
       | Pos.Mark (Pos.Mark ("saisie", _) :: id, id_pos) ->
           one (Input (StrSet.from_marked_list id)) id_pos
       | Pos.Mark (Pos.Mark ("calculee", _) :: id, id_pos) -> (
@@ -432,6 +438,8 @@ type variable_space = {
 
 type literal = Float of float | Undefined
 
+type case = Default | Value of literal
+
 (** Unary operators *)
 type unop = Not | Minus
 
@@ -512,7 +520,9 @@ and 'v expression =
   | NbCategory of Pos.t CatVar.Map.t
   | Attribut of 'v m_access * string Pos.marked
   | Size of 'v m_access
-  | IsVariable of 'v m_access * string Pos.marked
+  | Type of 'v m_access * value_typ Pos.marked
+  | SameVariable of 'v m_access * 'v m_access
+  | InDomain of 'v m_access * Pos.t CatVar.Map.t
   | NbAnomalies
   | NbDiscordances
   | NbInformatives
@@ -602,6 +612,14 @@ type 'v formula =
   | SingleFormula of 'v formula_decl
   | MultipleFormulaes of 'v formula_loop * 'v formula_decl
 
+type stop_kind =
+  | SKApplication (* Leave the whole application *)
+  | SKTarget (* Leave the current target *)
+  | SKFun (* Leave the current function *)
+  | SKId of string option
+(* Leave the iterator with the selected var
+   (or the current if [None]) *)
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -638,10 +656,13 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
+  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
+  | CleanFinalizedErrors
   | ExportErrors
   | FinalizeErrors
+  | Stop of stop_kind
 
 and ('v, 'e) m_instruction = ('v, 'e) instruction Pos.marked
 
@@ -741,9 +762,14 @@ and expr_map_var f = function
       let m_access' = m_access_map_var f m_access in
       Attribut (m_access', attr)
   | Size m_access -> Size (m_access_map_var f m_access)
-  | IsVariable (m_access, name) ->
+  | Type (m_access, m_typ) -> Type (m_access_map_var f m_access, m_typ)
+  | SameVariable (m_access0, m_access1) ->
+      let m_access0' = m_access_map_var f m_access0 in
+      let m_access1' = m_access_map_var f m_access1 in
+      SameVariable (m_access0', m_access1')
+  | InDomain (m_access, cvm) ->
       let m_access' = m_access_map_var f m_access in
-      IsVariable (m_access', name)
+      InDomain (m_access', cvm)
   | NbAnomalies -> NbAnomalies
   | NbDiscordances -> NbDiscordances
   | NbInformatives -> NbInformatives
@@ -783,6 +809,12 @@ and instr_map_var f g = function
       let m_il0' = List.map (m_instr_map_var f g) m_il0 in
       let m_il1' = List.map (m_instr_map_var f g) m_il1 in
       IfThenElse (m_e0', m_il0', m_il1')
+  | Switch (e, l) ->
+      let e' = m_expr_map_var f e in
+      let l' =
+        List.map (fun (c, l) -> (c, List.map (m_instr_map_var f g) l)) l
+      in
+      Switch (e', l')
   | WhenDoElse (m_eil, m_il) ->
       let map (m_e0, m_il0, pos) =
         let m_e0' = m_expr_map_var f m_e0 in
@@ -872,8 +904,10 @@ and instr_map_var f g = function
       let m_err' = Pos.map g m_err in
       RaiseError (m_err', m_s_opt)
   | CleanErrors -> CleanErrors
+  | CleanFinalizedErrors -> CleanFinalizedErrors
   | ExportErrors -> ExportErrors
   | FinalizeErrors -> FinalizeErrors
+  | Stop s -> Stop s
 
 and m_instr_map_var f g m_i = Pos.map (instr_map_var f g) m_i
 
@@ -949,7 +983,12 @@ and expr_fold_var f e acc =
   | NbCategory _ -> acc
   | Attribut (m_access, _) -> m_access_fold_var Info f m_access acc
   | Size m_access -> m_access_fold_var Info f m_access acc
-  | IsVariable (m_access, _) -> m_access_fold_var Info f m_access acc
+  | Type (m_access, _) -> m_access_fold_var Info f m_access acc
+  | SameVariable (m_access0, m_access1) ->
+      acc
+      |> m_access_fold_var Info f m_access0
+      |> m_access_fold_var Info f m_access1
+  | InDomain (m_access, _) -> m_access_fold_var Info f m_access acc
   | NbAnomalies -> acc
   | NbDiscordances -> acc
   | NbInformatives -> acc
@@ -989,6 +1028,9 @@ and instr_fold_var f instr acc =
       acc |> m_expr_fold_var f m_e0
       |> fold_list (m_instr_fold_var f) m_il0
       |> fold_list (m_instr_fold_var f) m_il1
+  | Switch (e, l) ->
+      acc |> m_expr_fold_var f e
+      |> fold_list (fun (_, l) -> fold_list (m_instr_fold_var f) l) l
   | WhenDoElse (m_eil, m_il) ->
       let fold (m_e0, m_il0, _) accu =
         accu |> m_expr_fold_var f m_e0 |> fold_list (m_instr_fold_var f) m_il0
@@ -1046,8 +1088,10 @@ and instr_fold_var f instr acc =
       |> fold_list (m_instr_fold_var f) m_il
   | RaiseError _ -> acc
   | CleanErrors -> acc
+  | CleanFinalizedErrors -> acc
   | ExportErrors -> acc
   | FinalizeErrors -> acc
+  | Stop _ -> acc
 
 and m_instr_fold_var f m_i acc = instr_fold_var f (Pos.unmark m_i) acc
 
@@ -1068,6 +1112,10 @@ let format_value_typ fmt t =
 let format_literal fmt l =
   Format.pp_print_string fmt
     (match l with Float f -> string_of_float f | Undefined -> "indefini")
+
+let format_case fmt = function
+  | Default -> Format.pp_print_string fmt "default"
+  | Value v -> format_literal fmt v
 
 let format_atom form_var fmt vl =
   match vl with
@@ -1229,10 +1277,20 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "taille(%a)"
         (format_access form_var form_expr)
         (Pos.unmark m_acc)
-  | IsVariable (m_acc, name) ->
-      Format.fprintf fmt "est_variable(%a, %s)"
+  | Type (m_acc, m_typ) ->
+      Format.fprintf fmt "type(%a, %a)"
         (format_access form_var form_expr)
-        (Pos.unmark m_acc) (Pos.unmark name)
+        (Pos.unmark m_acc) format_value_typ (Pos.unmark m_typ)
+  | SameVariable (m_acc0, m_acc1) ->
+      Format.fprintf fmt "est_variable(%a, %a)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc0)
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc1)
+  | InDomain (m_acc, cvm) ->
+      Format.fprintf fmt "dans_domaine(%a, %a)"
+        (format_access form_var form_expr)
+        (Pos.unmark m_acc) (CatVar.Map.pp_keys ()) cvm
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
@@ -1297,6 +1355,14 @@ let rec format_instruction form_var form_err =
     | IfThenElse (cond, t, f) ->
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
           form_expr (Pos.unmark cond) form_instrs t form_instrs f
+    | Switch (e, l) ->
+        Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
+        List.iter
+          (fun (cl, l) ->
+            List.iter (Format.fprintf fmt "%a :@," format_case) cl;
+            Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
+          l;
+        Format.fprintf fmt "@]@,"
     | WhenDoElse (wdl, ed) ->
         let pp_wd th fmt (expr, dl, _) =
           Format.fprintf fmt "@[<v 2>%swhen (%a) do@\n%a@;@]" th form_expr
@@ -1463,8 +1529,14 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "leve_erreur %a %s\n" form_err (Pos.unmark err)
           (match var_opt with Some var -> " " ^ Pos.unmark var | None -> "")
     | CleanErrors -> Format.fprintf fmt "nettoie_erreurs\n"
+    | CleanFinalizedErrors -> Format.fprintf fmt "nettoie_erreurs_finalisees\n"
     | ExportErrors -> Format.fprintf fmt "exporte_erreurs\n"
     | FinalizeErrors -> Format.fprintf fmt "finalise_erreurs\n"
+    | Stop (SKId None) -> Format.fprintf fmt "stop\n"
+    | Stop (SKId (Some s)) -> Format.fprintf fmt "stop %s\n" s
+    | Stop SKApplication -> Format.fprintf fmt "stop application\n"
+    | Stop SKFun -> Format.fprintf fmt "stop fonction\n"
+    | Stop SKTarget -> Format.fprintf fmt "stop cible\n"
 
 and format_instructions form_var form_err fmt instrs =
   Pp.list "" (Pp.unmark (format_instruction form_var form_err)) fmt instrs

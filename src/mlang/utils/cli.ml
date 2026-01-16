@@ -23,15 +23,18 @@
 (** The command line interface is declared using {!module Cmdliner} *)
 
 open Cmdliner
+open Config
+module Cmdliner = Cmdliner
+module Term = Cmdliner.Term
+module ANSITerminal = ANSITerminal
 
 let files =
   Arg.(
-    non_empty & pos_all file []
+    value & pos_all file []
     & info [] ~docv:"FILES" ~doc:"M files to be compiled")
 
 let applications =
-  Arg.(
-    non_empty & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
+  Arg.(value & opt (list string) [] & info [ "A" ] ~doc:"Application name(s)")
 
 let without_dgfip_m =
   Arg.(
@@ -54,15 +57,6 @@ let display_time =
     & info [ "display_time"; "t" ]
         ~doc:"Displays timing information (use with --debug)")
 
-let dep_graph_file =
-  let doc =
-    "Name of the file where the variable dependency graph should be output \
-     (use with --debug)"
-  in
-  Arg.(
-    value & opt file "dep_graph.dot"
-    & info [ "dep_graph_file"; "g" ] ~docv:"DEP_GRAPH" ~doc)
-
 let no_print_cycles =
   let doc = "If set, disable the eventual circular dependencies repport" in
   Arg.(value & flag & info [ "no_print_cycles"; "c" ] ~doc)
@@ -82,7 +76,7 @@ let backend =
 
 let mpp_function =
   Arg.(
-    required
+    value
     & opt (some string) None
     & info [ "mpp_function" ] ~docv:"MPP_FUNCTION" ~doc:"M++ file main function")
 
@@ -160,7 +154,7 @@ let comparison_error_margin_cli =
 let income_year_cli =
   Arg.(
     value
-    & opt (some int) None
+    & opt int (1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1)
     & info [ "income-year" ] ~docv:"INCOME_YEAR"
         ~doc:"Set the year of the income.")
 
@@ -182,13 +176,21 @@ let dgfip_options =
           "Specify DGFiP options (use --dgfip_options=--help to display DGFiP \
            specific options)")
 
+let no_nondet_display =
+  Arg.(
+    value & flag
+    & info [ "no_nondet_display" ] ~docv:""
+        ~doc:
+          "Hides all non deterministic displays (display time, progress bar). \
+           Used for cram tests.")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
-    $ display_time $ dep_graph_file $ no_print_cycles $ backend $ output
-    $ run_all_tests $ dgfip_test_filter $ run_test $ mpp_function
-    $ optimize_unsafe_float $ precision $ roundops $ comparison_error_margin_cli
-    $ income_year_cli $ m_clean_calls $ dgfip_options)
+    $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
+    $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
+    $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
+    $ m_clean_calls $ dgfip_options $ no_nondet_display)
 
 let info =
   let doc =
@@ -232,115 +234,6 @@ let info =
       | Some v -> Build_info.V1.Version.to_string v)
     ~doc ~exits ~man
 
-type value_sort =
-  | RegularFloat
-  | MPFR of int (* bitsize of the floats *)
-  | BigInt of int (* precision of the fixed point *)
-  | Interval
-  | Rational
-
-type round_ops = RODefault | ROMulti | ROMainframe of int
-(* size of type long, either 32 or 64 *)
-
-type backend = Dgfip_c | UnknownBackend
-
-type execution_mode =
-  | SingleTest of string
-  | MultipleTests of string
-  | Extraction
-
-type files = NonEmpty of string list
-
-let get_files = function NonEmpty l -> l
-
-(* This feels weird to put here, but by construction it should not happen.*)
-let source_files : files ref = ref (NonEmpty [])
-
-let application_names : string list ref = ref []
-
-let without_dgfip_m = ref false
-
-let dep_graph_file : string ref = ref "dep_graph.dot"
-
-let verify_flag = ref false
-
-let debug_flag = ref false
-
-let var_info_flag = ref false
-
-let var_info_debug = ref []
-
-let warning_flag = ref true
-
-let no_print_cycles_flag = ref false
-
-let display_time = ref false
-
-let output_file = ref ""
-
-let optimize_unsafe_float = ref false
-
-let m_clean_calls = ref false
-
-let value_sort = ref RegularFloat
-
-let round_ops = ref RODefault
-
-let backend = ref UnknownBackend
-
-let dgfip_test_filter = ref false
-
-let mpp_function = ref ""
-
-let dgfip_flags = ref Dgfip_options.default_flags
-
-let execution_mode = ref Extraction
-
-(* Default value for the epsilon slack when comparing things in the
-   interpreter *)
-let comparison_error_margin = ref 0.000001
-
-let income_year = ref 0
-
-let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
-    (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
-    (dep_graph_file_ : string) (no_print_cycles_ : bool)
-    (output_file_ : string option) (optimize_unsafe_float_ : bool)
-    (m_clean_calls_ : bool) (comparison_error_margin_ : float option)
-    (income_year_ : int option) (value_sort_ : value_sort)
-    (round_ops_ : round_ops) (backend_ : backend) (dgfip_test_filter_ : bool)
-    (mpp_function_ : string) (dgfip_flags_ : Dgfip_options.flags)
-    (execution_mode_ : execution_mode) =
-  source_files := files_;
-  application_names := applications_;
-  without_dgfip_m := without_dgfip_m_;
-  debug_flag := debug_;
-  var_info_debug := var_info_debug_;
-  var_info_flag := !var_info_debug <> [];
-  display_time := display_time_;
-  dep_graph_file := dep_graph_file_;
-  no_print_cycles_flag := no_print_cycles_;
-  optimize_unsafe_float := optimize_unsafe_float_;
-  m_clean_calls := m_clean_calls_;
-  execution_mode := execution_mode_;
-  (income_year :=
-     match income_year_ with
-     | Some y -> y
-     | None -> 1900 + (Unix.localtime (Unix.time ())).Unix.tm_year - 1);
-  value_sort := value_sort_;
-  round_ops := round_ops_;
-  backend := backend_;
-  dgfip_test_filter := dgfip_test_filter_;
-  mpp_function := mpp_function_;
-  dgfip_flags := dgfip_flags_;
-  match output_file_ with
-  | None -> ()
-  | Some o -> (
-      output_file := o;
-      match comparison_error_margin_ with
-      | None -> ()
-      | Some m -> comparison_error_margin := m)
-
 (**{1 Terminal formatting}*)
 
 let concat_with_line_depending_prefix_and_suffix (prefix : int -> string)
@@ -367,7 +260,7 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
 
 (**{2 Markers}*)
 
-(** Prints [\[INFO\]] in blue on the terminal standard output *)
+(** Prints [[INFO]] in blue on the terminal standard output *)
 let var_info_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
 
@@ -390,28 +283,28 @@ let format_with_style (styles : ANSITerminal.style list)
   if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
   else Printf.sprintf str
 
-(** Prints [\[DEBUG\]] in purple on the terminal standard output as well as
-    timing since last debug *)
+(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
+    since last debug *)
 let debug_marker (f_time : bool) =
   if f_time then time_marker ();
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
 
-(** Prints [\[ERROR\]] in red on the terminal error output *)
+(** Prints [[ERROR]] in red on the terminal error output *)
 let error_marker () =
   ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
 
-(** Prints [\[WARNING\]] in yellow on the terminal standard output *)
+(** Prints [[WARNING]] in yellow on the terminal standard output *)
 let warning_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
 
-(** Prints [\[RESULT\]] in green on the terminal standard output *)
+(** Prints [[RESULT]] in green on the terminal standard output *)
 let result_marker () =
   ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
 
 let clocks =
   Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
 
-(** Prints [\[🕛\]] in blue on the terminal standard output *)
+(** Prints [[🕛]] in blue on the terminal standard output *)
 let clock_marker i =
   let new_time = Unix.gettimeofday () in
   let initial_time = !initial_time in
@@ -431,13 +324,13 @@ let debug_print ?(endline = "\n") kont =
       (fun str ->
         Format.printf "%a%s%s@?"
           (fun _ -> debug_marker)
-          !display_time str endline)
+          !Config.display_time str endline)
       kont
   else Format.ifprintf Format.std_formatter kont
 
 let var_info_print kont =
   ANSITerminal.erase ANSITerminal.Eol;
-  if !var_info_flag then
+  if !Config.var_info_flag then
     Format.kasprintf
       (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
       kont
@@ -450,34 +343,36 @@ let error_print kont =
     kont
 
 let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
-  let step_ticks = 5 in
-  let ticks = ref 0 in
-  let msg = ref task in
-  let stop = ref false in
-  let timer () =
-    while true do
-      if !stop then Thread.exit ();
-      ticks := !ticks + 1;
-      clock_marker (!ticks / step_ticks);
-      Format.printf "%s" !msg;
-      flush_all ();
-      flush_all ();
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
-      Unix.sleepf 0.05
-    done
-  in
-  let _ = Thread.create timer () in
-  ( (fun current_progress_msg ->
-      msg := Format.sprintf "%s: %s" task current_progress_msg),
-    fun finish_msg ->
-      stop := true;
-      debug_marker false;
-      Format.printf "%s: %s" task finish_msg;
-      ANSITerminal.erase ANSITerminal.Below;
-      ANSITerminal.move_bol ();
-      Format.printf "\n";
-      time_marker () )
+  if !Config.no_nondet_display then (ignore, ignore)
+  else
+    let step_ticks = 5 in
+    let ticks = ref 0 in
+    let msg = ref task in
+    let stop = ref false in
+    let timer () =
+      while true do
+        if !stop then Thread.exit ();
+        ticks := !ticks + 1;
+        if !Config.display_time then clock_marker (!ticks / step_ticks);
+        Format.printf "%s" !msg;
+        flush_all ();
+        flush_all ();
+        ANSITerminal.erase ANSITerminal.Below;
+        ANSITerminal.move_bol ();
+        Unix.sleepf 0.05
+      done
+    in
+    let _ = Thread.create timer () in
+    ( (fun current_progress_msg ->
+        msg := Format.sprintf "%s: %s" task current_progress_msg),
+      fun finish_msg ->
+        stop := true;
+        result_marker ();
+        Format.printf "%s: %s" task finish_msg;
+        ANSITerminal.erase ANSITerminal.Below;
+        ANSITerminal.move_bol ();
+        Format.printf "\n";
+        time_marker () )
 
 let warning_print kont =
   ANSITerminal.erase ANSITerminal.Eol;

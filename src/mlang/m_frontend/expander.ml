@@ -75,6 +75,9 @@ module Err = struct
   let constant_cannot_have_a_size pos =
     Errors.raise_spanned_error "constant cannot have a size" pos
 
+  let constant_cannot_have_a_type pos =
+    Errors.raise_spanned_error "constant cannot have a type" pos
+
   let constant_cannot_have_a_name pos =
     Errors.raise_spanned_error "constant cannot have a name" pos
 
@@ -265,7 +268,7 @@ let elim_unselected_apps (p : Mast.program) : Mast.program =
             (apps_env, []) source_file
         in
         (apps_env, List.rev prog_file :: prog))
-      (empty_apps_env !Cli.application_names, [])
+      (empty_apps_env !Config.application_names, [])
       p
   in
   check_apps_on_cmdline apps_env;
@@ -514,9 +517,11 @@ let rec iterate_all_combinations (ld : loop_domain) : loop_context list =
     iterated values.
 
     In OCaml terms, if you want [translate_loop_variables lvs f ctx], then you
-    should define [f] by [let f = fun lc i ctx -> ...] and use {!val:
-    merge_loop_ctx} inside [...] before translating the loop body. [lc] is the
-    loop context, [i] the loop sequence index and [ctx] the translation context. *)
+    should define [f] by [let f = fun lc i ctx -> ...] and use
+    {!val:
+    merge_loop_ctx} inside [...] before translating the loop body.
+    [lc] is the loop context, [i] the loop sequence index and [ctx] the
+    translation context. *)
 
 let expand_loop_variables (lvs : Com.m_var_name Com.loop_variables Pos.marked)
     (const_map : const_context) : (loop_context -> 'a) -> 'a list =
@@ -684,10 +689,26 @@ and expand_expression (const_map : const_context) (loop_map : loop_context)
       match expand_access const_map loop_map (Pos.same a m_expr) with
       | ExpLiteral _ -> Err.constant_cannot_have_a_size a_pos
       | ExpAccess m_a -> Pos.same (Size m_a) m_expr)
-  | IsVariable (Pos.Mark (a, a_pos), name) -> (
+  | Type (Pos.Mark (a, a_pos), m_typ) -> (
+      match expand_access const_map loop_map (Pos.same a m_expr) with
+      | ExpLiteral _ -> Err.constant_cannot_have_a_type a_pos
+      | ExpAccess m_a -> Pos.same (Type (m_a, m_typ)) m_expr)
+  | SameVariable (Pos.Mark (a0, a0_pos), Pos.Mark (a1, a1_pos)) ->
+      let m_a0' =
+        match expand_access const_map loop_map (Pos.same a0 m_expr) with
+        | ExpLiteral _ -> Err.constant_cannot_have_a_name a0_pos
+        | ExpAccess m_a -> m_a
+      in
+      let m_a1' =
+        match expand_access const_map loop_map (Pos.same a1 m_expr) with
+        | ExpLiteral _ -> Err.constant_cannot_have_a_name a1_pos
+        | ExpAccess m_a -> m_a
+      in
+      Pos.same (SameVariable (m_a0', m_a1')) m_expr
+  | InDomain (Pos.Mark (a, a_pos), cvm) -> (
       match expand_access const_map loop_map (Pos.same a m_expr) with
       | ExpLiteral _ -> Err.constant_cannot_have_a_name a_pos
-      | ExpAccess m_a -> Pos.same (IsVariable (m_a, name)) m_expr)
+      | ExpAccess m_a -> Pos.same (InDomain (m_a, cvm)) m_expr)
   | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
     ->
       m_expr
@@ -759,6 +780,12 @@ let rec expand_instruction (const_map : const_context)
       let ithen' = expand_instructions const_map ithen in
       let ielse' = expand_instructions const_map ielse in
       Pos.same (Com.IfThenElse (expr', ithen', ielse')) m_instr :: prev
+  | Com.Switch (e, l) ->
+      let e' = expand_expression const_map ParamsMap.empty e in
+      let l' =
+        List.map (fun (c, l) -> (c, expand_instructions const_map l)) l
+      in
+      Pos.same (Com.Switch (e', l')) m_instr :: prev
   | Com.WhenDoElse (wdl, ed) ->
       let map (expr, dl, pos) =
         let expr' = expand_expression const_map ParamsMap.empty expr in
@@ -910,8 +937,8 @@ let rec expand_instruction (const_map : const_context)
           m_sp_opt
       in
       Pos.same (Com.ComputeChaining (chain, m_sp_opt')) m_instr :: prev
-  | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors
-    ->
+  | Com.RaiseError _ | Com.CleanErrors | Com.CleanFinalizedErrors
+  | Com.ExportErrors | Com.FinalizeErrors | Com.Stop _ ->
       m_instr :: prev
 
 and expand_instructions (const_map : const_context)

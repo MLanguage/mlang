@@ -1,8 +1,10 @@
-(lang dune 2.5)
+(lang dune 2.7)
 
 (name mlang)
 
 (version %%VERSION%%)
+
+(cram enable)
 
 (generate_opam_files true)
 

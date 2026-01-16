@@ -30,16 +30,6 @@ OCAMLFLAGS=
 #OCAMLFLAGS="-g -inline 0"
 # Pour instrumenter la couverture de code, il est nécessaire d'installer
 # le paquet OCaml bisect_ppx
-# Utiliser l'indicateur WITH_BISECT=1 pour activer l'instrumentation nécessaire
-# à l'analyse de la couverture de code lors des étapes de compilation.
-WITH_BISECT?=0
-ifeq ($(WITH_BISECT), 1)
-  BISECT_PATH:=$(shell ocamlfind query bisect_ppx)
-  ifeq ($(BISECT_PATH),)
-    $(error $(BISECT_PATH) Pour instrumenter la couverture de code, il faut \
-      installer le paquet OCaml bisect_ppx)
-  endif
-endif
 
 ##################################################
 # Building the backend
@@ -56,7 +46,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)/calc),1)
 %.o: %.c
-	$(CC) $(BACKEND_CFLAGS) -c $< -o $@
+	$(CC) $(BACKEND_CFLAGS) -I. -c $< -o $@
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -105,8 +95,7 @@ endif
 
 # Build derivative file lists
 DRIVER_TARGETS:=$(foreach file,$(DRIVER_FILES),calc/$(file))
-DRIVER_TEMP:=$(DRIVER_FILES:.ml=.o)
-DRIVER_OBJECT_FILES:=$(DRIVER_TEMP:.c=.o)
+DRIVER_OBJECT_FILES:=$(DRIVER_C_FILES:.c=.o)
 # TODO: use &: when upgraded to GNU Make 4.3+
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -120,18 +109,11 @@ endif
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 cal: $(DRIVER_TARGETS)
 	@echo "Compilation de la calculette primitive:"
-	@echo "  OCAMLFLAGS=$(OCAMLFLAGS)"
-	@echo "  WITH_BISECT=$(WITH_BISECT)"
-	cd calc && rm -f $(DRIVER_OBJECT_FILES)
-ifeq ($(WITH_BISECT), 1)
-	cd calc && ocamlopt -cc $(CC) -ccopt -std=c99 -ccopt -fno-common \
-	-I $(BISECT_PATH)/common -I $(BISECT_PATH)/runtime \
-	-ppx "$(BISECT_PATH)/ppx.exe --as-ppx" \
-	unix.cmxa bisect_common.cmxa bisect.cmxa *.o $(DRIVER_FILES) -o cal
-else
-	cd calc && ocamlopt -cc $(CC) $(OCAMLFLAGS) -ccopt -std=c99 -ccopt -fno-common \
-	unix.cmxa *.o $(DRIVER_FILES) -o ../cal
-endif
+	@for I in $(DRIVER_C_FILES:.c=.o) ; \
+	do \
+	  $(MAKE_DGFIP_CALC) $$I || exit; \
+	done
+	cd calc && $(CC) -lm *.o -o ../cal
 	@echo "Compilation terminée"
 endif
 
@@ -155,7 +137,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal ${TEST_FILES}
+	./cal -mode primitif -recursif ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

@@ -55,8 +55,15 @@ let complete_vars_stack (prog : Validator.program) : Validator.program =
           let nbItFilter = match filter with Some _ -> 1 | None -> 0 in
           let nbRef, nbIt = aux_instrs instrs in
           (nbRef, max nbIt @@ max nbItSort nbItFilter)
+      | Com.Switch (_, l) ->
+          List.fold_left
+            (fun (mNbRef, mNbIt) (_, l) ->
+              let nbRef, nbIt = aux_instrs l in
+              (max nbRef mNbRef, max nbIt mNbIt))
+            (0, 0) l
       | Com.Affectation _ | Com.Print _ | Com.ComputeTarget _ | Com.RaiseError _
-      | Com.CleanErrors | Com.ExportErrors | Com.FinalizeErrors ->
+      | Com.CleanErrors | Com.CleanFinalizedErrors | Com.ExportErrors
+      | Com.FinalizeErrors | Com.Stop _ ->
           (0, 0)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
@@ -374,6 +381,13 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let sz = max szI @@ max szT szE in
           let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
+      | Com.Switch (expr, l) ->
+          let nbI, szI, nbRefI, tdata = aux_expr tdata expr in
+          List.fold_left
+            (fun (mNb, mSz, mNbRef, tdata) (_, l) ->
+              let nb, sz, rbRef, tdata = aux_instrs tdata l in
+              (max nb mNb, max sz mSz, max rbRef mNbRef, tdata))
+            (nbI, szI, nbRefI, tdata) l
       | Com.WhenDoElse (wdl, ed) ->
           let rec wde (nb, sz, nbRef, tdata) = function
             | (me, dl, _) :: wdl' ->
@@ -508,8 +522,8 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let sz = max n' n'' + (max sz @@ max sz' @@ max sz'' sz''') in
           let nbRef = max nbRef @@ max nbRef' @@ max nbRef'' nbRef''' in
           (nb, sz, nbRef, tdata)
-      | Com.RaiseError _ | Com.CleanErrors | Com.ExportErrors
-      | Com.FinalizeErrors ->
+      | Com.RaiseError _ | Com.CleanErrors | Com.CleanFinalizedErrors
+      | Com.ExportErrors | Com.FinalizeErrors | Com.Stop _ ->
           (0, 0, 0, tdata)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
@@ -533,12 +547,25 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
       | Com.Var (FieldAccess (_, me, _, _))
       | Com.Size (Pos.Mark (TabAccess (_, _, me), _))
       | Com.Size (Pos.Mark (FieldAccess (_, me, _, _), _))
+      | Com.Type (Pos.Mark (TabAccess (_, _, me), _), _)
+      | Com.Type (Pos.Mark (FieldAccess (_, me, _, _), _), _)
       | Com.Attribut (Pos.Mark (TabAccess (_, _, me), _), _)
-      | Com.Attribut (Pos.Mark (FieldAccess (_, me, _, _), _), _)
-      | Com.IsVariable (Pos.Mark (TabAccess (_, _, me), _), _)
-      | Com.IsVariable (Pos.Mark (FieldAccess (_, me, _, _), _), _) ->
+      | Com.Attribut (Pos.Mark (FieldAccess (_, me, _, _), _), _) ->
           aux_expr tdata me
-      | Com.Comparison (_, me0, me1) | Com.Binop (_, me0, me1) ->
+      | Com.Comparison (_, me0, me1)
+      | Com.Binop (_, me0, me1)
+      | Com.SameVariable
+          ( Pos.Mark (TabAccess (_, _, me0), _),
+            Pos.Mark (TabAccess (_, _, me1), _) )
+      | Com.SameVariable
+          ( Pos.Mark (TabAccess (_, _, me0), _),
+            Pos.Mark (FieldAccess (_, me1, _, _), _) )
+      | Com.SameVariable
+          ( Pos.Mark (FieldAccess (_, me0, _, _), _),
+            Pos.Mark (TabAccess (_, _, me1), _) )
+      | Com.SameVariable
+          ( Pos.Mark (FieldAccess (_, me0, _, _), _),
+            Pos.Mark (FieldAccess (_, me1, _, _), _) ) ->
           let nb0, sz0, nbRef0, tdata = aux_expr tdata me0 in
           let nb1, sz1, nbRef1, tdata = aux_expr tdata me1 in
           (max nb0 nb1, max sz0 sz1, max nbRef0 nbRef1, tdata)
@@ -570,9 +597,9 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           (max nb nb', max sz sz', max nbRef nbRef', tdata)
       | Com.Literal _
       | Com.Var (VarAccess _)
-      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.IsVariable _
-      | Com.NbAnomalies | Com.NbDiscordances | Com.NbInformatives
-      | Com.NbBloquantes ->
+      | Com.NbCategory _ | Com.Attribut _ | Com.Size _ | Com.Type _
+      | Com.SameVariable _ | Com.InDomain _ | Com.NbAnomalies
+      | Com.NbDiscordances | Com.NbInformatives | Com.NbBloquantes ->
           (0, 0, 0, tdata)
       | Com.FuncCallLoop _ | Com.Loop _ -> assert false
     in
@@ -589,7 +616,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
   in
   (prog, { stats with nb_all_tmps; sz_all_tmps; nb_all_refs })
 
-(** {1 Translation } *)
+(** {1 Translation} *)
 
 (** {2 General translation context} *)
 
@@ -698,23 +725,27 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             let e' = translate_expression p dict e in
             let i = (StrMap.find (Pos.unmark f) p.prog_event_fields).index in
             Size (Pos.mark (FieldAccess (m_sp_opt', e', f, i)) pos))
-    | IsVariable (Pos.Mark (access, pos), m_name) -> (
+    | Type (Pos.Mark (access, pos), m_typ) ->
+        let access' = translate_access p dict access in
+        Type (Pos.mark access' pos, m_typ)
+    | SameVariable (Pos.Mark (access0, pos0), Pos.Mark (access1, pos1)) ->
+        let access0' = translate_access p dict access0 in
+        let access1' = translate_access p dict access1 in
+        SameVariable (Pos.mark access0' pos0, Pos.mark access1' pos1)
+    | InDomain (Pos.Mark (access, pos), cvm) -> (
         match access with
-        | VarAccess (_, m_id) -> (
+        | VarAccess (_, m_id) ->
             let var = get_var dict m_id in
             if Com.Var.is_ref var then
               let access' = translate_access p dict access in
-              IsVariable (Pos.mark access' pos, m_name)
-            else
-              let name = Pos.unmark m_name in
-              if Com.Var.name_str var = name then Literal (Float 1.0)
-              else
-                match Com.Var.alias var with
-                | Some m_a when Pos.unmark m_a = name -> Literal (Float 1.0)
-                | _ -> Literal (Float 0.0))
+              InDomain (Pos.mark access' pos, cvm)
+            else if
+              Com.Var.is_tgv var && Com.CatVar.Map.mem (Com.Var.cat var) cvm
+            then Literal (Float 1.0)
+            else Literal (Float 0.0)
         | _ ->
             let access' = translate_access p dict access in
-            IsVariable (Pos.mark access' pos, m_name))
+            InDomain (Pos.mark access' pos, cvm))
     | NbAnomalies -> NbAnomalies
     | NbDiscordances -> NbDiscordances
     | NbInformatives -> NbInformatives
@@ -781,6 +812,17 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let prog_else, dict = aux ([], dict) ile in
         let instr' = Com.IfThenElse (expr, prog_then, prog_else) in
         aux (Pos.mark instr' pos :: res, dict) il
+    | Pos.Mark (Com.Switch (e, l), pos) :: il ->
+        let e' = translate_expression p dict e in
+        let revl', dict =
+          List.fold_left
+            (fun (revl, dict) (c, l) ->
+              let l', dict = aux ([], dict) l in
+              ((c, l') :: revl, dict))
+            ([], dict) l
+        in
+        let i' = Com.Switch (e', List.rev revl') in
+        aux (Pos.mark i' pos :: res, dict) il
     | Pos.Mark (Com.WhenDoElse (wdl, ed), pos) :: il ->
         let wdl', dict =
           rev_fst
@@ -916,34 +958,32 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let instr = Com.Restore (al', var_params', evts', evtfs', prog_rest) in
         aux (Pos.mark instr pos :: res, dict) il
     | Pos.Mark (Com.ArrangeEvents (sort, filter, add, instrs), pos) :: il ->
-        let sort', itval_depth', dict =
+        let sort', dict =
           match sort with
           | Some (m_id0, m_id1, expr) ->
               let var0 = get_var dict m_id0 in
               let var0' = Com.Var.set_loc_idx var0 itval_depth in
               let var1 = get_var dict m_id1 in
               let var1' = Com.Var.set_loc_idx var1 (itval_depth + 1) in
-              let dict =
+              let dict' =
                 dict |> IntMap.add var0.id var0' |> IntMap.add var1.id var1'
               in
-              let expr' = translate_expression p dict expr in
-              (Some (var0', var1', expr'), itval_depth + 2, dict)
-          | None -> (None, itval_depth, dict)
+              let expr' = translate_expression p dict' expr in
+              (Some (var0', var1', expr'), dict')
+          | None -> (None, dict)
         in
-        let filter', itval_depth', dict =
+        let filter', dict =
           match filter with
           | Some (m_id, expr) ->
               let var = get_var dict m_id in
               let var' = Com.Var.set_loc_idx var itval_depth in
-              let dict = IntMap.add var.id var' dict in
-              let expr' = translate_expression p dict expr in
-              (Some (var', expr'), max itval_depth' (itval_depth + 1), dict)
-          | None -> (None, itval_depth', dict)
+              let dict' = IntMap.add var.id var' dict in
+              let expr' = translate_expression p dict' expr in
+              (Some (var', expr'), dict')
+          | None -> (None, dict)
         in
         let add' = Option.map (translate_expression p dict) add in
-        let instrs', dict =
-          translate_prog p dict it_depth itval_depth' instrs
-        in
+        let instrs', dict = translate_prog p dict it_depth itval_depth instrs in
         let instr = Com.ArrangeEvents (sort', filter', add', instrs') in
         aux (Pos.mark instr pos :: res, dict) il
     | Pos.Mark (Com.RaiseError (err_name, var_opt), pos) :: il ->
@@ -953,10 +993,14 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         aux (Pos.mark instr' pos :: res, dict) il
     | Pos.Mark (Com.CleanErrors, pos) :: il ->
         aux (Pos.mark Com.CleanErrors pos :: res, dict) il
+    | Pos.Mark (Com.CleanFinalizedErrors, pos) :: il ->
+        aux (Pos.mark Com.CleanFinalizedErrors pos :: res, dict) il
     | Pos.Mark (Com.ExportErrors, pos) :: il ->
         aux (Pos.mark Com.ExportErrors pos :: res, dict) il
     | Pos.Mark (Com.FinalizeErrors, pos) :: il ->
         aux (Pos.mark Com.FinalizeErrors pos :: res, dict) il
+    | Pos.Mark (Com.Stop i, pos) :: il ->
+        aux (Pos.mark (Com.Stop i) pos :: res, dict) il
     | Pos.Mark (Com.ComputeDomain _, _) :: _
     | Pos.Mark (Com.ComputeChaining _, _) :: _
     | Pos.Mark (Com.ComputeVerifs _, _) :: _ ->

@@ -12,3 +12,9 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 val proceed : Mast.program -> Mast.program
+(** Expands the program by:
+    - keeping elements that only belong to the selected applications defined in
+      {!Utils.Config.application_names};
+    - inlining constant's values and removes their definition;
+    - unrolling loops on variable names (such as "sum(i=05,06,07:Xi)" that
+      becomes "sum(x05, X06, X07)". *)

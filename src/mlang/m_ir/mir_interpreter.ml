@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+exception Stop_instruction of Com.stop_kind
+
 let exit_on_rte = ref true
 
 let repl_debug = ref false
@@ -57,11 +59,11 @@ module type S = sig
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_old_anos : StrSet.t;
     mutable ctx_nb_anos : int;
     mutable ctx_nb_discos : int;
     mutable ctx_nb_infos : int;
     mutable ctx_nb_bloquantes : int;
+    mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
@@ -154,14 +156,21 @@ struct
     ctx_pr_out : print_ctx;
     ctx_pr_err : print_ctx;
     mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_old_anos : StrSet.t;
     mutable ctx_nb_anos : int;
     mutable ctx_nb_discos : int;
     mutable ctx_nb_infos : int;
     mutable ctx_nb_bloquantes : int;
+    mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
+  }
+
+  type pctx = {
+    std : Com.print_std;
+    ctx : ctx;
+    std_fmt : Format.formatter;
+    ctx_pr : print_ctx;
   }
 
   let empty_ctx (p : Mir.program) : ctx =
@@ -214,11 +223,11 @@ struct
       ctx_pr_out = { indent = 0; is_newline = true };
       ctx_pr_err = { indent = 0; is_newline = true };
       ctx_anos = [];
-      ctx_old_anos = StrSet.empty;
       ctx_nb_anos = 0;
       ctx_nb_discos = 0;
       ctx_nb_infos = 0;
       ctx_nb_bloquantes = 0;
+      ctx_archived_anos = StrSet.empty;
       ctx_finalized_anos = [];
       ctx_exported_anos = [];
       ctx_events = [];
@@ -335,7 +344,7 @@ struct
   let bool_of_real (f : N.t) : bool = not N.(f =. zero ())
 
   let compare_numbers op i1 i2 =
-    let epsilon = N.of_float !Cli.comparison_error_margin in
+    let epsilon = N.of_float !Config.comparison_error_margin in
     let open Com in
     match op with
     | Gt -> N.(i1 >. i2 +. epsilon)
@@ -345,60 +354,62 @@ struct
     | Eq -> N.(N.abs (i1 -. i2) <. epsilon)
     | Neq -> N.(N.abs (i1 -. i2) >=. epsilon)
 
-  let get_var_space (ctx : ctx) =
-    let i_sp = ctx.ctx_var_space in
+  let get_var_space (ctx : ctx) (m_sp_opt : Com.var_space) =
+    let i_sp =
+      match m_sp_opt with None -> ctx.ctx_var_space | Some (_, i_sp) -> i_sp
+    in
     IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
 
-  (*
-  let get_var_space_opt (ctx : ctx) = function
-    | None -> None
-    | Some (_, i_sp) -> IntMap.find_opt i_sp ctx.ctx_prog.program_var_spaces_idx
-
-  let get_var_space_value ctx = function
-    | None -> get_var_space ctx
-    | Some vsd -> vsd
-*)
-  let get_var_space_from (ctx : ctx) = function
-    | None -> get_var_space ctx
-    | Some (_, i_sp) -> IntMap.find i_sp ctx.ctx_prog.program_var_spaces_idx
-
-  let get_var (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t) :
+  let get_var (ctx : ctx) (m_sp_opt : Com.var_space) (var : Com.Var.t) :
       Com.variable_space * Com.Var.t * int =
     match var.scope with
-    | Com.Var.Tgv _ -> (vsd, var, 0)
-    | Com.Var.Temp _ -> (get_var_space ctx, var, ctx.ctx_tmps_org)
+    | Com.Var.Tgv _ -> (get_var_space ctx m_sp_opt, var, 0)
+    | Com.Var.Temp _ -> (get_var_space ctx None, var, ctx.ctx_tmps_org)
     | Com.Var.Ref ->
         let rv = ctx.ctx_ref.(ctx.ctx_ref_org + Com.Var.loc_idx var) in
-        (rv.var_space, rv.ref_var, rv.org)
+        let vsd =
+          match m_sp_opt with
+          | None -> rv.var_space
+          | _ -> get_var_space ctx m_sp_opt
+        in
+        (vsd, rv.ref_var, rv.org)
 
-  let get_var_tab (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
-      (idx : int) : Com.Var.t =
-    let _, v, _ = get_var ctx vsd var in
-    match Com.Var.get_table v with
-    | Some _ -> ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + idx)
+  let get_var_tab (ctx : ctx) (var : Com.Var.t) (i : int) : Com.Var.t =
+    match Com.Var.get_table var with
+    | Some _ -> ctx.ctx_tab_map.(Com.Var.loc_tab_idx var + 1 + i)
     | None -> assert false
 
   let get_var_value_org (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
-      (org : int) : value =
-    let vi = org + Com.Var.loc_idx var in
+      (vorg : int) : value =
+    let vi = Com.Var.loc_idx var in
     match var.scope with
-    | Com.Var.Tgv _ -> (
+    | Com.Var.Tgv _ ->
         let var_space = ctx.ctx_var_spaces.(vsd.vs_id) in
-        match Com.Var.cat_var_loc var with
-        | LocInput -> var_space.input.(vi)
-        | LocComputed -> var_space.computed.(vi)
-        | LocBase -> var_space.base.(vi))
-    | Com.Var.Temp _ -> ctx.ctx_tmps.(vi).value
+        let var_tab =
+          match Com.Var.cat_var_loc var with
+          | LocInput -> var_space.input
+          | LocComputed -> var_space.computed
+          | LocBase -> var_space.base
+        in
+        if Array.length var_tab > 0 then var_tab.(vi) else Undefined
+    | Com.Var.Temp _ -> ctx.ctx_tmps.(vorg + vi).value
     | Com.Var.Ref -> assert false
 
-  let get_var_value (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t) :
+  let get_var_value (ctx : ctx) (m_sp_opt : Com.var_space) (v : Com.Var.t) :
       value =
-    let vsd, var, vorg = get_var ctx vsd var in
-    let var =
-      if Com.Var.is_table var then ctx.ctx_tab_map.(Com.Var.loc_tab_idx var + 2)
-      else var
-    in
+    let vsd, var, vorg = get_var ctx m_sp_opt v in
+    let var = if Com.Var.is_table var then get_var_tab ctx var 0 else var in
     get_var_value_org ctx vsd var vorg
+
+  let get_var_value_tab (ctx : ctx) (m_sp_opt : Com.var_space) (v : Com.Var.t)
+      (i : int) : value =
+    let vsd, var, vorg = get_var ctx m_sp_opt v in
+    if i < 0 then Number (N.zero ())
+    else if Com.Var.size var <= i then Undefined
+    else if Com.Var.is_table var then
+      let var_i = get_var_tab ctx var i in
+      get_var_value_org ctx vsd var_i vorg
+    else get_var_value_org ctx vsd var vorg
 
   let set_var_ref (ctx : ctx) (var : Com.Var.t) (var_space : Com.variable_space)
       (ref_var : Com.Var.t) (org : int) : unit =
@@ -410,29 +421,26 @@ struct
         ctx.ctx_ref.(ctx.ctx_ref_org + i).org <- org
     | _ -> assert false
 
+  let mode_corr (ctx : ctx) =
+    match StrMap.find_opt "MODE_CORR" ctx.ctx_prog.program_vars with
+    | Some var -> (
+        let vsd = ctx.ctx_prog.program_var_space_def in
+        let _, var, vorg = get_var ctx None var in
+        match get_var_value_org ctx vsd var vorg with
+        | Undefined -> false
+        | Number n -> compare_numbers Eq n (N.one ()))
+    | None -> false
+
   exception BlockingError
 
   let rec get_access_value ctx access =
     match access with
-    | Com.VarAccess (m_sp_opt, v) ->
-        let vsd = get_var_space_from ctx m_sp_opt in
-        get_var_value ctx vsd v
-    | Com.TabAccess (m_sp_opt, m_v, m_idx) -> (
+    | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
+    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
-            let vsd = get_var_space_from ctx m_sp_opt in
-            let vsd, v, vorg = get_var ctx vsd m_v in
             let i = Int64.to_int @@ N.to_int z in
-            let sz = Com.Var.size v in
-            if i < 0 then Number (N.zero ())
-            else if sz <= i then Undefined
-            else
-              let v' =
-                if Com.Var.is_table v then
-                  ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i)
-                else v
-              in
-              get_var_value_org ctx vsd v' vorg
+            get_var_value_tab ctx m_sp_opt v i
         | Undefined -> Undefined)
     | Com.FieldAccess (m_sp_opt, e, _, j) -> (
         match evaluate_expr ctx e with
@@ -442,70 +450,173 @@ struct
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
               | Com.Numeric n -> n
-              | Com.RefVar v ->
-                  let vsd = get_var_space_from ctx m_sp_opt in
-                  get_var_value ctx vsd v
+              | Com.RefVar v -> get_var_value ctx m_sp_opt v
             else Undefined
-        | _ -> Undefined)
+        | Undefined -> Undefined)
 
   and get_access_var ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) ->
-        let vsd = get_var_space_from ctx m_sp_opt in
-        let vsd, v, _ = get_var ctx vsd v in
-        Some (vsd, v)
+        let vsd, v, vorg = get_var ctx m_sp_opt v in
+        Some (vsd, v, vorg)
     | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
-            let vsd = get_var_space_from ctx m_sp_opt in
-            let vsd, v, _ = get_var ctx vsd m_v in
+            let vsd, v, vorg = get_var ctx m_sp_opt m_v in
             let i = Int64.to_int @@ N.to_int z in
             if 0 <= i && i < Com.Var.size v then
               if Com.Var.is_table v then
-                Some (vsd, ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i))
-              else Some (vsd, v)
+                let v_i = get_var_tab ctx v i in
+                Some (vsd, v_i, vorg)
+              else Some (vsd, v, vorg)
             else None
         | Undefined -> None)
     | Com.FieldAccess (m_sp_opt, m_e, _, j) -> (
         match evaluate_expr ctx m_e with
         | Number z ->
-            let vsd = get_var_space_from ctx m_sp_opt in
             let i = Int64.to_int @@ N.to_int z in
             let events = List.hd ctx.ctx_events in
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
-              | Com.RefVar v -> Some (vsd, v)
+              | Com.RefVar v ->
+                  let vsd, var, vorg = get_var ctx m_sp_opt v in
+                  Some (vsd, var, vorg)
               | Com.Numeric _ -> None
             else None
         | _ -> None)
 
   and set_var_value_org (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
-      (org : int) (value : value) : unit =
-    let vi = org + Com.Var.loc_idx var in
+      (vorg : int) (value : value) : unit =
+    let vi = Com.Var.loc_idx var in
     match var.scope with
-    | Com.Var.Tgv _ -> (
+    | Com.Var.Tgv _ ->
         let var_space = ctx.ctx_var_spaces.(vsd.vs_id) in
-        match Com.Var.cat_var_loc var with
-        | LocInput -> var_space.input.(vi) <- value
-        | LocComputed -> var_space.computed.(vi) <- value
-        | LocBase -> var_space.base.(vi) <- value)
-    | Com.Var.Temp _ -> ctx.ctx_tmps.(vi).value <- value
+        let var_tab =
+          match Com.Var.cat_var_loc var with
+          | LocInput -> var_space.input
+          | LocComputed -> var_space.computed
+          | LocBase -> var_space.base
+        in
+        if Array.length var_tab > 0 then var_tab.(vi) <- value
+    | Com.Var.Temp _ -> ctx.ctx_tmps.(vorg + vi).value <- value
     | Com.Var.Ref -> assert false
 
-  and set_var_value (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
+  and set_var_value (ctx : ctx) (m_sp_opt : Com.var_space) (var : Com.Var.t)
       (value : value) : unit =
-    let vsd, v, vorg = get_var ctx vsd var in
+    let vsd, v, vorg = get_var ctx m_sp_opt var in
     if Com.Var.is_table v then
       for i = 0 to Com.Var.size v - 1 do
-        let v' = ctx.ctx_tab_map.(Com.Var.loc_tab_idx v + 1 + i) in
-        set_var_value_org ctx vsd v' vorg value
+        let v_i = get_var_tab ctx v i in
+        set_var_value_org ctx vsd v_i vorg value
       done
     else set_var_value_org ctx vsd v vorg value
 
-  and set_access ctx access vexpr =
-    match get_access_var ctx access with
-    | Some (vsd, v) -> set_var_value ctx vsd v @@ evaluate_expr ctx vexpr
+  and set_var_value_tab (ctx : ctx) (m_sp_opt : Com.var_space) (v : Com.Var.t)
+      (i : int) (value : value) : unit =
+    let vsd, var, vorg = get_var ctx m_sp_opt v in
+    if 0 <= i && i < Com.Var.size var then
+      if Com.Var.is_table var then
+        let var_i = get_var_tab ctx var i in
+        set_var_value_org ctx vsd var_i vorg value
+      else set_var_value_org ctx vsd var vorg value
+
+  and set_access ctx access value =
+    match access with
+    | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
+    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+        match evaluate_expr ctx m_idx with
+        | Number z ->
+            let i = Int64.to_int @@ N.to_int z in
+            set_var_value_tab ctx m_sp_opt v i value
+        | Undefined -> ())
+    | Com.FieldAccess (m_sp_opt, e, _, j) -> (
+        match evaluate_expr ctx e with
+        | Number z -> (
+            let i = Int64.to_int @@ N.to_int z in
+            let events = List.hd ctx.ctx_events in
+            if 0 <= i && i < Array.length events then
+              match events.(i).(j) with
+              | Com.Numeric _ -> events.(i).(j) <- Com.Numeric value
+              | Com.RefVar v -> set_var_value ctx m_sp_opt v value)
+        | Undefined -> ())
+
+  (* print aux *)
+
+  and pr_ctx std ctx =
+    match std with
+    | Com.StdOut ->
+        { std; ctx; std_fmt = Format.std_formatter; ctx_pr = ctx.ctx_pr_out }
+    | Com.StdErr ->
+        { std; ctx; std_fmt = Format.err_formatter; ctx_pr = ctx.ctx_pr_err }
+
+  and pr_flush (pctx : pctx) =
+    match pctx.std with
+    | Com.StdOut -> ()
+    | Com.StdErr -> Format.pp_print_flush pctx.std_fmt ()
+
+  and pr_out_indent (pctx : pctx) =
+    if pctx.ctx_pr.is_newline then (
+      for _i = 1 to pctx.ctx_pr.indent do
+        Format.fprintf pctx.std_fmt " "
+      done;
+      pctx.ctx_pr.is_newline <- false)
+
+  and pr_raw (pctx : pctx) s =
+    let len = String.length s in
+    let rec aux = function
+      | n when n >= len -> ()
+      | n -> (
+          match s.[n] with
+          | '\n' ->
+              Format.fprintf pctx.std_fmt "\n";
+              pr_flush pctx;
+              pctx.ctx_pr.is_newline <- true;
+              aux (n + 1)
+          | c ->
+              pr_out_indent pctx;
+              Format.fprintf pctx.std_fmt "%c" c;
+              aux (n + 1))
+    in
+    aux 0
+
+  and pr_set_indent (pctx : pctx) diff =
+    pctx.ctx_pr.indent <- max 0 (pctx.ctx_pr.indent + diff)
+
+  and pr_value (pctx : pctx) mi ma value =
+    pr_raw pctx (Pp.spr "%a" (format_value_prec mi ma) value)
+
+  and pr_info (pctx : pctx) info (vsd : Com.variable_space) var =
+    if not vsd.vs_by_default then (
+      pr_raw pctx (Pos.unmark vsd.vs_name);
+      pr_raw pctx ".");
+    let _, v, _ = get_var pctx.ctx None var in
+    match info with
+    | Com.Name -> pr_raw pctx (Com.Var.name_str v)
+    | Com.Alias -> pr_raw pctx (Com.Var.alias_str v)
+
+  and pr_string (pctx : pctx) s =
+    pr_raw pctx s;
+    pr_flush pctx
+
+  and pr_access (pctx : pctx) info acc =
+    match get_access_var pctx.ctx acc with
+    | Some (vsd, var, _) ->
+        pr_info pctx info vsd var;
+        pr_flush pctx
     | None -> ()
+
+  and pr_indent (pctx : pctx) e =
+    match evaluate_expr pctx.ctx e with
+    | Undefined -> ()
+    | Number x ->
+        let diff = Int64.to_int @@ N.to_int @@ roundf x in
+        pr_set_indent pctx diff
+
+  and pr_expr (pctx : pctx) mi ma e =
+    pr_value pctx mi ma (evaluate_expr pctx.ctx e);
+    pr_flush pctx
+
+  (* interpret *)
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     let comparison op new_e1 new_e2 =
@@ -637,47 +748,33 @@ struct
             match evaluate_expr ctx arg1 with
             | Undefined -> Undefined
             | Number f -> (
-                let up = Int64.sub (N.to_int @@ roundf f) 1L in
-                let var_arg2_opt =
+                let nb = Int64.to_int @@ N.to_int @@ roundf f in
+                let var_opt =
                   match Pos.unmark arg2 with
                   | Var access -> get_access_var ctx access
                   | _ -> None
                 in
-                match var_arg2_opt with
+                match var_opt with
                 | None -> Undefined
-                | Some (vsd, var_arg2) -> (
-                    let cast_to_int (v : value) : Int64.t option =
-                      match v with
-                      | Number f -> Some (N.to_int @@ roundf f)
-                      | Undefined -> None
-                    in
-                    let access_index (i : int) : Int64.t option =
-                      let ei =
-                        Pos.same (Com.Literal (Float (float_of_int i))) arg2
+                | Some (vsd, var, vorg) ->
+                    if Com.Var.is_table var then
+                      let rec loop res i =
+                        if i >= Com.Var.size var || i >= nb then res
+                        else
+                          let var_i = get_var_tab ctx var i in
+                          let val_i = get_var_value_org ctx vsd var_i vorg in
+                          let res =
+                            match (res, val_i) with
+                            | Undefined, _ -> val_i
+                            | Number _, Undefined -> res
+                            | Number nr, Number ni ->
+                                if N.(nr <. ni) then val_i else res
+                          in
+                          loop res (i + 1)
                       in
-                      let instr =
-                        let m_sp_opt =
-                          let vn = Com.Normal (Pos.unmark vsd.vs_name) in
-                          Some (Pos.without vn, vsd.vs_id)
-                        in
-                        let a = Com.TabAccess (m_sp_opt, var_arg2, ei) in
-                        Pos.same (Com.Var a) arg2
-                      in
-                      cast_to_int @@ evaluate_expr ctx instr
-                    in
-                    let maxi = ref None in
-                    for i = 0 to Int64.to_int up do
-                      match access_index i with
-                      | None -> ()
-                      | Some n ->
-                          maxi :=
-                            Option.fold ~none:(Some n)
-                              ~some:(fun m -> Some (max n m))
-                              !maxi
-                    done;
-                    match !maxi with
-                    | None -> Undefined
-                    | Some f -> Number (N.of_int f))))
+                      loop Undefined 0
+                    else if nb >= 1 then get_var_value_org ctx vsd var vorg
+                    else Undefined))
         | FuncCall (Pos.Mark (NbEvents, _), _) ->
             let card = Array.length (List.hd ctx.ctx_events) in
             Number (N.of_int @@ Int64.of_int @@ card)
@@ -687,28 +784,37 @@ struct
         | FuncCall (_, _) -> assert false
         | Attribut (m_acc, a) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) -> (
-                let _, v', _ = get_var ctx vsd v in
-                match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs v') with
+            | Some (_, v, _) -> (
+                match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs v) with
                 | Some l -> Number (N.of_float (float (Pos.unmark l)))
                 | None -> Undefined)
             | None -> Undefined)
         | Size m_acc -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) ->
-                let _, v', _ = get_var ctx vsd v in
-                Number (N.of_float @@ float @@ Com.Var.size v')
+            | Some (_, v, _) -> Number (N.of_float @@ float @@ Com.Var.size v)
             | None -> Undefined)
-        | IsVariable (m_acc, m_name) -> (
+        | Type (m_acc, m_typ) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (vsd, v) -> (
-                let _, v', _ = get_var ctx vsd v in
-                let name = Pos.unmark m_name in
-                if Com.Var.name_str v' = name then Number (N.one ())
-                else
-                  match Com.Var.alias v' with
-                  | Some m_a when Pos.unmark m_a = name -> Number (N.one ())
-                  | _ -> Number (N.zero ()))
+            | Some (_, v, _) ->
+                if Com.Var.is_tgv v && Com.Var.typ v = Some (Pos.unmark m_typ)
+                then Number (N.one ())
+                else Number (N.zero ())
+            | None -> Undefined)
+        | SameVariable (m_acc0, m_acc1) -> (
+            let v0_opt = get_access_var ctx (Pos.unmark m_acc0) in
+            let v1_opt = get_access_var ctx (Pos.unmark m_acc1) in
+            match (v0_opt, v1_opt) with
+            | Some (_, v0, _), Some (_, v1, _) ->
+                if Com.Var.name_str v0 = Com.Var.name_str v1 then
+                  Number (N.one ())
+                else Number (N.zero ())
+            | _, _ -> Number (N.zero ()))
+        | InDomain (m_acc, cvm) -> (
+            match get_access_var ctx (Pos.unmark m_acc) with
+            | Some (_, v, _) ->
+                if Com.Var.is_tgv v && Com.CatVar.Map.mem (Com.Var.cat v) cvm
+                then Number (N.one ())
+                else Number (N.zero ())
             | None -> Number (N.zero ()))
         | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
         | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
@@ -745,7 +851,7 @@ struct
       unit =
     match Pos.unmark stmt with
     | Com.Affectation (Pos.Mark (SingleFormula (VarDecl (m_acc, vexpr)), _)) ->
-        set_access ctx (Pos.unmark m_acc) vexpr
+        set_access ctx (Pos.unmark m_acc) @@ evaluate_expr ctx vexpr
     | Com.Affectation
         (Pos.Mark (SingleFormula (EventFieldRef (idx, _, j, var)), _)) -> (
         match evaluate_expr ctx idx with
@@ -754,7 +860,10 @@ struct
             let events = List.hd ctx.ctx_events in
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
-              | Com.RefVar _ -> events.(i).(j) <- Com.RefVar var
+              | Com.RefVar _ ->
+                  let _, v, _ = get_var ctx None var in
+                  if Com.Var.is_tgv v && not (Com.Var.is_table v) then
+                    events.(i).(j) <- Com.RefVar v
               | Com.Numeric _ -> ())
         | _ -> ())
     | Com.Affectation (Pos.Mark (Com.MultipleFormulaes _, _)) -> assert false
@@ -763,6 +872,25 @@ struct
         | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx f
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
+    | Com.Switch (c, l) -> (
+        let v = evaluate_expr ctx c in
+        let exception INTERNAL_STOP_SWITCH in
+        let then_ () = raise INTERNAL_STOP_SWITCH in
+        try
+          List.iter
+            (fun (cases, stmts) ->
+              List.iter
+                (fun case ->
+                  match (case, v) with
+                  | Com.Default, _ | Value Undefined, Undefined ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | Value (Float f), Number n
+                    when compare_numbers Eq n (N.of_float f) ->
+                      evaluate_stmts ~then_ canBlock ctx stmts
+                  | _ -> ())
+                cases)
+            l
+        with INTERNAL_STOP_SWITCH -> ())
     | Com.WhenDoElse (wdl, ed) ->
         let rec aux = function
           | (expr, dl, _) :: l -> (
@@ -779,161 +907,101 @@ struct
     | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
     | Com.ComputeTarget (Pos.Mark (tn, _), args, m_sp_opt) ->
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
-        let vsd = get_var_space_from ctx m_sp_opt in
-        let vs_id_sav = ctx.ctx_var_space in
-        ctx.ctx_var_space <- vsd.vs_id;
-        evaluate_target canBlock ctx tf args;
-        ctx.ctx_var_space <- vs_id_sav
+        let vsd = get_var_space ctx m_sp_opt in
+        evaluate_target canBlock ctx tf args vsd
     | Com.Print (std, args) ->
-        let std_fmt, ctx_pr =
-          match std with
-          | Com.StdOut -> (Format.std_formatter, ctx.ctx_pr_out)
-          | Com.StdErr -> (Format.err_formatter, ctx.ctx_pr_err)
-        in
-        let pr_flush () =
-          match std with
-          | Com.StdOut -> ()
-          | Com.StdErr -> Format.pp_print_flush Format.err_formatter ()
-        in
-        let pr_indent () =
-          if ctx_pr.is_newline then (
-            for _i = 1 to ctx_pr.indent do
-              Format.fprintf std_fmt " "
-            done;
-            ctx_pr.is_newline <- false)
-        in
-        let pr_raw s =
-          let len = String.length s in
-          let rec aux = function
-            | n when n >= len -> ()
-            | n -> (
-                match s.[n] with
-                | '\n' ->
-                    Format.fprintf std_fmt "\n";
-                    pr_flush ();
-                    ctx_pr.is_newline <- true;
-                    aux (n + 1)
-                | c ->
-                    pr_indent ();
-                    Format.fprintf std_fmt "%c" c;
-                    aux (n + 1))
-          in
-          aux 0
-        in
-        let pr_set_indent diff =
-          ctx_pr.indent <- max 0 (ctx_pr.indent + diff)
-        in
-        let pr_value mi ma value =
-          pr_raw (Pp.spr "%a" (format_value_prec mi ma) value)
-        in
-        let pr_info info (vsd : Com.variable_space) var =
-          if not vsd.vs_by_default then (
-            pr_raw (Pos.unmark vsd.vs_name);
-            pr_raw ".");
-          let _, v, _ = get_var ctx vsd var in
-          match info with
-          | Com.Name -> pr_raw (Com.Var.name_str v)
-          | Com.Alias -> pr_raw (Com.Var.alias_str v)
-        in
+        let pctx = pr_ctx std ctx in
         List.iter
           (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
-            | PrintString s ->
-                pr_raw s;
-                pr_flush ()
-            | PrintAccess (info, m_a) -> (
-                match get_access_var ctx @@ Pos.unmark m_a with
-                | Some (vsd, var) ->
-                    pr_info info vsd var;
-                    pr_flush ()
-                | None -> ())
-            | PrintIndent e -> (
-                match evaluate_expr ctx e with
-                | Undefined -> ()
-                | Number x ->
-                    let diff = Int64.to_int @@ N.to_int @@ roundf x in
-                    pr_set_indent diff)
-            | PrintExpr (e, mi, ma) ->
-                pr_value mi ma (evaluate_expr ctx e);
-                pr_flush ())
+            | PrintString s -> pr_string pctx s
+            | PrintAccess (info, m_a) -> pr_access pctx info (Pos.unmark m_a)
+            | PrintIndent e -> pr_indent pctx e
+            | PrintExpr (e, mi, ma) -> pr_expr pctx mi ma e)
           args;
-        pr_flush ()
-    | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) ->
-        List.iter
-          (fun m_a ->
-            match get_access_var ctx @@ Pos.unmark m_a with
-            | Some (vsd, v) ->
-                let vsd, v, vorg = get_var ctx vsd v in
-                set_var_ref ctx var vsd v vorg;
-                evaluate_stmts canBlock ctx stmts
-            | None -> ())
-          al;
-        List.iter
-          (fun (vcs, expr, m_sp_opt) ->
-            let eval vc _ =
-              StrMap.iter
-                (fun _ v ->
-                  if
-                    Com.CatVar.compare (Com.Var.cat v) vc = 0
-                    && not (Com.Var.is_table v)
-                  then (
-                    let vsd = get_var_space_from ctx m_sp_opt in
-                    let vsd, v, org = get_var ctx vsd v in
-                    set_var_ref ctx var vsd v org;
-                    match evaluate_expr ctx expr with
-                    | Number z when N.(z =. one ()) ->
-                        evaluate_stmts canBlock ctx stmts
-                    | _ -> ()))
-                ctx.ctx_prog.program_vars
-            in
-            Com.CatVar.Map.iter eval vcs)
-          var_params
-    | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) ->
-        List.iter
-          (fun (e0, e1, step) ->
-            match evaluate_expr ctx e0 with
-            | Number z0 -> (
-                match evaluate_expr ctx e1 with
-                | Number z1 -> (
-                    match evaluate_expr ctx step with
-                    | Number zStep when not N.(is_zero zStep) ->
-                        let cmp =
-                          if N.(zStep > zero ()) then N.( <=. ) else N.( >=. )
-                        in
-                        let rec loop i =
-                          if cmp i z1 then (
-                            let vsd = ctx.ctx_prog.program_var_space_def in
-                            set_var_value ctx vsd var (Number i);
-                            evaluate_stmts canBlock ctx stmts;
-                            loop N.(i +. zStep))
-                        in
-                        loop z0
-                    | _ -> ())
-                | Undefined -> ())
-            | Undefined -> ())
-          var_intervals
+        pr_flush pctx
+    | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) -> (
+        try
+          List.iter
+            (fun m_a ->
+              match get_access_var ctx @@ Pos.unmark m_a with
+              | Some (vsd, v, vorg) ->
+                  set_var_ref ctx var vsd v vorg;
+                  evaluate_stmts canBlock ctx stmts
+              | None -> ())
+            al;
+          List.iter
+            (fun (vcs, expr, m_sp_opt) ->
+              let eval vc _ =
+                StrMap.iter
+                  (fun _ v ->
+                    if
+                      Com.CatVar.compare (Com.Var.cat v) vc = 0
+                      && not (Com.Var.is_table v)
+                    then (
+                      let vsd, v, org = get_var ctx m_sp_opt v in
+                      set_var_ref ctx var vsd v org;
+                      match evaluate_expr ctx expr with
+                      | Number z when N.(z =. one ()) ->
+                          evaluate_stmts canBlock ctx stmts
+                      | _ -> ()))
+                  ctx.ctx_prog.program_vars
+              in
+              Com.CatVar.Map.iter eval vcs)
+            var_params
+        with
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
+            if scope = Pos.unmark var.name then () else raise exn)
+    | Com.Iterate_values ((var : Com.Var.t), var_intervals, stmts) -> (
+        try
+          List.iter
+            (fun (e0, e1, step) ->
+              let val0 = evaluate_expr ctx e0 in
+              let val1 = evaluate_expr ctx e1 in
+              let valStep = evaluate_expr ctx step in
+              match (val0, val1, valStep) with
+              | Number z0, Number z1, Number zStep when not N.(is_zero zStep) ->
+                  let cmp = N.(if zStep > zero () then ( <=. ) else ( >=. )) in
+                  let rec loop i =
+                    if cmp i z1 then (
+                      let vsd, var, vorg = get_var ctx None var in
+                      set_var_value_org ctx vsd var vorg (Number i);
+                      evaluate_stmts canBlock ctx stmts;
+                      loop N.(i +. zStep))
+                  in
+                  loop z0
+              | _, _, _ -> ())
+            var_intervals
+        with
+        | Stop_instruction (SKId None) -> ()
+        | Stop_instruction (SKId (Some scope)) as exn ->
+            if scope = Pos.unmark var.name then () else raise exn)
+    | Com.Stop scope -> raise (Stop_instruction scope)
     | Com.Restore (al, var_params, evts, evtfs, stmts) ->
-        let vsd_def = get_var_space ctx in
-        let backup backup_vars access =
-          match get_access_var ctx access with
-          | Some (vsd, var) ->
-              let vsd, var, vorg = get_var ctx vsd var in
-              if Com.Var.is_table var then
-                let sz = Com.Var.size var in
-                let rec loop backup_vars i =
-                  if i = sz then backup_vars
-                  else
-                    let v = get_var_tab ctx vsd var i in
-                    let value = get_var_value_org ctx vsd v vorg in
-                    loop ((vsd, v, vorg, value) :: backup_vars) (i + 1)
-                in
-                loop backup_vars 0
+        let backup backup_vars vsd var vorg =
+          if Com.Var.is_table var then
+            let sz = Com.Var.size var in
+            let rec loop backup_vars i =
+              if i >= sz then backup_vars
               else
-                let value = get_var_value ctx vsd var in
-                (vsd, var, vorg, value) :: backup_vars
-          | None -> backup_vars
+                let v_i = get_var_tab ctx var i in
+                let value = get_var_value_org ctx vsd v_i vorg in
+                loop ((vsd, v_i, vorg, value) :: backup_vars) (i + 1)
+            in
+            loop backup_vars 0
+          else
+            let value = get_var_value_org ctx vsd var vorg in
+            (vsd, var, vorg, value) :: backup_vars
         in
-        let backup_vars = List.fold_left backup [] (List.map Pos.unmark al) in
+        let backup_vars =
+          List.fold_left
+            (fun backup_vars m_acc ->
+              match get_access_var ctx (Pos.unmark m_acc) with
+              | Some (vsd, var, vorg) -> backup backup_vars vsd var vorg
+              | None -> backup_vars)
+            [] al
+        in
         let backup_vars =
           List.fold_left
             (fun backup_vars ((var : Com.Var.t), vcs, expr, m_sp_opt) ->
@@ -942,14 +1010,11 @@ struct
                   StrMap.fold
                     (fun _ v backup_vars ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                        let vsd = get_var_space_from ctx m_sp_opt in
-                        let vsd, v', org = get_var ctx vsd v in
-                        set_var_ref ctx var vsd v' org;
+                        let vsd, v', vorg = get_var ctx m_sp_opt v in
+                        set_var_ref ctx var vsd v' vorg;
                         match evaluate_expr ctx expr with
                         | Number z when N.(z =. one ()) ->
-                            let dummy_name = Pos.without (Com.Normal "") in
-                            let m_sp_opt = Some (dummy_name, vsd.vs_id) in
-                            backup backup_vars (Com.VarAccess (m_sp_opt, v))
+                            backup backup_vars vsd v' vorg
                         | _ -> backup_vars)
                       else backup_vars)
                     ctx.ctx_prog.program_vars backup_vars)
@@ -978,7 +1043,7 @@ struct
               let rec aux backup_evts i =
                 if i < Array.length events0 then (
                   let vi = N.of_int @@ Int64.of_int i in
-                  set_var_value ctx vsd_def var (Number vi);
+                  set_var_value ctx None var (Number vi);
                   match evaluate_expr ctx expr with
                   | Number z when N.(z =. one ()) ->
                       let evt = events0.(i) in
@@ -990,12 +1055,15 @@ struct
               aux backup_evts 0)
             backup_evts evtfs
         in
-        evaluate_stmts canBlock ctx stmts;
-        List.iter
-          (fun (vsd, v, vorg, value) -> set_var_value_org ctx vsd v vorg value)
-          backup_vars;
-        let events0 = List.hd ctx.ctx_events in
-        List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
+        let then_ () =
+          List.iter
+            (fun (vsd, v, vorg, value) ->
+              set_var_value_org ctx vsd v vorg value)
+            backup_vars;
+          let events0 = List.hd ctx.ctx_events in
+          List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
+        in
+        evaluate_stmts ~then_ canBlock ctx stmts
     | Com.ArrangeEvents (sort, filter, add, stmts) ->
         let event_list, nbAdd =
           match add with
@@ -1042,9 +1110,8 @@ struct
               let rec aux res i =
                 if i >= Array.length events0 then Array.of_list (List.rev res)
                 else
-                  let vsd_def = ctx.ctx_prog.program_var_space_def in
                   let vi = Number (N.of_int @@ Int64.of_int i) in
-                  set_var_value ctx vsd_def var vi;
+                  set_var_value ctx None var vi;
                   let res' =
                     match evaluate_expr ctx expr with
                     | Number z when N.(z =. one ()) -> events0.(i) :: res
@@ -1053,7 +1120,6 @@ struct
                   aux res' (i + 1)
               in
               aux event_list 0
-          | None when event_list = [] -> Array.copy (List.hd ctx.ctx_events)
           | None ->
               let events0 = List.hd ctx.ctx_events in
               let rec aux res i =
@@ -1066,11 +1132,10 @@ struct
         (match sort with
         | Some (var0, var1, expr) ->
             let sort_fun i _ j _ =
-              let vsd_def = ctx.ctx_prog.program_var_space_def in
               let vi = Number (N.of_int @@ Int64.of_int i) in
-              set_var_value ctx vsd_def var0 vi;
+              set_var_value ctx None var0 vi;
               let vj = Number (N.of_int @@ Int64.of_int j) in
-              set_var_value ctx vsd_def var1 vj;
+              set_var_value ctx None var1 vj;
               match evaluate_expr ctx expr with
               | Number z when N.(z =. zero ()) -> false
               | Number _ -> true
@@ -1078,8 +1143,8 @@ struct
             in
             Sorting.mergeSort sort_fun nbAdd (Array.length events) events
         | None -> ());
-        evaluate_stmts canBlock ctx stmts;
-        ctx.ctx_events <- List.tl ctx.ctx_events
+        let then_ () = ctx.ctx_events <- List.tl ctx.ctx_events in
+        evaluate_stmts ~then_ canBlock ctx stmts
     | Com.RaiseError (m_err, var_opt) ->
         let err = Pos.unmark m_err in
         (match err.typ with
@@ -1101,33 +1166,78 @@ struct
         ctx.ctx_nb_discos <- 0;
         ctx.ctx_nb_infos <- 0;
         ctx.ctx_nb_bloquantes <- 0
+    | Com.CleanFinalizedErrors -> ctx.ctx_finalized_anos <- []
     | Com.FinalizeErrors ->
-        let not_in_old_anos (err, _) =
-          let name = Pos.unmark err.Com.Error.name in
-          not (StrSet.mem name ctx.ctx_old_anos)
+        let mem (ano : Com.Error.t) anos =
+          List.fold_left
+            (fun res ((a : Com.Error.t), _) ->
+              res || Pos.unmark a.name = Pos.unmark ano.name)
+            false anos
         in
-        ctx.ctx_finalized_anos <-
-          (let rec merge_anos old_anos new_anos =
-             match (old_anos, new_anos) with
-             | [], anos | anos, [] -> anos
-             | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
-           in
-           let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
-           merge_anos ctx.ctx_finalized_anos new_anos);
-        let add_ano res (err, _) =
-          StrSet.add (Pos.unmark err.Com.Error.name) res
-        in
-        ctx.ctx_old_anos <- List.fold_left add_ano ctx.ctx_old_anos ctx.ctx_anos
+        if mode_corr ctx then
+          let rec merge_anos () =
+            match ctx.ctx_anos with
+            | [] -> ()
+            | ((ano : Com.Error.t), arg) :: discos ->
+                let cont =
+                  if not (mem ano ctx.ctx_finalized_anos) then (
+                    ctx.ctx_finalized_anos <-
+                      ctx.ctx_finalized_anos @ [ (ano, arg) ];
+                    ano.typ <> Com.Error.Anomaly)
+                  else true
+                in
+                ctx.ctx_anos <- discos;
+                if cont then merge_anos ()
+          in
+          merge_anos ()
+        else (
+          ctx.ctx_finalized_anos <- [];
+          let rec merge_anos () =
+            match ctx.ctx_anos with
+            | [] -> ctx.ctx_finalized_anos <- List.rev ctx.ctx_finalized_anos
+            | ((ano : Com.Error.t), arg) :: discos ->
+                if not (StrSet.mem (Pos.unmark ano.name) ctx.ctx_archived_anos)
+                then (
+                  ctx.ctx_archived_anos <-
+                    StrSet.add (Pos.unmark ano.name) ctx.ctx_archived_anos;
+                  ctx.ctx_finalized_anos <- (ano, arg) :: ctx.ctx_finalized_anos);
+                ctx.ctx_anos <- discos;
+                merge_anos ()
+          in
+          merge_anos ())
     | Com.ExportErrors ->
-        ctx.ctx_exported_anos <- ctx.ctx_exported_anos @ ctx.ctx_finalized_anos;
-        ctx.ctx_finalized_anos <- []
+        if mode_corr ctx then
+          let rec merge_anos () =
+            match ctx.ctx_finalized_anos with
+            | [] -> ()
+            | ((ano : Com.Error.t), arg) :: fins ->
+                if not (StrSet.mem (Pos.unmark ano.name) ctx.ctx_archived_anos)
+                then (
+                  ctx.ctx_archived_anos <-
+                    StrSet.add (Pos.unmark ano.name) ctx.ctx_archived_anos;
+                  ctx.ctx_exported_anos <-
+                    ctx.ctx_exported_anos @ [ (ano, arg) ]);
+                ctx.ctx_finalized_anos <- fins;
+                merge_anos ()
+          in
+          merge_anos ()
+        else (
+          ctx.ctx_exported_anos <-
+            ctx.ctx_exported_anos @ ctx.ctx_finalized_anos;
+          ctx.ctx_finalized_anos <- [])
     | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
         assert false
 
-  and evaluate_stmts canBlock (ctx : ctx) (stmts : Mir.m_instruction list) :
-      unit =
-    try List.iter (evaluate_stmt canBlock ctx) stmts
-    with BlockingError as b_err -> if canBlock then raise b_err
+  and evaluate_stmts ?(then_ = ignore) canBlock (ctx : ctx)
+      (stmts : Mir.m_instruction list) : unit =
+    let () =
+      try List.iter (evaluate_stmt canBlock ctx) stmts with
+      | BlockingError as b_err -> if canBlock then raise b_err
+      | Stop_instruction _ as exn ->
+          then_ ();
+          raise exn
+    in
+    then_ ()
 
   and evaluate_function (ctx : ctx) (target : Mir.target)
       (args : Mir.m_expression list) : value =
@@ -1145,30 +1255,33 @@ struct
     set_args 0 target.target_args args;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).var <- Option.get target.target_result;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value <- Undefined;
-    evaluate_target_aux false ctx target;
+    evaluate_target_aux ~is_fun:true false ctx target;
     ctx.ctx_tmps.(ctx.ctx_tmps_org).value
 
   and evaluate_target (canBlock : bool) (ctx : ctx) (target : Mir.target)
-      (args : Mir.m_access list) : unit =
+      (args : Mir.m_access list) (vsd : Com.variable_space) : unit =
     let rec set_args n vl al =
       match (vl, al) with
       | v :: vl', m_a :: al' -> (
           ctx.ctx_ref.(ctx.ctx_ref_org + n).var <- v;
           match get_access_var ctx (Pos.unmark m_a) with
-          | Some (vsd, ref_var) ->
-              let vsd, ref_var, org = get_var ctx vsd ref_var in
-              ctx.ctx_ref.(ctx.ctx_ref_org + n).var_space <- vsd;
+          | Some (var_space, ref_var, org) ->
+              ctx.ctx_ref.(ctx.ctx_ref_org + n).var_space <- var_space;
               ctx.ctx_ref.(ctx.ctx_ref_org + n).ref_var <- ref_var;
               ctx.ctx_ref.(ctx.ctx_ref_org + n).org <- org;
               set_args (n + 1) vl' al'
           | None -> ())
-      | [], [] -> evaluate_target_aux canBlock ctx target
+      | [], [] ->
+          let vs_id_sav = ctx.ctx_var_space in
+          ctx.ctx_var_space <- vsd.vs_id;
+          evaluate_target_aux ~is_fun:false canBlock ctx target;
+          ctx.ctx_var_space <- vs_id_sav
       | _ -> assert false
     in
     set_args 0 target.target_args args
 
-  and evaluate_target_aux (canBlock : bool) (ctx : ctx) (target : Mir.target) :
-      unit =
+  and evaluate_target_aux ~(is_fun : bool) (canBlock : bool) (ctx : ctx)
+      (target : Mir.target) : unit =
     let sav_target = ctx.ctx_target in
     ctx.ctx_target <- target;
     ctx.ctx_tmps_org <- ctx.ctx_tmps_org + target.target_sz_tmps;
@@ -1179,9 +1292,15 @@ struct
         ctx.ctx_tmps.(i).value <- Undefined)
       target.target_tmp_vars;
     ctx.ctx_ref_org <- ctx.ctx_ref_org + target.target_nb_refs;
-    evaluate_stmts canBlock ctx target.target_prog;
-    ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
-    ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps;
+    let then_ () =
+      ctx.ctx_ref_org <- ctx.ctx_ref_org - target.target_nb_refs;
+      ctx.ctx_tmps_org <- ctx.ctx_tmps_org - target.target_sz_tmps
+    in
+    let () =
+      try evaluate_stmts ~then_ canBlock ctx target.target_prog with
+      | Stop_instruction SKTarget when not is_fun -> ()
+      | Stop_instruction SKFun when is_fun -> ()
+    in
     ctx.ctx_target <- sav_target
 
   let evaluate_program (ctx : ctx) : unit =
@@ -1195,12 +1314,17 @@ struct
         | None ->
             Errors.raise_error "Unable to find main function of Bir program"
       in
+      let vsd = ctx.ctx_prog.program_var_space_def in
       ctx.ctx_target <- main_target;
-      evaluate_target false ctx main_target [];
+      evaluate_target false ctx main_target [] vsd;
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
-    with RuntimeError (e, ctx) ->
-      if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
+    with
+    | RuntimeError (e, ctx) ->
+        if !exit_on_rte then raise_runtime_as_structured e
+        else raise (RuntimeError (e, ctx))
+    | Stop_instruction SKApplication ->
+        (* The only stop never caught by anything else *) ()
+    | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 end
 
 module BigIntPrecision = struct
@@ -1259,7 +1383,8 @@ module RatMfInterp =
     (Mir_number.RationalNumber)
     (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 
-let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
+let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
+    (module S) =
   match (sort, roundops) with
   | RegularFloat, RODefault -> (module FloatDefInterp)
   | RegularFloat, ROMulti -> (module FloatMultInterp)
@@ -1277,7 +1402,8 @@ let get_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : (module S) =
   | Rational, ROMulti -> (module RatMultInterp)
   | Rational, ROMainframe _ -> (module RatMfInterp)
 
-let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
+let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
+    unit =
   begin
     match sort with
     | MPFR prec -> Mpfr.set_default_prec prec
@@ -1298,7 +1424,7 @@ let prepare_interp (sort : Cli.value_sort) (roundops : Cli.round_ops) : unit =
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) :
+    (sort : Config.value_sort) (roundops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
@@ -1313,7 +1439,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
       ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
     in
     let fold _ (var : Com.Var.t) res =
-      if Com.Var.is_given_back var then
+      if Com.Var.is_given_back var || true then
         let litt =
           match Com.Var.cat_var_loc var with
           | LocInput -> default_space.input.(Com.Var.loc_idx var)
@@ -1333,6 +1459,7 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
   (varMap, anoSet)
 
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Cli.value_sort) (roundops : Cli.round_ops) : Com.literal =
+    (sort : Config.value_sort) (roundops : Config.round_ops) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
-  Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  with Stop_instruction _ -> Undefined

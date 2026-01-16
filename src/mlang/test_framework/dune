@@ -4,6 +4,13 @@
  (modules irj_parser)
  (flags --dump --explain --table))
 
+(library
+ (name irj_utils)
+ (public_name mlang.irj_utils)
+ (flags
+  (:standard -open Utils -open M_ir))
+ (libraries m_frontend m_ir utils menhirLib parmap str))
+
 ;; This section deals with the .messages file.
 
 ;; The following rule generates "parserMessages.ml" based on the source file

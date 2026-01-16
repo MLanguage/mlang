@@ -10,3 +10,7 @@
  (package irj_checker)
  (public_name irj_checker)
  (libraries mlang cmdliner dune-build-info))
+
+(documentation
+ (package irj_checker)
+ (mld_files ("index")))

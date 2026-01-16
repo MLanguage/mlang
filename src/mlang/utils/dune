@@ -1,0 +1,4 @@
+(library
+ (public_name mlang.utils)
+ (name utils)
+ (libraries re ANSITerminal cmdliner dune-build-info threads))

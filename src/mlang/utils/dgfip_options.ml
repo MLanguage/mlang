@@ -11,6 +11,71 @@
 
 open Cmdliner
 
+type flags = {
+  (* -m *) annee_revenu : int;
+  (* -P *) flg_correctif : bool;
+  (* flg_correctif true by default, -P makes it false *)
+  (* -R *) flg_iliad : bool;
+  (* also implied by "iliad" in !Cli.application_names; disabled by -U *)
+  (* -R *) flg_pro : bool;
+  (* also implied by "pro" in !Cli.application_names; disabled by -U *)
+  (* -U *) flg_cfir : bool;
+  (* disabled by -R *)
+  (* -b *) flg_gcos : bool;
+  (* -b0 and -b1 ; disabled by -U and -R *)
+  (* -b *) flg_tri_ebcdic : bool;
+  (* -b1 only *)
+  (* -s *) flg_short : bool;
+  (* -r *) flg_register : bool;
+  (* -O *) flg_optim_min_max : bool;
+  (* -X *) flg_extraction : bool;
+  (* -D *) flg_genere_libelle_restituee : bool;
+  (* -S *) flg_controle_separe : bool;
+  (* -I *) flg_controle_immediat : bool;
+  (* unused *)
+  (* -o *) flg_overlays : bool;
+  (* -Z *) flg_colors : bool;
+  (* -L *) flg_ticket : bool;
+  (* -t *) flg_trace : bool;
+  (* -g *) flg_debug : bool;
+  (* also implied by -t *)
+  (* -k *) nb_debug_c : int;
+  (* -x *)
+  xflg : bool;
+      (* Flags to deal with in a particular way : -c compilation mode -l link
+         mode -v specify the variable file (tgv.m) -e specify the error file
+         (err.m) *)
+      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident
+         -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
+         flag_phase -f flg_ench_init -E cvt_file -g flg_debug -a flg_api -T
+         flg_trace_irdata *)
+}
+
+let default_flags =
+  {
+    annee_revenu = 1991;
+    flg_correctif = true;
+    flg_iliad = false;
+    flg_pro = false;
+    flg_cfir = false;
+    flg_gcos = false;
+    flg_tri_ebcdic = false;
+    flg_short = false;
+    flg_register = false;
+    flg_optim_min_max = false;
+    flg_extraction = false;
+    flg_genere_libelle_restituee = false;
+    flg_controle_separe = false;
+    flg_controle_immediat = false;
+    flg_overlays = false;
+    flg_colors = false;
+    flg_ticket = false;
+    flg_trace = false;
+    flg_debug = false;
+    nb_debug_c = 0;
+    xflg = false;
+  }
+
 let income_year = Arg.(value & opt int 1991 & info [ "m" ] ~doc:"Income year")
 
 let iliad_pro =
@@ -97,72 +162,6 @@ let info =
   in
   Cmd.info "mlang --dgfip_options" ~doc ~man
 
-(* Flags inherited from the old compiler *)
-type flags = {
-  (* -m *) annee_revenu : int;
-  (* -P *) flg_correctif : bool;
-  (* flg_correctif true by default, -P makes it false *)
-  (* -R *) flg_iliad : bool;
-  (* also implied by "iliad" in !Cli.application_names; disabled by -U *)
-  (* -R *) flg_pro : bool;
-  (* also implied by "pro" in !Cli.application_names; disabled by -U *)
-  (* -U *) flg_cfir : bool;
-  (* disabled by -R *)
-  (* -b *) flg_gcos : bool;
-  (* -b0 and -b1 ; disabled by -U and -R *)
-  (* -b *) flg_tri_ebcdic : bool;
-  (* -b1 only *)
-  (* -s *) flg_short : bool;
-  (* -r *) flg_register : bool;
-  (* -O *) flg_optim_min_max : bool;
-  (* -X *) flg_extraction : bool;
-  (* -D *) flg_genere_libelle_restituee : bool;
-  (* -S *) flg_controle_separe : bool;
-  (* -I *) flg_controle_immediat : bool;
-  (* unused *)
-  (* -o *) flg_overlays : bool;
-  (* -Z *) flg_colors : bool;
-  (* -L *) flg_ticket : bool;
-  (* -t *) flg_trace : bool;
-  (* -g *) flg_debug : bool;
-  (* also implied by -t *)
-  (* -k *) nb_debug_c : int;
-  (* -x *)
-  xflg : bool;
-      (* Flags to deal with in a particular way : -c compilation mode -l link
-         mode -v specify the variable file (tgv.m) -e specify the error file
-         (err.m) *)
-      (* Other flags, not used in makefiles -h dir_var_h -i flg_ident
-         -K flg_optim_cte -G flg_listing (+genere_cre = FALSE) -p
-         flag_phase -f flg_ench_init -E cvt_file -g flg_debug -a flg_api -T
-         flg_trace_irdata *)
-}
-
-let default_flags =
-  {
-    annee_revenu = 1991;
-    flg_correctif = true;
-    flg_iliad = false;
-    flg_pro = false;
-    flg_cfir = false;
-    flg_gcos = false;
-    flg_tri_ebcdic = false;
-    flg_short = false;
-    flg_register = false;
-    flg_optim_min_max = false;
-    flg_extraction = false;
-    flg_genere_libelle_restituee = false;
-    flg_controle_separe = false;
-    flg_controle_immediat = false;
-    flg_overlays = false;
-    flg_colors = false;
-    flg_ticket = false;
-    flg_trace = false;
-    flg_debug = false;
-    nb_debug_c = 0;
-    xflg = false;
-  }
-
 let handler ~(application_names : string list) (income_year : int)
     (iliad_pro : bool) (cfir : bool) (batch : int option)
     (primitive_only : bool) (extraction : bool) (separate_controls : bool)
@@ -201,7 +200,4 @@ let handler ~(application_names : string list) (income_year : int)
 let process_dgfip_options ~application_names options =
   let options = Array.of_list ("mlang" :: options) in
   let cmd = Cmd.v info (dgfip_t (handler ~application_names)) in
-  let res = Cmd.eval_value ~argv:options cmd in
-  match res with
-  | Ok res -> ( match res with `Ok res -> Some res | _ -> None)
-  | _ -> None
+  Cmd.eval_value ~argv:options cmd

@@ -53,7 +53,7 @@ rule token = parse
 | '<' { LT }
 | ">=" { GTE }
 | "<=" { LTE }
-| '"' [^'"']* '"' as s { STRING s }
+| '"' { string (Buffer.create 16) lexbuf }
 | (['a'-'z' 'A'-'Z' '0'-'9' '_']+ | ['0'-'9']+ '.' ['0'-'9']+) as s {
     match s with
     | "BOOLEEN" -> BOOLEAN
@@ -64,6 +64,7 @@ rule token = parse
     | "REEL" -> REAL
     | "afficher" -> PRINT
     | "afficher_erreur" -> PRINT_ERR
+    | "aiguillage" -> MATCH
     | "ajouter" -> ADD
     | "alias" -> ALIAS
     | "alors" -> THEN
@@ -79,11 +80,13 @@ rule token = parse
     | "calculable" -> COMPUTABLE
     | "calculee" -> COMPUTED
     | "calculer" -> COMPUTE
+    | "cas" -> CASE
     | "categorie" -> CATEGORY
     | "champ_evenement" -> EVENT_FIELD
     | "cible" -> TARGET
     | "const" -> CONST
     | "dans" -> IN
+    | "dans_domaine" -> IN_DOMAIN
     | "discordance" -> DISCORDANCE
     | "domaine" -> DOMAIN
     | "enchaineur" -> CHAINING
@@ -91,7 +94,6 @@ rule token = parse
     | "erreur" -> ERROR
     | "espace" -> SPACE
     | "espace_variables" -> VARIABLE_SPACE
-    | "est_variable" -> IS_VARIABLE
     | "et" -> AND
     | "evenement" -> EVENT
     | "evenements" -> EVENTS
@@ -108,13 +110,15 @@ rule token = parse
     | "informative" -> INFORMATIVE
     | "iterer" -> ITERATE
     | "leve_erreur" -> RAISE_ERROR
+    | "meme_variable" -> SAME_VARIABLE
+    | "nb_anomalies" -> NB_ANOMALIES
     | "nb_bloquantes" -> NB_BLOCKING
     | "nb_categorie" -> NB_CATEGORY
-    | "nb_anomalies" -> NB_ANOMALIES
     | "nb_discordances" -> NB_DISCORDANCES
     | "nb_informatives" -> NB_INFORMATIVES
     | "neant" -> NOTHING
     | "nettoie_erreurs" -> CLEAN_ERRORS
+    | "nettoie_erreurs_finalisees" -> CLEAN_FINALIZED_ERRORS
     | "nom" -> NAME
     | "non" -> NOT
     | "numero_compl" -> COMPL_NUMBER
@@ -136,6 +140,7 @@ rule token = parse
     | "sinon_si" -> ELSEIF
     | "sortie" -> OUTPUT
     | "specialise" -> SPECIALIZE
+    | "stop" -> STOP
     | "tableau" -> TABLE
     | "taille" -> SIZE
     | "trier" -> SORT
@@ -178,3 +183,23 @@ and multiline_comment level = parse
 | '\n' { new_line lexbuf; multiline_comment level lexbuf }
 | _ { multiline_comment level lexbuf }
 
+and string buf = parse
+| '"' { STRING (Buffer.contents buf) }
+| '\\' '"'  { Buffer.add_char buf '"'; string buf lexbuf }
+| '\\' '\\' { Buffer.add_char buf '\\'; string buf lexbuf }
+| '\\' 'n'  { Buffer.add_char buf '\n'; string buf lexbuf }
+| '\\' 't'  { Buffer.add_char buf '\t'; string buf lexbuf }
+| '\\' ' '  { Buffer.add_char buf ' '; string buf lexbuf }
+| '\\' _ as esc {
+    Format.ksprintf Errors.raise_error "Unknown escape: \\'%s' while parsing string %s" esc (Buffer.contents buf)
+  }
+| '\n' {
+    Format.ksprintf Errors.raise_error "Unterminated string literal %S" (Buffer.contents buf)
+  }
+| _ as c {
+    Buffer.add_char buf c;
+    string buf lexbuf
+  }
+| eof {
+    Format.ksprintf Errors.raise_error "Unterminated string literal %S" (Buffer.contents buf)
+  }

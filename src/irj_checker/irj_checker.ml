@@ -14,13 +14,15 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 (** The Irj_checker Module is a simple entry point to use the Mlang IRJ file
-    parser in order to perform syntactic checks on test files or produce other IR
-    test formats.
+    parser in order to perform syntactic checks on test files or produce other
+    IR test formats.
 
-    Usage: irj_checker.exe [--message-format=VAL] <test_file.irj> [transformation-target]*)
+    Usage: irj_checker.exe [--message-format=VAL] <test_file.irj>
+    [transformation-target]*)
 
 open Cmdliner
-open Mlang
+open Irj_utils
+open Utils
 
 type message_format_enum = Human | GNU
 
@@ -36,14 +38,11 @@ let gen_file generator test_data =
   Format.pp_print_newline out_fmt ();
   Format.pp_print_flush out_fmt ()
 
-let irj_checker (f : string) (message_format : message_format_enum)
+let irj_check_file (f : string) (message_format : message_format_enum)
     (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   try
-    if not (Sys.file_exists f && not (Sys.is_directory f)) then
-      Errors.raise_error
-        (Format.asprintf "%s: this path is not a valid file in the filesystem" f);
-    let test_data = Mlang.Irj_file.parse_file f in
+    let test_data = Irj_file.parse_file f in
     let test_data =
       match validation_mode with
       | Primitive ->
@@ -70,11 +69,32 @@ let irj_checker (f : string) (message_format : message_format_enum)
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
   with Errors.StructuredError (msg, pos, kont) ->
     (match message_format with
-    | Human -> Cli.error_print "%a" Errors.format_structured_error
+    | Human ->
+        Cli.error_print "There has been an error in %S: %a" f
+          Errors.format_structured_error
     | GNU -> Format.eprintf "%a" Errors.format_structured_error_gnu_format)
       (msg, pos);
     (match kont with None -> () | Some kont -> kont ());
     exit 123
+
+let rec irj_checker (f : string) (message_format : message_format_enum)
+    (validation_mode : validation_mode_enum)
+    (transform_target : transformation_target) : unit =
+  if not (Sys.file_exists f) then (
+    Cli.error_print "%s: this path is not a valid file in the filesystem" f;
+    exit 124);
+  if Sys.is_directory f then
+    Array.iter
+      (fun sub ->
+        irj_checker (Filename.concat f sub) message_format validation_mode
+          transform_target)
+      (Sys.readdir f)
+  else irj_check_file f message_format validation_mode transform_target
+
+let irj_checker (f : string) (message_format : message_format_enum)
+    (validation_mode : validation_mode_enum)
+    (transform_target : transformation_target) : unit =
+  irj_checker f message_format validation_mode transform_target
 
 let validation_mode_opt =
   [ ("strict", Strict); ("corrective", Corrective); ("primitive", Primitive) ]

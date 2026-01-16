@@ -15,21 +15,41 @@ MUSL_HOME?=/usr/local/musl
 
 MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
-SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
+SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
 # Add a TESTS_DIR for 2024 when available
-ifeq ($(filter $(YEAR), 2024), $(YEAR))
-	#$(warning WARNING: the source M files and fuzzer tests have not yet been published for year: $(YEAR). Should you choose to provide your own source files, you can create a directory ir-calcul/M_SVN/$(YEAR) and put them in there)
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
+ifeq ($(filter $(YEAR), 2024 2025), $(YEAR))
+	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
+	SOURCE_EXT_FILES?=\
+		$(SOURCE_EXT_DIR)/cibles.m \
+		$(SOURCE_EXT_DIR)/codes_1731.m \
+		$(SOURCE_EXT_DIR)/commence_par_5.m \
+		$(SOURCE_EXT_DIR)/commence_par_7.m \
+		$(SOURCE_EXT_DIR)/commence_par_H.m \
+		$(SOURCE_EXT_DIR)/correctif.m \
+		$(SOURCE_EXT_DIR)/main.m
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-else ifeq ($(filter $(YEAR), 2019 2020 2021 2022 2023), $(YEAR))
+else ifeq ($(filter $(YEAR), 2022 2023), $(YEAR))
+	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+	SOURCE_EXT_FILES?=\
+		$(SOURCE_EXT_DIR)/cibles.m \
+		$(SOURCE_EXT_DIR)/codes_1731.m \
+		$(SOURCE_EXT_DIR)/commence_par_5.m \
+		$(SOURCE_EXT_DIR)/commence_par_7.m \
+		$(SOURCE_EXT_DIR)/commence_par_H.m \
+		$(SOURCE_EXT_DIR)/correctif.m \
+		$(SOURCE_EXT_DIR)/main.m
+	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 2018 2019 2020 2021), $(YEAR))
 	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
 else ifeq ($(filter $(YEAR), 0), $(YEAR))
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+	SOURCE_FILES?=#$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
 	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
-    $(warning WARNING: there is no default configuration for year: $(YEAR))
-    $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+	$(warning WARNING: there is no default configuration for year: $(YEAR))
+	$(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
 ##################################################
@@ -67,9 +87,11 @@ endif
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
-DRIVER_DIR?=ml_driver
-# Driver sources for tax calculator (must be manually ordered for OCaml compiler)
-DRIVER_FILES?=irdata.c stubs.c common.ml m.ml read_test.ml main.ml
+DRIVER_DIR?=c_driver
+# Driver sources for tax calculator
+DRIVER_H_FILES?=aide.h chaine.h commun.h fichiers.h format.h ida.h irj.h liste.h mem.h options.h traitement.h utils.h
+DRIVER_C_FILES?=aide.c chaine.c commun.c fichiers.c format.c ida.c irdata.c irj.c liste.c main.c mem.c options.c traitement.c utils.c
+DRIVER_FILES?=$(DRIVER_H_FILES) $(DRIVER_C_FILES)
 
 # Flag to disable binary dump comparison
 NO_BINARY_COMPARE?=1
@@ -108,3 +130,5 @@ MAKE_DGFIP=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$
 
 MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_DIR)/$(DGFIP_DIR)/calc ROOT_DIR="$(ROOT_DIR)"
 
+IRJ_BIN=irj_checker
+IRJ_TESTS_DIRS?=tests/2019 tests/2020 tests/2022 tests/2023

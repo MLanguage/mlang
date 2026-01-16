@@ -39,7 +39,9 @@ val new_local : unit -> local_var
 
     would turn into
 
-    {[ mult (lit 0.5) (plus (local_var x) (local_var y)) ]}
+    {[
+      mult (lit 0.5) (plus (local_var x) (local_var y))
+    ]}
 
     where [x] and [y] are previously defined {!local_var}s *)
 
@@ -116,7 +118,8 @@ val ite : constr -> constr -> constr -> constr
 (** {2 Decoupled expressions} *)
 
 (** While {!constr} is the expression language for decoupled values, the
-    following represents complete and optimized expressions for M computations *)
+    following represents complete and optimized expressions for M computations
+*)
 
 type expression_composition = {
   set_vars : (dflag * string * constr) list;
@@ -139,7 +142,8 @@ type t
 (** Decoupled expression type. Closed representation of a computation. *)
 
 val is_always_true : t -> bool
-(** Tells if the expression [t] reprensents a value statically different to zero *)
+(** Tells if the expression [t] reprensents a value statically different to zero
+*)
 
 type local_decls
 (** Representation of local variables existing in an expression *)

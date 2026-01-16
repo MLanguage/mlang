@@ -3,3 +3,10 @@
 (menhir
  (modules mparser)
  (flags --explain))
+
+(library
+ (public_name mlang.frontend)
+ (name m_frontend)
+ (flags
+  (:standard -open Utils -open M_ir))
+ (libraries utils m_ir))

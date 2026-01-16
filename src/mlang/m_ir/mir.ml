@@ -113,16 +113,16 @@ let find_var_by_name (p : program) (name : string Pos.marked) : Com.Var.t =
     with Not_found ->
       Errors.raise_spanned_error "unknown variable" (Pos.get name))
 
-let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
-    'var Com.expression Pos.marked =
+let rec expand_functions_expr (p : program) (e : 'var Com.expression Pos.marked)
+    : 'var Com.expression Pos.marked =
   let open Com in
   match Pos.unmark e with
   | TestInSet (positive, e0, values) ->
-      let new_e0 = expand_functions_expr e0 in
+      let new_e0 = expand_functions_expr p e0 in
       let new_values =
         let map = function
           | Com.VarValue m_a ->
-              let a' = expand_functions_access (Pos.unmark m_a) in
+              let a' = expand_functions_access p (Pos.unmark m_a) in
               Com.VarValue (Pos.same a' m_a)
           | value -> value
         in
@@ -130,23 +130,23 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       in
       Pos.same (TestInSet (positive, new_e0, new_values)) e
   | Comparison (op, e1, e2) ->
-      let new_e1 = expand_functions_expr e1 in
-      let new_e2 = expand_functions_expr e2 in
+      let new_e1 = expand_functions_expr p e1 in
+      let new_e2 = expand_functions_expr p e2 in
       Pos.same (Comparison (op, new_e1, new_e2)) e
   | Binop (op, e1, e2) ->
-      let new_e1 = expand_functions_expr e1 in
-      let new_e2 = expand_functions_expr e2 in
+      let new_e1 = expand_functions_expr p e1 in
+      let new_e2 = expand_functions_expr p e2 in
       Pos.same (Binop (op, new_e1, new_e2)) e
   | Unop (op, e1) ->
-      let new_e1 = expand_functions_expr e1 in
+      let new_e1 = expand_functions_expr p e1 in
       Pos.same (Unop (op, new_e1)) e
   | Conditional (e1, e2, e3) ->
-      let new_e1 = expand_functions_expr e1 in
-      let new_e2 = expand_functions_expr e2 in
-      let new_e3 = Option.map expand_functions_expr e3 in
+      let new_e1 = expand_functions_expr p e1 in
+      let new_e2 = expand_functions_expr p e2 in
+      let new_e3 = Option.map (expand_functions_expr p) e3 in
       Pos.same (Conditional (new_e1, new_e2, new_e3)) e
   | Var access ->
-      let e' = Var (expand_functions_access access) in
+      let e' = Var (expand_functions_access p access) in
       Pos.same e' e
   | Literal _ -> e
   | FuncCall (Pos.Mark (SumFunc, _), args) ->
@@ -154,13 +154,13 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
         List.fold_left
           (fun acc_opt arg ->
             match acc_opt with
-            | None -> Some (Pos.unmark (expand_functions_expr arg))
+            | None -> Some (Pos.unmark (expand_functions_expr p arg))
             | Some acc ->
                 Some
                   (Binop
                      ( Pos.same Com.Add e,
                        Pos.same acc e,
-                       expand_functions_expr arg )))
+                       expand_functions_expr p arg )))
           None args
       in
       let expr =
@@ -171,55 +171,80 @@ let rec expand_functions_expr (e : 'var Com.expression Pos.marked) :
       Pos.same
         (Comparison
            ( Pos.same Com.Gt e,
-             expand_functions_expr arg,
+             expand_functions_expr p arg,
              Pos.same (Literal (Float 0.0)) e ))
         e
   | FuncCall (Pos.Mark (GtezFunc, _), [ arg ]) ->
       Pos.same
         (Comparison
            ( Pos.same Com.Gte e,
-             expand_functions_expr arg,
+             expand_functions_expr p arg,
              Pos.same (Literal (Float 0.0)) e ))
         e
   | FuncCall ((Pos.Mark ((MinFunc | MaxFunc), _) as fn), [ arg1; arg2 ]) ->
-      let earg1 = expand_functions_expr arg1 in
-      let earg2 = expand_functions_expr arg2 in
+      let earg1 = expand_functions_expr p arg1 in
+      let earg2 = expand_functions_expr p arg2 in
       Pos.same (FuncCall (fn, [ earg1; earg2 ])) e
   | FuncCall ((Pos.Mark (AbsFunc, _) as fn), [ arg ]) ->
-      Pos.same (FuncCall (fn, [ expand_functions_expr arg ])) e
+      Pos.same (FuncCall (fn, [ expand_functions_expr p arg ])) e
   | FuncCall (Pos.Mark (NullFunc, _), [ arg ]) ->
       Pos.same
         (Comparison
            ( Pos.same Com.Eq e,
-             expand_functions_expr arg,
+             expand_functions_expr p arg,
              Pos.same (Literal (Float 0.0)) e ))
         e
   | FuncCall (fn, args) ->
-      Pos.same (FuncCall (fn, List.map expand_functions_expr args)) e
+      Pos.same (FuncCall (fn, List.map (expand_functions_expr p) args)) e
   | Attribut (m_a, attr) ->
-      let a' = expand_functions_access (Pos.unmark m_a) in
+      let a' = expand_functions_access p (Pos.unmark m_a) in
       let e' = Attribut (Pos.same a' m_a, attr) in
       Pos.same e' e
   | Size m_a ->
-      let a' = expand_functions_access (Pos.unmark m_a) in
+      let a' = expand_functions_access p (Pos.unmark m_a) in
       let e' = Size (Pos.same a' m_a) in
       Pos.same e' e
-  | IsVariable (m_a, name) ->
-      let a' = expand_functions_access (Pos.unmark m_a) in
-      let e' = IsVariable (Pos.same a' m_a, name) in
+  | Type (m_a, m_typ) ->
+      let a' = expand_functions_access p (Pos.unmark m_a) in
+      let e' = Type (Pos.same a' m_a, m_typ) in
       Pos.same e' e
+  | SameVariable (m_a0, m_a1) ->
+      let a0' = expand_functions_access p (Pos.unmark m_a0) in
+      let a1' = expand_functions_access p (Pos.unmark m_a1) in
+      let e' = SameVariable (Pos.same a0' m_a0, Pos.same a1' m_a1) in
+      Pos.same e' e
+  | InDomain (m_a, cvm) ->
+      let a' = expand_functions_access p (Pos.unmark m_a) in
+      let rec fold cv pos e_opt =
+        if Com.CatVar.compare cv Com.CatVar.all_inputs = 0 then
+          let cv_input =
+            p.program_var_categories
+            |> Com.CatVar.Map.filter (fun k _ -> Com.CatVar.is_input k)
+            |> Com.CatVar.Map.map (fun _ -> Pos.none)
+          in
+          Com.CatVar.Map.fold fold cv_input e_opt
+        else
+          let e'' = InDomain (Pos.same a' m_a, Com.CatVar.Map.one cv pos) in
+          match e_opt with
+          | None -> Some (Pos.same e'' e)
+          | Some m_e' ->
+              Some
+                (Pos.same (Binop (Pos.same Com.Or e, m_e', Pos.same e'' e)) e)
+      in
+      Option.get @@ Com.CatVar.Map.fold fold cvm None
   | NbAnomalies | NbDiscordances | NbInformatives | NbBloquantes
   | FuncCallLoop _ | Loop _ | NbCategory _ ->
       e
 
-and expand_functions_access (access : 'var Com.access) : 'var Com.access =
+and expand_functions_access (p : program) (access : 'var Com.access) :
+    'var Com.access =
   match access with
   | VarAccess _ -> access
   | TabAccess (m_sp_opt, m_v, i) ->
-      let i' = expand_functions_expr i in
+      let i' = expand_functions_expr p i in
       TabAccess (m_sp_opt, m_v, i')
   | FieldAccess (m_sp_opt, v_i, f, i_f) ->
-      let m_i = expand_functions_expr v_i in
+      let m_i = expand_functions_expr p v_i in
       FieldAccess (m_sp_opt, m_i, f, i_f)
 
 let expand_functions (p : program) : program =
@@ -228,27 +253,27 @@ let expand_functions (p : program) : program =
     let rec map_instr m_instr =
       match Pos.unmark m_instr with
       | Affectation (Pos.Mark (SingleFormula (VarDecl (m_a, v_expr)), pos)) ->
-          let m_expr = expand_functions_expr v_expr in
+          let m_expr = expand_functions_expr p v_expr in
           let m_a' =
-            let a' = expand_functions_access (Pos.unmark m_a) in
+            let a' = expand_functions_access p (Pos.unmark m_a) in
             Pos.same a' m_a
           in
           let form = SingleFormula (VarDecl (m_a', m_expr)) in
           Pos.same (Affectation (Pos.mark form pos)) m_instr
       | Affectation
           (Pos.Mark (SingleFormula (EventFieldRef (v_idx, f, i, v_id)), pos)) ->
-          let m_idx = expand_functions_expr v_idx in
+          let m_idx = expand_functions_expr p v_idx in
           let form = SingleFormula (EventFieldRef (m_idx, f, i, v_id)) in
           Pos.same (Affectation (Pos.mark form pos)) m_instr
       | Affectation (Pos.Mark (MultipleFormulaes _, _)) -> assert false
       | IfThenElse (i, t, e) ->
-          let i' = expand_functions_expr i in
+          let i' = expand_functions_expr p i in
           let t' = List.map map_instr t in
           let e' = List.map map_instr e in
           Pos.same (IfThenElse (i', t', e')) m_instr
       | WhenDoElse (wdl, ed) ->
           let map_wdl (expr, dl, pos) =
-            let expr' = expand_functions_expr expr in
+            let expr' = expand_functions_expr p expr in
             let dl' = List.map map_instr dl in
             (expr', dl', pos)
           in
@@ -265,14 +290,14 @@ let expand_functions (p : program) : program =
               (fun m_arg ->
                 match Pos.unmark m_arg with
                 | Com.PrintAccess (info, m_a) ->
-                    let a' = expand_functions_access (Pos.unmark m_a) in
+                    let a' = expand_functions_access p (Pos.unmark m_a) in
                     let m_a' = Pos.same a' m_a in
                     Pos.same (Com.PrintAccess (info, m_a')) m_arg
                 | Com.PrintIndent e ->
-                    let e' = expand_functions_expr e in
+                    let e' = expand_functions_expr p e in
                     Pos.same (Com.PrintIndent e') m_arg
                 | Com.PrintExpr (e, mi, ma) ->
-                    let e' = expand_functions_expr e in
+                    let e' = expand_functions_expr p e in
                     Pos.same (Com.PrintExpr (e', mi, ma)) m_arg
                 | Com.PrintString _ -> m_arg)
               pr_args
@@ -282,7 +307,7 @@ let expand_functions (p : program) : program =
           let var_params' =
             List.map
               (fun (cats, e, m_sp_opt) ->
-                let e' = expand_functions_expr e in
+                let e' = expand_functions_expr p e in
                 (cats, e', m_sp_opt))
               var_params
           in
@@ -292,9 +317,9 @@ let expand_functions (p : program) : program =
           let var_intervals' =
             List.map
               (fun (e0, e1, step) ->
-                let e0' = expand_functions_expr e0 in
-                let e1' = expand_functions_expr e1 in
-                let step' = expand_functions_expr step in
+                let e0' = expand_functions_expr p e0 in
+                let e1' = expand_functions_expr p e1 in
+                let step' = expand_functions_expr p step in
                 (e0', e1', step'))
               var_intervals
           in
@@ -302,12 +327,12 @@ let expand_functions (p : program) : program =
           Pos.same (Iterate_values (v_id, var_intervals', instrs')) m_instr
       | Restore (vars, var_params, evts, evtfs, instrs) ->
           let var_params' =
-            let map (v, cs, e, s) = (v, cs, expand_functions_expr e, s) in
+            let map (v, cs, e, s) = (v, cs, expand_functions_expr p e, s) in
             List.map map var_params
           in
-          let evts' = List.map expand_functions_expr evts in
+          let evts' = List.map (expand_functions_expr p) evts in
           let evtfs' =
-            List.map (fun (v, e) -> (v, expand_functions_expr e)) evtfs
+            List.map (fun (v, e) -> (v, expand_functions_expr p e)) evtfs
           in
           let instrs' = List.map map_instr instrs in
           let instr' = Restore (vars, var_params', evts', evtfs', instrs') in
@@ -316,21 +341,27 @@ let expand_functions (p : program) : program =
           let sort' =
             match sort with
             | Some (var0, var1, expr) ->
-                let expr' = expand_functions_expr expr in
+                let expr' = expand_functions_expr p expr in
                 Some (var0, var1, expr')
             | None -> None
           in
           let filter' =
             match filter with
             | Some (var, expr) ->
-                let expr' = expand_functions_expr expr in
+                let expr' = expand_functions_expr p expr in
                 Some (var, expr')
             | None -> None
           in
-          let add' = Option.map expand_functions_expr add in
+          let add' = Option.map (expand_functions_expr p) add in
           let instrs' = List.map map_instr instrs in
           Pos.same (ArrangeEvents (sort', filter', add', instrs')) m_instr
-      | RaiseError _ | CleanErrors | ExportErrors | FinalizeErrors -> m_instr
+      | Switch (e, l) ->
+          let e' = expand_functions_expr p e in
+          let l' = List.map (fun (c, l) -> (c, List.map map_instr l)) l in
+          Pos.same (Switch (e', l')) m_instr
+      | RaiseError _ | CleanErrors | CleanFinalizedErrors | ExportErrors
+      | FinalizeErrors | Stop _ ->
+          m_instr
       | ComputeDomain _ | ComputeChaining _ | ComputeVerifs _ -> assert false
     in
     StrMap.map

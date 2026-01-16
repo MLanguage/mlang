@@ -87,6 +87,11 @@ let parse_literal sloc (s : string) : Com.literal =
   try Com.Float (float_of_string s)
   with Failure _ -> E.raise_spanned_error "invalid literal" (mk_position sloc)
 
+let parse_to_atom (v : parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
+  match v with
+  | ParseVar v -> AtomVar (Pos.mark v pos)
+  | ParseInt v -> AtomLiteral (Float (float_of_int v))
+
 let parse_atom sloc (s : string) : Com.m_var_name Com.atom =
   try Com.AtomLiteral (Com.Float (float_of_string s))
   with Failure _ ->
@@ -121,64 +126,6 @@ let parse_function_name f_name =
     | fn -> Func fn
   in
   Pos.map map f_name
-
-(* # parse_string #
- * Takes a litteral string and produces a String.t of the corresponding chars
- *)
-let parse_string (s : string) : string =
-  (* we remove the quotes (first and last chars) *)
-  let s = Re.Str.string_after s 1 in
-  let s = Re.Str.string_before s (String.length s - 1) in
-  let l = String.length s in
-  let buf = Buffer.create l in
-  (* We decode litteral encoded chars (i.e. "\t" "\xA0", etc.) *)
-  let rec aux = function
-    | i when i >= l -> Buffer.contents buf
-    | i -> begin
-        let c = s.[i] in
-        match c with
-        | '\\' -> (
-            let i = i + 1 in
-            if i >= l then aux i
-            else
-              let c = s.[i] in
-              match c with
-              | 'n' ->
-                  Buffer.add_char buf '\n';
-                  aux (i + 1)
-              | 't' ->
-                  Buffer.add_char buf '\t';
-                  aux (i + 1)
-              | '"' ->
-                  Buffer.add_char buf '"';
-                  aux (i + 1)
-              | '\\' ->
-                  Buffer.add_char buf '\\';
-                  aux (i + 1)
-              | 'x' | 'X' -> (
-                  try
-                    let to_int i =
-                      if i >= l then raise Not_found
-                      else
-                        let c = s.[i] in
-                        match c with
-                        | '0' .. '9' -> int_of_char c - int_of_char '0'
-                        | 'a' .. 'f' -> int_of_char c - int_of_char 'a' + 10
-                        | 'A' .. 'F' -> int_of_char c - int_of_char 'A' + 10
-                        | _ -> raise Not_found
-                    in
-                    let c1 = to_int (i + 1) in
-                    let c0 = to_int (i + 2) in
-                    Buffer.add_char buf (char_of_int ((c1 * 16) + c0));
-                    aux (i + 3)
-                  with Not_found -> aux (i + 3))
-              | _ -> aux (i + 1))
-        | c ->
-            Buffer.add_char buf c;
-            aux (i + 1)
-      end
-  in
-  aux 0
 
 let parse_index_format (m_s : string Pos.marked) : string Pos.marked =
   let s = Pos.unmark m_s in

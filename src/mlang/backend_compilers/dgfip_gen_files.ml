@@ -15,7 +15,7 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 let open_file filename =
-  let folder = Filename.dirname !Cli.output_file in
+  let folder = Filename.dirname !Config.output_file in
   let oc = open_out (Filename.concat folder filename) in
   let fmt = Format.formatter_of_out_channel oc in
   (oc, fmt)
@@ -124,6 +124,13 @@ let gen_table_varinfos (cprog : Mir.program) flags =
 #include "mlang.h"
 
 |};
+  Pp.fpr fmt "char *espaces_variables[NB_ESPACES_VARIABLES + 1] = {@\n";
+  IntMap.iter
+    (fun _ (vsd : Com.variable_space) ->
+      let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "  \"%s\",@\n" sp)
+    cprog.program_var_spaces_idx;
+  Pp.fpr fmt "  NULL@\n};@\n@\n";
   let attrs =
     Com.CatVar.Map.fold
       (fun _ Com.CatVar.{ attributs; _ } res ->
@@ -270,7 +277,7 @@ typedef struct S_varinfo_map {
     attrs
 
 let is_valid_app apps =
-  StrMap.exists (fun app _ -> List.mem app !Cli.application_names) apps
+  StrMap.exists (fun app _ -> List.mem app !Config.application_names) apps
 
 let gen_erreurs_c fmt flags (cprog : Mir.program) =
   Pp.fpr fmt {|/****** LICENCE CECIL *****/
@@ -347,7 +354,7 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
     FLG_TRACE_IRDATA\n"; *)
   if flags.flg_debug then Pp.fpr fmt "#define FLG_DEBUG\n";
   Pp.fpr fmt "#define NB_DEBUG_C  %d\n" flags.nb_debug_c;
-  Pp.fpr fmt "#define EPSILON %f\n" !Cli.comparison_error_margin;
+  Pp.fpr fmt "#define EPSILON %f\n" !Config.comparison_error_margin;
   let count loc =
     StrMap.fold
       (fun _ var nb ->
@@ -366,8 +373,8 @@ let gen_conf_h fmt (cprog : Mir.program) flags =
 let gen_dbg fmt =
   Pp.fpr fmt
     {|int change_couleur(int couleur, int typographie);
-int get_couleur();
-int get_typo();
+int get_couleur(void);
+int get_typo(void);
     
 #ifdef FLG_TRACE
 extern int niv_trace;
@@ -474,6 +481,7 @@ typedef struct S_ref_var T_ref_var;
     (IntMap.cardinal cprog.program_var_spaces_idx);
   Pp.fpr fmt "#define ESPACE_PAR_DEFAUT %d@\n@\n"
     cprog.program_var_space_def.vs_id;
+  Pp.fpr fmt "extern char *espaces_variables[];@\n@\n";
   Pp.fpr fmt
     {|
 struct S_irdata {
@@ -524,6 +532,7 @@ struct S_irdata {
   int nb_events;
   T_print_context ctx_pr_out;
   T_print_context ctx_pr_err;
+  char abandon;   
 };
 
 typedef struct S_irdata T_irdata;
@@ -587,13 +596,17 @@ extern int size_varinfo(T_varinfo *info, char *res_def, double *res_val);
 #define TYPE_REEL 6
 
 extern void add_erreur(T_irdata *irdata, T_erreur *erreur, char *code);
-extern void free_erreur();
+#ifdef ANCIEN
+extern void free_erreur(void);
+#else
+extern void free_erreur(T_irdata *irdata);
+#endif /* ANCIEN */
 
 #define fabs(a) (((a) < 0.0) ? -(a) : (a))
 #define min(a,b)	(((a) <= (b)) ? (a) : (b))
 #define max(a,b)	(((a) >= (b)) ? (a) : (b))
 |};
-  Pp.fpr fmt "#define EPSILON %f" !Cli.comparison_error_margin;
+  Pp.fpr fmt "#define EPSILON %f" !Config.comparison_error_margin;
   Pp.fpr fmt
     {|
 #define GT_E(a,b) ((a) > (b) + EPSILON)
@@ -719,18 +732,19 @@ extern int nb_anomalies(T_irdata *irdata);
 extern int nb_bloquantes(T_irdata *irdata);
 extern void nettoie_erreur _PROTS((T_irdata *irdata ));
 extern void finalise_erreur _PROTS((T_irdata *irdata ));
+extern void nettoie_erreurs_finalisees _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
 
 extern T_irdata *cree_irdata(void);
-extern void init_saisie(T_irdata *irdata);
-extern void init_calculee(T_irdata *irdata);
-extern void init_base(T_irdata *irdata);
+extern void init_saisie(T_irdata *irdata, int sp);
+extern void init_calculee(T_irdata *irdata, int sp);
+extern void init_base(T_irdata *irdata, int sp);
 extern void init_erreur(T_irdata *irdata);
 extern void detruis_irdata(T_irdata *irdata);
 extern void set_max_bloquantes(T_irdata *irdata, const int max_ano);
-extern void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst);
-extern void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst);
-extern void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_saisie(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_calculee(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_base(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
 extern void ecris_saisie(T_irdata *irdata, int idx, char def, double val);
 extern void ecris_calculee(T_irdata *irdata, int idx, char def, double val);
 extern void ecris_base(T_irdata *irdata, int idx, char def, double val);
@@ -757,6 +771,7 @@ extern char *lis_erreur_nom(T_erreur *err);
 extern int lis_erreur_type(T_erreur *err);
 extern int nb_evenements(T_irdata *irdata);
 
+extern T_varinfo *cherche_varinfo_statique(const char *nom);
 extern T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom);
 
 extern char lis_varinfo(
@@ -817,15 +832,21 @@ extern void pr_var(T_print_context *pr_ctx, T_irdata *irdata, int var_space, cha
 extern void pr_out_var(T_irdata *irdata, int var_space, char *nom);
 extern void pr_err_var(T_irdata *irdata, int var_space, char *nom);
 
-extern char est_variable(
-  T_varinfo *info, char *nomCmp, char *res_def, double *res_val
+extern char meme_variable(
+  T_varinfo *info0, T_varinfo *info1, char *res_def, double *res_val
 );
 
-extern char est_variable_tabaccess(
+extern char dans_domaine(
+  T_varinfo *info, int id_cv, char *res_def, double *res_val
+);
+
+extern char dans_domaine_tabaccess(
   T_irdata *irdata, int idx_tab,
   char idx_def, double idx_val,
-  char *nomCmp, char *res_def, double *res_val
+  int id_cv, char *res_def, double *res_val
 );
+
+extern char est_type(T_varinfo *info, int type, char *res_def, double *res_val);
 
 |}
 
@@ -900,11 +921,11 @@ int change_couleur (int couleur,int typographie) {
 	return 0;
 }
 
-int get_couleur () {
+int get_couleur (void) {
 	return color ;
 }
 
-int get_typo () {
+int get_typo (void) {
 	return typo ;
 }
 
@@ -1028,7 +1049,7 @@ void free_keep_discord(T_irdata *irdata) {
 
 /* Libération de la mémoire allouée par la fonction add_erreur */
 #ifdef ANCIEN
-void free_erreur() {}
+void free_erreur(void) {}
 #else
 void free_erreur(T_irdata *irdata) {
   init_erreur(irdata);
@@ -1108,11 +1129,15 @@ int multimax_varinfo(
   double val;
   *res_def = 0;
   *res_val = 0.0;
-  if (irdata == NULL || info == NULL || info->tab_idx < 0 || nb_def == 0) return *res_def;
-  for (i = 0; i < nb && i < info->size; i++) {
-    lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
-    if (def == 1) *res_def = 1;
-    if (val >= *res_val) *res_val = val;
+  if (irdata == NULL || info == NULL || nb_def == 0) return *res_def;
+  if (info->tab_idx >= 0) {
+    for (i = 0; i < nb && i < info->size; i++) {
+      lis_tabaccess(irdata, var_space, info->tab_idx, 1, (double)i, &def, &val);
+      if (def == 1) *res_def = 1;
+      if (val >= *res_val) *res_val = val;
+    }
+  } else if (nb >= 1) {
+    lis_varinfo(irdata, var_space, info, res_def, res_val);
   }
   return *res_def;
 }
@@ -1286,9 +1311,11 @@ static void init_tab(char *p_def, double *p_val, int nb) {
   memset(p_def, 0, nb);
 }
 
-void init_saisie(T_irdata *irdata) {
+void init_saisie(T_irdata *irdata, int sp) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_saisie, irdata->saisie, TAILLE_SAISIE);
+  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
+  if (irdata->var_spaces[sp].saisie == NULL) return;
+  init_tab(irdata->var_spaces[sp].def_saisie, irdata->var_spaces[sp].saisie, TAILLE_SAISIE);
 }
 
 void init_saisie_espace(char *def, double *val) {
@@ -1296,9 +1323,11 @@ void init_saisie_espace(char *def, double *val) {
   init_tab(def, val, TAILLE_SAISIE);
 }
 
-void init_calculee(T_irdata *irdata) {
+void init_calculee(T_irdata *irdata, int sp) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_calculee, irdata->calculee, TAILLE_CALCULEE);
+  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
+  if (irdata->var_spaces[sp].calculee == NULL) return;
+  init_tab(irdata->var_spaces[sp].def_calculee, irdata->var_spaces[sp].calculee, TAILLE_CALCULEE);
 }
 
 void init_calculee_espace(char *def, double *val) {
@@ -1306,9 +1335,11 @@ void init_calculee_espace(char *def, double *val) {
   init_tab(def, val, TAILLE_CALCULEE);
 }
 
-void init_base(T_irdata *irdata) {
+void init_base(T_irdata *irdata, int sp) {
   if (irdata == NULL) return;
-  init_tab(irdata->def_base, irdata->base, TAILLE_BASE);
+  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
+  if (irdata->var_spaces[sp].base == NULL) return;
+  init_tab(irdata->var_spaces[sp].def_base, irdata->var_spaces[sp].base, TAILLE_BASE);
 }
 
 void init_base_espace(char *def, double *val) {
@@ -1485,6 +1516,7 @@ T_irdata *cree_irdata(void) {
   irdata->ctx_pr_err.std = stderr;
   irdata->ctx_pr_err.indent = 0;
   irdata->ctx_pr_err.is_newline = 1;
+  irdata->abandon = 0;
   return irdata;
 
 erreur_cree_irdata:
@@ -1501,22 +1533,61 @@ void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
   }
 }
 
-void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
+void recopie_saisie(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->saisie, irdata_src->saisie, TAILLE_SAISIE * sizeof(double));
-  memcpy(irdata_dst->def_saisie, irdata_src->def_saisie, TAILLE_SAISIE);
+  if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
+  if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
+  if (irdata_src->var_spaces[sp_src].saisie == NULL || irdata_dst->var_spaces[sp_dst].saisie == NULL) {
+    return;
+  }
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].saisie,
+    irdata_src->var_spaces[sp_src].saisie,
+    TAILLE_SAISIE * sizeof(double)
+  );
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].def_saisie,
+    irdata_src->var_spaces[sp_src].def_saisie,
+    TAILLE_SAISIE
+  );
 }
 
-void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
+void recopie_calculee(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->calculee, irdata_src->calculee, TAILLE_CALCULEE * sizeof(double));
-  memcpy(irdata_dst->def_calculee, irdata_src->def_calculee, TAILLE_CALCULEE);
+  if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
+  if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
+  if (irdata_src->var_spaces[sp_src].calculee == NULL || irdata_dst->var_spaces[sp_dst].calculee == NULL) {
+    return;
+  }
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].calculee,
+    irdata_src->var_spaces[sp_src].calculee,
+    TAILLE_CALCULEE * sizeof(double)
+  );
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].def_calculee,
+    irdata_src->var_spaces[sp_src].def_calculee,
+    TAILLE_CALCULEE
+  );
 }
 
-void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
+void recopie_base(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
-  memcpy(irdata_dst->base, irdata_src->base, TAILLE_BASE * sizeof(double));
-  memcpy(irdata_dst->def_base, irdata_src->def_base, TAILLE_BASE);
+  if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
+  if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
+  if (irdata_src->var_spaces[sp_src].base == NULL || irdata_dst->var_spaces[sp_dst].base == NULL) {
+    return;
+  }
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].base,
+    irdata_src->var_spaces[sp_src].base,
+    TAILLE_BASE * sizeof(double)
+  );
+  memcpy(
+    irdata_dst->var_spaces[sp_dst].def_base,
+    irdata_src->var_spaces[sp_src].def_base,
+    TAILLE_BASE
+  );
 }
 
 static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
@@ -1669,6 +1740,30 @@ int lis_erreur_type(T_erreur *err) {
 int nb_evenements(T_irdata *irdata) {
   if (irdata == NULL) return 0;
   return irdata->nb_events;
+}
+
+T_varinfo *cherche_varinfo_statique(const char *nom) {
+  T_varinfo_map *map = NULL;
+  int res = -1;
+  int inf = 0;
+  int sup = NB_variable + NB_saisie;
+  int millieu = 0;
+
+  if (nom == NULL) return NULL;
+  while ((res != 0) && (inf < sup)) {
+    millieu = (inf + sup) / 2;
+    map = &(varinfo[millieu]);
+    res = strcmp(nom, map->name);
+    if (res < 0) {
+      sup = millieu;
+    } else if (res > 0) {
+      inf = millieu + 1;
+    }
+  }
+  if (res == 0) {
+    return map->info;
+  }
+  return NULL;
 }
 
 T_varinfo *cherche_varinfo(T_irdata *irdata, const char *nom) {
@@ -2047,15 +2142,21 @@ void pr_err_var(T_irdata *irdata, int var_space, char *nom) {
   pr_var(&(irdata->ctx_pr_err), irdata, var_space, nom);
 }
 
-char est_variable(T_varinfo *info, char *nomCmp, char *res_def, double *res_val) {
+char meme_variable(T_varinfo *info0, T_varinfo *info1, char *res_def, double *res_val) {
   *res_def = 1;
-  if (info == NULL || nomCmp == NULL) {
+  if (info0 == NULL || info1 == NULL) {
     *res_val = 0.0;
     return *res_def;
   }
   if (
-    strcmp(info->name, nomCmp) == 0
-    || (info->alias != NULL && strcmp(info->alias, nomCmp) == 0)
+    strcmp(info0->name, info1->name) == 0
+    || (
+      info0->alias != NULL
+      && info1->alias != NULL
+      && strcmp(info0->alias, "") != 0
+      && strcmp(info1->alias, "") != 0
+      && strcmp(info0->alias, info1->alias) == 0
+    )
   ) {
     *res_val = 1.0;
     return *res_def;
@@ -2064,14 +2165,41 @@ char est_variable(T_varinfo *info, char *nomCmp, char *res_def, double *res_val)
   return *res_def;
 }
 
-char est_variable_tabaccess(
+char dans_domaine(T_varinfo *info, int id_cv, char *res_def, double *res_val) {
+  *res_def = 1;
+  if (info == NULL) {
+    *res_val = 0.0;
+    return *res_def;
+  }
+  if (id_cv == info->cat) {
+    *res_val = 1.0;
+    return *res_def;
+  }
+  *res_val = 0.0;
+  return *res_def;
+}
+
+char dans_domaine_tabaccess(
   T_irdata *irdata, int idx_tab,
   char idx_def, double idx_val,
-  char *nomCmp, char *res_def, double *res_val
+  int id_cv, char *res_def, double *res_val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
-  return est_variable(info, nomCmp, res_def, res_val);
+  return dans_domaine(info, id_cv, res_def, res_val);
 }
+
+char est_type(T_varinfo *info, int type, char *res_def, double *res_val) {
+  *res_def = 1;
+  *res_val = 0.0;
+  if (info == NULL || info->type == SANS_TYPE) return *res_def;
+  if (info->type == type) {
+    *res_val = 1.0;
+  } else {
+    *res_val = 0.0;
+  }
+  return *res_def;
+}
+
 
 #ifdef FLG_TRACE
 

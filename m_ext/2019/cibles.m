@@ -524,5 +524,15 @@ cible enchainement_primitif_interpreteur:
 application: iliad;
 V_IND_TRAIT = 4;
 calculer cible enchainement_primitif;
+exporte_erreurs;
 
+# cibles bidonnes pour correctif
+
+cible enchaineur_primitif:
+application: iliad;
+neant;
+
+cible enchaineur_correctif:
+application: iliad;
+neant;
 

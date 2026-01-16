@@ -25,11 +25,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  | CompSubTyp of string Pos.marked
  | Attr of variable_attribute
 
- let parse_to_atom (v: parse_val) (pos : Pos.t) : Com.m_var_name Com.atom =
-   match v with
-   | ParseVar v -> AtomVar (Pos.mark v pos)
-   | ParseInt v -> AtomLiteral (Float (float_of_int v))
-
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
@@ -59,11 +54,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %token BASE GIVEN_BACK COMPUTABLE BY_DEFAULT
 %token DOMAIN SPECIALIZE AUTHORIZE VERIFIABLE EVENT EVENTS VALUE STEP
 %token EVENT_FIELD ARRANGE_EVENTS SORT FILTER ADD REFERENCE
-%token IS_VARIABLE VARIABLE_SPACE SPACE
+%token SAME_VARIABLE VARIABLE_SPACE SPACE IN_DOMAIN CLEAN_FINALIZED_ERRORS
+%token STOP MATCH CASE
 
 %token EOF
 
 %type<Mast.source_file> source_file
+%type<Mast.m_instruction list> instruction_list_rev
 
 %nonassoc SEMICOLON
 %left OR
@@ -298,7 +295,7 @@ comp_variable_table:
 | TABLE LBRACKET size = SYMBOL RBRACKET { parse_table_size size }
 
 comp_variable_descr:
-| descr = STRING { parse_string descr }
+| descr = STRING { descr }
 
 comp_attr:
 | BASE { "base" }
@@ -342,7 +339,7 @@ input_variable_name:
 | name = SYMBOL COLON { parse_variable_name $sloc name }
 
 input_descr:
-descr = STRING { parse_string descr }
+descr = STRING { descr }
 
 input_attr_or_category:
 | attr = variable_attribute { (None, Some attr, false) }
@@ -487,6 +484,10 @@ rule_etc:
       in
       aux [] begPos uname
     in
+    List.iter (fun (Pos.Mark (i, _)) ->
+		Format.printf "Tag %S@." i;
+	      )
+	      (Pos.unmark rule_tag_names);
     let rule_number =
       try Pos.map int_of_string num
       with _ ->
@@ -878,8 +879,29 @@ instruction:
     Some (RaiseError (e_name, var))
   }
 | CLEAN_ERRORS SEMICOLON { Some CleanErrors }
+| CLEAN_FINALIZED_ERRORS SEMICOLON { Some CleanFinalizedErrors }
 | EXPORT_ERRORS SEMICOLON { Some ExportErrors }
 | FINALIZE_ERRORS SEMICOLON { Some FinalizeErrors }
+| STOP APPLICATION SEMICOLON { Some (Stop SKApplication) }
+| STOP FONCTION SEMICOLON { Some (Stop SKFun) }
+| STOP TARGET SEMICOLON { Some (Stop SKTarget) } 
+| STOP s = SYMBOL SEMICOLON { Some (Stop (SKId (Some s))) }
+| STOP SEMICOLON { Some (Stop (SKId None)) }
+| MATCH LPAREN e = with_pos(expression) RPAREN COLON LPAREN l = nonempty_list(switch_case) RPAREN
+  { Some (Switch (e, l)) }
+
+switch_case_value:
+| CASE s = SYMBOL COLON { Value (Com.Float (float_of_string s)) }
+| CASE UNDEFINED COLON { Value Com.Undefined }
+| BY_DEFAULT COLON { Com.Default }
+
+switch_cases_rev:
+  | sc = switch_case_value { [ sc ] }
+  | scl = switch_cases_rev sc = switch_case_value { sc :: scl }
+
+switch_case:
+  | scr = switch_cases_rev ilt = instruction_list_rev
+    { List.rev scr, List.rev ilt }
 
 target_param:
 | COLON SPACE sp = symbol_with_pos {
@@ -923,7 +945,7 @@ instruction_then_when_branch:
 | ENDWHEN { ([], (Pos.without [])) }
 
 print_argument:
-| s = STRING { Com.PrintString (parse_string s) }
+| s = STRING { Com.PrintString s }
 | f = with_pos(print_function) LPAREN m_a = with_pos(var_access) RPAREN {
     match Pos.unmark f with
     | "nom" -> Com.PrintAccess (Com.Name, m_a)
@@ -1218,7 +1240,7 @@ error_name:
 n = SYMBOL COLON { n }
 
 error_descr:
-s = STRING { parse_string s }
+s = STRING { s }
 
 error_message:
 | COLON  s = with_pos(error_descr) { s }
@@ -1467,14 +1489,21 @@ function_call:
     Attribut (access, attr)
   }
 | SIZE LPAREN access = with_pos(var_access) RPAREN { Size access }
+| TYPE LPAREN access = with_pos(var_access)
+  COMMA typ = with_pos(value_type_prim) RPAREN { Type (access, typ) }
 | NB_ANOMALIES LPAREN RPAREN { NbAnomalies }
 | NB_DISCORDANCES LPAREN RPAREN { NbDiscordances }
 | NB_INFORMATIVES LPAREN RPAREN { NbInformatives }
 | NB_BLOCKING LPAREN RPAREN { NbBloquantes }
-| IS_VARIABLE LPAREN access = with_pos(var_access)
-  COMMA name = symbol_with_pos RPAREN {
-    IsVariable (access, name)
-  } 
+| SAME_VARIABLE LPAREN access0 = with_pos(var_access)
+  COMMA access1 = with_pos(var_access) RPAREN {
+    SameVariable (access0, access1)
+  }
+| IN_DOMAIN LPAREN access = with_pos(var_access)
+  COMMA vcat = with_pos(var_category_id) RPAREN {
+    let vc = Com.CatVar.Map.from_string_list vcat in
+    InDomain (access, vc)
+  }
 | s = with_pos(function_name) LPAREN RPAREN {
     FuncCall (parse_function_name s, [])
   }
