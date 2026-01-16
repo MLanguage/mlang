@@ -143,6 +143,8 @@ sphinx-doc: FORCE build dev-doc
 	mkdir -p $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
 	cp -r $(shell pwd)/_build/default/_doc/_html/* $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
 	.venv/bin/sphinx-build -M html $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
+
+latex-doc: FORCE sphinx-doc
 	.venv/bin/sphinx-build -M latexpdf $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
 
 dev-doc: FORCE build
@@ -152,7 +154,7 @@ else
 	dune build @doc
 endif
 
-doc: FORCE build dev-doc sphinx-doc
+doc: FORCE build doc-deps dev-doc sphinx-doc
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
