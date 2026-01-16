@@ -2,6 +2,63 @@
 
 # Le compilateur MLang
 
+## Installer
+
+Mlang est implanté en OCaml. L'utilisation du gestionnaire de paquets OCaml `opam`
+est fortement recommandée.
+Vous pouvez l'installer via votre gestionnaire de paquet préféré s'il distribue
+`opam`, ou bien en vous referant à la [documentation d'opam](https://opam.ocaml.org/doc/Install.html).
+Mlang a également quelques autres dépendances, dont une vers la librairie de calcul
+de flotants MPFR. Si vous êtes sous Debian, vous pouvez simplement utiliser la commande
+suivante pour installer toutes les dépendances externes à OCaml :
+
+```
+$ sudo apt install \
+	libgmp-dev \
+	libmpfr-dev \
+	git \
+	patch \
+	unzip \
+	bubblewrap \
+	bzip2 \
+	opam
+```
+
+Si vous n'avez jamais utilisé `opam`, commencez par lancer :
+
+```
+$ opam init
+$ opam update
+```
+
+Enfin, vous pouvre initialiser le projet `mlang` avec 
+
+```
+$ make init
+```
+
+**Note pour les utilisateurs d'opam confirmés** : la commande `make init` crée 
+un switch local où seront installées les dépendances OCaml de mlang. 
+
+Cette commande initialise le dossier `ir-calcul` dans lequel sont poussés
+le code de calcul primitif de l'impot sur le revenu.
+
+Si besoin, la commande
+```
+$ make deps
+```
+réinstallera les dépendances OCaml et mettra à jour le dossier `ir-calcul`.
+
+Une fois compilé, vous pouvez soit appeler mlang via la commande :
+```
+$ opam exec -- mlang
+```
+tant que vous êtes dans le dossier depuis lequel vous avez compilé, soit
+l'installer localement avec la commande :
+```
+opam install ./mlang.opam
+```
+
 ## Utiliser MLang
 
 Le binaire `mlang` prend en argument le fichier *M* à exécuter. 
@@ -10,8 +67,9 @@ traitement sera équivalent au traitement d'un seul et même fichier dans lequel
 serait concatené le contenu de chaque fichier.
 %%
 
-Les deux options principales sont : 
+Les options principales sont : 
 * `-A`: le nom de l'application à traiter;
+* `-b`: le mode d'utilisation, ou `backend`;
 * `--mpp_function`: le nom de la fonction principale à traiter.
 
 ### Mode interpreteur
@@ -49,7 +107,8 @@ NB: le dossier `output` doit avoir été créé en amont.
 
 ### Options DGFiP
 
-Les options DGFiP sont à usage interne.
+Les options DGFiP sont à usage interne. Elles sont spécifiées dans
+l'option `--dgfip_options`.
 
 ```
        -b VAL
@@ -94,16 +153,29 @@ Les options DGFiP sont à usage interne.
        -Z  Colored output in chainings
 ```
 
-## Comportement de mlang
+## Comportement de Mlang
+
+% A faire : des modules sont référencés plus bas.
+% Ca serait bien d'avoir des liens vers les docs de ces modules.
+
+Le compilateur Mlang effectue son traitement en quatre étapes :
+* la traduction dans un format abstrait interne;
+* un pré-traitement pour le simplifier;
+* une vérification pour analyser la cohérence du code;
+* le traitement du code M, que ce soit son interprétation ou sa compilation.
+
+Le module `Driver` (et plus précisément la fonction `Driver.main`) correspond au
+point d'entrée de mlang.
 
 ### Traduction
 
-% A faire : traduction du M en M_AST
+Le langage M est parsé selon les règles spécifiées dans {ref}`syntax`.
+Elle est effecuée par les modules `Mparser`, `Mlexer` et `Parse_utils`.
 
 ### Pré-traitement
 
-Le prétraitement est une opération purement syntaxique.
-Son but est triple :
+Le prétraitement est une opération purement syntaxique. Elle est effectuée par
+les modules `Expander` et `Mir`. Son but est triple :
 - éliminer les constructions relatives aux applications non-sélectionnées ;
 - remplacer les constantes par leur valeur numérique ;
 - remplacer les expressions numériques débutant par `somme` avec des
@@ -289,18 +361,31 @@ BX = BX + B09;
 BX = BX + B10;
 BZ = BZ + B09;
 BZ = BZ + B10;
-````
+```
 
 ### Vérification de cohérence
 
-% A faire : documentation de la verification
+De nombreuses constructions sont valides à la traduction, mais brisent
+certains invariants nécessaires à la bonne exécution du code : double 
+déclaration d'attributs, nom de variable déjà utilisé, variable mal 
+typée...
+L'ensemble de ces vérifications est accessible dans le module 
+`Validator` du frontend. Le sous module `Validator.Err` définit l'ensemble 
+des erreurs levées par cette étape de vérification.
+
+**NB** : seule la première erreur rencontrée par le validateur est levée.
 
 ### Traitement
 
 #### Interpreteur
 
-Lecture du fichier IRJ et interpretation du code.
+L'interpréteur utilise la représentation interne du code M
+pour lancer le calcul à partir d'un fichier IRJ 
+(voir {ref}`syntax_irj`).
+L'interprétation est effecuée par le module `Test_interpreter`.
 
 #### Transpilation
 
-Ecriture du code C équivalent au code M.
+La transpilation traduit le code dans le langage spécifié (en 2025, seul le C 
+est transpilable). La transpilation est effecutée dans le module 
+`Bir_to_dgfip_c`.

@@ -127,11 +127,36 @@ test_cram:
 # Doc
 ##################################################
 
-doc: FORCE build
+TARGET_DIR_SPHINX_DOC_SRC:= _build/default/sphinx-doc-src
+TARGET_DIR_DOC_BUILD:= _build/default/full-doc
+
+doc-deps: FORCE
+	python3 -m venv .venv
+	.venv/bin/pip install sphinx myst-parser
+
+sphinx-doc: FORCE build dev-doc
+	@command -v .venv/bin/sphinx-build >/dev/null 2>&1 || \
+	{ echo "Pour construire la documentation, vous avez besoin de sphinx-build avec \
+		l'extension 'myst-parser'. Lancez `make doc-deps`."; exit 1; }
+	rm -rf $(TARGET_DIR_SPHINX_DOC_SRC)/*
+	cp -r doc $(TARGET_DIR_SPHINX_DOC_SRC)
+	mkdir -p $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
+	cp -r $(shell pwd)/_build/default/_doc/_html/* $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
+	.venv/bin/sphinx-build -M html $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
+	.venv/bin/sphinx-build -M latexpdf $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
+
+dev-doc: FORCE build
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	dune build @doc
-	ln -fs $(shell pwd)/_build/default/_doc/_html/index.html doc/doc.html
 endif
 
+doc: FORCE build dev-doc sphinx-doc
+ifeq ($(call is_in,),)
+	$(call make_in,,$@)
+else
+	rm -rf examples/doc
+	mkdir -p examples/doc
+	cp -r $(TARGET_DIR_DOC_BUILD)/* examples/doc
+endif

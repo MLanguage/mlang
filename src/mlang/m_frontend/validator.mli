@@ -10,11 +10,22 @@
   You should have received a copy of the GNU General Public License along with
   this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type rule_or_verif = Rule | Verif
+(** The validator performs several verifications on the consistency of the M
+    program. The list of errors is defined in the internal module [Err] inside
+    this module. Verification requires to translate the program into an
+    intermediate representation, {!Validator.program}. In this representation,
+    rules are sorted by dependencies over the variables of the selected
+    applications and domains (using {!Utils.TopologicalSorting}). The output
+    type is very close to {!M_ir.Mir.program} and will be translated later in
+    this type, by {!Mast_to_mir.translate}.
+
+    NB: the output of {!Validator.proceed} is temporary and will be modified in
+    {!Mast_to_mir.translate}. *)
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
 
 type 'a doms = 'a Com.domain Com.DomainIdMap.t
+(** Domains can either be rule domains or verification domains. *)
 
 type chaining = {
   chain_name : string Pos.marked;

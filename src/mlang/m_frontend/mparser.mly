@@ -484,6 +484,10 @@ rule_etc:
       in
       aux [] begPos uname
     in
+    List.iter (fun (Pos.Mark (i, _)) ->
+		Format.printf "Tag %S@." i;
+	      )
+	      (Pos.unmark rule_tag_names);
     let rule_number =
       try Pos.map int_of_string num
       with _ ->

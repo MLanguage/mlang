@@ -14,6 +14,23 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+(** Mir (for M Intermediate Representation) programs are built after being
+    verified and expanded. The {!M_frontend.Mast.source_file_item}s are replaced
+    by a set of targets that straightforwardly list all instructions relative to
+    the treated application. Severals constructions from {!M_ir.Com} no longer
+    appear in this representation.
+    - Constants have been inlined.
+    - Loops (FunCallLoop, Loop) have been unrolled.
+    - Chaining, domain and verification calculations have been unified into
+    Target calculations.
+    This filtering is performed by {!M_frontend.Expander}, {!M_frontend.Validator} and
+    {!M_frontend.Mast_to_mir}.
+
+    The structural difference between {!M_frontend.Mast} and Mir common types are
+    the replacement of {!Mir.Com.m_var_name} by {!M_ir.Com.Var.t} and
+    {!M_frontend.Mast.error_name} by {!M_ir.Com.Error.t}.
+ *)
+
 type set_value = Com.Var.t Com.set_value
 
 type access = Com.Var.t Com.access
@@ -47,6 +64,8 @@ type stats = {
   max_nb_args : int;
   table_map : Com.Var.t IntMap.t;
 }
+(** A set of constants relative to the program and its selected
+    applications. *)
 
 type program = {
   program_safe_prefix : string;

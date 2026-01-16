@@ -10,7 +10,7 @@ type value_sort =
 (** Rounding operations to use in the interpreter. They correspond to the
     rounding operations used by the DGFiP calculator in different execution
     contexts.
-    
+
     - RODefault: rounding operations used in the PC/single-thread context
     - ROMulti: rouding operations used in the PC/multi-thread context
     - ROMainframe rounding operations used in the mainframe context *)
@@ -47,8 +47,8 @@ val var_info_flag : bool ref
 (** Print infomation about variables declared, defined ou used incorrectly *)
 
 val var_info_debug : string list ref
-(** Prints even more information but only about some variables members of a
-    list *)
+(** Prints even more information but only about some variables members of a list
+*)
 
 val warning_flag : bool ref
 (** Print warning info *)

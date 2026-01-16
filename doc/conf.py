@@ -24,4 +24,7 @@ language = 'fr'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'alabaster'
-html_static_path = ['_static']
+html_static_path = ['_static','_static/dev']
+
+# When building, we move the dev documentation in this 'dev' folder.
+html_extra_path = ['_static/dev']

@@ -53,11 +53,11 @@ module CatVar = struct
 
     let from_string_list = function
       | Pos.Mark ([ Pos.Mark ("*", _) ], id_pos) ->
-          one (Input (StrSet.one "*")) id_pos
+          one all_inputs id_pos
           |> add (Computed { is_base = false }) id_pos
           |> add (Computed { is_base = true }) id_pos
       | Pos.Mark ([ Pos.Mark ("saisie", _); Pos.Mark ("*", _) ], id_pos) ->
-          one (Input (StrSet.one "*")) id_pos
+          one all_inputs id_pos
       | Pos.Mark (Pos.Mark ("saisie", _) :: id, id_pos) ->
           one (Input (StrSet.from_marked_list id)) id_pos
       | Pos.Mark (Pos.Mark ("calculee", _) :: id, id_pos) -> (
