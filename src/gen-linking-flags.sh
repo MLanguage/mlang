@@ -16,7 +16,7 @@ case "$LINKING_MODE" in
             linux)
                 FLAGS="-noautolink"
                 CCLIB="-Wl,-Bstatic -lgmp_caml -lmpfr -lgmp -lnums \
-                       -lthreadsnat -lparmap_stubs -lANSITerminal_stubs \
+                       -lthreadsnat -lparmap_stubs -lANSITerminal_stubs -lcamlstr \
                        -Wl,-Bdynamic -lpthread -lunix"
                 LIBS=""
                 OCAML_LIBS="camlidl"
