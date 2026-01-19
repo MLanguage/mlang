@@ -205,7 +205,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -228,7 +228,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     | Com.VarAccess (m_sp_opt, v) ->
         let vsd, v, vorg = get_var ctx m_sp_opt v in
         Some (vsd, v, vorg)
-    | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
+    | Com.TabAccess ((m_sp_opt, m_v), m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
             let vsd, v, vorg = get_var ctx m_sp_opt m_v in
@@ -292,7 +292,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
   and set_access ctx access value =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -386,6 +386,22 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     pr_flush pctx
 
   (* interpret *)
+
+  and same_variable ctx m_acc m_acc' : bool =
+    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
+    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
+    match (v0_opt, v1_opt) with
+    | Some (_, v0, _), Some (_, v1, _) ->
+        Com.Var.name_str v0 = Com.Var.name_str v1
+    | _, _ -> false
+
+  and evaluate_switch_expr (ctx : ctx) s_e =
+    match s_e with
+    | Com.SEValue e -> (
+        match evaluate_expr ctx e with
+        | Undefined -> `Undefined
+        | Number n -> `Value n)
+    | SESameVariable v -> `Var v
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     let out =
@@ -507,15 +523,9 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
                 then Number (N.one ())
                 else Number (N.zero ())
             | None -> Undefined)
-        | SameVariable (m_acc0, m_acc1) -> (
-            let v0_opt = get_access_var ctx (Pos.unmark m_acc0) in
-            let v1_opt = get_access_var ctx (Pos.unmark m_acc1) in
-            match (v0_opt, v1_opt) with
-            | Some (_, v0, _), Some (_, v1, _) ->
-                if Com.Var.name_str v0 = Com.Var.name_str v1 then
-                  Number (N.one ())
-                else Number (N.zero ())
-            | _, _ -> Number (N.zero ()))
+        | SameVariable (m_acc0, m_acc1) ->
+            if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
+            else Number (N.zero ())
         | InDomain (m_acc, cvm) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) ->
@@ -581,21 +591,32 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
     | Com.Switch (c, l) -> (
-        let v = evaluate_expr ctx c in
         let exception INTERNAL_STOP_SWITCH in
         let then_ () = raise INTERNAL_STOP_SWITCH in
+        let v = evaluate_switch_expr ctx c in
+        let default = ref None in
         try
           List.iter
             (fun (cases, stmts) ->
               List.iter
                 (fun case ->
                   match (case, v) with
-                  | Com.Default, _ | Value Undefined, Undefined ->
+                  | Com.CDefault, _ ->
+                      (* Trigged only if all other cases fail *)
+                      default := Some stmts
+                  | CValue Undefined, `Undefined ->
                       evaluate_stmts ~then_ canBlock ctx stmts
-                  | Value (Float f), Number n when N.compare Eq n (N.of_float f)
-                    ->
-                      evaluate_stmts ~then_ canBlock ctx stmts
-                  | _ -> ())
+                  | CValue _, `Undefined | CValue Undefined, _ -> ()
+                  | CValue (Float f), `Value v ->
+                      if N.of_float f = v then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CValue _, `Var _ ->
+                      failwith "Cannot match value with variable"
+                  | CVar m_acc, `Var v ->
+                      if same_variable ctx m_acc v then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CVar _, (`Value _ | `Undefined) ->
+                      failwith "Cannot match variable with value")
                 cases)
             l
         with INTERNAL_STOP_SWITCH -> ())
