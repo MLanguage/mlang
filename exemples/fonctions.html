@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+
+<html lang="fr" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Les fonctions &#8212; Documentation MLang </title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=d1a510d7"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=e6b791cb"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Recherche" href="../search.html" />
+    <link rel="prev" title="Calcul des valeurs" href="valeurs.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="les-fonctions">
+<span id="exemples-fonctions"></span><h1>Les fonctions<a class="headerlink" href="#les-fonctions" title="Lien vers cette rubrique">¶</a></h1>
+<section id="fichier-test-test-m">
+<h2>Fichier test : test.m<a class="headerlink" href="#fichier-test-test-m" title="Lien vers cette rubrique">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">espace_variables</span> <span class="n">GLOBAL</span> <span class="p">:</span> <span class="n">par_defaut</span><span class="p">;</span>
+<span class="n">domaine</span> <span class="n">regle</span> <span class="n">mon_domaine_de_regle</span><span class="p">:</span> <span class="n">par_defaut</span><span class="p">;</span>
+<span class="n">domaine</span> <span class="n">verif</span> <span class="n">mon_domaine_de_verifications</span><span class="p">:</span> <span class="n">par_defaut</span><span class="p">;</span>
+<span class="n">application</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">variable</span> <span class="n">calculee</span> <span class="p">:</span> <span class="n">attribut</span> <span class="n">mon_attribut</span><span class="p">;</span>
+
+<span class="n">evenement</span>
+<span class="p">:</span> <span class="n">valeur</span> <span class="n">ev_val</span>
+<span class="p">:</span> <span class="n">variable</span> <span class="n">ev_var</span><span class="p">;</span>
+
+<span class="n">X</span> <span class="p">:</span> <span class="n">calculee</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">0</span> <span class="p">:</span> <span class="s2">&quot;&quot;</span> <span class="nb">type</span> <span class="n">REEL</span><span class="p">;</span>
+<span class="n">Y</span> <span class="p">:</span> <span class="n">calculee</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">1</span> <span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">;</span>
+<span class="n">TAB</span> <span class="p">:</span> <span class="n">tableau</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span> <span class="n">calculee</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">2</span> <span class="p">:</span> <span class="s2">&quot;&quot;</span> <span class="nb">type</span> <span class="n">ENTIER</span><span class="p">;</span>
+
+<span class="n">cible</span> <span class="n">init_tab</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">iterer</span> <span class="p">:</span> <span class="n">variable</span> <span class="n">I</span> <span class="p">:</span> <span class="n">entre</span> <span class="mf">0.</span><span class="o">.</span><span class="p">(</span><span class="n">taille</span><span class="p">(</span><span class="n">TAB</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">increment</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">dans</span> <span class="p">(</span>
+  <span class="n">TAB</span><span class="p">[</span><span class="n">I</span><span class="p">]</span> <span class="o">=</span> <span class="n">I</span><span class="p">;</span>
+<span class="p">)</span>
+
+<span class="n">cible</span> <span class="n">reinit_tab</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">iterer</span> <span class="p">:</span> <span class="n">variable</span> <span class="n">I</span> <span class="p">:</span> <span class="n">entre</span> <span class="mf">0.</span><span class="o">.</span><span class="p">(</span><span class="n">taille</span><span class="p">(</span><span class="n">TAB</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="n">increment</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">dans</span> <span class="p">(</span>
+  <span class="n">TAB</span><span class="p">[</span><span class="n">I</span><span class="p">]</span> <span class="o">=</span> <span class="n">indefini</span><span class="p">;</span>
+<span class="p">)</span>
+
+<span class="n">cible</span> <span class="n">test_abs</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__ABS__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;abs(indefini) = &quot;</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;abs(1) = &quot;</span>        <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;abs(-1) = &quot;</span>       <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_afficher</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__AFFICHER__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;afficher </span><span class="se">\&quot;</span><span class="s2">Bonjour, monde!</span><span class="se">\&quot;</span><span class="s2"> : &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;Bonjour, monde!&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">afficher (0) : &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">afficher (3.1415926535):2 : &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="mf">3.1415926535</span><span class="p">):</span><span class="mi">2</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">afficher (3.1415926535):2..4 : &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="mf">3.1415926535</span><span class="p">):</span><span class="mf">2..4</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span> <span class="n">indenter</span> <span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_arr</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__ARR__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;arr(indefini) = &quot;</span> <span class="p">(</span><span class="n">arr</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;arr(1.8) = &quot;</span>      <span class="p">(</span><span class="n">arr</span><span class="p">(</span><span class="mf">1.8</span><span class="p">))</span>      <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;arr(-1.7) = &quot;</span>     <span class="p">(</span><span class="n">arr</span><span class="p">(</span><span class="o">-</span><span class="mf">1.7</span><span class="p">))</span>     <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_attribut</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__ATTRIBUT__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;attribut(X, mon_attribut) = &quot;</span>   <span class="p">(</span><span class="n">attribut</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">mon_attribut</span><span class="p">))</span>   <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;attribut(TAB, mon_attribut) = &quot;</span> <span class="p">(</span><span class="n">attribut</span><span class="p">(</span><span class="n">TAB</span><span class="p">,</span> <span class="n">mon_attribut</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_champ_evenement_base</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;champ_evenement(0, ev_val) = &quot;</span> <span class="p">(</span><span class="n">champ_evenement</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">ev_val</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;champ_evenement(0, ev_var) = &quot;</span> <span class="p">(</span><span class="n">champ_evenement</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">ev_var</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_champ_evenement</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__CHAMP_EVENEMENT__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">arranger_evenements</span>
+  <span class="p">:</span> <span class="n">ajouter</span> <span class="mi">1</span>
+  <span class="p">:</span> <span class="n">dans</span> <span class="p">(</span>
+      <span class="n">afficher</span> <span class="s2">&quot;Avant d&#39;initialiser les champs de l&#39;événement:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+      <span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_champ_evenement_base</span><span class="p">;</span>
+      <span class="n">champ_evenement</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">ev_var</span><span class="p">)</span> <span class="n">reference</span> <span class="n">X</span><span class="p">;</span>      
+      <span class="n">champ_evenement</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">ev_val</span><span class="p">)</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+      <span class="n">X</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+      <span class="n">afficher</span> <span class="s2">&quot;Après avoir initialisé les champs de l&#39;événement:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+      <span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_champ_evenement_base</span><span class="p">;</span>
+      <span class="n">X</span> <span class="o">=</span> <span class="n">indefini</span><span class="p">;</span>
+    <span class="p">)</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_inf</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__INF__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;inf(indefini) = &quot;</span> <span class="p">(</span><span class="n">inf</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;inf(1.8) = &quot;</span>      <span class="p">(</span><span class="n">inf</span><span class="p">(</span><span class="mf">1.8</span><span class="p">))</span>      <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;inf(-1.7) = &quot;</span>     <span class="p">(</span><span class="n">inf</span><span class="p">(</span><span class="o">-</span><span class="mf">1.7</span><span class="p">))</span>     <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_max</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__MAX__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;max(indefini, indefini) = &quot;</span> <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">indefini</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;max(-1, indefini) = &quot;</span>       <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;max(indefini, -1) = &quot;</span>       <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">indefini</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;max(1, indefini) = &quot;</span>        <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_meme_variable</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__MEME_VARIABLE__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;meme_variable(X,X) = &quot;</span>        <span class="p">(</span><span class="n">meme_variable</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">X</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;meme_variable(X,TAB) = &quot;</span>      <span class="p">(</span><span class="n">meme_variable</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">TAB</span><span class="p">))</span>      <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;meme_variable(TAB[0],TAB) = &quot;</span> <span class="p">(</span><span class="n">meme_variable</span><span class="p">(</span><span class="n">TAB</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_min</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__MIN__&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;min(indefini, indefini) = &quot;</span> <span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">indefini</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;min(1, indefini) = &quot;</span>        <span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;min(indefini, 1) = &quot;</span>        <span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">indefini</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;min(-1, indefini) = &quot;</span>       <span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_multimax_base</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;multimax(indefini, TAB) = &quot;</span> <span class="p">(</span><span class="n">multimax</span><span class="p">(</span><span class="n">indefini</span><span class="p">,</span> <span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;multimax(7, TAB) = &quot;</span> <span class="p">(</span><span class="n">multimax</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;multimax(taille(TAB) + 1, TAB) = &quot;</span> <span class="p">(</span><span class="n">multimax</span><span class="p">(</span><span class="n">taille</span><span class="p">(</span><span class="n">TAB</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;multimax(0, TAB) = &quot;</span>  <span class="p">(</span><span class="n">multimax</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">TAB</span><span class="p">))</span>  <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;multimax(-1, TAB) = &quot;</span> <span class="p">(</span><span class="n">multimax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_multimax</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__MULTIMAX__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;Avant initialisation du tableau :</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_multimax_base</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">init_tab</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;Après initialisation du tableau :</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_multimax_base</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">reinit_tab</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_nb_evenements_base</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;nb_evenements() = &quot;</span> <span class="p">(</span><span class="n">nb_evenements</span> <span class="p">())</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_nb_evenements</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__NB_EVENEMENTS__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;Avant la définition d&#39;un événement :</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_nb_evenements_base</span><span class="p">;</span>
+<span class="n">arranger_evenements</span>
+  <span class="p">:</span> <span class="n">ajouter</span> <span class="mi">1</span>
+  <span class="p">:</span> <span class="n">dans</span> <span class="p">(</span>
+      <span class="n">afficher</span> <span class="s2">&quot;Pendant la définition d&#39;un événement :</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+      <span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_nb_evenements_base</span><span class="p">;</span>
+    <span class="p">)</span>
+<span class="n">afficher</span> <span class="s2">&quot;Après la définition d&#39;un événement :</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_nb_evenements_base</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_null</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__NULL__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;null(indefini) = &quot;</span> <span class="p">(</span><span class="n">null</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;null(0) = &quot;</span>        <span class="p">(</span><span class="n">null</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;null(1) = &quot;</span>        <span class="p">(</span><span class="n">null</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_positif</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__POSITIF__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif(indefini) = &quot;</span> <span class="p">(</span><span class="n">positif</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif(0) = &quot;</span>        <span class="p">(</span><span class="n">positif</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif(1) = &quot;</span>        <span class="p">(</span><span class="n">positif</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif(-1) = &quot;</span>       <span class="p">(</span><span class="n">positif</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_positif_ou_nul</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__POSITIF OU NUL__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif_ou_nul(indefini) = &quot;</span> <span class="p">(</span><span class="n">positif_ou_nul</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif_ou_nul(0) = &quot;</span>        <span class="p">(</span><span class="n">positif_ou_nul</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif_ou_nul(1) = &quot;</span>        <span class="p">(</span><span class="n">positif_ou_nul</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;positif_ou_nul(-1) = &quot;</span>       <span class="p">(</span><span class="n">positif_ou_nul</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_present</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__PRESENT__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;present(indefini) = &quot;</span> <span class="p">(</span><span class="n">present</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;present(0) = &quot;</span>        <span class="p">(</span><span class="n">present</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;present(1) = &quot;</span>        <span class="p">(</span><span class="n">present</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_somme</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__SOMME__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;somme() = &quot;</span>              <span class="p">(</span><span class="n">somme</span><span class="p">())</span>              <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;somme(indefini) = &quot;</span>      <span class="p">(</span><span class="n">somme</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span>      <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;somme(1, indefini) = &quot;</span>   <span class="p">(</span><span class="n">somme</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">indefini</span><span class="p">))</span>   <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;somme(1, 2, 3, 4, 5) = &quot;</span> <span class="p">(</span><span class="n">somme</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_supzero</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__SUPZERO__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;supzero(indefini) = &quot;</span> <span class="p">(</span><span class="n">supzero</span><span class="p">(</span><span class="n">indefini</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;supzero(42) = &quot;</span>       <span class="p">(</span><span class="n">supzero</span><span class="p">(</span><span class="mi">42</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;supzero(-1) = &quot;</span>       <span class="p">(</span><span class="n">supzero</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;supzero(0) = &quot;</span>        <span class="p">(</span><span class="n">supzero</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_taille</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__TAILLE__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;taille(TAB) = &quot;</span> <span class="p">(</span><span class="n">taille</span><span class="p">(</span><span class="n">TAB</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;taille(X) = &quot;</span>   <span class="p">(</span><span class="n">taille</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>   <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">test_type</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;__TYPE__</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(X, REEL) = &quot;</span>          <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">REEL</span><span class="p">))</span>          <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(X, ENTIER) = &quot;</span>        <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">ENTIER</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(TAB, ENTIER) = &quot;</span>      <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">TAB</span><span class="p">,</span> <span class="n">ENTIER</span><span class="p">))</span>      <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, ENTIER) = &quot;</span>        <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">ENTIER</span><span class="p">))</span>        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, REEL) = &quot;</span>          <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">REEL</span><span class="p">))</span>          <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, BOOLEEN) = &quot;</span>       <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">BOOLEEN</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, DATE_AAAA) = &quot;</span>     <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">DATE_AAAA</span><span class="p">))</span>     <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, DATE_JJMMAAAA) = &quot;</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">DATE_JJMMAAAA</span><span class="p">))</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;type(Y, DATE_MM) = &quot;</span>       <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">DATE_MM</span><span class="p">))</span>       <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="n">indenter</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="n">cible</span> <span class="n">fun_test</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="c1"># Abs</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_abs</span><span class="p">;</span>
+<span class="c1"># Afficher</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_afficher</span><span class="p">;</span>
+<span class="c1"># Arr</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_arr</span><span class="p">;</span>
+<span class="c1"># Attribut</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_attribut</span><span class="p">;</span>
+<span class="c1"># Champ evenement</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_champ_evenement</span><span class="p">;</span>
+<span class="c1"># Inf</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_inf</span><span class="p">;</span>
+<span class="c1"># Max</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_max</span><span class="p">;</span>
+<span class="c1"># Meme variable</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_meme_variable</span><span class="p">;</span>
+<span class="c1"># Min</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_min</span><span class="p">;</span>
+<span class="c1"># Multimax</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_multimax</span><span class="p">;</span>
+<span class="c1"># Null</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_nb_evenements</span><span class="p">;</span>
+<span class="c1"># Null</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_null</span><span class="p">;</span>
+<span class="c1"># Positif</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_positif</span><span class="p">;</span>
+<span class="c1"># Positif ou nul</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_positif_ou_nul</span><span class="p">;</span>
+<span class="c1"># Présent</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_present</span><span class="p">;</span>
+<span class="c1"># Somme</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_somme</span><span class="p">;</span>
+<span class="c1"># Supzero</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_supzero</span><span class="p">;</span>
+<span class="c1"># Taille</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_taille</span><span class="p">;</span>
+<span class="c1"># Type</span>
+<span class="n">calculer</span> <span class="n">cible</span> <span class="n">test_type</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="fichier-irj-test-irj">
+<h2>Fichier irj : test.irj<a class="headerlink" href="#fichier-irj-test-irj" title="Lien vers cette rubrique">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1">#NOM</span>
+<span class="n">MON</span><span class="o">-</span><span class="n">TEST</span>
+<span class="c1">#ENTREES-PRIMITIF</span>
+<span class="c1">#CONTROLES-PRIMITIF</span>
+<span class="c1">#RESULTATS-PRIMITIF</span>
+<span class="c1">#ENTREES-CORRECTIF</span>
+<span class="c1">#CONTROLES-CORRECTIF</span>
+<span class="c1">#RESULTATS-CORRECTIF</span>
+<span class="c1">##</span>
+</pre></div>
+</div>
+</section>
+<section id="commande">
+<h2>Commande<a class="headerlink" href="#commande" title="Lien vers cette rubrique">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mlang</span> <span class="n">test</span><span class="o">.</span><span class="n">m</span> \
+	<span class="o">--</span><span class="n">without_dfgip_m</span> \
+	<span class="o">-</span><span class="n">A</span> <span class="n">mon_application</span> \
+	<span class="o">--</span><span class="n">mpp_function</span> <span class="n">fun_test</span> \
+	<span class="o">--</span><span class="n">run_test</span> <span class="n">test</span><span class="o">.</span><span class="n">irj</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MLang</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../intro.html">Introduction au langage M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../syntax.html">La syntaxe du M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fonctions.html">Les fonctions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../syntax_irj.html">Les fichiers IRJ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../mlang.html">Le compilateur MLang</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="valeurs.html">Calcul des valeurs</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Les fonctions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="valeurs.html" title="Chapitre précédent">Calcul des valeurs</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Direction Générale des FInances Publiques.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/exemples/fonctions.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

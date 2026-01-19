@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+
+<html lang="fr" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Le compilateur MLang &#8212; Documentation MLang </title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=d1a510d7"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=e6b791cb"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Recherche" href="search.html" />
+    <link rel="next" title="Calcul des valeurs" href="exemples/valeurs.html" />
+    <link rel="prev" title="Les fichiers IRJ" href="syntax_irj.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="le-compilateur-mlang">
+<span id="mlang"></span><h1>Le compilateur MLang<a class="headerlink" href="#le-compilateur-mlang" title="Lien vers cette rubrique">¶</a></h1>
+<section id="installer">
+<h2>Installer<a class="headerlink" href="#installer" title="Lien vers cette rubrique">¶</a></h2>
+<p>Mlang est implanté en OCaml. L’utilisation du gestionnaire de paquets OCaml <code class="docutils literal notranslate"><span class="pre">opam</span></code>
+est fortement recommandée.
+Vous pouvez l’installer via votre gestionnaire de paquet préféré s’il distribue
+<code class="docutils literal notranslate"><span class="pre">opam</span></code>, ou bien en vous referant à la <a class="reference external" href="https://opam.ocaml.org/doc/Install.html">documentation d’opam</a>.
+Mlang a également quelques autres dépendances, dont une vers la librairie de calcul
+de flotants MPFR. Si vous êtes sous Debian, vous pouvez simplement utiliser la commande
+suivante pour installer toutes les dépendances externes à OCaml :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ sudo apt install \
+	libgmp-dev \
+	libmpfr-dev \
+	git \
+	patch \
+	unzip \
+	bubblewrap \
+	bzip2 \
+	opam
+</pre></div>
+</div>
+<p>Si vous n’avez jamais utilisé <code class="docutils literal notranslate"><span class="pre">opam</span></code>, commencez par lancer :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ opam init
+$ opam update
+</pre></div>
+</div>
+<p>Enfin, vous pouvre initialiser le projet <code class="docutils literal notranslate"><span class="pre">mlang</span></code> avec</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ make init
+</pre></div>
+</div>
+<p><strong>Note pour les utilisateurs d’opam confirmés</strong> : la commande <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">init</span></code> crée
+un switch local où seront installées les dépendances OCaml de mlang.</p>
+<p>Cette commande initialise le dossier <code class="docutils literal notranslate"><span class="pre">ir-calcul</span></code> dans lequel sont poussés
+le code de calcul primitif de l’impot sur le revenu.</p>
+<p>Si besoin, la commande</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ make deps
+</pre></div>
+</div>
+<p>réinstallera les dépendances OCaml et mettra à jour le dossier <code class="docutils literal notranslate"><span class="pre">ir-calcul</span></code>.</p>
+<p>Une fois compilé, vous pouvez soit appeler mlang via la commande :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ opam exec -- mlang
+</pre></div>
+</div>
+<p>tant que vous êtes dans le dossier depuis lequel vous avez compilé, soit
+l’installer localement avec la commande :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">opam</span> <span class="n">install</span> <span class="o">./</span><span class="n">mlang</span><span class="o">.</span><span class="n">opam</span>
+</pre></div>
+</div>
+</section>
+<section id="utiliser-mlang">
+<h2>Utiliser MLang<a class="headerlink" href="#utiliser-mlang" title="Lien vers cette rubrique">¶</a></h2>
+<p>Le binaire <code class="docutils literal notranslate"><span class="pre">mlang</span></code> prend en argument le fichier <em>M</em> à exécuter.
+Il peut également prendre en argument une liste de fichiers, auquel cas leur
+traitement sera équivalent au traitement d’un seul et même fichier dans lequel
+serait concatené le contenu de chaque fichier.</p>
+<p>Les options principales sont :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">-A</span></code>: le nom de l’application à traiter;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-b</span></code>: le mode d’utilisation, ou <code class="docutils literal notranslate"><span class="pre">backend</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mpp_function</span></code>: le nom de la fonction principale à traiter.</p></li>
+</ul>
+<section id="mode-interpreteur">
+<h3>Mode interpreteur<a class="headerlink" href="#mode-interpreteur" title="Lien vers cette rubrique">¶</a></h3>
+<p>Le mode interpreteur de <code class="docutils literal notranslate"><span class="pre">mlang</span></code> utilise un fichier <em>IRJ</em> (voir <a class="reference internal" href="syntax_irj.html#syntax-irj"><span class="std std-ref">Les fichiers IRJ</span></a>)
+pour exécuter le code <em>M</em> directement depuis sa représentation abstraite.</p>
+<p>Voici une commande simple pour invoquer l’interpreteur :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ mlang test.m \
+	-A mon_application \
+	-b interpreter \
+	--mpp_function hello_world \
+	--run_test test.irj \
+	--without_dfgip_m
+</pre></div>
+</div>
+</section>
+<section id="mode-transpilation">
+<h3>Mode transpilation<a class="headerlink" href="#mode-transpilation" title="Lien vers cette rubrique">¶</a></h3>
+<p>Le mode transpilation de <code class="docutils literal notranslate"><span class="pre">mlang</span></code> permet de traduire le code <em>M</em> dans un autre
+langage.
+En 2025, seul le langage C est supporté.
+Voici une commande simple pour traduire un fichier <em>M</em> en <em>C</em> :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ mlang test.m \
+	-A mon_application \
+	-b dgfip_c \
+	--mpp_function hello_world
+	--dgfip_options=&#39;&#39; 
+	--output output/mon-test.c
+</pre></div>
+</div>
+<p>NB: le dossier <code class="docutils literal notranslate"><span class="pre">output</span></code> doit avoir été créé en amont.</p>
+</section>
+<section id="options-dgfip">
+<h3>Options DGFiP<a class="headerlink" href="#options-dgfip" title="Lien vers cette rubrique">¶</a></h3>
+<p>Les options DGFiP sont à usage interne. Elles sont spécifiées dans
+l’option <code class="docutils literal notranslate"><span class="pre">--dgfip_options</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>       <span class="o">-</span><span class="n">b</span> <span class="n">VAL</span>
+           <span class="n">Set</span> <span class="n">application</span> <span class="n">to</span> <span class="s2">&quot;batch&quot;</span> <span class="p">(</span><span class="n">b0</span> <span class="o">=</span> <span class="n">normal</span><span class="p">,</span> <span class="n">b1</span> <span class="o">=</span> <span class="k">with</span> <span class="n">EBCDIC</span> <span class="n">sort</span><span class="p">)</span>
+
+       <span class="o">-</span><span class="n">D</span>  <span class="n">Generate</span> <span class="n">labels</span> <span class="k">for</span> <span class="n">output</span> <span class="n">variables</span>
+
+       <span class="o">-</span><span class="n">g</span>  <span class="n">Generate</span> <span class="k">for</span> <span class="n">test</span> <span class="p">(</span><span class="n">debug</span><span class="p">)</span>
+
+       <span class="o">-</span><span class="n">I</span>  <span class="n">Generate</span> <span class="n">immediate</span> <span class="n">controls</span>
+
+       <span class="o">-</span><span class="n">k</span> <span class="n">VAL</span> <span class="p">(</span><span class="n">absent</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+           <span class="n">Number</span> <span class="n">of</span> <span class="n">debug</span> <span class="n">files</span>
+
+       <span class="o">-</span><span class="n">L</span>  <span class="n">Generate</span> <span class="n">calls</span> <span class="n">to</span> <span class="n">ticket</span> <span class="n">function</span>
+
+       <span class="o">-</span><span class="n">m</span> <span class="n">VAL</span> <span class="p">(</span><span class="n">absent</span><span class="o">=</span><span class="mi">1991</span><span class="p">)</span>
+           <span class="n">Income</span> <span class="n">year</span>
+
+       <span class="o">-</span><span class="n">O</span>  <span class="n">Optimize</span> <span class="n">generated</span> <span class="n">code</span> <span class="p">(</span><span class="n">inline</span> <span class="n">min_max</span> <span class="n">function</span><span class="p">)</span>
+
+       <span class="o">-</span><span class="n">o</span>  <span class="n">Generate</span> <span class="n">overlays</span>
+
+       <span class="o">-</span><span class="n">P</span>  <span class="n">Primitive</span> <span class="n">calculation</span> <span class="n">only</span>
+
+       <span class="o">-</span><span class="n">r</span>  <span class="n">Pass</span> <span class="n">TGV</span> <span class="n">pointer</span> <span class="k">as</span> <span class="n">register</span> <span class="ow">in</span> <span class="n">rules</span>
+
+       <span class="o">-</span><span class="n">R</span>  <span class="n">Set</span> <span class="n">application</span> <span class="n">to</span> <span class="n">both</span> <span class="s2">&quot;iliad&quot;</span> <span class="ow">and</span> <span class="s2">&quot;pro&quot;</span>
+
+       <span class="o">-</span><span class="n">s</span>  <span class="n">Strip</span> <span class="n">comments</span> <span class="kn">from</span><span class="w"> </span><span class="nn">generated</span> <span class="n">output</span>
+
+       <span class="o">-</span><span class="n">S</span>  <span class="n">Generate</span> <span class="n">separate</span> <span class="n">controls</span>
+
+       <span class="o">-</span><span class="n">t</span>  <span class="n">Generate</span> <span class="n">trace</span> <span class="n">code</span>
+
+       <span class="o">-</span><span class="n">U</span>  <span class="n">Set</span> <span class="n">application</span> <span class="n">to</span> <span class="s2">&quot;cfir&quot;</span>
+
+       <span class="o">-</span><span class="n">x</span>  <span class="n">Generate</span> <span class="n">cross</span> <span class="n">references</span>
+
+       <span class="o">-</span><span class="n">X</span>  <span class="n">Generate</span> <span class="k">global</span> <span class="n">extraction</span>
+
+       <span class="o">-</span><span class="n">Z</span>  <span class="n">Colored</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">chainings</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="comportement-de-mlang">
+<h2>Comportement de Mlang<a class="headerlink" href="#comportement-de-mlang" title="Lien vers cette rubrique">¶</a></h2>
+<p>Le compilateur Mlang effectue son traitement en quatre étapes :</p>
+<ul class="simple">
+<li><p>la traduction dans un format abstrait interne;</p></li>
+<li><p>un pré-traitement pour le simplifier;</p></li>
+<li><p>une vérification pour analyser la cohérence du code;</p></li>
+<li><p>le traitement du code M, que ce soit son interprétation ou sa compilation.</p></li>
+</ul>
+<p>Le module <code class="docutils literal notranslate"><span class="pre">Driver</span></code> (et plus précisément la fonction <code class="docutils literal notranslate"><span class="pre">Driver.main</span></code>) correspond au
+point d’entrée de mlang.</p>
+<section id="traduction">
+<h3>Traduction<a class="headerlink" href="#traduction" title="Lien vers cette rubrique">¶</a></h3>
+<p>Le langage M est parsé selon les règles spécifiées dans <a class="reference internal" href="syntax.html#syntax"><span class="std std-ref">La syntaxe du M</span></a>.
+Elle est effecuée par les modules <code class="docutils literal notranslate"><span class="pre">Mparser</span></code>, <code class="docutils literal notranslate"><span class="pre">Mlexer</span></code> et <code class="docutils literal notranslate"><span class="pre">Parse_utils</span></code>.</p>
+</section>
+<section id="pre-traitement">
+<h3>Pré-traitement<a class="headerlink" href="#pre-traitement" title="Lien vers cette rubrique">¶</a></h3>
+<p>Le prétraitement est une opération purement syntaxique. Elle est effectuée par
+les modules <code class="docutils literal notranslate"><span class="pre">Expander</span></code> et <code class="docutils literal notranslate"><span class="pre">Mir</span></code>. Son but est triple :</p>
+<ul class="simple">
+<li><p>éliminer les constructions relatives aux applications non-sélectionnées ;</p></li>
+<li><p>remplacer les constantes par leur valeur numérique ;</p></li>
+<li><p>remplacer les expressions numériques débutant par <code class="docutils literal notranslate"><span class="pre">somme</span></code> avec des
+additions ;</p></li>
+<li><p>éliminer les <code class="docutils literal notranslate"><span class="pre">&lt;multi-formule&gt;</span></code>s en les remplaçant par des séries de <code class="docutils literal notranslate"><span class="pre">&lt;formule&gt;</span></code>s.</p></li>
+</ul>
+<p>Toute substitution transformant un programme M syntaxiquement valide en un
+texte ne correspondant à aucun programme M provoque l’échec du traitement.</p>
+<section id="cas-des-applications">
+<h4>Cas des applications<a class="headerlink" href="#cas-des-applications" title="Lien vers cette rubrique">¶</a></h4>
+<p>On élimine du programme M:</p>
+<ul class="simple">
+<li><p>les déclarations des applications non-sélectionnées ;</p></li>
+<li><p>les déclarations des enchaîneurs ne spécifiant pas une application
+sélectionnée ;</p></li>
+<li><p>les déclarations des règles ne spécifiant pas une application
+sélectionnée ;</p></li>
+<li><p>les déclarations des vérifications ne spécifiant pas une application
+sélectionnée ;</p></li>
+<li><p>les déclarations des cibles ne spécifiant pas une application sélectionnée.</p></li>
+</ul>
+<p>Dans les déclarations des règles spécifiant une application sélectionnée, on
+élimine les enchaîneurs qui ne sont plus déclarés dans le programme M obtenu.</p>
+</section>
+<section id="cas-des-constantes">
+<h4>Cas des constantes<a class="headerlink" href="#cas-des-constantes" title="Lien vers cette rubrique">¶</a></h4>
+<p>Pour prétraiter un programme, on le parcourt du début à la fin. Pour chaque
+<code class="docutils literal notranslate"><span class="pre">&lt;variable&gt;</span></code> rencontrée, si elle correspond à une contante défini précédemment,
+alors il est remplacé dans le programme par la valeur numérique correspondante.</p>
+<p>Un intervalle de la forme <code class="docutils literal notranslate"><span class="pre">&lt;naturel:début&gt;..&lt;symbole:const&gt;</span></code> est
+converti par substitution de la constante <code class="docutils literal notranslate"><span class="pre">const</span></code> en l’intervalle
+<code class="docutils literal notranslate"><span class="pre">&lt;naturel:début&gt;..&lt;naturel:fin&gt;</span></code>, avec <code class="docutils literal notranslate"><span class="pre">fin</span></code> le naturel correspondant
+à <code class="docutils literal notranslate"><span class="pre">const</span></code>.</p>
+<p><em>Exemple</em> : considérons le programme suivant :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>fin : const = 10;
+… 
+pour i = 9-fin :
+  Bi = Bi + fin;
+</pre></div>
+</div>
+<p>Par substitution de la constante <code class="docutils literal notranslate"><span class="pre">fin</span></code>, il est remplacé dans un premier temps
+remplacée par le programme :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>fin : const = 10;`
+… 
+pour i = 9..10 :
+  Bi = Bi + fin;
+</pre></div>
+</div>
+<p>puis dans un second temps par le programme :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>fin : const = 10;
+…
+pour i = 9..10 :
+  Bi = Bi + 10;
+</pre></div>
+</div>
+</section>
+<section id="interpretation-des-indices">
+<h4>Interprétation des indices<a class="headerlink" href="#interpretation-des-indices" title="Lien vers cette rubrique">¶</a></h4>
+<p>Pour rappel, les <em>indices</em> ont la forme suivante :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;indices&gt; ::= &lt;indice&gt; ; …
+&lt;indice&gt; ::= &lt;minuscule&gt; = &lt;intervalle&gt; , …
+</pre></div>
+</div>
+<p>avec :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;minuscule&gt;</span> <span class="pre">::=</span> <span class="pre">[a-z]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;majuscule&gt;</span> <span class="pre">::=</span> <span class="pre">[A-Z]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;intervalle&gt;</span> <span class="pre">::=</span> <span class="pre">&lt;majuscule&gt;+</span> <span class="pre">|</span> <span class="pre">&lt;majuscule&gt;</span> <span class="pre">..</span> <span class="pre">&lt;majuscule&gt;</span> <span class="pre">|</span> <span class="pre">&lt;naturel&gt;</span> <span class="pre">(..</span> <span class="pre">&lt;naturel&gt;</span> <span class="pre">|</span> <span class="pre">-</span> <span class="pre">&lt;variable&gt;)?</span></code></p></li>
+</ul>
+<p>Chaque <code class="docutils literal notranslate"><span class="pre">&lt;indice&gt;</span></code> associe à une lettre minuscule une série de chaînes de
+caractères de même taille.
+Cette série est composée de la succession de chaque
+<intervalle> à droite du symbole <code class="docutils literal notranslate"><span class="pre">=</span></code>.</p>
+<p>Les séries associées aux <intervalles> sont définis comme suit :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;majuscule&gt;+</span></code> est la série composée de chacune des majuscules prises
+séparément, donc de taille 1 (<em>par exemple</em> : <code class="docutils literal notranslate"><span class="pre">AXF</span></code> représente la série <code class="docutils literal notranslate"><span class="pre">A</span></code>, <code class="docutils literal notranslate"><span class="pre">X</span></code>, <code class="docutils literal notranslate"><span class="pre">F</span></code>);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;majuscule:/début/&gt;****&lt;majuscule:/fin/&gt;</span></code> est la série composée de toutes
+les majuscules comprises entre /début/ et /fin/, bornes comprises, suivant
+l’ordre alphabétique, donc de taille 1 (<em>par exemple</em> : <code class="docutils literal notranslate"><span class="pre">A..D</span></code> représente la série <code class="docutils literal notranslate"><span class="pre">A</span></code>, <code class="docutils literal notranslate"><span class="pre">B</span></code>, <code class="docutils literal notranslate"><span class="pre">C</span></code>, <code class="docutils literal notranslate"><span class="pre">D</span></code>);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;naturel:début&gt;..&lt;naturel:fin&gt;</span></code> est la série composée de tous les
+nombres naturels entre <code class="docutils literal notranslate"><span class="pre">début</span></code> et <code class="docutils literal notranslate"><span class="pre">fin</span></code>, bornes comprises, la taille des
+éléments étant égale à la taille du plus grand naturel en base 10; les
+naturels trop petits pour avoir la taille requise  sont complétés par des 0 à
+gauche (<em>par exemple</em> : <code class="docutils literal notranslate"><span class="pre">9..11</span></code> représente la série <code class="docutils literal notranslate"><span class="pre">09</span></code>, <code class="docutils literal notranslate"><span class="pre">10</span></code>, <code class="docutils literal notranslate"><span class="pre">11</span></code>);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;naturel&gt;-&lt;variable&gt;</span></code> est converti lors du prétraitement des constantes
+en un intervalle de la forme <code class="docutils literal notranslate"><span class="pre">&lt;naturel&gt;..&lt;naturel&gt;</span></code>.</p></li>
+</ul>
+</section>
+<section id="cas-des-expressions-somme">
+<h4>Cas des expressions <code class="docutils literal notranslate"><span class="pre">somme(…)</span></code><a class="headerlink" href="#cas-des-expressions-somme" title="Lien vers cette rubrique">¶</a></h4>
+<p>Pour une expression numérique
+<code class="docutils literal notranslate"><span class="pre">somme</span> <span class="pre">(</span> <span class="pre">&lt;indice:ind&gt;:</span> <span class="pre">&lt;expression</span> <span class="pre">numerique:expr&gt;</span> <span class="pre">)</span></code>,
+l’expression <em>expr</em> sera remplacée par la somme des expressions construites
+ainsi : pour chaque chaîne de caractères de la série introduite par <em>ind</em>, les
+symboles apparaîssant dans <em>expr</em> sont remplacés par ceux dans lesquels la
+lettre minuscule de /ind/ est substituéé par la chaine de caractère.</p>
+<p>La somme ainsi générée est parenthésée.</p>
+<p>Une expression numérique
+<code class="docutils literal notranslate"><span class="pre">somme</span> <span class="pre">(</span> <span class="pre">&lt;indice:ind&gt;</span> <span class="pre">;</span> <span class="pre">&lt;indices:inds&gt;</span> <span class="pre">:</span> <span class="pre">&lt;expression</span> <span class="pre">numérique:expr&gt;</span> <span class="pre">)</span></code>,
+est remplacée par la somme des expressions
+<em><code class="docutils literal notranslate"><span class="pre">somme</span></code></em><code class="docutils literal notranslate"> <span class="pre">&lt;indices:inds&gt;</span> <span class="pre">:</span> <span class="pre">expr'&gt;</span> <span class="pre">)</span></code> avec <code class="docutils literal notranslate"><span class="pre">expr'</span></code> prenant sa valeur
+dans la série <code class="docutils literal notranslate"><span class="pre">sub(ind,</span> <span class="pre">expr)</span></code>.</p>
+<p>La procédure est ensuite appliquée récursivement à cette somme.</p>
+<p>La somme ainsi générée est parenthésée.</p>
+<p>Notons que les sous-sommes récursivement produites n’ont pas besoin de l’être
+car l’addition est associative.</p>
+<p>On applique cette transformation à toutes les expressions <code class="docutils literal notranslate"><span class="pre">somme(…)</span></code> tant
+qu’il en existe dans le programme.</p>
+<p><strong>Exemple</strong>. Considérons l’expression suivante :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">somme(i</span> <span class="pre">=</span> <span class="pre">XZ</span> <span class="pre">;</span> <span class="pre">j</span> <span class="pre">=</span> <span class="pre">9..10</span> <span class="pre">:</span> <span class="pre">Bi</span> <span class="pre">+</span> <span class="pre">Bj)</span></code></p></li>
+</ul>
+<p>Elle est dans un premier temps remplacée par la somme suivante :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">(somme(j</span> <span class="pre">=</span> <span class="pre">9..10</span> <span class="pre">:</span> <span class="pre">BX</span> <span class="pre">+</span> <span class="pre">Bj)</span> <span class="pre">+</span> <span class="pre">somme(j</span> <span class="pre">=</span> <span class="pre">9..10</span> <span class="pre">:</span> <span class="pre">BZ</span> <span class="pre">+</span> <span class="pre">Bj))</span></code></p></li>
+</ul>
+<p>puis dans un second temps par la somme :</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">(BX</span> <span class="pre">+</span> <span class="pre">B09</span> <span class="pre">+</span> <span class="pre">BX</span> <span class="pre">+</span> <span class="pre">B10</span> <span class="pre">+</span> <span class="pre">BZ</span> <span class="pre">+</span> <span class="pre">B09</span> <span class="pre">+</span> <span class="pre">BZ</span> <span class="pre">+</span> <span class="pre">B10)</span></code></p></li>
+</ul>
+<p>On remarque que seule l’expression globale est parenthésée car l’addition est
+associative.</p>
+</section>
+<section id="cas-des-multi-formules">
+<h4>Cas des multi-formules<a class="headerlink" href="#cas-des-multi-formules" title="Lien vers cette rubrique">¶</a></h4>
+<p>On commence par substituer toutes les expressions <code class="docutils literal notranslate"><span class="pre">somme(…)</span></code> apparaissant dans
+les multi-formules.</p>
+<p>Puis on transforme les multi-formules en séries de formules en suivant la
+méthode décrite ci-dessous.</p>
+<p>Pour chaque multi-formule rencontrée, de la forme <code class="docutils literal notranslate"><span class="pre">pour</span> <span class="pre">&lt;indices&gt;</span> <span class="pre">:</span> <span class="pre">&lt;formule&gt;</span></code>,
+dès que les constantes apparaîssant dans les <indices> ont été substitués, on
+remplace cette multi-formule par la série de formules générée de la manière
+suivante.</p>
+<p>Pour une multi-formule <code class="docutils literal notranslate"><span class="pre">pour</span> <span class="pre">&lt;indice:ind&gt;</span> <span class="pre">:</span> <span class="pre">&lt;formule:f&gt;</span></code>, la
+formule <code class="docutils literal notranslate"><span class="pre">f</span></code> sera remplacée par la série des formules construites ainsi : pour
+chaque chaîne de caractères de la série introduite par <code class="docutils literal notranslate"><span class="pre">ind</span></code>, les symboles
+apparaîssant dans <code class="docutils literal notranslate"><span class="pre">f</span></code> sont remplacés par ceux dans lesquels la lettre
+minuscule de <code class="docutils literal notranslate"><span class="pre">ind</span></code> est substituéé par la chaïne de caractère.</p>
+<p>On notera <code class="docutils literal notranslate"><span class="pre">sub(ind,</span> <span class="pre">f)</span></code> la série constituée des formules ainsi régérées.</p>
+<p>Une multi-formule <code class="docutils literal notranslate"><span class="pre">pour</span> <span class="pre">&lt;indice:ind&gt;</span> <span class="pre">;</span> <span class="pre">&lt;indices:inds&gt;</span> <span class="pre">:</span> <span class="pre">&lt;formule:f&gt;</span></code>,
+est remplacée par la série des multi-formules
+<code class="docutils literal notranslate"><span class="pre">pour</span> <span class="pre">&lt;indices:inds&gt;</span> <span class="pre">:</span> <span class="pre">f'&gt;</span></code> avec <code class="docutils literal notranslate"><span class="pre">f'</span></code> prenant sa valeur
+dans la série <code class="docutils literal notranslate"><span class="pre">sub(ind,</span> <span class="pre">f)</span></code>.</p>
+<p>La procédure est ensuite appliquée récursivement
+à ces multi-formules.</p>
+<p><strong>Exemple</strong>. Considérons la multi-formule suivante :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pour</span> <span class="n">i</span> <span class="o">=</span> <span class="n">XZ</span> <span class="p">;</span> <span class="n">j</span> <span class="o">=</span> <span class="mf">9..10</span> <span class="p">:</span>
+  <span class="n">Bi</span> <span class="o">=</span> <span class="n">Bi</span> <span class="o">+</span> <span class="n">Bj</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Elle est dans un premier temps remplacée par la série suivante :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pour</span> <span class="n">j</span> <span class="o">=</span> <span class="mf">9..10</span> <span class="p">:</span>
+  <span class="n">BX</span> <span class="o">=</span> <span class="n">BX</span> <span class="o">+</span> <span class="n">Bj</span><span class="p">;</span>
+ 
+<span class="n">pour</span> <span class="n">j</span> <span class="o">=</span> <span class="mf">9..10</span> <span class="p">:</span>
+  <span class="n">BZ</span> <span class="o">=</span> <span class="n">BZ</span> <span class="o">+</span> <span class="n">Bj</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Puis dans un second temps par la série des formules :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">BX</span> <span class="o">=</span> <span class="n">BX</span> <span class="o">+</span> <span class="n">B09</span><span class="p">;</span>
+<span class="n">BX</span> <span class="o">=</span> <span class="n">BX</span> <span class="o">+</span> <span class="n">B10</span><span class="p">;</span>
+<span class="n">BZ</span> <span class="o">=</span> <span class="n">BZ</span> <span class="o">+</span> <span class="n">B09</span><span class="p">;</span>
+<span class="n">BZ</span> <span class="o">=</span> <span class="n">BZ</span> <span class="o">+</span> <span class="n">B10</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="verification-de-coherence">
+<h3>Vérification de cohérence<a class="headerlink" href="#verification-de-coherence" title="Lien vers cette rubrique">¶</a></h3>
+<p>De nombreuses constructions sont valides à la traduction, mais brisent
+certains invariants nécessaires à la bonne exécution du code : double
+déclaration d’attributs, nom de variable déjà utilisé, variable mal
+typée…
+L’ensemble de ces vérifications est accessible dans le module
+<code class="docutils literal notranslate"><span class="pre">Validator</span></code> du frontend. Le sous module <code class="docutils literal notranslate"><span class="pre">Validator.Err</span></code> définit l’ensemble
+des erreurs levées par cette étape de vérification.</p>
+<p><strong>NB</strong> : seule la première erreur rencontrée par le validateur est levée.</p>
+</section>
+<section id="traitement">
+<h3>Traitement<a class="headerlink" href="#traitement" title="Lien vers cette rubrique">¶</a></h3>
+<section id="interpreteur">
+<h4>Interpreteur<a class="headerlink" href="#interpreteur" title="Lien vers cette rubrique">¶</a></h4>
+<p>L’interpréteur utilise la représentation interne du code M
+pour lancer le calcul à partir d’un fichier IRJ
+(voir <a class="reference internal" href="syntax_irj.html#syntax-irj"><span class="std std-ref">Les fichiers IRJ</span></a>).
+L’interprétation est effecuée par le module <code class="docutils literal notranslate"><span class="pre">Test_interpreter</span></code>.</p>
+</section>
+<section id="transpilation">
+<h4>Transpilation<a class="headerlink" href="#transpilation" title="Lien vers cette rubrique">¶</a></h4>
+<p>La transpilation traduit le code dans le langage spécifié (en 2025, seul le C
+est transpilable). La transpilation est effecutée dans le module
+<code class="docutils literal notranslate"><span class="pre">Bir_to_dgfip_c</span></code>.</p>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MLang</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction au langage M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="syntax.html">La syntaxe du M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fonctions.html">Les fonctions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="syntax_irj.html">Les fichiers IRJ</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Le compilateur MLang</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installer">Installer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#utiliser-mlang">Utiliser MLang</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#comportement-de-mlang">Comportement de Mlang</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="exemples/valeurs.html">Calcul des valeurs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="exemples/fonctions.html">Les fonctions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="syntax_irj.html" title="Chapitre précédent">Les fichiers IRJ</a></li>
+      <li>Next: <a href="exemples/valeurs.html" title="Chapitre suivant">Calcul des valeurs</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Direction Générale des FInances Publiques.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/mlang.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

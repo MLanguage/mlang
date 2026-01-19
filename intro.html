@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+
+<html lang="fr" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Introduction au langage M &#8212; Documentation MLang </title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=d1a510d7"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=e6b791cb"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Recherche" href="search.html" />
+    <link rel="next" title="La syntaxe du M" href="syntax.html" />
+    <link rel="prev" title="Documentation du langage M" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="introduction-au-langage-m">
+<span id="intro-m"></span><h1>Introduction au langage M<a class="headerlink" href="#introduction-au-langage-m" title="Lien vers cette rubrique">¶</a></h1>
+<section id="les-elements-de-base">
+<h2>Les éléments de base<a class="headerlink" href="#les-elements-de-base" title="Lien vers cette rubrique">¶</a></h2>
+<p>Un programme M se caracterise par la définition successive :</p>
+<ul class="simple">
+<li><p>de types de variables avec leurs attributs ;</p></li>
+<li><p>de domaines et d’événements ;</p></li>
+<li><p>d’espaces de variables ;</p></li>
+<li><p>d’applications ;</p></li>
+<li><p>de variables et de constantes ;</p></li>
+<li><p>des fonctions ;</p></li>
+<li><p>de règles de calcul associées ou non à une application.</p></li>
+</ul>
+<p>Exécuter d’un tel programme pour une application donnée correspond à
+exécuter l’ensemble des règles de calcul associée la dite application.</p>
+<p>L’ordre d’exécution des règles de calcul dépend des dépendances entre les
+variables. Si une variable est affectée dans une règle, alors cette règle
+sera exécutée avant toutes celles utilisant la valeur de la dite variable.</p>
+<p>Si une variable est lue et écrite cycliquement, l’ordre d’exécution des règles
+n’est pas garanti.</p>
+</section>
+<section id="definitions-par-defaut">
+<h2>Définitions par défaut<a class="headerlink" href="#definitions-par-defaut" title="Lien vers cette rubrique">¶</a></h2>
+<p>Les types de variables, leurs attributs, les domaines et les événements
+sont historiquement des mots clés propres au langage M.</p>
+<p>Il est aujourd’hui possible de les définir à la main.</p>
+</section>
+<section id="apercu-de-la-syntaxe">
+<h2>Aperçu de la syntaxe<a class="headerlink" href="#apercu-de-la-syntaxe" title="Lien vers cette rubrique">¶</a></h2>
+<p>Voici un exemple simple de programme M minimal.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Fichier: test.m</span>
+
+<span class="c1"># On définit un espace de variable global dans lequel nos variables</span>
+<span class="c1"># seront stockées par défaut.</span>
+<span class="n">espace_variables</span> <span class="n">GLOBAL</span> <span class="p">:</span> <span class="n">par_defaut</span><span class="p">;</span>
+
+<span class="c1"># On définit deux domaines obligatoires:</span>
+<span class="c1"># * un domaine pour les règles;</span>
+<span class="c1"># * un domaine pour les vérificateurs.</span>
+<span class="n">domaine</span> <span class="n">regle</span> <span class="n">mon_domaine_de_regle</span><span class="p">:</span> <span class="n">par_defaut</span><span class="p">:</span> <span class="n">calculable</span><span class="p">;</span>
+<span class="n">domaine</span> <span class="n">verif</span> <span class="n">mon_domaine_de_verifications</span><span class="p">:</span> <span class="n">par_defaut</span><span class="p">;</span>
+
+<span class="c1"># On définit une ou plusiseurs application pour nos règles.</span>
+<span class="n">application</span> <span class="n">mon_application</span><span class="p">;</span>
+
+<span class="c1"># On définit une cible, un ensemble d&#39;instructions à exécuter.</span>
+<span class="n">cible</span> <span class="n">hello_world</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;Bonjour, monde!</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Cet exemple jouet n’utilise ni ne définit aucune variable, les domaines
+et les espaces de variables ne sont pas utilisés ici mais ils seront nécessaires
+plus tard.</p>
+<p>Pour essayer notre exemple, nous allons créer un fichier “test.irj” avec le
+contenu suivant :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1">#NOM</span>
+<span class="n">MON</span><span class="o">-</span><span class="n">TEST</span>
+<span class="c1">#ENTREES-PRIMITIF</span>
+<span class="c1">#CONTROLES-PRIMITIF</span>
+<span class="c1">#RESULTATS-PRIMITIF</span>
+<span class="c1">#ENTREES-CORRECTIF</span>
+<span class="c1">#CONTROLES-CORRECTIF</span>
+<span class="c1">#RESULTATS-CORRECTIF</span>
+<span class="c1">##</span>
+</pre></div>
+</div>
+<p>Le détail de la syntaxe irj peut être sur la page dédiée : <a class="reference internal" href="syntax_irj.html#syntax-irj"><span class="std std-ref">Les fichiers IRJ</span></a></p>
+<p>Enfin, on peut lancer mlang.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> $ mlang --without_dfgip_m test.m -A mon_application --mpp_function hello_world --run_test test.irj
+ Parsing: completed!
+ Bonjour, monde!
+ [RESULT] test.irj
+ [RESULT] No failure!
+ [RESULT] Test passed!
+</pre></div>
+</div>
+</section>
+<section id="definition-de-variables">
+<h2>Définition de variables<a class="headerlink" href="#definition-de-variables" title="Lien vers cette rubrique">¶</a></h2>
+<p>Les variables sont divisées en deux catégories.</p>
+<ul class="simple">
+<li><p>Les variables <code class="docutils literal notranslate"><span class="pre">saisie</span></code>s sont les variables d’entrées du
+programme M.</p></li>
+<li><p>Les variables <code class="docutils literal notranslate"><span class="pre">calculee</span></code>s sont les variables sur lesquelles seront
+calculées les données.</p></li>
+</ul>
+<p>Chacune de ces catégories principales doivent être dotées d’attributs,
+un ensemble d’entiers constants pour une variable donnée.
+Ainsi, on peut rajouter à notre programme test les lignes suivantes :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">variable</span> <span class="n">saisie</span> <span class="p">:</span> <span class="n">attribut</span> <span class="n">mon_attribut</span><span class="p">;</span>
+<span class="n">variable</span> <span class="n">calculee</span> <span class="p">:</span> <span class="n">attribut</span> <span class="n">mon_attribut</span><span class="p">;</span>
+<span class="n">X</span> <span class="p">:</span> <span class="n">saisie</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">0</span> <span class="n">alias</span> <span class="n">ALIAS_DE_X</span> <span class="p">:</span> <span class="s2">&quot;Cette variable s&#39;appelle X&quot;</span><span class="p">;</span>
+<span class="n">Y</span> <span class="p">:</span> <span class="n">calculee</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">1</span> <span class="p">:</span> <span class="s2">&quot;Cette variable s&#39;appelle Y&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Notez que la variable <code class="docutils literal notranslate"><span class="pre">X</span></code> a un alias <code class="docutils literal notranslate"><span class="pre">ALIAS_DE_X</span></code>.
+Toutes les variables saisies doivent être parées d’un alias qui peut être
+utilisé de la même façon que son nom original.
+Cet alias existe initialement pour faire le lien entre la variable utilisée
+dans le M (nom original) et le code de la variable dans le formulaire de
+déclaration de l’impot sur le revenu tel qu’on le retrouve aujourd’hui sur
+le site de déclaration (1AP, 8TV, …).</p>
+<p>Ajoutons une nouvelle cible à notre calcul :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cible</span> <span class="n">hello_world2</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;Bonjour, monde, X = &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="n">X</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot; !</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">X</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;Y = &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="n">Y</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot; !</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Et lançons le calcul :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> $ mlang --without_dfgip_m test.m -A mon_application --mpp_function hello_world2 --run_test test.irj
+Parsing: completed!
+Bonjour, monde, X = indefini !
+Y = 1 !
+[RESULT] test.irj
+[RESULT] No failure!
+[RESULT] Test passed!
+</pre></div>
+</div>
+<p>Pour comprendre la valeur finale de Y, référez-vous à la
+section <a class="reference internal" href="syntax.html#valeurs"><span class="std std-ref">Les valeurs</span></a>.</p>
+</section>
+<section id="regles-de-calcul">
+<h2>Règles de calcul<a class="headerlink" href="#regles-de-calcul" title="Lien vers cette rubrique">¶</a></h2>
+<p>Les règles en M sont des unités de calcul de variables associées à une ou
+plusieurs application et optionnellement à un domaine de règles.
+Elles sont composées d’une successions d’affectations.
+Voici la définition de deux règles simples que nous rajoutons à notre fichier test :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Z</span> <span class="p">:</span> <span class="n">calculee</span> <span class="n">mon_attribut</span> <span class="o">=</span> <span class="mi">1</span> <span class="p">:</span> <span class="s2">&quot;Cette variable s&#39;appelle Z&quot;</span><span class="p">;</span>
+
+<span class="n">regle</span> <span class="n">mon_domaine_de_regles</span> <span class="mi">1</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">Z</span> <span class="o">=</span> <span class="n">Y</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+
+<span class="n">regle</span> <span class="mi">2</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">X</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>La première règle est associée au domaine <code class="docutils literal notranslate"><span class="pre">mon_domaine_de_regles</span></code> tandis que la
+seconde n’étant pas spécifié, sera associée au domaine de règle par défaut.
+Dans notre exemple, il s’agissait également de <code class="docutils literal notranslate"><span class="pre">mon_domaine_de_regles</span></code>.</p>
+<p>Le calcul d’un domaine correspond au calcul de l’ensemble de ses règles.
+L’ordre d’application des règles dépend de l’ordre d’affectation des variables.
+Dans notre cas, <code class="docutils literal notranslate"><span class="pre">X</span></code> est une entrée dont <code class="docutils literal notranslate"><span class="pre">Y</span></code> dépend (règle 2), et <code class="docutils literal notranslate"><span class="pre">Z</span></code> dépend de
+<code class="docutils literal notranslate"><span class="pre">Y</span></code>.</p>
+<p>Par conséquent, la règle 2 sera appliquée avant la règle 1.
+On peut ainsi rajouter une cible qui calcule le domaine de règles :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cible</span> <span class="n">calc_test</span><span class="p">:</span>
+<span class="n">application</span> <span class="p">:</span> <span class="n">mon_application</span><span class="p">;</span>
+<span class="n">calculer</span> <span class="n">domaine</span> <span class="n">mon_domaine_de_regles</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="s2">&quot;X = &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="n">X</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Y = &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="n">Y</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Z = &quot;</span><span class="p">;</span>
+<span class="n">afficher</span> <span class="p">(</span><span class="n">Z</span><span class="p">);</span>
+<span class="n">afficher</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Et lancer le calcul :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> $ mlang --without_dfgip_m test.m -A mon_application --mpp_function calc_test --run_test test.irj
+ Parsing: completed!
+ X = indefini
+ Y = 1
+ Z = 2
+ [RESULT] test.irj
+ [RESULT] No failure!
+ [RESULT] Test passed!
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MLang</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Introduction au langage M</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#les-elements-de-base">Les éléments de base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#definitions-par-defaut">Définitions par défaut</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#apercu-de-la-syntaxe">Aperçu de la syntaxe</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#definition-de-variables">Définition de variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#regles-de-calcul">Règles de calcul</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="syntax.html">La syntaxe du M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fonctions.html">Les fonctions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="syntax_irj.html">Les fichiers IRJ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mlang.html">Le compilateur MLang</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="exemples/valeurs.html">Calcul des valeurs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="exemples/fonctions.html">Les fonctions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="Chapitre précédent">Documentation du langage M</a></li>
+      <li>Next: <a href="syntax.html" title="Chapitre suivant">La syntaxe du M</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Direction Générale des FInances Publiques.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/intro.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

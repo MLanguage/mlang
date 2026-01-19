@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html lang="fr" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Les fichiers IRJ &#8212; Documentation MLang </title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=d1a510d7"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=e6b791cb"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Recherche" href="search.html" />
+    <link rel="next" title="Le compilateur MLang" href="mlang.html" />
+    <link rel="prev" title="Les fonctions" href="fonctions.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="les-fichiers-irj">
+<span id="syntax-irj"></span><h1>Les fichiers IRJ<a class="headerlink" href="#les-fichiers-irj" title="Lien vers cette rubrique">¶</a></h1>
+<section id="syntaxe">
+<h2>Syntaxe<a class="headerlink" href="#syntaxe" title="Lien vers cette rubrique">¶</a></h2>
+<p>Les fichiers IRJ sont des fichiers de test faisant corespondre entrées et
+sorties du calcul d’un programme M.
+Chaque fichier IRJ est divisé en 7 parties, plus 3 parties optionnelles,
+et est terminé par la ligne <code class="docutils literal notranslate"><span class="pre">##</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">NOM</span></code> : le nom du test.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENTREES-PRIMITIF</span></code> : les valeurs des variables d’entrées au début du calcul. A chaque variable <code class="docutils literal notranslate"><span class="pre">VAR</span></code> est associée une valeur <code class="docutils literal notranslate"><span class="pre">val</span></code> entière ou décimale sur une ligne de la forme <code class="docutils literal notranslate"><span class="pre">VAR/val</span></code>. Les variables d’entrées qui ne sont pas définies dans le fichier IRJ seront initialisées à <code class="docutils literal notranslate"><span class="pre">indefini</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CONTROLES-PRIMITIF</span></code> : à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RESULTATS-PRIMITIF</span></code> : les valeurs des variables restituées à la fin du calcul. Comme pour les variables d’entrées, elles sont décrites sous la forme <code class="docutils literal notranslate"><span class="pre">VAR/val</span></code>. Les valeurs restituées absentes du fichiers IRJ sont supposées avoir la valeur <code class="docutils literal notranslate"><span class="pre">indefini</span></code> à la fin du calcul.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENTREES-CORRECTIF</span></code> : à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CONTROLES-CORRECTIF</span></code> : à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RESULTATS-CORRECTIF</span></code> : à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENTREES-RAPPELS</span></code> : partie optionnelle, à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CONTROLES-RAPPELS</span></code> : partie optionnelle, à documenter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RESULTATS-RAPPELS</span></code> : partie optionnelle, à documenter</p></li>
+</ul>
+<p>Voici un exemple de fichier IRJ minimal</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>   <span class="c1">#NOM</span>
+   <span class="n">MON</span><span class="o">-</span><span class="n">TEST</span>
+   <span class="c1">#ENTREES-PRIMITIF</span>
+   <span class="n">X</span><span class="o">/</span><span class="mf">0.0</span>
+   <span class="c1">#CONTROLES-PRIMITIF</span>
+   <span class="c1">#RESULTATS-PRIMITIF</span>
+   <span class="n">Y</span><span class="o">/</span><span class="mi">1</span>
+   <span class="n">Z</span><span class="o">/</span><span class="mf">2.0</span>
+   <span class="c1">#ENTREES-CORRECTIF</span>
+   <span class="c1">#CONTROLES-CORRECTIF</span>
+   <span class="c1">#RESULTATS-CORRECTIF</span>
+   <span class="c1">##</span>
+</pre></div>
+</div>
+<p>De nombreux exemples de fichiers IRJ sont disponibles dans le dossier <code class="docutils literal notranslate"><span class="pre">tests/</span></code>.</p>
+</section>
+<section id="utilisation">
+<h2>Utilisation<a class="headerlink" href="#utilisation" title="Lien vers cette rubrique">¶</a></h2>
+<p>Trois utilitaires sont dédiés à l’utilisation des fichiers IRJ.</p>
+<section id="irj-checker">
+<h3>IRJ checker<a class="headerlink" href="#irj-checker" title="Lien vers cette rubrique">¶</a></h3>
+<p>Les sources de mlang mettent à disposition un code de vérification de fichiers
+IRJ.
+Après compilation, il peut être exécuté via la commande :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ dune exec -- irj_checker
+</pre></div>
+</div>
+</section>
+<section id="interpreteur">
+<h3>Interpreteur<a class="headerlink" href="#interpreteur" title="Lien vers cette rubrique">¶</a></h3>
+<p>Le binaire mlang intègre un interpreteur de M qui prend en entrée un ou
+plusieurs fichiers M ainsi qu’un fichier IRJ.
+Après compilation, l’interpreteur peut être exécuté via la commande :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ dune exec -- mlang test.m -A application -b interpreter --mpp_function cible_dentree  --dgfip_options=&#39;&#39; -r test.irj
+</pre></div>
+</div>
+<p>L’option <code class="docutils literal notranslate"><span class="pre">-r</span></code> peut être remplacée par <code class="docutils literal notranslate"><span class="pre">-R</span></code> pour tester l’ensemble des tests d’un
+dossier complet.</p>
+</section>
+<section id="fichiers-c">
+<h3>Fichiers C<a class="headerlink" href="#fichiers-c" title="Lien vers cette rubrique">¶</a></h3>
+<p>Il est également possible d’utiliser les fichiers IRJ comme entrée du code C
+généré à partir d’une compilation de code M par <code class="docutils literal notranslate"><span class="pre">mlang</span></code>.
+Ce traitement est effectué dans le cas du backend <code class="docutils literal notranslate"><span class="pre">dgfip_c</span></code> de mlang, dont
+le code est disponible dans <code class="docutils literal notranslate"><span class="pre">examples/dgfip_c/ml_primitif</span></code>.
+La calculette d’une année donnée peut êter compilée via :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ make YEAR=year compile_dgfip_c_backend
+</pre></div>
+</div>
+<p>Les scripts présents dans <code class="docutils literal notranslate"><span class="pre">examples/dgfip_c/ml_primitif/ml_driver</span></code> permettent
+d’interfacer les fichiers IRJ avec les valeurs <code class="docutils literal notranslate"><span class="pre">C</span></code> de type <code class="docutils literal notranslate"><span class="pre">T_irdata</span></code> contenant
+le TGV (Tableau Général des Variables).
+La commande suivante permet de tester la calculette d’une année sur l’ensemble
+des tests fuzzés de la dite année.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ make test_dgfip_c_backend
+</pre></div>
+</div>
+<p>L’utilisation du script <code class="docutils literal notranslate"><span class="pre">cal</span></code> utilisé dans cette règle est documentée dans
+<code class="docutils literal notranslate"><span class="pre">examples/dgfip_c/README.md</span></code>.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MLang</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction au langage M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="syntax.html">La syntaxe du M</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fonctions.html">Les fonctions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Les fichiers IRJ</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#syntaxe">Syntaxe</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#utilisation">Utilisation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mlang.html">Le compilateur MLang</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="exemples/valeurs.html">Calcul des valeurs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="exemples/fonctions.html">Les fonctions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="fonctions.html" title="Chapitre précédent">Les fonctions</a></li>
+      <li>Next: <a href="mlang.html" title="Chapitre suivant">Le compilateur MLang</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Direction Générale des FInances Publiques.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/syntax_irj.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
