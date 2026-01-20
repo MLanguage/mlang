@@ -78,8 +78,8 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
     in
     let toNum p = Com.Numeric (Com.Float (float p)) in
     let optToNum = function
-      | Some p -> Com.Numeric (Com.Float (float p))
-      | None -> Com.Numeric Com.Undefined
+      | Some p -> Com.(Numeric (Float (float p)))
+      | None -> Com.(Numeric (Float 0.))
     in
     let toEvent (rappel : Irj_ast.rappel) =
       StrMap.empty
@@ -100,12 +100,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
   in
   let expVars vars_init =
     let fold res (Pos.Mark (var, _), Pos.Mark (value, _)) =
-      let fVal =
-        match value with
-        | Irj_ast.I i -> Com.Float (float i)
-        | Irj_ast.F f -> Com.Float f
-        | Irj_ast.U -> Com.Undefined
-      in
+      let fVal = irj_lit_to_com_lit value in
       StrMap.add var fVal res
     in
     List.fold_left fold StrMap.empty vars_init

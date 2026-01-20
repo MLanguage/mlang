@@ -583,7 +583,7 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
       | Pos.Mark (AtomVar m_v', _) ->
           let a' = Com.VarAccess (m_sp_opt', m_v') in
           ExpAccess (Pos.mark a' a_pos))
-  | TabAccess (m_sp_opt, m_v, m_i) -> (
+  | TabAccess ((m_sp_opt, m_v), m_i) -> (
       match expand_variable const_map loop_map m_v with
       | Pos.Mark (AtomLiteral _, v_pos) -> Err.constant_forbidden_as_table v_pos
       | Pos.Mark (AtomVar m_v', _) ->
@@ -597,7 +597,7 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
               m_sp_opt
           in
           let m_i' = expand_expression const_map loop_map m_i in
-          let a' = Com.TabAccess (m_sp_opt', m_v', m_i') in
+          let a' = Com.TabAccess ((m_sp_opt', m_v'), m_i') in
           ExpAccess (Pos.mark a' a_pos))
   | FieldAccess (m_sp_opt, e, f, i_f) ->
       let m_sp_opt' =
@@ -611,6 +611,14 @@ let rec expand_access (const_map : const_context) (loop_map : loop_context)
       in
       let e' = expand_expression const_map loop_map e in
       ExpAccess (Pos.mark (Com.FieldAccess (m_sp_opt', e', f, i_f)) a_pos)
+
+and expand_switch_expression (const_map : const_context)
+    (loop_map : loop_context) = function
+  | Com.SEValue e -> Com.SEValue (expand_expression const_map loop_map e)
+  | SESameVariable v -> (
+      match expand_access const_map loop_map v with
+      | ExpAccess m_a -> SESameVariable m_a
+      | ExpLiteral _ -> SESameVariable v)
 
 and expand_expression (const_map : const_context) (loop_map : loop_context)
     (m_expr : Mast.expression Pos.marked) : Mast.expression Pos.marked =
@@ -766,6 +774,14 @@ let expand_formula (const_map : const_context)
       let res = loop_context_provider translator in
       List.rev res @ prev
 
+let expand_switch_case const_map loop_map c =
+  match c with
+  | Com.CVar e -> (
+      match expand_access const_map loop_map e with
+      | ExpLiteral l -> Com.CValue l
+      | ExpAccess a -> Com.CVar a)
+  | CValue _ | CDefault -> c
+
 let rec expand_instruction (const_map : const_context)
     (prev : Mast.instruction Pos.marked list)
     (m_instr : Mast.instruction Pos.marked) : Mast.instruction Pos.marked list =
@@ -781,9 +797,18 @@ let rec expand_instruction (const_map : const_context)
       let ielse' = expand_instructions const_map ielse in
       Pos.same (Com.IfThenElse (expr', ithen', ielse')) m_instr :: prev
   | Com.Switch (e, l) ->
-      let e' = expand_expression const_map ParamsMap.empty e in
+      let e' = expand_switch_expression const_map ParamsMap.empty e in
       let l' =
-        List.map (fun (c, l) -> (c, expand_instructions const_map l)) l
+        List.map
+          (fun (cl, l) ->
+            let cl =
+              match e with
+              | SESameVariable _ -> cl
+              | SEValue _ ->
+                  List.map (expand_switch_case const_map ParamsMap.empty) cl
+            in
+            (cl, expand_instructions const_map l))
+          l
       in
       Pos.same (Com.Switch (e', l')) m_instr :: prev
   | Com.WhenDoElse (wdl, ed) ->

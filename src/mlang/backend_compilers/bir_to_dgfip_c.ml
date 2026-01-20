@@ -165,6 +165,28 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   let value_comp = D.dinstr res_val in
   D.build_transitive_composition { set_vars; def_test; value_comp }
 
+and code_access (p : Mir.program) m_acc =
+  let d_irdata = D.ddirect (D.dinstr "irdata") in
+  match Pos.unmark m_acc with
+  | Com.VarAccess (_, v) -> ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
+  | Com.TabAccess ((_, v), m_i) ->
+      let ei = generate_c_expr p m_i in
+      let d_fun =
+        D.dfun "lis_tabaccess_varinfo"
+          [
+            d_irdata;
+            D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
+            ei.def_test;
+            ei.value_comp;
+          ]
+      in
+      (ei.set_vars, D.ddirect @@ d_fun)
+  | Com.FieldAccess (_, ie, f, _) ->
+      let e = generate_c_expr p ie in
+      let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
+      let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
+      (e.set_vars, D.ddirect d_fun)
+
 and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
     D.expression_composition =
   let comparison op se1 se2 =
@@ -245,7 +267,7 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
                     D.{ set_vars = []; def_test; value_comp }
                   in
                   comparison (Pos.without Com.Eq) sle0 s_v
-              | Com.VarValue (Pos.Mark (TabAccess (m_sp_opt, v, m_i), _)) ->
+              | Com.VarValue (Pos.Mark (TabAccess ((m_sp_opt, v), m_i), _)) ->
                   let s_v = lis_tabaccess p m_sp_opt v m_i in
                   comparison (Pos.without Com.Eq) sle0 s_v
               | Com.VarValue (Pos.Mark (FieldAccess (m_sp_opt, me, f, _), _)) ->
@@ -491,7 +513,7 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
       let def_test = D.m_var m_sp_opt var Def in
       let value_comp = D.m_var m_sp_opt var Val in
       { set_vars = []; def_test; value_comp }
-  | Var (TabAccess (m_sp_opt, v, m_idx)) -> lis_tabaccess p m_sp_opt v m_idx
+  | Var (TabAccess ((m_sp_opt, v), m_idx)) -> lis_tabaccess p m_sp_opt v m_idx
   | Var (FieldAccess (m_sp_opt, me, f, _)) ->
       let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
       let res = fresh_c_local "result" in
@@ -526,7 +548,7 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
   | Attribut (m_acc, a) -> (
       let attr = Pos.unmark a in
       match Pos.unmark m_acc with
-      | VarAccess (_, v) | TabAccess (_, v, _) ->
+      | VarAccess (_, v) | TabAccess ((_, v), _) ->
           let ptr = VID.gen_info_ptr v in
           let def_test =
             D.dinstr (Pp.spr "attribut_%s_def((T_varinfo *)%s)" attr ptr)
@@ -596,7 +618,7 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
         match Pos.unmark m_acc with
         | Com.VarAccess (_, v) ->
             ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
-        | Com.TabAccess (_, v, m_i) ->
+        | Com.TabAccess ((_, v), m_i) ->
             let ei = generate_c_expr p m_i in
             let d_fun =
               D.dfun "lis_tabaccess_varinfo"
@@ -648,31 +670,8 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
       let value_comp = D.dinstr res_val in
       D.build_transitive_composition { set_vars; def_test; value_comp }
   | SameVariable (m_acc0, m_acc1) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
-      let code_access m_acc =
-        match Pos.unmark m_acc with
-        | Com.VarAccess (_, v) ->
-            ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
-        | Com.TabAccess (_, v, m_i) ->
-            let ei = generate_c_expr p m_i in
-            let d_fun =
-              D.dfun "lis_tabaccess_varinfo"
-                [
-                  d_irdata;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-                  ei.def_test;
-                  ei.value_comp;
-                ]
-            in
-            (ei.set_vars, D.ddirect @@ d_fun)
-        | Com.FieldAccess (_, ie, f, _) ->
-            let e = generate_c_expr p ie in
-            let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
-            (e.set_vars, D.ddirect d_fun)
-      in
-      let set_vars0, evt_d_fun0 = code_access m_acc0 in
-      let set_vars1, evt_d_fun1 = code_access m_acc1 in
+      let set_vars0, evt_d_fun0 = code_access p m_acc0 in
+      let set_vars1, evt_d_fun1 = code_access p m_acc1 in
       let res = fresh_c_local "res" in
       let res_def = Pp.spr "%s_def" res in
       let res_val = Pp.spr "%s_val" res in
@@ -727,7 +726,7 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
           let def_test = D.dinstr res_def in
           let value_comp = D.dinstr res_val in
           D.build_transitive_composition { set_vars; def_test; value_comp }
-      | TabAccess (_, v, m_i) ->
+      | TabAccess ((_, v), m_i) ->
           let d_irdata = D.ddirect (D.dinstr "irdata") in
           let res = fresh_c_local "res" in
           let res_def = Pp.spr "%s_def" res in
@@ -809,9 +808,9 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
-let generate_expr_with_res_in p dgfip_flags oc res_def res_val expr =
+let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
+    =
   let pr form = Format.fprintf oc form in
-  let locals, set, def, value = D.build_expression @@ generate_c_expr p expr in
   if D.is_always_true def then
     pr "@;@[<v 2>{%a%a%a%a@]@;}" D.format_local_declarations locals
       (D.format_set_vars dgfip_flags)
@@ -829,6 +828,10 @@ let generate_expr_with_res_in p dgfip_flags oc res_def res_val expr =
       def res_def
       (D.format_assign dgfip_flags res_val)
       value res_val
+
+let generate_expr_with_res_in p dgfip_flags oc res_def res_val expr =
+  generate_c_expr p expr |> D.build_expression
+  |> write_decoupled_expr dgfip_flags oc res_def res_val
 
 let generate_m_assign (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) (oc : Format.formatter)
@@ -944,7 +947,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       match Pos.unmark m_acc with
       | VarAccess (m_sp_opt, v) ->
           generate_var_def p dgfip_flags m_sp_opt v expr oc
-      | TabAccess (m_sp_opt, v, m_idx) ->
+      | TabAccess ((m_sp_opt, v), m_idx) ->
           generate_var_def_tab p dgfip_flags m_sp_opt v m_idx expr oc
       | FieldAccess (m_sp_opt, i, f, _) ->
           let fn = Pos.unmark f in
@@ -968,7 +971,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@]@;}";
       pr "@]@;}"
   | Switch (e, l) ->
-      pr "@;@[<v 2>{";
       (* Undef & Default should be unique, but just in case we take them all *)
       let undef_branches, default_branches, other_branches =
         List.fold_left
@@ -976,9 +978,10 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             List.fold_left
               (fun (und, def, oth) c ->
                 match c with
-                | Com.Default -> (und, l :: def, oth)
-                | Com.(Value Undefined) -> (l :: und, def, oth)
-                | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+                | Com.CDefault -> (und, l :: def, oth)
+                | Com.(CValue Undefined) -> (l :: und, def, oth)
+                | Com.(CValue (Float f)) -> (und, def, (`Float f, l) :: oth)
+                | Com.CVar v -> (und, def, (`Var v, l) :: oth))
               acc cl)
           ([], [], []) l
       in
@@ -988,42 +991,85 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       let exp = fresh_c_local "exp" in
       let exp_def = exp ^ "_def" in
       let exp_val = exp ^ "_val" in
+      let is_var_switch =
+        match e with SESameVariable _ -> true | SEValue _ -> false
+      in
+      let var_of_switch () =
+        assert is_var_switch;
+        match e with SESameVariable e -> e | _ -> assert false
+      in
+      pr "@;@[<v 2>{";
       pr "@;char %s;@;double %s;" exp_def exp_val;
-      generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
-      pr "@;@[<v 2>if (%s) {" exp_def;
-      pr "@;";
+      let () =
+        (* Check is def if necessary *)
+        match e with
+        | SESameVariable _ -> pr "{@;"
+        | SEValue e ->
+            generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
+            pr "@;@[<v 2>if (%s) {@;" exp_def
+      in
+      pr "// Switch cases  @;";
       (* Expression is defined *)
       let () =
+        let pp_case (v, br) =
+          match v with
+          | `Float v ->
+              assert (not is_var_switch);
+              pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
+                (generate_stmts env dgfip_flags p)
+                br
+          | `Var v ->
+              assert is_var_switch;
+              let e = var_of_switch () in
+              let compared_var = Pos.unmark e in
+              let is_same = fresh_c_local "is_same_var" in
+              let is_same_def = is_same ^ "_def" in
+              let is_same_val = is_same ^ "_val" in
+              pr "@;char %s;@;double %s;" is_same_def is_same_val;
+              let ex =
+                Pos.same (Com.SameVariable (v, Pos.same compared_var e)) e
+              in
+              generate_expr_with_res_in p dgfip_flags oc is_same_def is_same_val
+                ex;
+              pr "if (%s) {@;@[<v 2>%a@]@;}" is_same_val
+                (generate_stmts env dgfip_flags p)
+                br
+        in
+        let rec loop_else = function
+          | [] -> (
+              (* Default branch *)
+              match (default_branches, other_branches) with
+              | [], _ -> ()
+              | hd :: _, [] ->
+                  pr "// Default switch case@;";
+                  pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
+              | hd :: _, _ ->
+                  pr "// Default switch case@;";
+                  pr "@;else {@[<v 2>%a@]@;}"
+                    (generate_stmts env dgfip_flags p)
+                    hd)
+          | c :: tl ->
+              pr "else {@;@[<v 2>  ";
+              pp_case c;
+              loop_else tl;
+              pr "@]@;}@;"
+        in
         match other_branches with
         | [] -> ()
-        | (v, br) :: tl ->
-            pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
-              (generate_stmts env dgfip_flags p)
-              br;
-            List.iter
-              (fun (v, br) ->
-                pr "@; else if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val
-                  v
-                  (generate_stmts env dgfip_flags p)
-                  br)
-              tl
+        | c :: tl ->
+            pp_case c;
+            loop_else tl
       in
-      let () =
-        match (default_branches, other_branches) with
-        | [], _ -> ()
-        | hd :: _, [] ->
-            pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
-        | hd :: _, _ ->
-            pr "@;else {@[<v 2>%a@]@;}" (generate_stmts env dgfip_flags p) hd
-      in
-      pr "@;}";
+      pr "}@;// End of switch cases & default@;";
       (* Expression is undefined *)
       let () =
         match undef_branches with
         | [] -> ()
-        | hd :: _ -> pr " else %a" (generate_stmts env dgfip_flags p) hd
+        | hd :: _ ->
+            pr "// Undefined switch case@;";
+            pr " else %a" (generate_stmts env dgfip_flags p) hd
       in
-      pr "@]@;}@]"
+      pr "@]}"
   | WhenDoElse (wdl, ed) ->
       let goto_label = fresh_c_local "when_do_block" in
       let fin_label = fresh_c_local "when_do_end" in
@@ -1094,7 +1140,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                     match info with Com.Name -> "name" | Com.Alias -> "alias"
                   in
                   pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr fld
-              | TabAccess (m_sp_opt, v, m_idx) ->
+              | TabAccess ((m_sp_opt, v), m_idx) ->
                   pr_sp m_sp_opt (Some v);
                   pr "@;@[<v 2>{";
                   pr "T_varinfo *info;";
@@ -1168,7 +1214,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                 pr "@;%s = %s;" ref_val (VID.gen_val_ptr m_sp_opt var);
                 pr "@]@;}";
                 set_args (n + 1) vl' al'
-            | Com.TabAccess (m_sp_opt, var, vidx) ->
+            | Com.TabAccess ((m_sp_opt, var), vidx) ->
                 pr "@;@[<v 2>if (must_exec) {";
                 let idx_tab = Com.Var.loc_tab_idx var in
                 pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
@@ -1254,7 +1300,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@;%s = %s;" ref_val (VID.gen_val_ptr m_sp_opt v);
               pr "%a" (generate_stmts env dgfip_flags p) stmts;
               pr "@]@;}"
-          | Com.TabAccess (m_sp_opt, var, vidx) ->
+          | Com.TabAccess ((m_sp_opt, var), vidx) ->
               pr "@;@[<v 2>{";
               let idx_tab = Com.Var.loc_tab_idx var in
               pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
@@ -1553,7 +1599,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               let sz = VID.gen_size var in
               pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name def_ptr val_ptr
                 sz
-          | Com.TabAccess (m_sp_opt, var, vidx) ->
+          | Com.TabAccess ((m_sp_opt, var), vidx) ->
               pr "@;@[<v 2>{";
               let idx_tab = Com.Var.loc_tab_idx var in
               pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;

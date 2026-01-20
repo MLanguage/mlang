@@ -24,6 +24,8 @@
 %token<string> SYMBOL NAME
 %token<int> INTEGER
 %token<float> FLOAT
+%token UNDEFINED
+/* The undefined value */
 
 %token SLASH
 /* Used as field separator */
@@ -107,7 +109,7 @@ rappels:
 
 variable_and_value:
 | var = SYMBOL SLASH value = value NL { (Pos.mark var (mk_position $loc(var)), Pos.mark value (mk_position $loc(value))) }
-| var = SYMBOL SLASH? NL { (Pos.mark var (mk_position $loc(var)), Pos.without U) }
+| var = SYMBOL SLASH? NL { (Pos.mark var (mk_position $loc(var)), Pos.mark (I 0) (mk_position $loc(var))) }
 
 calc_error:
 | error = SYMBOL NL { Pos.mark error (mk_position $sloc) }
@@ -153,3 +155,4 @@ integer:
 value:
 | i = INTEGER { I (i) }
 | f = FLOAT   { F (f) }
+| UNDEFINED { U }

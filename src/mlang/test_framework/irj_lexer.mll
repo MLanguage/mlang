@@ -84,6 +84,9 @@ rule token = parse
   { FLOAT (float_of_string f) } (* DONT KEEP THAT *)
   (* Probably in order to write a specific function for our number format *)
 
+| "indefini"
+  { UNDEFINED }
+  
 | ['a'-'z' 'A'-'Z' '0'-'9' '_']+ as s
   { SYMBOL s }
 
