@@ -35,8 +35,8 @@ module type S = sig
   (** Evaluates an expression. *)
 
   val evaluate_program : ctx -> unit
-  (** Evaluates a whole program. Proper initialisation of inputs and events
-      is required before calling this function (through [update_ctx_with_inputs]
+  (** Evaluates a whole program. Proper initialisation of inputs and events is
+      required before calling this function (through [update_ctx_with_inputs]
       and [update_ctx_with_events]. *)
 
   (** {2 Helpers} *)

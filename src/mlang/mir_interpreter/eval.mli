@@ -2,6 +2,30 @@
 
 val exit_on_rte : bool ref
 
+(** {2 Generic evaluation functions} *)
+
+val evaluate_program :
+  p:M_ir.Mir.program ->
+  inputs:M_ir.Com.literal M_ir.Com.Var.Map.t ->
+  events:(M_ir.Com.literal, M_ir.Com.Var.t) M_ir.Com.event_value StrMap.t list ->
+  sort:Config.value_sort ->
+  round_ops:Config.round_ops ->
+  M_ir.Com.literal M_ir.Com.Var.Map.t * M_ir.Com.Error.Set.t
+(** Evaluates a whole program and returns the given back variables, as well as
+    the set of anomalies. The evaluation engine is selected from [sort] and
+    [roundops]. *)
+
+val evaluate_expr :
+  p:M_ir.Mir.program ->
+  e:M_ir.Mir.expression Pos.marked ->
+  sort:Config.value_sort ->
+  round_ops:Config.round_ops ->
+  M_ir.Com.literal
+(** Evaluates a single expression. The evaluation engine is selected from [sort]
+    and [roundops]. *)
+
+(** {2 Generic module type} *)
+
 module type S = sig
   type custom_float
 
@@ -16,8 +40,8 @@ module type S = sig
   (** Evaluates an expression. *)
 
   val evaluate_program : ctx -> unit
-  (** Evaluates a whole program. Proper initialisation of inputs and events
-      is required before calling this function (through [update_ctx_with_inputs]
+  (** Evaluates a whole program. Proper initialisation of inputs and events is
+      required before calling this function (through [update_ctx_with_inputs]
       and [update_ctx_with_events]. *)
 
   (** {2 Helpers} *)
@@ -47,52 +71,47 @@ module Make
 (** These modules are instanes of Make with modules defined in
     {!module: M_ir.Mir_number} and {!module: M_ir.Mir_roundops}. *)
 
+(** Float with default rounding strategy. *)
 module FloatDefInterp : S with type custom_float = float
 
+(** Float with multithread rounding strategy. *)
 module FloatMultInterp : S with type custom_float = float
 
+(** Float with mainframe rounding strategy. *)
 module FloatMfInterp : S with type custom_float = float
 
+(** Multiple-precision floating-point with default rounding strategy. *)
 module MPFRDefInterp : S with type custom_float = Mpfrf.t
 
+(** Multiple-precision floating-point with multithread rounding strategy. *)
 module MPFRMultInterp : S with type custom_float = Mpfrf.t
 
+(** Multiple-precision floating-point with mainframe rounding strategy. *)
 module MPFRMfInterp : S with type custom_float = Mpfrf.t
 
+(** Multiple precision integer arithmetic with default rounding strategy. *)
 module BigIntDefInterp : S with type custom_float = Mpzf.t
 
+(** Multiple precision integer arithmetic with multihtread rounding strategy. *)
 module BigIntMultInterp : S with type custom_float = Mpzf.t
 
+(** Multiple precision integer arithmetic with mainframe rounding strategy. *)
 module BigIntMfInterp : S with type custom_float = Mpzf.t
 
-module IntvDefInterp : S
+(** Multiple-precision floating-point intervals with default rounding strategy. *)
+module IntvDefInterp : S with type custom_float = M_ir.Mir_number.interval
 
-module IntvMultInterp : S
+(** Multiple-precision floating-point intervals with multithread rounding strategy. *)
+module IntvMultInterp : S with type custom_float = M_ir.Mir_number.interval
 
-module IntvMfInterp : S
+(** Multiple-precision floating-point intervals with mainframe rounding strategy. *)
+module IntvMfInterp : S with type custom_float = M_ir.Mir_number.interval
 
+(** Multiple-precision rationals with default rounding strategy. *)
 module RatDefInterp : S with type custom_float = Mpqf.t
 
+(** Multiple-precision rationals with multithread rounding strategy. *)
 module RatMultInterp : S with type custom_float = Mpqf.t
 
+(** Multiple-precision rationals with mainframe rounding strategy. *)
 module RatMfInterp : S with type custom_float = Mpqf.t
-
-val evaluate_program :
-  p:M_ir.Mir.program ->
-  inputs:M_ir.Com.literal M_ir.Com.Var.Map.t ->
-  events:(M_ir.Com.literal, M_ir.Com.Var.t) M_ir.Com.event_value StrMap.t list ->
-  sort:Config.value_sort ->
-  round_ops:Config.round_ops ->
-  M_ir.Com.literal M_ir.Com.Var.Map.t * M_ir.Com.Error.Set.t
-(** Evaluates a whole program and returns the given back variables, as
-    well as the set of anomalies.
-    The evaluation engine is selected from [sort] and [roundops]. *)
-
-val evaluate_expr :
-  p:M_ir.Mir.program ->
-  e:M_ir.Mir.expression Pos.marked ->
-  sort:Config.value_sort ->
-  round_ops:Config.round_ops ->
-  M_ir.Com.literal
-(** Evaluates a single expression.
-    The evaluation engine is selected from [sort] and [roundops]. *)

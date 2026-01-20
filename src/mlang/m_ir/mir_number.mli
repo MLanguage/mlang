@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+type interval = { down : Mpfrf.t; up : Mpfrf.t }
+
 module type NumberInterface = sig
   type t
 
@@ -68,8 +70,8 @@ module type NumberInterface = sig
   val is_zero : t -> bool
 
   val compare : ?epsilon:float -> Com.comp_op -> t -> t -> bool
-  (** Returns the comparison between two numbers in the precision context
-    of the current configuration. *)
+  (** Returns the comparison between two numbers in the precision context of the
+      current configuration. *)
 end
 
 module RegularFloatNumber : NumberInterface with type t = float
@@ -78,7 +80,7 @@ val mpfr_floor : Mpfrf.t -> Mpfrf.t
 
 module MPFRNumber : NumberInterface with type t = Mpfrf.t
 
-module IntervalNumber : NumberInterface
+module IntervalNumber : NumberInterface with type t = interval
 
 module RationalNumber : NumberInterface with type t = Mpqf.t
 

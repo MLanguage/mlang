@@ -11,14 +11,12 @@ module type S = sig
     M_ir.Com.Var.t ->
     M_ir.Com.variable_space * M_ir.Com.Var.t * int
   (** Returns the variable identifier and its space, with an offset integer.
-      This offset integer is 0 for TGV variables
-   *)
+      This offset integer is 0 for TGV variables *)
 
   val get_var_tab :
     custom_float Types.ctx -> M_ir.Com.Var.t -> int -> M_ir.Com.Var.t
-  (** [get_var_tab ctx vs v i]
-      Each cell of a table is a separate variable. This function
-      returns the variable representing the cell [i] in table [v].
+  (** [get_var_tab ctx vs v i] Each cell of a table is a separate variable. This
+      function returns the variable representing the cell [i] in table [v].
       Fails if the variable in argument is not a table. *)
 
   val get_var_value_org :
@@ -110,9 +108,8 @@ val empty_ctx :
 (** [empty_ctx ?inputs ?events p]
 
     Creates a fresh context for executing the program [p] or expressions within
-    the context of [p] (for example, with variables declared in [p].
-    Parameters [inputs] and [events] are required for interpreting the whole
-    program. *)
+    the context of [p] (for example, with variables declared in [p]. Parameters
+    [inputs] and [events] are required for interpreting the whole program. *)
 
 module Make (N : M_ir.Mir_number.NumberInterface) :
   S with type custom_float := N.t

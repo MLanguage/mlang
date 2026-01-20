@@ -234,8 +234,11 @@ MakeComparable (struct
   let is_nan_or_inf x = not (Mpfrf.number_p x)
 end)
 
-module IntervalNumber : NumberInterface = MakeComparable (struct
-  type t = { down : Mpfrf.t; up : Mpfrf.t }
+type interval = { down : Mpfrf.t; up : Mpfrf.t }
+
+module IntervalNumber : NumberInterface with type t = interval =
+MakeComparable (struct
+  type t = interval
 
   let v (x : Mpfrf.t) (y : Mpfrf.t) : t = { down = x; up = y }
 
