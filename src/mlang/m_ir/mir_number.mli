@@ -72,18 +72,18 @@ module type NumberInterface = sig
     of the current configuration. *)
 end
 
-module RegularFloatNumber : NumberInterface
+module RegularFloatNumber : NumberInterface with type t = float
 
 val mpfr_floor : Mpfrf.t -> Mpfrf.t
 
-module MPFRNumber : NumberInterface
+module MPFRNumber : NumberInterface with type t = Mpfrf.t
 
 module IntervalNumber : NumberInterface
 
-module RationalNumber : NumberInterface
+module RationalNumber : NumberInterface with type t = Mpqf.t
 
 module BigIntFixedPointNumber : functor
   (P : sig
      val scaling_factor_bits : int ref
    end)
-  -> NumberInterface
+  -> NumberInterface with type t = Mpzf.t

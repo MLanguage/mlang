@@ -76,7 +76,8 @@ module type NumberInterface = sig
   val compare : ?epsilon:float -> Com.comp_op -> t -> t -> bool
 end
 
-module MakeComparable (N : NumberInterfaceNoCompare) : NumberInterface = struct
+module MakeComparable (N : NumberInterfaceNoCompare) :
+  NumberInterface with type t = N.t = struct
   include N
 
   let compare ?(epsilon = !Config.comparison_error_margin) op i1 i2 =
@@ -91,7 +92,8 @@ module MakeComparable (N : NumberInterfaceNoCompare) : NumberInterface = struct
     | Neq -> abs (i1 -. i2) >=. epsilon
 end
 
-module RegularFloatNumber : NumberInterface = MakeComparable (struct
+module RegularFloatNumber : NumberInterface with type t = float =
+MakeComparable (struct
   type t = float
 
   let format_t fmt f = Format.fprintf fmt "%f" f
@@ -172,7 +174,8 @@ let mpfr_ceil (x : Mpfrf.t) : Mpfrf.t =
   ignore (Mpfr.ceil out x);
   Mpfrf.of_mpfr out
 
-module MPFRNumber : NumberInterface = MakeComparable (struct
+module MPFRNumber : NumberInterface with type t = Mpfrf.t =
+MakeComparable (struct
   type t = Mpfrf.t
 
   let rounding : Mpfr.round = Near
@@ -349,7 +352,8 @@ module IntervalNumber : NumberInterface = MakeComparable (struct
   let is_nan_or_inf x = not (Mpfrf.number_p x.down && Mpfrf.number_p x.up)
 end)
 
-module RationalNumber : NumberInterface = MakeComparable (struct
+module RationalNumber : NumberInterface with type t = Mpqf.t =
+MakeComparable (struct
   type t = Mpqf.t
 
   let format_t fmt f = Mpqf.print fmt f
@@ -421,7 +425,7 @@ end)
 
 module BigIntFixedPointNumber (P : sig
   val scaling_factor_bits : int ref
-end) : NumberInterface = MakeComparable (struct
+end) : NumberInterface with type t = Mpzf.t = MakeComparable (struct
   type t = Mpzf.t
 
   let precision_modulo () =

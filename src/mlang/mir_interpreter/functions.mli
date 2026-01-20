@@ -1,6 +1,6 @@
 module Make
     (N : M_ir.Mir_number.NumberInterface)
-    (R : M_ir.Mir_roundops.RoundOpsInterface with type t = N.t) : sig
+    (_ : M_ir.Mir_roundops.RoundOpsInterface with type t = N.t) : sig
   val arr : N.t Types.value -> N.t Types.value
 
   val inf : N.t Types.value -> N.t Types.value
