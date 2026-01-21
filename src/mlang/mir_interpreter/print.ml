@@ -1,9 +1,6 @@
 open Types
 
-module Make
-    (N : M_ir.Mir_number.NumberInterface)
-    (C : Context.S with type custom_float := N.t) =
-struct
+module Make (N : M_ir.Mir_number.NumberInterface) = struct
   let _format_value (fmt : Format.formatter) (x : N.t value) =
     match x with
     | Undefined -> Com.format_literal fmt Com.Undefined
@@ -62,17 +59,13 @@ struct
     pr_raw pctx s;
     flush pctx
 
-  let access ~eval (pctx : 'a pctx) info acc =
-    match C.get_access_var ~eval pctx.ctx acc with
-    | Some (vsd, var, _) -> (
-        if not vsd.vs_by_default then (
-          pr_raw pctx (Pos.unmark vsd.vs_name);
-          pr_raw pctx ".");
-        let _, v, _ = C.get_var pctx.ctx None var in
-        match info with
-        | Com.Name -> pr_raw pctx (Com.Var.name_str v)
-        | Com.Alias -> pr_raw pctx (Com.Var.alias_str v))
-    | None -> ()
+  let access (pctx : 'a pctx) pinfo vsd var =
+    if not vsd.Com.vs_by_default then (
+      pr_raw pctx (Pos.unmark vsd.vs_name);
+      pr_raw pctx ".");
+    match pinfo with
+    | Com.Name -> pr_raw pctx (Com.Var.name_str var)
+    | Com.Alias -> pr_raw pctx (Com.Var.alias_str var)
 
   and indent (pctx : 'a pctx) = function
     | Undefined -> ()

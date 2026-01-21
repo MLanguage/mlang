@@ -232,7 +232,7 @@ let empty_ctx ?inputs ?events (p : M_ir.Mir.program) : 'a ctx =
   Option.iter (update_ctx_with_events res) events;
   res
 
-module Make (N : M_ir.Mir_number.NumberInterface) = struct
+module Make (N : Number.S) = struct
   let get_var_space (ctx : N.t ctx) (m_sp_opt : Com.var_space) =
     let i_sp =
       match m_sp_opt with None -> ctx.ctx_var_space | Some (_, i_sp) -> i_sp

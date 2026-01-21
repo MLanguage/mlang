@@ -60,3 +60,9 @@ type run_error =
       (string * (string option * Pos.t) list * (unit -> unit) option)
 
 exception RuntimeError of run_error
+
+module type Number = sig
+  include M_ir.Mir_number.NumberInterface
+
+  include M_ir.Mir_roundops.RoundOpsInterface with type t := t
+end

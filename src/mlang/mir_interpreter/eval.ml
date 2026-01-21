@@ -52,15 +52,13 @@ module type S = sig
     (custom_float value, Com.Var.t) Com.event_value
 end
 
-module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) :
-  S with type custom_float = N.t = struct
+module Make (N : Types.Number) : S with type custom_float = N.t = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
-  module R = RF (N)
-  module Funs = Functions.Make (N) (R)
+  module Funs = Functions.Make (N)
   module C = Context.Make (N)
-  module Print = Print.Make (N) (C)
+  module Print = Print.Make (N)
 
   type custom_float = N.t
 
@@ -72,7 +70,7 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
 
   exception BlockingError
 
-  let roundf (x : N.t) = R.roundf x
+  let roundf (x : N.t) = N.roundf x
 
   let literal_to_value (l : Com.literal) : value =
     match l with
@@ -312,8 +310,14 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
       (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
         match Pos.unmark arg with
         | PrintString s -> Print.string pctx s
-        | PrintAccess (info, m_a) ->
-            Print.access ~eval:evaluate_expr pctx info (Pos.unmark m_a)
+        | PrintAccess (info, m_a) -> (
+            match
+              C.get_access_var ~eval:evaluate_expr pctx.ctx (Pos.unmark m_a)
+            with
+            | None -> ()
+            | Some (vsd, var, _) ->
+                let _, v, _ = C.get_var pctx.ctx None var in
+                Print.access pctx info vsd v)
         | PrintIndent e -> Print.indent pctx (evaluate_expr pctx.ctx e)
         | PrintExpr (e, mi, ma) ->
             Print.value pctx mi ma (evaluate_expr pctx.ctx e))
@@ -789,61 +793,21 @@ module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor)
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 end
 
-module BigIntPrecision = struct
-  let scaling_factor_bits = ref 64
-end
-
-module MainframeLongSize = struct
-  let max_long = ref Int64.max_int
-end
-
-module FloatDefInterp =
-  Make (Mir_number.RegularFloatNumber) (Mir_roundops.DefaultRoundOps)
-module FloatMultInterp =
-  Make (Mir_number.RegularFloatNumber) (Mir_roundops.MultiRoundOps)
-module FloatMfInterp =
-  Make
-    (Mir_number.RegularFloatNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module MPFRDefInterp =
-  Make (Mir_number.MPFRNumber) (Mir_roundops.DefaultRoundOps)
-module MPFRMultInterp =
-  Make (Mir_number.MPFRNumber) (Mir_roundops.MultiRoundOps)
-module MPFRMfInterp =
-  Make
-    (Mir_number.MPFRNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module BigIntDefInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.DefaultRoundOps)
-module BigIntMultInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.MultiRoundOps)
-module BigIntMfInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module IntvDefInterp =
-  Make (Mir_number.IntervalNumber) (Mir_roundops.DefaultRoundOps)
-module IntvMultInterp =
-  Make (Mir_number.IntervalNumber) (Mir_roundops.MultiRoundOps)
-module IntvMfInterp =
-  Make
-    (Mir_number.IntervalNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module RatDefInterp =
-  Make (Mir_number.RationalNumber) (Mir_roundops.DefaultRoundOps)
-module RatMultInterp =
-  Make (Mir_number.RationalNumber) (Mir_roundops.MultiRoundOps)
-module RatMfInterp =
-  Make
-    (Mir_number.RationalNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
+module FloatDefInterp = Make (Number.FloatDef)
+module FloatMultInterp = Make (Number.FloatMult)
+module FloatMfInterp = Make (Number.FloatMf)
+module MPFRDefInterp = Make (Number.MPFRDef)
+module MPFRMultInterp = Make (Number.MPFRMult)
+module MPFRMfInterp = Make (Number.MPFRMf)
+module BigIntDefInterp = Make (Number.BigIntDef)
+module BigIntMultInterp = Make (Number.BigIntMult)
+module BigIntMfInterp = Make (Number.BigIntMf)
+module IntvDefInterp = Make (Number.IntvDef)
+module IntvMultInterp = Make (Number.IntvMult)
+module IntvMfInterp = Make (Number.IntvMf)
+module RatDefInterp = Make (Number.RatDef)
+module RatMultInterp = Make (Number.RatMult)
+module RatMfInterp = Make (Number.RatMf)
 
 let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
     (module S) =
@@ -864,31 +828,11 @@ let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
   | Rational, ROMulti -> (module RatMultInterp)
   | Rational, ROMainframe _ -> (module RatMfInterp)
 
-let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
-    unit =
-  begin
-    match sort with
-    | MPFR prec -> Mpfr.set_default_prec prec
-    | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
-    | Interval -> Mpfr.set_default_prec 64
-    | _ -> ()
-  end;
-  match roundops with
-  | ROMainframe long_size ->
-      let max_long =
-        if long_size = 32 then Int64.of_int32 Int32.max_int
-        else if long_size = 64 then Int64.max_int
-        else assert false
-        (* checked when parsing command line *)
-      in
-      MainframeLongSize.max_long := max_long
-  | _ -> ()
-
 let evaluate_program ~(p : Mir.program) ~(inputs : Com.literal Com.Var.Map.t)
     ~(events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
     ~(sort : Config.value_sort) ~(round_ops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t =
-  prepare_interp sort round_ops;
+  Number.setup_precision sort round_ops;
   let module Interp = (val get_interp sort round_ops : S) in
   let ctx =
     let inputs = Com.Var.Map.map Interp.literal_to_value inputs in

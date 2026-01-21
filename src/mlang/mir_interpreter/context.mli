@@ -111,5 +111,4 @@ val empty_ctx :
     the context of [p] (for example, with variables declared in [p]. Parameters
     [inputs] and [events] are required for interpreting the whole program. *)
 
-module Make (N : M_ir.Mir_number.NumberInterface) :
-  S with type custom_float := N.t
+module Make (N : Number.S) : S with type custom_float := N.t

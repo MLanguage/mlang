@@ -62,56 +62,54 @@ end
 (** Builds an intepretation engine from a number interface
     ({!module: M_ir.Mir_number}) and a rounding strategy
     ({!module: M_ir.Mir_roundops}). *)
-module Make
-    (N : M_ir.Mir_number.NumberInterface)
-    (RF : M_ir.Mir_roundops.RoundOpsFunctor) : S with type custom_float = N.t
+module Make (N : Number.S) : S with type custom_float = N.t
 
 (** {2 Engines} *)
 
 (** These modules are instanes of Make with modules defined in
     {!module: M_ir.Mir_number} and {!module: M_ir.Mir_roundops}. *)
 
-(** Float with default rounding strategy. *)
 module FloatDefInterp : S with type custom_float = float
+(** Float with default rounding strategy. *)
 
-(** Float with multithread rounding strategy. *)
 module FloatMultInterp : S with type custom_float = float
+(** Float with multithread rounding strategy. *)
 
-(** Float with mainframe rounding strategy. *)
 module FloatMfInterp : S with type custom_float = float
+(** Float with mainframe rounding strategy. *)
 
-(** Multiple-precision floating-point with default rounding strategy. *)
 module MPFRDefInterp : S with type custom_float = Mpfrf.t
+(** Multiple-precision floating-point with default rounding strategy. *)
 
-(** Multiple-precision floating-point with multithread rounding strategy. *)
 module MPFRMultInterp : S with type custom_float = Mpfrf.t
+(** Multiple-precision floating-point with multithread rounding strategy. *)
 
-(** Multiple-precision floating-point with mainframe rounding strategy. *)
 module MPFRMfInterp : S with type custom_float = Mpfrf.t
+(** Multiple-precision floating-point with mainframe rounding strategy. *)
 
-(** Multiple precision integer arithmetic with default rounding strategy. *)
 module BigIntDefInterp : S with type custom_float = Mpzf.t
+(** Multiple precision integer arithmetic with default rounding strategy. *)
 
-(** Multiple precision integer arithmetic with multihtread rounding strategy. *)
 module BigIntMultInterp : S with type custom_float = Mpzf.t
+(** Multiple precision integer arithmetic with multihtread rounding strategy. *)
 
-(** Multiple precision integer arithmetic with mainframe rounding strategy. *)
 module BigIntMfInterp : S with type custom_float = Mpzf.t
+(** Multiple precision integer arithmetic with mainframe rounding strategy. *)
 
-(** Multiple-precision floating-point intervals with default rounding strategy. *)
 module IntvDefInterp : S with type custom_float = M_ir.Mir_number.interval
+(** Multiple-precision floating-point intervals with default rounding strategy. *)
 
-(** Multiple-precision floating-point intervals with multithread rounding strategy. *)
 module IntvMultInterp : S with type custom_float = M_ir.Mir_number.interval
+(** Multiple-precision floating-point intervals with multithread rounding strategy. *)
 
-(** Multiple-precision floating-point intervals with mainframe rounding strategy. *)
 module IntvMfInterp : S with type custom_float = M_ir.Mir_number.interval
+(** Multiple-precision floating-point intervals with mainframe rounding strategy. *)
 
-(** Multiple-precision rationals with default rounding strategy. *)
 module RatDefInterp : S with type custom_float = Mpqf.t
+(** Multiple-precision rationals with default rounding strategy. *)
 
-(** Multiple-precision rationals with multithread rounding strategy. *)
 module RatMultInterp : S with type custom_float = Mpqf.t
+(** Multiple-precision rationals with multithread rounding strategy. *)
 
-(** Multiple-precision rationals with mainframe rounding strategy. *)
 module RatMfInterp : S with type custom_float = Mpqf.t
+(** Multiple-precision rationals with mainframe rounding strategy. *)
