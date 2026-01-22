@@ -462,6 +462,16 @@ module Err = struct
         case
     in
     Errors.raise_spanned_error msg pos
+
+  let unexpected_variable_scope ~var_scope ~expected_scope (Pos.Mark (v, pos)) =
+    let varname = Com.get_var_name v in
+    let msg =
+      Pp.spr
+        "Variable %s is a %a variable, which should be a %s variable in this \
+         context"
+        varname Com.format_simple_scope var_scope expected_scope
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -1515,8 +1525,29 @@ let check_var_space (m_sp_opt : Com.var_space) (env : var_env) : unit =
           | Some _ -> ()
           | None -> Err.unknown_var_space sp_name (Pos.get m_sp)))
 
-let check_variable (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name)
-    (idx_mem : var_mem_type) (env : var_env) : unit =
+let check_right_scope ~env ~must_be (Pos.Mark (var, _) as m_vn) =
+  let v_name = Com.get_normal_var var in
+  let var =
+    let id = StrMap.find v_name env.vars in
+    IntMap.find id env.prog.prog_dict
+  in
+  match must_be with
+  | `Tgv when Com.Var.is_tgv var -> ()
+  | `Ref when Com.Var.is_ref var -> ()
+  | `Temp when Com.Var.is_temp var -> ()
+  | `Tgv ->
+      Err.unexpected_variable_scope m_vn ~var_scope:var.scope
+        ~expected_scope:"TGV"
+  | `Ref ->
+      Err.unexpected_variable_scope m_vn ~var_scope:var.scope
+        ~expected_scope:"reference"
+  | `Temp ->
+      Err.unexpected_variable_scope m_vn ~var_scope:var.scope
+        ~expected_scope:"temp"
+
+let check_variable ?(must_be : [ `Tgv | `Ref | `Temp ] option)
+    (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name) (idx_mem : var_mem_type)
+    (env : var_env) : unit =
   let decl_mem, decl_pos = Pos.to_couple @@ get_var_mem_type m_vn env in
   (match (decl_mem, idx_mem) with
   | _, Both | Num, Num | Table, Table -> ()
@@ -1525,6 +1556,9 @@ let check_variable (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name)
      | Both, Table -> Err.mixed_variable_used_as_table decl_pos (Pos.get m_vn)*)
   | Num, Table -> Err.variable_used_as_table decl_pos (Pos.get m_vn)
   | Table, Num -> Err.table_used_as_variable decl_pos (Pos.get m_vn));
+  (match must_be with
+  | None -> ()
+  | Some must_be -> check_right_scope ~env ~must_be m_vn);
   match m_sp_opt with
   | None -> ()
   | Some (m_sp, _) ->
@@ -1729,7 +1763,7 @@ let rec check_instructions (env : var_env)
                 | Some _ -> Err.event_field_is_not_a_reference f_name f_pos
                 | None -> Err.unknown_event_field f_name f_pos);
                 let m_i' = map_expr env m_i in
-                check_variable None m_v Num env;
+                check_variable ~must_be:`Tgv None m_v Num env;
                 let m_v' = map_var env m_v in
                 let f' =
                   Com.SingleFormula (EventFieldRef (m_i', f, iFmt, m_v'))
