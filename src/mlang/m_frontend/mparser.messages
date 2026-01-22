@@ -485,7 +485,7 @@ source_file: SYMBOL COLON COMPUTED BASE WITH
 ## comp_attr_or_subtyp
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+Liste d'attributs incomplète. Avez-vous oublié de terminer la liste avec ':' ?
 
 source_file: VERIFICATION WITH
 ##
@@ -676,7 +676,7 @@ source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SYMBOL 
 ## SYMBOL
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+Symbole innattendu. Avez-vous oublié un ';'?
 
 source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SIZE WITH
 ##

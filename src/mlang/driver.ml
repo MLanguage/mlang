@@ -82,15 +82,17 @@ let parse () =
     let filebuf = { filebuf with lex_curr_p } in
     match Mparser.source_file token filebuf with
     | commands -> commands
-    | exception Mparser.Error s ->
-        let msg =
-          match String.trim (Syntax_messages.message s) with
-          | exception Not_found -> "Unknown syntax error."
-          | "<YOUR SYNTAX ERROR MESSAGE HERE>" -> "Syntax error while parsing."
-          | msg -> "M syntax error: " ^ msg
+    | exception Mparser.Error s -> (
+        let pos =
+          Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)
         in
-        Errors.raise_spanned_error msg
-          (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
+        let err msg =
+          Format.kasprintf (fun m -> Errors.raise_spanned_error m pos) msg
+        in
+        match String.trim (Syntax_messages.message s) with
+        | exception Not_found -> err "Erreur de syntaxe innattendue."
+        | "<YOUR SYNTAX ERROR MESSAGE HERE>" -> err "Erreur de syntaxe %i" s
+        | msg -> err "Erreur: %s " msg)
   in
 
   let parse_file source_file =
