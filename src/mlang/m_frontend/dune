@@ -2,7 +2,7 @@
 
 (menhir
  (modules mparser)
- (flags --explain))
+ (flags --exn-carries-state --explain))
 
 (library
  (public_name mlang.frontend)
@@ -10,3 +10,58 @@
  (flags
   (:standard -open Utils -open M_ir))
  (libraries utils m_ir))
+
+; Generates the Syntax_messages module
+
+(rule
+ (target syntax_messages.ml)
+ (deps
+  (:parser mparser.mly)
+  (:msg syntax.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --compile-errors %{msg}))))
+
+; Rules to check parser updates and properly merging the changes
+
+(rule
+ (target new.messages)
+ (deps
+  (:parser mparser.mly))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --list-errors))))
+
+(rule
+ (target updated.messages)
+ (deps
+  (:parser mparser.mly)
+  (:msg syntax.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --update-errors %{msg}))))
+
+(rule
+ (target syntax.messages.updated)
+ (deps
+  (:parser mparser.mly)
+  (:new new.messages)
+  (:updated updated.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --merge-errors %{new}
+     --merge-errors %{updated}))))
+
+; Tests the syntax.messages file when the parser changes.
+; To update the file, use dune runtest --auto-update
+
+(rule
+ (alias runtest)
+ (package mlang)
+ (deps syntax.messages syntax.messages.updated)
+ (action
+  (diff syntax.messages syntax.messages.updated)))
