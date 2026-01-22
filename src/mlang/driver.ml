@@ -167,23 +167,18 @@ let extract m_program =
   | UnknownBackend -> Errors.raise_error "No backend specified!"
 
 let driver () =
-  try
-    Cli.debug_print "Reading M files...";
-    let m_program = parse () in
-    Cli.debug_print "Elaborating...";
-    let m_program = Expander.proceed m_program in
-    let m_program = Validator.proceed !Config.mpp_function m_program in
-    let m_program = Mast_to_mir.translate m_program in
-    let m_program = Mir.expand_functions m_program in
-    Cli.debug_print "Creating combined program suitable for execution...";
-    match !Config.execution_mode with
-    | SingleTest test -> run_single_test m_program test
-    | MultipleTests tests -> run_multiple_tests m_program tests
-    | Extraction -> extract m_program
-  with Errors.StructuredError (msg, pos_list, kont) as e ->
-    Cli.error_print "%a" Errors.format_structured_error (msg, pos_list);
-    (match kont with None -> () | Some kont -> kont ());
-    raise e
+  Cli.debug_print "Reading M files...";
+  let m_program = parse () in
+  Cli.debug_print "Elaborating...";
+  let m_program = Expander.proceed m_program in
+  let m_program = Validator.proceed !Config.mpp_function m_program in
+  let m_program = Mast_to_mir.translate m_program in
+  let m_program = Mir.expand_functions m_program in
+  Cli.debug_print "Creating combined program suitable for execution...";
+  match !Config.execution_mode with
+  | SingleTest test -> run_single_test m_program test
+  | MultipleTests tests -> run_multiple_tests m_program tests
+  | Extraction -> extract m_program
 
 let set_opts (files : string list) (application_names : string list)
     (without_dgfip_m : bool) (debug : bool) (var_info_debug : string list)
