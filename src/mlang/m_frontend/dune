@@ -11,6 +11,8 @@
   (:standard -open Utils -open M_ir))
  (libraries utils m_ir))
 
+; Generates the Syntax_messages module
+
 (rule
  (target syntax_messages.ml)
  (deps
@@ -20,6 +22,8 @@
   (with-stdout-to
    %{target}
    (run menhir %{parser} --base %{parser} --compile-errors %{msg}))))
+
+; Rules to check parser updates and properly merging the changes
 
 (rule
  (target new.messages)
@@ -51,6 +55,9 @@
    %{target}
    (run menhir %{parser} --base %{parser} --merge-errors %{new}
      --merge-errors %{updated}))))
+
+; Tests the mparser.messages file when the parser changes.
+; To update the file, use dune runtest --auto-update
 
 (rule
  (alias runtest)
