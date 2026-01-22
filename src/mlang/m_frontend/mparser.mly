@@ -28,6 +28,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  (** Module generated automaticcaly by Menhir, the parser generator *)
 %}
 
+%start source_file
+
 %token<string> SYMBOL STRING
 
 %token PLUS MINUS TIMES DIV MOD
@@ -67,8 +69,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %left AND
 %nonassoc NOT
 (* %nonassoc SYMBOL *)
-
-%start source_file
 
 %%
 

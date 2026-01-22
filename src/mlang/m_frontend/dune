@@ -2,7 +2,7 @@
 
 (menhir
  (modules mparser)
- (flags --explain))
+ (flags --exn-carries-state --explain))
 
 (library
  (public_name mlang.frontend)
@@ -10,3 +10,13 @@
  (flags
   (:standard -open Utils -open M_ir))
  (libraries utils m_ir))
+
+(rule
+ (target syntax_messages.ml)
+ (deps
+  (:parser mparser.mly)
+  (:msg mparser.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --compile-errors %{msg}))))

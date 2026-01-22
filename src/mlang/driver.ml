@@ -82,8 +82,14 @@ let parse () =
     let filebuf = { filebuf with lex_curr_p } in
     match Mparser.source_file token filebuf with
     | commands -> commands
-    | exception Mparser.Error ->
-        Errors.raise_spanned_error "M syntax error"
+    | exception Mparser.Error s ->
+        let msg =
+          match String.trim (Syntax_messages.message s) with
+          | exception Not_found -> "Unknown syntax error."
+          | "<YOUR SYNTAX ERROR MESSAGE HERE>" -> "Syntax error while parsing."
+          | msg -> "M syntax error: " ^ msg
+        in
+        Errors.raise_spanned_error msg
           (Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p))
   in
 
