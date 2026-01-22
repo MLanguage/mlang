@@ -15,6 +15,7 @@ The frontend also handles ast expansion with {!module: Mlang.M_frontend.Expander
   Mlang.M_frontend.Mlexer
   Mlang.M_frontend.Mparser
   Mlang.M_frontend.Parse_utils
+  Mlang.M_frontend.Syntax_messages
   Mlang.M_frontend.Validator }
 
 {1 Intermediate Representation}

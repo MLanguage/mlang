@@ -1,3 +1,53 @@
+source_file: SYMBOL COLON INPUT SYMBOL EQUALS WITH
+##
+## Ends in an error in state: 16.
+##
+## variable_attribute -> symbol_with_pos EQUALS . variable_attribute_value [ SYMBOL GIVEN_BACK COLON BASE ALIAS ]
+##
+## The known suffix of the stack is as follows:
+## symbol_with_pos EQUALS
+##
+
+Valeur manquante après le symbole '='.
+
+source_file: SYMBOL COLON COMPUTED SYMBOL WITH
+##
+## Ends in an error in state: 77.
+##
+## variable_attribute -> symbol_with_pos . EQUALS variable_attribute_value [ SYMBOL GIVEN_BACK COLON BASE ]
+##
+## The known suffix of the stack is as follows:
+## symbol_with_pos
+##
+
+Définition incomplète d'un attribut
+
+source_file: SYMBOL COLON COMPUTED BASE WITH
+##
+## Ends in an error in state: 84.
+##
+## list(comp_attr_or_subtyp) -> comp_attr_or_subtyp . list(comp_attr_or_subtyp) [ COLON ]
+##
+## The known suffix of the stack is as follows:
+## comp_attr_or_subtyp
+##
+
+Liste d'attributs incomplète. Avez-vous oublié de terminer la liste avec ':' ?
+
+source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SYMBOL WITH
+##
+## Ends in an error in state: 111.
+##
+## factor -> SYMBOL . [ TIMES THEN STEP SEMICOLON RPAREN RBRACKET RANGE PLUS OR NOT NEQ MOD MINUS LTE LT IN GTE GT EQUALS ENDIF ELSE DO DIV COMMA COLON AND ]
+## function_name -> SYMBOL . [ LPAREN ]
+## symbol_with_pos -> SYMBOL . [ LBRACKET DOT ]
+##
+## The known suffix of the stack is as follows:
+## SYMBOL
+##
+
+Symbole innattendu. Avez-vous oublié un ';'?
+
 source_file: WITH
 ##
 ## Ends in an error in state: 0.
@@ -102,18 +152,6 @@ source_file: SYMBOL COLON INPUT SYMBOL WITH
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-source_file: SYMBOL COLON INPUT SYMBOL EQUALS WITH
-##
-## Ends in an error in state: 16.
-##
-## variable_attribute -> symbol_with_pos EQUALS . variable_attribute_value [ SYMBOL GIVEN_BACK COLON BASE ALIAS ]
-##
-## The known suffix of the stack is as follows:
-## symbol_with_pos EQUALS
-##
-
-Valeur manquante après le symbole '='.
 
 source_file: SYMBOL COLON INPUT ALIAS WITH
 ##
@@ -427,18 +465,6 @@ source_file: SYMBOL COLON COMPUTED WITH
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-source_file: SYMBOL COLON COMPUTED SYMBOL WITH
-##
-## Ends in an error in state: 77.
-##
-## variable_attribute -> symbol_with_pos . EQUALS variable_attribute_value [ SYMBOL GIVEN_BACK COLON BASE ]
-##
-## The known suffix of the stack is as follows:
-## symbol_with_pos
-##
-
-Définition incomplète d'un attribut
-
 source_file: SYMBOL COLON COMPUTED COLON WITH
 ##
 ## Ends in an error in state: 79.
@@ -474,18 +500,6 @@ source_file: SYMBOL COLON COMPUTED COLON STRING TYPE BOOLEAN WITH
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-source_file: SYMBOL COLON COMPUTED BASE WITH
-##
-## Ends in an error in state: 84.
-##
-## list(comp_attr_or_subtyp) -> comp_attr_or_subtyp . list(comp_attr_or_subtyp) [ COLON ]
-##
-## The known suffix of the stack is as follows:
-## comp_attr_or_subtyp
-##
-
-Liste d'attributs incomplète. Avez-vous oublié de terminer la liste avec ':' ?
 
 source_file: VERIFICATION WITH
 ##
@@ -663,20 +677,6 @@ source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON RESTORE CO
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SYMBOL WITH
-##
-## Ends in an error in state: 111.
-##
-## factor -> SYMBOL . [ TIMES THEN STEP SEMICOLON RPAREN RBRACKET RANGE PLUS OR NOT NEQ MOD MINUS LTE LT IN GTE GT EQUALS ENDIF ELSE DO DIV COMMA COLON AND ]
-## function_name -> SYMBOL . [ LPAREN ]
-## symbol_with_pos -> SYMBOL . [ LBRACKET DOT ]
-##
-## The known suffix of the stack is as follows:
-## SYMBOL
-##
-
-Symbole innattendu. Avez-vous oublié un ';'?
 
 source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SIZE WITH
 ##
@@ -6257,4 +6257,3 @@ source_file: APPLICATION SYMBOL SEMICOLON WITH
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-

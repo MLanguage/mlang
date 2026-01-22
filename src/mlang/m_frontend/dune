@@ -20,3 +20,41 @@
   (with-stdout-to
    %{target}
    (run menhir %{parser} --base %{parser} --compile-errors %{msg}))))
+
+(rule
+ (target new.messages)
+ (deps
+  (:parser mparser.mly))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --list-errors))))
+
+(rule
+ (target updated.messages)
+ (deps
+  (:parser mparser.mly)
+  (:msg mparser.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --update-errors %{msg}))))
+
+(rule
+ (target mparser.messages.updated)
+ (deps
+  (:parser mparser.mly)
+  (:new new.messages)
+  (:updated updated.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run menhir %{parser} --base %{parser} --merge-errors %{new}
+     --merge-errors %{updated}))))
+
+(rule
+ (alias runtest)
+ (package mlang)
+ (deps mparser.messages mparser.messages.updated)
+ (action
+  (diff mparser.messages mparser.messages.updated)))
