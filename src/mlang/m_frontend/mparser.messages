@@ -113,7 +113,7 @@ source_file: SYMBOL COLON INPUT SYMBOL EQUALS WITH
 ## symbol_with_pos EQUALS
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+Valeur manquante après le symbole '='.
 
 source_file: SYMBOL COLON INPUT ALIAS WITH
 ##
@@ -437,7 +437,7 @@ source_file: SYMBOL COLON COMPUTED SYMBOL WITH
 ## symbol_with_pos
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+Définition incomplète d'un attribut
 
 source_file: SYMBOL COLON COMPUTED COLON WITH
 ##
