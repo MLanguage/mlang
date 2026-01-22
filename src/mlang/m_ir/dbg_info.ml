@@ -66,7 +66,11 @@ module Info = struct
   module Runtime = struct
     type t = { hash : int; value : Com.literal; name : string option }
 
-    let make origin value name = { hash = Origin.hash origin; value; name }
+    type rename_this = { origin : Origin.t; name : string option }
+
+    let make origin value name =
+      let hash = Hashtbl.hash { origin; name } in
+      { hash; value; name }
   end
 
   module Static = struct
@@ -125,7 +129,11 @@ module TickMap = struct
     | Some tick -> tick
 end
 
-type interp_error = { name : string; value : Com.literal; expected : Com.literal }
+type interp_error = {
+  name : string;
+  value : Com.literal;
+  expected : Com.literal;
+}
 
 type t = {
   graph : Graph.t;
@@ -235,7 +243,8 @@ let to_json (fmt : Format.formatter) info : unit =
   delim := "";
   let print_interp_errors tick (error : interp_error) =
     Format.fprintf fmt {|%s"%d": {"name": %S, "value": %a, "expected": %a}|}
-      !delim tick error.name Com.format_literal error.value Com.format_literal error.expected;
+      !delim tick error.name Com.format_literal error.value Com.format_literal
+      error.expected;
     delim := ","
   in
   Format.fprintf fmt {|},@."interp_errors": {@.|};
