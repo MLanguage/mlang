@@ -17,7 +17,7 @@
  (target syntax_messages.ml)
  (deps
   (:parser mparser.mly)
-  (:msg mparser.messages))
+  (:msg syntax.messages))
  (action
   (with-stdout-to
    %{target}
@@ -38,14 +38,14 @@
  (target updated.messages)
  (deps
   (:parser mparser.mly)
-  (:msg mparser.messages))
+  (:msg syntax.messages))
  (action
   (with-stdout-to
    %{target}
    (run menhir %{parser} --base %{parser} --update-errors %{msg}))))
 
 (rule
- (target mparser.messages.updated)
+ (target syntax.messages.updated)
  (deps
   (:parser mparser.mly)
   (:new new.messages)
@@ -56,12 +56,12 @@
    (run menhir %{parser} --base %{parser} --merge-errors %{new}
      --merge-errors %{updated}))))
 
-; Tests the mparser.messages file when the parser changes.
+; Tests the syntax.messages file when the parser changes.
 ; To update the file, use dune runtest --auto-update
 
 (rule
  (alias runtest)
  (package mlang)
- (deps mparser.messages mparser.messages.updated)
+ (deps syntax.messages syntax.messages.updated)
  (action
-  (diff mparser.messages mparser.messages.updated)))
+  (diff syntax.messages syntax.messages.updated)))

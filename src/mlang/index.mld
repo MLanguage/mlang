@@ -6,7 +6,7 @@ intermediate representations going from the source code to the target backend.
 {1 Frontend}
 
 First, the source code is parsed according to the Menhir grammar specified in {!module: Mlang.M_frontend.Mparser}.
-The grammar is not exactly LR(1) so we rely on {!module: Mlang.M_frontend.Parse_utils} to backtrack, especially on symbol parsing. The target intermediate representation is {!module: Mlang.M_frontend.Mast}, which is very close to the concrete syntax and can be printed using {!module: Mlang.M_frontend.Format_mast}.
+The grammar is not exactly LR(1) so we rely on {!module: Mlang.M_frontend.Parse_utils} to backtrack, especially on symbol parsing. {!module: Mlang.M_frontend.Syntax_messages} treats the error messages in the different failing cases. The target intermediate representation is {!module: Mlang.M_frontend.Mast}, which is very close to the concrete syntax and can be printed using {!module: Mlang.M_frontend.Format_mast}.
 The frontend also handles ast expansion with {!module: Mlang.M_frontend.Expander} and validation with {!module: Mlang.M_frontend.Validator}.
 
 {!modules:
