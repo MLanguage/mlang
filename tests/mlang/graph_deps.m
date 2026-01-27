@@ -45,7 +45,8 @@ calculer domaine primitive;
 cible other:
 application: app;
 TAB[1] = 37;
-iterer : variable IT : categorie calculee base : dans (
+X = TAB[1];
+iterer : variable IT : categorie calculee base : avec IT > 1 : dans (
   IT = X;
 )
 calculer cible target;
