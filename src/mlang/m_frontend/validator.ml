@@ -905,6 +905,13 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
         | Some _ -> assert false
         | None -> None
       in
+      (* Adding table reference to cells *)
+      let table =
+        match table with
+        | None -> None
+        | Some arr ->
+            Some (Array.mapi (fun i v -> Com.Var.set_table_cell v var i) arr)
+      in
       let prog =
         match table with
         | Some tab -> Array.fold_left (fun p v -> check_global_var v p) prog tab

@@ -159,6 +159,7 @@ module Var = struct
     cat : CatVar.t;
     is_given_back : bool;
     typ : value_typ option;
+    table_cell : (t * int) option;
   }
 
   and scope = Tgv of tgv | Temp of t Array.t option | Ref
@@ -186,6 +187,20 @@ module Var = struct
     | Tgv tgv -> tgv.table
     | Temp table -> table
     | Ref -> None
+
+  let get_table_cell v =
+    match v.scope with Tgv tgv -> tgv.table_cell | _ -> None
+
+  let set_table_cell v tabvar index =
+    Format.printf "set_table_cell for %s (%d)@." (name_str v) v.id;
+    let scope =
+      match v.scope with
+      | Tgv tgv ->
+          let tgv = { tgv with table_cell = Some (tabvar, index) } in
+          Tgv tgv
+      | _ -> assert false
+    in
+    { v with scope }
 
   let is_table v = get_table v <> None
 
@@ -309,12 +324,14 @@ module Var = struct
   let new_tgv ~(name : string Pos.marked) ~(table : t Array.t option)
       ~(is_given_back : bool) ~(alias : string Pos.marked option)
       ~(descr : string Pos.marked) ~(attrs : int Pos.marked StrMap.t)
-      ~(cat : CatVar.t) ~(typ : value_typ option) : t =
+      ~(cat : CatVar.t) ~(typ : value_typ option)
+      ~(table_cell : (id * int) option) : t =
     {
       name;
       id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc cat);
-      scope = Tgv { table; alias; descr; attrs; cat; is_given_back; typ };
+      scope =
+        Tgv { table; alias; descr; attrs; cat; is_given_back; typ; table_cell };
     }
 
   let new_temp ~(name : string Pos.marked) ~(table : t Array.t option) : t =
