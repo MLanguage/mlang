@@ -585,14 +585,21 @@ struct
         let tick = Tick.tick () in
         let access_name name =
           match access with
-          | Com.VarAccess _ -> name
+          | Com.VarAccess _ -> (
+              Format.printf "var: %a@." Com.Var.pp v;
+              match Com.Var.get_table_cell v with
+              | None -> name
+              | Some (v, i) ->
+                  let tab = Com.Var.name_str v in
+                  Format.asprintf "%s[%d]" tab i)
           | Com.TabAccess ((_, v), m_i) ->
               let name = Com.Var.name_str v in
               let idx_str = eval_m_index ctx m_i in
               Format.asprintf "%s[%s]" name idx_str
-          | Com.FieldAccess (_, _, _, _) -> Com.Var.name_str v
+          | Com.FieldAccess (_, _, _, _) -> name
         in
         let name = access_name @@ Com.Var.name_str v in
+        Format.printf "setting %s@." name;
         let is_input =
           match Com.Var.cat_var_loc v with
           | Com.CatVar.LocInput -> true
@@ -694,6 +701,7 @@ struct
       match dep with
       | Com.V var ->
           let name = Com.Var.name_str var in
+          Format.printf "var name: %s@." name;
           (* For now, we add uninstantiated depedencies as undefined *)
           begin
             match TickMap.find name dbg_info.ledger with
@@ -728,6 +736,7 @@ struct
           let name = Com.Var.name_str var in
           let idx_str = eval_m_index ctx m_i in
           let name = Format.asprintf "%s[%s]" name idx_str in
+          Format.printf "tab name %s@." name;
           begin
             match TickMap.find name dbg_info.ledger with
             | exception Failure _ ->
@@ -743,7 +752,6 @@ struct
           end
       | LiteralDep _lit -> (ticks, dbg_info)
     in
-
     List.fold_left trace_dep ([], dbg_info) deps
 
   and get_rule ctx =
