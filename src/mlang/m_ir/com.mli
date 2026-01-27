@@ -127,6 +127,9 @@ module Var : sig
     cat : CatVar.t;  (** Category *)
     is_given_back : bool;  (** Is the variable 'restituee'? *)
     typ : value_typ option;  (** Optional variable type *)
+    table_cell : (t * int) option;
+        (** Says if the variable is a table cell, ie TAB0 from the table TAB.
+       Payload is the name of the table variable *)
   }
   (** Exhaustive data on a TGV variable. *)
 
@@ -160,6 +163,10 @@ module Var : sig
   (** Returns the table represented by the variable, if relevant. Returns [None]
       on references. *)
 
+  val get_table_cell : t -> (t * int) option
+
+  val set_table_cell : t -> t -> int -> t
+
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
 
@@ -167,8 +174,7 @@ module Var : sig
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
-  (** Returns the category of a TGV variable; fails if it is not a TGV variable.
-  *)
+  (** Returns the category of a TGV variable; fails if it is not a TGV variable. *)
 
   val size : t -> int
   (** Returns the size of a variable: the size of the array if it is a table; 1
