@@ -127,6 +127,9 @@ module Var : sig
     cat : CatVar.t;  (** Category *)
     is_given_back : bool;  (** Is the variable 'restituee'? *)
     typ : value_typ option;  (** Optional variable type *)
+    table_cell : (t * int) option;
+        (** Says if the variable is a table cell, ie TAB0 from the table TAB.
+       Payload is the name of the table variable *)
   }
   (** Exhaustive data on a TGV variable. *)
 
@@ -160,6 +163,10 @@ module Var : sig
   (** Returns the table represented by the variable, if relevant. Returns [None]
       on references. *)
 
+  val get_table_cell : t -> (t * int) option
+
+  val set_table_cell : t -> t -> int -> t
+
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
 
@@ -167,8 +174,7 @@ module Var : sig
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
-  (** Returns the category of a TGV variable; fails if it is not a TGV variable.
-  *)
+  (** Returns the category of a TGV variable; fails if it is not a TGV variable. *)
 
   val size : t -> int
   (** Returns the size of a variable: the size of the array if it is a table; 1
@@ -325,8 +331,9 @@ type verif_domain = verif_domain_data domain
 (** A literal can either be a float value or undefined. *)
 type literal = Float of float | Undefined
 
-(** A case for switches (aiguillages). *)
-type case = Default | Value of literal
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
 
 (** Unary operators *)
 type unop = Not | Minus
@@ -386,18 +393,21 @@ type var_space = (m_var_name * int) option
 (** The prefix of a variable that defines its space. No space is equivalent to
     the default space. *)
 
+type 'v var_id = var_space * 'v
+
 (** A generic representation of an access to a variable, read or write. *)
 type 'v access =
-  | VarAccess of var_space * 'v  (** Simple variable occurence *)
-  | TabAccess of var_space * 'v * 'v m_expression
-      (** Access to a cell of a table *)
+  | VarAccess of 'v var_id  (** Simple variable occurence *)
+  | TabAccess of 'v var_id * 'v m_expression  (** Access to a cell of a table *)
   | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
       (** Call to 'champ_evenement' *)
 
 and 'v m_access = 'v access Pos.marked
 
+and 'v case = CDefault | CValue of literal | CVar of 'v m_access
+
 (** Values that can be substituted for loop parameters *)
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -432,7 +442,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -448,6 +458,30 @@ and 'v expression =
   | NbBloquantes
 
 and 'v m_expression = 'v expression Pos.marked
+
+type const = { id : string; value : literal; pos : Pos.t }
+
+type 'v dep =
+  | Tab of 'v * 'v m_expression
+  | V of 'v
+  | LiteralDep of literal
+  | Const of const
+
+val get_used_variables : 'v expression -> 'v dep list
+
+val mk_atomlit : literal -> 'v atom
+(** [mk_atomtit lit] makes a Literal expression with no origin *)
+
+val mk_atomlit_from_const : literal -> string Pos.marked -> 'v atom
+(** [mk_atomlit_from_const] makes a Literal expression with
+    the name of the const as origin *)
+
+val mk_lit : literal -> 'v expression
+(** [mk_lit lit] makes a Literal expression with no origin *)
+
+val mk_lit_from_const : literal -> string Pos.marked -> 'v expression
+(** [mk_lit_from_const] makes a Literal expression with
+    the name of the const as origin *)
 
 (** Handling of errors. *)
 module Error : sig
@@ -524,6 +558,10 @@ type stop_kind =
 
 (** {2 Instructions} *)
 
+type 'v switch_expression =
+  | SEValue of 'v m_expression
+  | SESameVariable of 'v m_access
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -560,7 +598,8 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
+  | Switch of
+      ('v switch_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -634,7 +673,12 @@ val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
 
-val format_case : Pp.t -> case -> unit
+val format_case :
+  (Pp.t -> 'v -> unit) ->
+  (Pp.t -> 'v expression -> unit) ->
+  Pp.t ->
+  'v case ->
+  unit
 
 val format_atom : (Pp.t -> 'v -> unit) -> Pp.t -> 'v atom -> unit
 

@@ -46,6 +46,8 @@ module type S = sig
     base : value Array.t;
   }
 
+  type ctx_exec_ctx = CtxUndefined | CtxTarget of string | CtxRule of int
+
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
@@ -66,10 +68,13 @@ module type S = sig
     mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_events :
+      (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_dbg_info : Dbg_info.t option;
+    mutable ctx_exec_ctx : ctx_exec_ctx;
   }
 
-  val empty_ctx : Mir.program -> ctx
+  val empty_ctx : Mir.program -> Dbg_info.t option -> ctx
 
   val literal_to_value : Com.literal -> value
 
@@ -143,6 +148,8 @@ struct
     base : value Array.t;
   }
 
+  type ctx_exec_ctx = CtxUndefined | CtxTarget of string | CtxRule of int
+
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
@@ -163,7 +170,10 @@ struct
     mutable ctx_archived_anos : StrSet.t;
     mutable ctx_finalized_anos : (Com.Error.t * string option) list;
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events : (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_events :
+      (value, Com.Var.t) Com.event_value Array.t Array.t list;
+    mutable ctx_dbg_info : Dbg_info.t option;
+    mutable ctx_exec_ctx : ctx_exec_ctx;
   }
 
   type pctx = {
@@ -173,7 +183,7 @@ struct
     ctx_pr : print_ctx;
   }
 
-  let empty_ctx (p : Mir.program) : ctx =
+  let empty_ctx (p : Mir.program) (dbg_info : Dbg_info.t option) : ctx =
     let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
     let init_tmp_var _i = { var = dummy_var; value = Undefined } in
     let init_ref _i =
@@ -210,6 +220,7 @@ struct
       in
       Array.init (IntMap.cardinal p.program_var_spaces_idx) init
     in
+    let ctx_dbg_info = dbg_info in
     {
       ctx_prog = p;
       ctx_target = snd (StrMap.min_binding p.program_targets);
@@ -231,6 +242,8 @@ struct
       ctx_finalized_anos = [];
       ctx_exported_anos = [];
       ctx_events = [];
+      ctx_dbg_info;
+      ctx_exec_ctx = CtxUndefined;
     }
 
   let literal_to_value (l : Com.literal) : value =
@@ -436,7 +449,7 @@ struct
   let rec get_access_value ctx access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -459,7 +472,7 @@ struct
     | Com.VarAccess (m_sp_opt, v) ->
         let vsd, v, vorg = get_var ctx m_sp_opt v in
         Some (vsd, v, vorg)
-    | Com.TabAccess (m_sp_opt, m_v, m_i) -> (
+    | Com.TabAccess ((m_sp_opt, m_v), m_i) -> (
         match evaluate_expr ctx m_i with
         | Number z ->
             let vsd, v, vorg = get_var ctx m_sp_opt m_v in
@@ -498,7 +511,20 @@ struct
           | LocBase -> var_space.base
         in
         if Array.length var_tab > 0 then var_tab.(vi) <- value
-    | Com.Var.Temp _ -> ctx.ctx_tmps.(vorg + vi).value <- value
+    | Com.Var.Temp _ ->
+        begin
+          match ctx.ctx_dbg_info with
+          | None -> ()
+          | Some dbg_info ->
+              let open Dbg_info in
+              let tick = Tick.tick () in
+              let rule = get_rule ctx in
+              let value = value_to_literal value in
+              let info = Info.make_from_var tick var rule value None false in
+              let dbg_info = Dbg_info.register dbg_info info in
+              ctx.ctx_dbg_info <- Some dbg_info
+        end;
+        ctx.ctx_tmps.(vorg + vi).value <- value
     | Com.Var.Ref -> assert false
 
   and set_var_value (ctx : ctx) (m_sp_opt : Com.var_space) (var : Com.Var.t)
@@ -520,10 +546,19 @@ struct
         set_var_value_org ctx vsd var_i vorg value
       else set_var_value_org ctx vsd var vorg value
 
-  and set_access ctx access value =
-    match access with
+  and evaluate_switch_expr (ctx : ctx) s_e =
+    match s_e with
+    | Com.SEValue e -> (
+        match evaluate_expr ctx e with
+        | Undefined -> `Undefined
+        | Number n -> `Value n)
+    | SESameVariable v -> `Var v
+
+  and set_access ctx access vexpr =
+    let value = evaluate_expr ctx vexpr in
+    (match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
-    | Com.TabAccess (m_sp_opt, v, m_idx) -> (
+    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match evaluate_expr ctx m_idx with
         | Number z ->
             let i = Int64.to_int @@ N.to_int z in
@@ -538,7 +573,56 @@ struct
               match events.(i).(j) with
               | Com.Numeric _ -> events.(i).(j) <- Com.Numeric value
               | Com.RefVar v -> set_var_value ctx m_sp_opt v value)
-        | Undefined -> ())
+        | Undefined -> ()));
+    match (ctx.ctx_dbg_info, get_access_var ctx access) with
+    | None, _ | _, None -> ()
+    | Some dbg_info, Some (_, v, _) ->
+        let open Dbg_info in
+        let deps = Com.get_used_variables @@ Pos.unmark vexpr in
+        let ticks, dbg_info = trace_deps deps dbg_info ctx in
+        (* Create the tick for this  variable after the deps so that they are
+           in the right order on marple side. *)
+        let tick = Tick.tick () in
+        let access_name name =
+          match access with
+          | Com.VarAccess _ -> (
+              Format.printf "var: %a@." Com.Var.pp v;
+              match Com.Var.get_table_cell v with
+              | None -> name
+              | Some (v, i) ->
+                  let tab = Com.Var.name_str v in
+                  Format.asprintf "%s[%d]" tab i)
+          | Com.TabAccess ((_, v), m_i) ->
+              let name = Com.Var.name_str v in
+              let idx_str = eval_m_index ctx m_i in
+              Format.asprintf "%s[%s]" name idx_str
+          | Com.FieldAccess (_, _, _, _) -> name
+        in
+        let name = access_name @@ Com.Var.name_str v in
+        Format.printf "setting %s@." name;
+        let is_input =
+          match Com.Var.cat_var_loc v with
+          | Com.CatVar.LocInput -> true
+          | (exception Failure _) | _ -> false
+        in
+        let pos = Pos.get vexpr in
+        let rule_id = get_rule ctx in
+        let value = value_to_literal value in
+        let descr =
+          match Com.Var.descr_str v with
+          | exception _ -> None
+          | descr -> Some descr
+        in
+        let info = Info.make tick name pos rule_id value descr is_input in
+        let dbg_info = Dbg_info.register dbg_info info in
+        let vert = Dbg_info.Graph.V.create tick in
+        let graph = dbg_info.graph in
+        let add_edge graph deptick =
+          let dep_vert = Dbg_info.Graph.V.create deptick in
+          Dbg_info.Graph.add_edge graph vert dep_vert
+        in
+        let graph = List.fold_left add_edge graph ticks in
+        ctx.ctx_dbg_info <- Some { dbg_info with graph }
 
   (* print aux *)
 
@@ -605,6 +689,78 @@ struct
         pr_flush pctx
     | None -> ()
 
+  (* end of print aux *)
+  and eval_m_index ctx m_i =
+    match evaluate_expr ctx m_i with
+    | Number z -> Int64.to_string @@ N.to_int z
+    | Undefined -> "indefini"
+
+  and trace_deps deps dbg_info ctx =
+    let open Dbg_info in
+    let trace_dep (ticks, dbg_info) dep =
+      match dep with
+      | Com.V var ->
+          let name = Com.Var.name_str var in
+          Format.printf "var name: %s@." name;
+          (* For now, we add uninstantiated depedencies as undefined *)
+          begin
+            match TickMap.find name dbg_info.ledger with
+            | exception Failure _msg ->
+                (* Format.fprintf Format.err_formatter "%s" msg; *)
+                let tick = Tick.tick () in
+                (* Format.fprintf Format.err_formatter "it will have tick: %d@." *)
+                (*   tick; *)
+                let rule = Origin.Declared in
+                let value = Com.Undefined in
+                let info = Info.make_from_var tick var rule value None false in
+                let dbg_info = Dbg_info.register dbg_info info in
+                (tick :: ticks, dbg_info)
+            | tick -> (tick :: ticks, dbg_info)
+          end
+      | Const const ->
+          let name = const.Com.id in
+          begin
+            match TickMap.find name dbg_info.ledger with
+            | tick -> (tick :: ticks, dbg_info)
+            | exception Failure _ ->
+                let tick = Tick.tick () in
+                let const =
+                  Const.make_from_pos name const.Com.value const.pos
+                in
+                let consts = Tick.Map.add tick const dbg_info.consts in
+                let ledger = StrMap.add name tick dbg_info.ledger in
+                let dbg_info = { dbg_info with consts; ledger } in
+                (tick :: ticks, dbg_info)
+          end
+      | Tab (var, m_i) ->
+          let name = Com.Var.name_str var in
+          let idx_str = eval_m_index ctx m_i in
+          let name = Format.asprintf "%s[%s]" name idx_str in
+          Format.printf "tab name %s@." name;
+          begin
+            match TickMap.find name dbg_info.ledger with
+            | exception Failure _ ->
+                let tick = Tick.tick () in
+                let rule = Origin.Declared in
+                let lit_value = Com.Undefined in
+                let info =
+                  Info.make_from_var tick var rule lit_value None false
+                in
+                let dbg_info = Dbg_info.register dbg_info info in
+                (tick :: ticks, dbg_info)
+            | tick -> (tick :: ticks, dbg_info)
+          end
+      | LiteralDep _lit -> (ticks, dbg_info)
+    in
+    List.fold_left trace_dep ([], dbg_info) deps
+
+  and get_rule ctx =
+    match ctx.ctx_exec_ctx with
+    | CtxRule i -> Dbg_info.Origin.Rule i
+    | CtxTarget s -> Dbg_info.Origin.Target s
+    (* FIXME: This is a debug failure, do not release as-if *)
+    | CtxUndefined -> raise @@ Failure "no rule id"
+
   and pr_indent (pctx : pctx) e =
     match evaluate_expr pctx.ctx e with
     | Undefined -> ()
@@ -619,6 +775,7 @@ struct
   (* interpret *)
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
+    (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
     let comparison op new_e1 new_e2 =
       match (op, new_e1, new_e2) with
       | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
@@ -708,8 +865,8 @@ struct
                 | Some e3 -> evaluate_expr ctx e3)
             | Number _ -> evaluate_expr ctx e2
             | Undefined -> Undefined)
-        | Literal Undefined -> Undefined
-        | Literal (Float f) -> Number (N.of_float f)
+        | Literal { lit = Undefined; _ } -> Undefined
+        | Literal { lit = Float f; _ } -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
         | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
             match evaluate_expr ctx arg with
@@ -781,7 +938,22 @@ struct
         | FuncCall (Pos.Mark (Func fn, _), args) ->
             let fd = StrMap.find fn ctx.ctx_prog.program_functions in
             evaluate_function ctx fd args
-        | FuncCall (_, _) -> assert false
+        | FuncCall (Pos.Mark (AbsFunc, _), _)
+        | FuncCall (Pos.Mark (Supzero, _), _)
+        | FuncCall (Pos.Mark (PresentFunc, _), _)
+        | FuncCall (Pos.Mark (ArrFunc, _), _)
+        | FuncCall (Pos.Mark (MinFunc, _), _)
+        | FuncCall (Pos.Mark (MaxFunc, _), _)
+        | FuncCall (Pos.Mark (Multimax, _), _)
+        | FuncCall (Pos.Mark (InfFunc, _), _) ->
+            raise @@ Failure "arity error"
+        | FuncCall
+            ( Mark
+                ( ( SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber
+                  | ComplNumber ),
+                  _ ),
+              _ ) ->
+            raise @@ Failure "not implemented"
         | Attribut (m_acc, a) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) -> (
@@ -800,15 +972,9 @@ struct
                 then Number (N.one ())
                 else Number (N.zero ())
             | None -> Undefined)
-        | SameVariable (m_acc0, m_acc1) -> (
-            let v0_opt = get_access_var ctx (Pos.unmark m_acc0) in
-            let v1_opt = get_access_var ctx (Pos.unmark m_acc1) in
-            match (v0_opt, v1_opt) with
-            | Some (_, v0, _), Some (_, v1, _) ->
-                if Com.Var.name_str v0 = Com.Var.name_str v1 then
-                  Number (N.one ())
-                else Number (N.zero ())
-            | _, _ -> Number (N.zero ()))
+        | SameVariable (m_acc0, m_acc1) ->
+            if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
+            else Number (N.zero ())
         | InDomain (m_acc, cvm) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) ->
@@ -847,11 +1013,19 @@ struct
       else raise (RuntimeError (e, ctx))
     else out
 
+  and same_variable ctx m_acc m_acc' : bool =
+    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
+    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
+    match (v0_opt, v1_opt) with
+    | Some (_, v0, _), Some (_, v1, _) ->
+        Com.Var.name_str v0 = Com.Var.name_str v1
+    | _, _ -> false
+
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =
     match Pos.unmark stmt with
     | Com.Affectation (Pos.Mark (SingleFormula (VarDecl (m_acc, vexpr)), _)) ->
-        set_access ctx (Pos.unmark m_acc) @@ evaluate_expr ctx vexpr
+        set_access ctx (Pos.unmark m_acc) vexpr
     | Com.Affectation
         (Pos.Mark (SingleFormula (EventFieldRef (idx, _, j, var)), _)) -> (
         match evaluate_expr ctx idx with
@@ -873,21 +1047,32 @@ struct
         | Number _ -> evaluate_stmts canBlock ctx t
         | Undefined -> ())
     | Com.Switch (c, l) -> (
-        let v = evaluate_expr ctx c in
         let exception INTERNAL_STOP_SWITCH in
         let then_ () = raise INTERNAL_STOP_SWITCH in
+        let v = evaluate_switch_expr ctx c in
+        let default = ref None in
         try
           List.iter
             (fun (cases, stmts) ->
               List.iter
                 (fun case ->
                   match (case, v) with
-                  | Com.Default, _ | Value Undefined, Undefined ->
+                  | Com.CDefault, _ ->
+                      (* Trigged only if all other cases fail *)
+                      default := Some stmts
+                  | CValue Undefined, `Undefined ->
                       evaluate_stmts ~then_ canBlock ctx stmts
-                  | Value (Float f), Number n
-                    when compare_numbers Eq n (N.of_float f) ->
-                      evaluate_stmts ~then_ canBlock ctx stmts
-                  | _ -> ())
+                  | CValue _, `Undefined | CValue Undefined, _ -> ()
+                  | CValue (Float f), `Value v ->
+                      if N.of_float f = v then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CValue _, `Var _ ->
+                      failwith "Cannot match value with variable"
+                  | CVar m_acc, `Var v ->
+                      if same_variable ctx m_acc v then
+                        evaluate_stmts ~then_ canBlock ctx stmts
+                  | CVar _, (`Value _ | `Undefined) ->
+                      failwith "Cannot match variable with value")
                 cases)
             l
         with INTERNAL_STOP_SWITCH -> ())
@@ -1260,6 +1445,22 @@ struct
 
   and evaluate_target (canBlock : bool) (ctx : ctx) (target : Mir.target)
       (args : Mir.m_access list) (vsd : Com.variable_space) : unit =
+    (* We check if the current target is in the rule map.
+       If it is, we assume we're in a rule, and register it
+       to annotate the value we'll set later in the dbg_info. *)
+    let target_name = Pos.unmark target.target_name in
+    (* Format.printf "evaluating target: %s@." target_name; *)
+    let rule_id =
+      IntMap.fold
+        (fun i str acc ->
+          match acc with
+          | Some _ -> acc
+          | None -> if str = target_name then Some i else None)
+        ctx.ctx_prog.program_rules None
+    in
+    (match rule_id with
+    | None -> ctx.ctx_exec_ctx <- CtxTarget target_name
+    | Some rule_id -> ctx.ctx_exec_ctx <- CtxRule rule_id);
     let rec set_args n vl al =
       match (vl, al) with
       | v :: vl', m_a :: al' -> (
@@ -1424,11 +1625,12 @@ let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
 
 let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Config.value_sort) (roundops : Config.round_ops) :
-    Com.literal Com.Var.Map.t * Com.Error.Set.t =
+    (sort : Config.value_sort) (roundops : Config.round_ops)
+    (dbg_info : Dbg_info.t option) :
+    Com.literal Com.Var.Map.t * Com.Error.Set.t * Dbg_info.t option =
   prepare_interp sort roundops;
   let module Interp = (val get_interp sort roundops : S) in
-  let ctx = Interp.empty_ctx p in
+  let ctx = Interp.empty_ctx p dbg_info in
   Interp.update_ctx_with_inputs ctx inputs;
   Interp.update_ctx_with_events ctx events;
   Interp.evaluate_program ctx;
@@ -1456,10 +1658,14 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     let fold res (e, _) = Com.Error.Set.add e res in
     List.fold_left fold Com.Error.Set.empty ctx.ctx_exported_anos
   in
-  (varMap, anoSet)
+  let dbg_info = ctx.ctx_dbg_info in
+  (varMap, anoSet, dbg_info)
 
 let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Config.value_sort) (roundops : Config.round_ops) : Com.literal =
+    (sort : Config.value_sort) (roundops : Config.round_ops)
+    (dbg_info : Dbg_info.t option) : Com.literal =
   let module Interp = (val get_interp sort roundops : S) in
-  try Interp.value_to_literal (Interp.evaluate_expr (Interp.empty_ctx p) e)
+  try
+    Interp.value_to_literal
+      (Interp.evaluate_expr (Interp.empty_ctx p dbg_info) e)
   with Stop_instruction _ -> Undefined

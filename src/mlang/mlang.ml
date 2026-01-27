@@ -16,6 +16,7 @@
 
 module Backend_compilers = Backend_compilers
 module Driver = Driver
+module Parsing = Parsing
 module Irj_utils = Irj_utils
 module M_ir = M_ir
 module M_frontend = M_frontend

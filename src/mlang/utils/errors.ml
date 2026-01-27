@@ -27,7 +27,7 @@ let format_structured_error fmt
           (fun (msg, pos) ->
             Printf.sprintf "%s%s"
               (match msg with None -> "" | Some msg -> msg ^ "\n")
-              (Pos.retrieve_loc_text pos))
+              (Cli.retrieve_loc_text pos))
           pos))
     (if List.length pos = 0 then "" else "\n")
 

@@ -16,6 +16,8 @@
 
 open Irj_ast
 
+type input = Filename of string | Contents of string
+
 (* Implement a parsing error handling following François Pottier’s example
    in https://gitlab.inria.fr/fpottier/menhir/blob/master/demos/calc-syntax-errors/calc.ml *)
 
@@ -85,12 +87,15 @@ let fail text buffer (checkpoint : _ Irj_parser.MenhirInterpreter.checkpoint) =
   Errors.raise_spanned_error indication
     (mk_position (MenhirLib.ErrorReports.last buffer))
 
-let parse_file (test_name : string) : Irj_ast.irj_file =
+let parse_file (test_name : input) : Irj_ast.irj_file =
   let text, filebuf =
-    try MenhirLib.LexerUtil.read test_name
-    with Sys_error msg ->
-      Errors.raise_error
-        (Format.asprintf "Unable to open file %s (%s)" test_name msg)
+    match test_name with
+    | Contents contents -> (contents, Lexing.from_string contents)
+    | Filename filename -> (
+        try MenhirLib.LexerUtil.read filename
+        with Sys_error msg ->
+          Errors.raise_error
+            (Format.asprintf "Unable to open file %s (%s)" filename msg))
   in
   let supplier =
     Irj_parser.MenhirInterpreter.lexer_lexbuf_to_supplier Irj_lexer.token

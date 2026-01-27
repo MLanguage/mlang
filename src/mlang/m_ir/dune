@@ -3,4 +3,4 @@
  (name m_ir)
  (flags
   (:standard -open Utils))
- (libraries utils num gmp re))
+ (libraries utils num gmp re ocamlgraph yojson))

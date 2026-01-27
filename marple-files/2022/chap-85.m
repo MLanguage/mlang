@@ -1,0 +1,1436 @@
+#*************************************************************************************************************************
+#
+#Copyright or © or Copr.[DGFIP][2023]
+#
+#Ce logiciel a été initialement développé par la Direction Générale des 
+#Finances Publiques pour permettre le calcul de l'impôt sur le revenu 2023 
+#au titre des revenus perçus en 2022. La présente version a permis la 
+#génération du moteur de calcul des chaînes de taxation des rôles d'impôt 
+#sur le revenu de ce millésime.
+#
+#Ce logiciel est régi par la licence CeCILL 2.1 soumise au droit français 
+#et respectant les principes de diffusion des logiciels libres. Vous pouvez 
+#utiliser, modifier et/ou redistribuer ce programme sous les conditions de 
+#la licence CeCILL 2.1 telle que diffusée par le CEA, le CNRS et l'INRIA  sur 
+#le site "http://www.cecill.info".
+#
+#Le fait que vous puissiez accéder à cet en-tête signifie que vous avez pris 
+#connaissance de la licence CeCILL 2.1 et que vous en avez accepté les termes.
+#
+#**************************************************************************************************************************
+regle 851000:
+application : iliad ;
+
+
+
+DEF5KC = positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV) * arr(BICDNV * BICNOV / (BICNOV + COD5DF + CODCKC)) ;
+
+DEF5DF = positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV)
+         * (present(CODCKC) * arr(BICDNV * COD5DF / (BICNOV + COD5DF + CODCKC))
+            + (1 - present(CODCKC)) * (BICDNV - DEF5KC)) ;
+       
+DEFCKC = BICDNV - DEF5KC - DEF5DF ;
+
+
+DEF5LC = positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC) * arr(BICDNC * BICNOC / (BICNOC + COD5EF + CODCLC)) ;
+
+DEF5EF = positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC)
+         * (present(CODCLC) * arr(BICDNC * COD5EF / (BICNOC + COD5EF + CODCLC))
+	    + (1 - present(CODCLC)) * (BICDNC - DEF5LC)) ;
+
+DEFCLC = BICDNC - DEF5LC - DEF5EF ;
+
+
+DEF5MC = positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP) * arr(BICDNP * BICNOP / (BICNOP + COD5FF + CODCMC)) ;
+
+DEF5FF = positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP)
+         * (present(CODCMC) * arr(BICDNP * COD5FF / (BICNOP + COD5FF + CODCMC))
+            + (1 - present(CODCMC)) * (BICDNP - DEF5MC)) ;
+
+DEFCMC = BICDNP - DEF5MC - DEF5FF ;       
+
+
+R15KC = positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV) * (BICNOV - DEF5KC)
+        + (1 - positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV)) * (BICNOV + COD5DF + CODCKC - BICDNV) ;
+
+R15LC = positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC) * (BICNOC - DEF5LC)
+        + (1 - positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC)) * (BICNOC + COD5EF + CODCLC - BICDNC) ;
+
+R15MC = positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP) * (BICNOP - DEF5MC)
+        + (1 - positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP)) * (BICNOP + COD5FF + CODCMC - BICDNP) ;
+
+regle 851002:
+application : iliad ;
+
+
+
+DEF5KI = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV) * arr(BIHDNV * BIHNOV / (BIHNOV + COD5DG + CODCKI)) ;
+
+DEF5DG = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV)
+         * (present(CODCKI) * arr(BIHDNV * COD5DG / (BIHNOV + COD5DG + CODCKI))
+	    + (1 - present(CODCKI)) * (BIHDNV - DEF5KI)) ;
+
+DEFCKI = BIHDNV - DEF5KI - DEF5DG ;
+
+
+DEF5LI = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC) * arr(BIHDNC * BIHNOC / (BIHNOC + COD5EG + CODCLI)) ;
+
+DEF5EG = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC)
+         * (present(CODCLI) * arr(BIHDNC * COD5EG / (BIHNOC + COD5EG + CODCLI))
+            + (1 - present(CODCLI)) * (BIHDNC - DEF5LI)) ;
+
+DEFCLI = BIHDNC - DEF5LI - DEF5EG ;
+
+
+DEF5MI = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP) * arr(BIHDNP * BIHNOP / (BIHNOP + COD5FG + CODCMI)) ;
+
+DEF5FG = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP)
+         * (present(CODCMI) * arr(BIHDNP * COD5FG / (BIHNOP + COD5FG + CODCMI))
+            + (1 - present(CODCMI)) *  (BIHDNP - DEF5MI)) ;
+
+DEFCMI = BIHDNP - DEF5MI - DEF5FG ;
+									     
+
+R25KI = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV) * (BIHNOV - DEF5KI)
+        + (1 - positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV)) * (BIHNOV + COD5DG + CODCKI - BIHDNV) ;
+
+R25LI = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC) * (BIHNOC - DEF5LI)
+        + (1 - positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC)) * (BIHNOC + COD5EG + CODCLI - BIHDNC) ;
+
+R25MI = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP) * (BIHNOP - DEF5MI)
+        + (1 - positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP)) * (BIHNOP + COD5FG + CODCMI - BIHDNP) ;
+
+R2MAJ5KI = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV) * arr((BIHNOV - DEF5KI) * MAJREV20) 
+           + (1 - positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV)) * (BIHNOV + COD5DG + CODCKI - BIHDNV) ;
+
+R2MAJ5LI = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC) * arr((BIHNOC - DEF5LI) * MAJREV20) 
+           + (1 - positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC)) * (BIHNOC + COD5EG + CODCLI - BIHDNC) ;
+
+R2MAJ5MI = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP) * arr((BIHNOP - DEF5MI) * MAJREV20) 
+           + (1 - positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP)) * (BIHNOP + COD5FG + CODCMI - BIHDNP) ;
+
+regle 851005:
+application : iliad ;
+
+
+BIPTAV = positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV) * (R15KC + COD5DF - DEF5DF)
+         + (1 - positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV)) * R15KC ;
+
+BIPTAC = positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC) * (R15LC + COD5EF - DEF5EF)
+         + (1 - positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC)) * R15LC ;
+
+BIPTAP = positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP) * (R15MC + COD5FF - DEF5FF)
+         +(1 - positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP)) * R15MC ;
+
+
+BIPTAQV = positif_ou_nul(BICNOV + COD5DF + CODCKC - BICDNV) * (CODCKC - DEFCKC) ;
+BIPTAQC = positif_ou_nul(BICNOC + COD5EF + CODCLC - BICDNC) * (CODCLC - DEFCLC) ;
+BIPTAQP = positif_ou_nul(BICNOP + COD5FF + CODCMC - BICDNP) * (CODCMC - DEFCMC) ;
+
+
+                                                        
+BIPTTAV = BIPTAV + BI1AV ; 
+BIPTTAC = BIPTAC + BI1AC ; 
+BIPTTAP = BIPTAP + BI1AP ; 
+
+BIPV = BICNOV + COD5DF + CODCKC - BICDNV + BIHNOV + COD5DG + CODCKI - BIHDNV ;
+BIPC = BICNOC + COD5EF + CODCLC - BICDNC + BIHNOC + COD5EG + CODCLI - BIHDNC ;
+BIPP = BICNOP + COD5FF + CODCMC - BICDNP + BIHNOP + COD5FG + CODCMI - BIHDNP ;
+
+regle 851010:
+application : iliad  ;
+
+
+
+DEF5NC = positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV) * arr(BICDEV * BICREV / (BICREV + COD5UR + CODCNC)) ;
+
+DEF5UR = positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV)
+         * (present(CODCNC) * arr(BICDEV * COD5UR / (BICREV + COD5UR + CODCNC))
+            + (1 - present(CODCNC)) * (BICDEV - DEF5NC)) ;
+
+DEFCNC = BICDEV - DEF5NC - DEF5UR ;
+
+
+DEF5OC = positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC) * arr(BICDEC * BICREC / (BICREC + COD5VR + CODCOC)) ;
+
+DEF5VR = positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC)
+         * (present(CODCOC) * arr(BICDEC * COD5VR / (BICREC + COD5VR + CODCOC))
+            + (1 - present(CODCOC)) * (BICDEC - DEF5OC)) ;
+
+DEFCOC = BICDEC - DEF5OC - DEF5VR ;
+
+
+DEF5PC = positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP) * arr(BICDEP * BICREP / (BICREP + COD5WR + CODCPC)) ;
+
+DEF5WR = positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP)
+         * (present(CODCPC) * arr(BICDEP * COD5WR / (BICREP + COD5WR + CODCPC))
+            + (1 - present(CODCPC)) * (BICDEP - DEF5PC)) ;
+
+DEFCPC = BICDEP - DEF5PC - DEF5WR ;
+
+
+R15NC = positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV) * (BICREV - DEF5NC)
+        + (1 - positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV)) * (BICREV + COD5UR + CODCNC - BICDEV) ;
+
+R15OC = positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC) * (BICREC - DEF5OC)
+        + (1 - positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC)) * (BICREC + COD5VR + CODCOC - BICDEC) ;
+
+R15PC = positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP) * (BICREP - DEF5PC)
+        + (1 - positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP)) * (BICREP + COD5WR + CODCPC - BICDEP) ;
+
+regle 851015:
+application : iliad ;
+
+
+BINTAV = positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV) * (R15NC + COD5UR - DEF5UR)
+         + (1 - positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV)) * R15NC ;
+
+BINTAC = positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC) * (R15OC + COD5VR - DEF5VR)
+         + (1 - positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC)) * R15OC ;
+
+BINTAP = positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP) * (R15PC + COD5WR - DEF5WR)
+         + (1 - positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP)) * R15PC ;
+
+
+BINTAQV = positif_ou_nul(BICREV + COD5UR + CODCNC - BICDEV) * (CODCNC - DEFCNC) ;
+BINTAQC = positif_ou_nul(BICREC + COD5VR + CODCOC - BICDEC) * (CODCOC - DEFCOC) ;
+BINTAQP = positif_ou_nul(BICREP + COD5WR + CODCPC - BICDEP) * (CODCPC - DEFCPC) ;
+
+
+BINTTAV = BINTAV + BI2AV ;           
+BINTTAC = BINTAC + BI2AC ;           
+BINTTAP = BINTAP + BI2AP ;           
+
+
+BINV = BICREV + COD5UR + CODCNC - BICDEV + BICHREV + COD5US + CODCNI - BICHDEV ;
+BINC = BICREC + COD5VR + CODCOC - BICDEC + BICHREC + COD5VS + CODCOI - BICHDEC ;
+BINP = BICREP + COD5WR + CODCPC - BICDEP + BICHREP + COD5WS + CODCPI - BICHDEP ;
+
+regle 851020:
+application : iliad ;
+
+ 
+BI12AV = BI1AV + BI2AV ;
+BI12AC = BI1AC + BI2AC ;
+BI12AP = BI1AP + BI2AP ;
+ 
+regle 851030:
+application : iliad  ;
+
+
+BITAV = BIPTAV + BINTAV ;
+BITAC = BIPTAC + BINTAC ;
+BITAP = BIPTAP + BINTAP ;
+
+BITTAV = BITAV + BI12AV ;
+BITTAC = BITAC + BI12AC ;
+BITTAP = BITAP + BI12AP ;
+
+regle 851040:
+application : iliad  ;
+
+   
+BI1 = somme(i=V,C,P:BI1i) ;
+
+BI2 = somme(i=V,C,P:BI2i) ;
+
+regle 851050:
+application : iliad  ;
+
+
+BI1V = BI1AV ;
+BI1C = BI1AC ;
+BI1P = BI1AP ;
+
+BI2V = BI2AV ;
+BI2C = BI2AC ;
+BI2P = BI2AP ;
+
+regle 851055:
+application : iliad ;
+
+
+
+DEF5NI = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV) * arr(BICHDEV * BICHREV / (BICHREV + COD5US + CODCNI)) ;
+
+DEF5US = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV)
+         * (present(CODCNI) * arr(BICHDEV * COD5US / (BICHREV + COD5US + CODCNI))
+            + (1 - present(CODCNI)) * (BICHDEV - DEF5NI)) ;
+
+DEFCNI = BICHDEV - DEF5NI - DEF5US ;
+
+									     
+DEF5OI = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC) * arr(BICHDEC * BICHREC / (BICHREC + COD5VS + CODCOI)) ;
+
+DEF5VS = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC)
+         * (present(CODCOI) * arr(BICHDEC * COD5VS / (BICHREC + COD5VS + CODCOI))
+            + (1 - present(CODCOI)) * (BICHDEC - DEF5OI)) ;
+
+DEFCOI = BICHDEC - DEF5OI - DEF5VS ;
+
+
+DEF5PI = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) * arr(BICHDEP * BICHREP / (BICHREP + COD5WS + CODCPI)) ;
+
+DEF5WS = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) 
+         * (present(CODCPI) * arr(BICHDEP * COD5WS / (BICHREP + COD5WS + CODCPI))
+            + (1 - present(CODCPI)) * (BICHDEP - DEF5PI)) ;
+
+DEFCPI = BICHDEP - DEF5PI - DEF5WS ;
+
+
+R25NI = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV) * (BICHREV - DEF5NI)
+        + (1 - positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV)) * (BICHREV + COD5US + CODCNI - BICHDEV) ;
+
+R25OI = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC) * (BICHREC - DEF5OI)
+        + (1 - positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC)) * (BICHREC + COD5VS + CODCOI - BICHDEC) ;
+
+R25PI = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) * (BICHREP - DEF5PI)
+        + (1 - positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP)) * (BICHREP + COD5WS + CODCPI - BICHDEP) ;
+
+R2MAJ5NI = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV) * arr((BICHREV - DEF5NI) * MAJREV20) 
+           + (1 - positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV)) * (BICHREV + COD5US + CODCNI - BICHDEV) ;
+
+R2MAJ5OI = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC) * arr((BICHREC - DEF5OI) * MAJREV20) 
+           + (1 - positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC)) * (BICHREC + COD5VS + CODCOI - BICHDEC) ;
+
+R2MAJ5PI = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) * arr((BICHREP - DEF5PI) * MAJREV20) 
+           + (1 - positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP)) * (BICHREP + COD5WS + CODCPI - BICHDEP) ;
+
+regle 851060:
+application : iliad ;
+
+
+BIHTAV = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV) * arr((R25KI + COD5DG - DEF5DG) * MAJREV20)
+         + (1 - positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV)) * R25KI ;
+
+BIHTAC = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC) * arr((R25LI + COD5EG - DEF5EG) * MAJREV20)
+         + (1 - positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC)) * R25LI ;
+
+BIHTAP = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP) * arr((R25MI + COD5FG - DEF5FG) * MAJREV20)
+         + (1 - positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP)) * R25MI ;
+       
+
+BIHTAQV = positif_ou_nul(BIHNOV + COD5DG + CODCKI - BIHDNV) * arr((CODCKI - DEFCKI) * MAJREV20) ;
+BIHTAQC = positif_ou_nul(BIHNOC + COD5EG + CODCLI - BIHDNC) * arr((CODCLI - DEFCLI) * MAJREV20) ;
+BIHTAQP = positif_ou_nul(BIHNOP + COD5FG + CODCMI - BIHDNP) * arr((CODCMI - DEFCMI) * MAJREV20) ;
+
+
+
+BINHTAV = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV) * arr((R25NI + COD5US - DEF5US) * MAJREV20)
+          + (1 - positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV)) * R25NI ;
+
+BINHTAC = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC) * arr((R25OI + COD5VS - DEF5VS) * MAJREV20)
+          + (1 - positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC)) * R25OI ;
+
+BINHTAP = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) * arr((R25PI + COD5WS - DEF5WS) * MAJREV20)
+          + (1 - positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP)) * R25PI ;
+	
+BINHTAQV = positif_ou_nul(BICHREV + COD5US + CODCNI - BICHDEV) * arr((CODCNI - DEFCNI) * MAJREV20) ;
+BINHTAQC = positif_ou_nul(BICHREC + COD5VS + CODCOI - BICHDEC) * arr((CODCOI - DEFCOI) * MAJREV20) ;
+BINHTAQP = positif_ou_nul(BICHREP + COD5WS + CODCPI - BICHDEP) * arr((CODCPI - DEFCPI) * MAJREV20) ;
+
+
+BINPROV = (somme(i=V,C,P :(max(0,arr((BIHNOi - BIHDNi) * MAJREV20)) + min(0,BIHNOi - BIHDNi))+(BICNOi - BICDNi))) ;
+
+regle 851070:
+application : iliad  ;
+
+
+MIB_TVENV = MIBVENV + MIBNPVENV + MIBGITEV + LOCGITV ;
+MIB_TVENC = MIBVENC + MIBNPVENC + MIBGITEC + LOCGITC ;
+MIB_TVENP = MIBVENP + MIBNPVENP + MIBGITEP + LOCGITP ;
+
+MIB_TPRESV = MIBPRESV + MIBNPPRESV + MIBMEUV + COD5NW ;
+MIB_TPRESC = MIBPRESC + MIBNPPRESC + MIBMEUC + COD5OW ;
+MIB_TPRESP = MIBPRESP + MIBNPPRESP + MIBMEUP + COD5PW ;
+
+MIB_TTV = MIB_TVENV + MIB_TPRESV ;
+MIB_TTC = MIB_TVENC + MIB_TPRESC ;
+MIB_TTP = MIB_TVENP + MIB_TPRESP ;
+
+regle 851080:
+application : iliad  ;
+
+
+MIB_AVV = min ( MIB_TVENV,
+                         (max(MIN_MBIC,
+                              arr( MIB_TVENV*TX_MIBVEN/100))
+                         )
+              );
+MIB_AVC = min ( MIB_TVENC,
+                         (max(MIN_MBIC,
+                              arr( MIB_TVENC*TX_MIBVEN/100))
+                         )
+              );
+MIB_AVP = min ( MIB_TVENP,
+                         (max(MIN_MBIC,
+                              arr( MIB_TVENP*TX_MIBVEN/100))
+                         )
+              );
+PMIB_AVV = min ( MIBVENV,
+                         (max(MIN_MBIC,
+                              arr( MIBVENV*TX_MIBVEN/100))
+                         )
+              );
+PMIB_AVC = min ( MIBVENC,
+                         (max(MIN_MBIC,
+                              arr( MIBVENC*TX_MIBVEN/100))
+                         )
+              );
+PMIB_AVP = min ( MIBVENP,
+                         (max(MIN_MBIC,
+                              arr( MIBVENP*TX_MIBVEN/100))
+                         )
+              );
+
+MIB_APV = min ( MIB_TPRESV,
+                         (max(MIN_MBIC,
+                              arr(MIB_TPRESV*TX_MIBPRES/100))
+                         )
+               );
+MIB_APC = min ( MIB_TPRESC,
+                         (max(MIN_MBIC,
+                              arr(MIB_TPRESC*TX_MIBPRES/100))
+                         )
+               );
+MIB_APP = min ( MIB_TPRESP,
+                         (max(MIN_MBIC,
+                              arr(MIB_TPRESP*TX_MIBPRES/100))
+                         )
+               );
+PMIB_APV = min ( MIBPRESV,
+                         (max(MIN_MBIC,
+                              arr(MIBPRESV*TX_MIBPRES/100))
+                         )
+               );
+PMIB_APC = min ( MIBPRESC,
+                         (max(MIN_MBIC,
+                              arr(MIBPRESC*TX_MIBPRES/100))
+                         )
+               );
+PMIB_APP = min ( MIBPRESP,
+                         (max(MIN_MBIC,
+                              arr(MIBPRESP*TX_MIBPRES/100))
+                         )
+               );
+
+regle 851090:
+application : iliad  ;
+
+
+MIB_ABVV = max(0,arr(MIB_AVV * MIBVENV / MIB_TVENV)) ;
+MIB_ABVC = max(0,arr(MIB_AVC * MIBVENC / MIB_TVENC)) ;
+MIB_ABVP = max(0,arr(MIB_AVP * MIBVENP / MIB_TVENP)) ;
+
+MIB_ABNPVV = max(0,arr(MIB_AVV * MIBNPVENV / MIB_TVENV))* positif(present(MIBGITEV)+present(LOCGITV))
+	      + (MIB_AVV - MIB_ABVV) * (1 - positif(present(MIBGITEV)+present(LOCGITV))) ;
+MIB_ABNPVC = max(0,arr(MIB_AVC * MIBNPVENC / MIB_TVENC))* positif(present(MIBGITEC)+present(LOCGITC))
+	      + (MIB_AVC - MIB_ABVC) * (1 - positif(present(MIBGITEC)+present(LOCGITC))) ;
+MIB_ABNPVP = max(0,arr(MIB_AVP * MIBNPVENP / MIB_TVENP))* positif(present(MIBGITEP)+present(LOCGITP))
+	      + (MIB_AVP - MIB_ABVP) * (1 - positif(present(MIBGITEP)+present(LOCGITP))) ;
+
+MIB_ABNPVLV = (MIB_AVV - MIB_ABVV - MIB_ABNPVV) * positif(present(MIBGITEV)+present(LOCGITV)) ;
+MIB_ABNPVLC = (MIB_AVC - MIB_ABVC - MIB_ABNPVC) * positif(present(MIBGITEC)+present(LOCGITC)) ;
+MIB_ABNPVLP = (MIB_AVP - MIB_ABVP - MIB_ABNPVP) * positif(present(MIBGITEP)+present(LOCGITP)) ;
+
+
+MIB_ABPV = max(0,arr(MIB_APV * MIBPRESV / MIB_TPRESV)) ;
+MIB_ABPC = max(0,arr(MIB_APC * MIBPRESC / MIB_TPRESC)) ;
+MIB_ABPP = max(0,arr(MIB_APP * MIBPRESP / MIB_TPRESP)) ;
+
+
+MIB_ABNPPV = positif(present(MIBMEUV) + present(COD5NW)) * max(0 , arr(MIB_APV * MIBNPPRESV / MIB_TPRESV))
+	     + (1 - positif(present(MIBMEUV) + present(COD5NW))) * (MIB_APV - MIB_ABPV) ;
+MIB_ABNPPC = positif(present(MIBMEUC) + present(COD5OW)) * max(0 , arr(MIB_APC * MIBNPPRESC / MIB_TPRESC))
+	     + (1 - positif(present(MIBMEUC) + present(COD5OW))) * (MIB_APC - MIB_ABPC) ;
+MIB_ABNPPP = positif(present(MIBMEUP) + present(COD5PW)) * max(0 , arr(MIB_APP * MIBNPPRESP / MIB_TPRESP))
+	     + (1 - positif(present(MIBMEUP) + present(COD5PW))) * (MIB_APP - MIB_ABPP) ;
+
+MIB_ABNPPLV = (MIB_APV - MIB_ABPV - MIB_ABNPPV) *  max(present(MIBMEUV),present(COD5NW)) ;
+MIB_ABNPPLC = (MIB_APC - MIB_ABPC - MIB_ABNPPC) *  max(present(MIBMEUC),present(COD5OW)) ;
+MIB_ABNPPLP = (MIB_APP - MIB_ABPP - MIB_ABNPPP) *  max(present(MIBMEUP),present(COD5PW)) ;
+
+regle 851100:
+application : iliad  ;
+
+
+MIB_NETVV = MIBVENV - MIB_ABVV;
+MIB_NETVC = MIBVENC - MIB_ABVC;
+MIB_NETVP = MIBVENP - MIB_ABVP;
+MIBNETVF = somme(i=V,C,P:MIB_NETVi) ;
+MIB_NETNPVV = MIBNPVENV - MIB_ABNPVV;
+MIB_NETNPVC = MIBNPVENC - MIB_ABNPVC;
+MIB_NETNPVP = MIBNPVENP - MIB_ABNPVP;
+MIBNETNPVF = somme(i=V,C,P:MIB_NETNPVi);
+MIB_NETNPVLV = MIBGITEV+ LOCGITV - MIB_ABNPVLV;
+MIB_NETNPVLC = MIBGITEC+ LOCGITC - MIB_ABNPVLC;
+MIB_NETNPVLP = MIBGITEP+ LOCGITP - MIB_ABNPVLP;
+MIBNETNPVLSV = arr(MIB_NETNPVLV * MIBGITEV / (MIBGITEV + LOCGITV));
+MIBNETNPVLSC = arr(MIB_NETNPVLC * MIBGITEC / (MIBGITEC + LOCGITC));
+MIBNETNPVLSP = arr(MIB_NETNPVLP * MIBGITEP / (MIBGITEP + LOCGITP));
+MIBNETNPVLNSV = MIB_NETNPVLV - MIBNETNPVLSV;
+MIBNETNPVLNSC = MIB_NETNPVLC - MIBNETNPVLSC;
+MIBNETNPVLNSP = MIB_NETNPVLP - MIBNETNPVLSP;
+MIBNETNPVLF = somme(i=V,C,P:MIB_NETNPVLi);
+
+MIB_NETPV = MIBPRESV - MIB_ABPV;
+MIB_NETPC = MIBPRESC - MIB_ABPC;
+MIB_NETPP = MIBPRESP - MIB_ABPP;
+MIBNETPF = somme(i=V,C,P:MIB_NETPi) ;
+MIB_NETNPPV = MIBNPPRESV - MIB_ABNPPV;
+MIB_NETNPPC = MIBNPPRESC - MIB_ABNPPC;
+MIB_NETNPPP = MIBNPPRESP - MIB_ABNPPP;
+MIBNETNPPF = somme(i=V,C,P:MIB_NETNPPi);
+
+MIB_NETNPPLV=MIBMEUV+COD5NW-MIB_ABNPPLV;
+MIB_NETNPPLC=MIBMEUC+COD5OW-MIB_ABNPPLC;
+MIB_NETNPPLP=MIBMEUP+COD5PW-MIB_ABNPPLP;
+MIBNETNPPLF = somme(i=V,C,P:MIB_NETNPPLi);
+
+RLOCFNPIV=MIB_NETNPVLV+MIB_NETNPPLV;
+RLOCFNPIC=MIB_NETNPVLC+MIB_NETNPPLC;
+RLOCFNPIP=MIB_NETNPVLP+MIB_NETNPPLP;
+
+PMIB_NETVV = MIBVENV - PMIB_AVV;
+PMIB_NETVC = MIBVENC - PMIB_AVC;
+PMIB_NETVP = MIBVENP - PMIB_AVP;
+PMIB_NETPV = MIBPRESV - PMIB_APV;
+PMIB_NETPC = MIBPRESC - PMIB_APC;
+PMIB_NETPP = MIBPRESP - PMIB_APP;
+
+regle 851105:
+application : iliad ;
+
+
+MIBNPLOCPSV = arr(MIB_NETNPPLV * MIBMEUV / (COD5NW + MIBMEUV)) * max(present(COD5NW) , present(MIBMEUV)) ;
+MIBNPLOCPSC = arr(MIB_NETNPPLC * MIBMEUC / (COD5OW + MIBMEUC)) * max(present(COD5OW) , present(MIBMEUC)) ;
+MIBNPLOCPSP = arr(MIB_NETNPPLP * MIBMEUP / (COD5PW + MIBMEUP)) * max(present(COD5PW) , present(MIBMEUP)) ;
+
+
+MIBNPLOCNPSV = MIB_NETNPPLV - MIBNPLOCPSV ;
+MIBNPLOCNPSC = MIB_NETNPPLC - MIBNPLOCPSC ;
+MIBNPLOCNPSP = MIB_NETNPPLP - MIBNPLOCPSP ;
+
+regle 851110:
+application : iliad ;
+
+MIB_NETCV = MIBPVV - BICPMVCTV ;
+MIB_NETCC = MIBPVC - BICPMVCTC ;
+MIB_NETCP = MIBPVP - BICPMVCTP ;
+MIB_NETCT = MIB_NETCV + MIB_NETCC + MIB_NETCP ;
+
+MIB_NETNPCT = MIBNPPVV + MIBNPPVC + MIBNPPVP - MIBNPDCT - COD5RZ - COD5SZ ;
+
+regle 851120:
+application : iliad  ;
+
+
+MIB_P1AV = MIB1AV - MIBDEV ;
+MIB_P1AC = MIB1AC - MIBDEC ;
+MIB_P1AP = MIB1AP - MIBDEP ;
+MIB_NP1AV = MIBNP1AV - MIBNPDEV ;
+MIB_NP1AC = MIBNP1AC - MIBNPDEC ;
+MIB_NP1AP = MIBNP1AP - MIBNPDEP ;
+MIB_1AV = max(0,MIB_P1AV + MIB_NP1AV) ;
+MIB_1AC = max(0,MIB_P1AC + MIB_NP1AC) ;
+MIB_1AP = max(0,MIB_P1AP + MIB_NP1AP) ;
+
+MIB_1AF = max (0, somme(i=V,C,P:MIB_1Ai)) ;
+
+regle 851130:
+application : iliad  ;
+
+
+REVIBI12V = BI1AV + BI2AV ;
+REVIBI12C = BI1AC + BI2AC ;
+REVIBI12P = BI1AP + BI2AP ;
+
+regle 851140:
+application : iliad  ;
+
+
+BICPF=BICPROOF;
+regle 851150:
+application : iliad  ;
+
+
+DEFNP = somme (i=1,2,3,4,5,6:DEFBICi) ;
+TOTDEFNP = DEFNP ;
+
+regle 851160:
+application : iliad  ;
+
+
+BICNPV = BINTAV + BINHTAV + MIB_NETNPVV + MIB_NETNPPV ;
+BICNPC = BINTAC + BINHTAC + MIB_NETNPVC + MIB_NETNPPC ;
+BICNPP = BINTAP + BINHTAP + MIB_NETNPVP + MIB_NETNPPP ;
+
+regle 851165:
+application : iliad  ;
+
+MIBNETPTOT = MIBNETVF + MIBNETPF + MIB_NETCT ;
+
+MIBNETNPTOT = MIBNETNPVF + MIBNETNPPF + MIB_NETNPCT ;
+
+regle 851170:
+application : iliad  ;
+
+BICNPF=max(0,BICNPOF);
+
+
+regle 851175:
+application:iliad;
+
+
+BICNPR1V = BICREV + COD5UR + CODCNC ;
+BICNPR1C = BICREC + COD5VR + CODCOC ;
+BICNPR1P = BICREP + COD5WR + CODCPC ;
+
+
+BICNPR2V = BICHREV + COD5US + CODCNI ;
+BICNPR2C = BICHREC + COD5VS + CODCOI ;
+BICNPR2P = BICHREP + COD5WS + CODCPI ;
+
+regle 851180:
+application : iliad  ;
+
+DEFNPIHQ = max(0 ,min(BICNPOCF, DEFBIC1+DEFBIC2+DEFBIC3+DEFBIC4+DEFBIC5+DEFBIC6)) ;
+DEFNPIQ = max(0 , min(BNCNPQCF, DEFBIC1+DEFBIC2+DEFBIC3+DEFBIC4+DEFBIC5+DEFBIC6-DEFNPIHQ)) ;
+DEFNPI=max(0,min(BICNPOCF+BICNPQCF,DEFNP));
+regle 851185:
+application : iliad  ;
+
+BICIFBIS =  abs(min(0 , BICNPOCF +BICNPQCF -DEFBIC1-DEFBIC2-DEFBIC3-DEFBIC4-DEFBIC5-DEFBIC6))
+                     * (1-positif(BICNPOCF +BICNPQCF))
+                            + max(0,DEFBIC1+DEFBIC2+DEFBIC3+DEFBIC4+DEFBIC5+DEFBIC6-BICNPOCF -BICNPQCF)
+                     * positif(BICNPOCF +BICNPQCF);
+BICIFBISQ =  abs(min(0 , BICNPQCF -max(0,BICNPOCF-DEFBIC1-DEFBIC2-DEFBIC3-DEFBIC4-DEFBIC5-DEFBIC6))) ;
+regle 851190:
+application : iliad  ;
+
+
+BICNPR = somme(i=V,C,P:BINTAi) ;
+
+regle 851200:
+application : iliad ;
+
+BI12F = somme(i=V,C,P:REVIBI12i) + MIB_1AF ; 
+
+regle 851210:
+application : iliad ;                   
+
+
+BICIMPV = BIHTAV + BIPTAV + MIB_NETVV + MIB_NETPV ;
+BICIMPC = BIHTAC + BIPTAC + MIB_NETVC + MIB_NETPC ;
+BICIMPP = BIHTAP + BIPTAP + MIB_NETVP + MIB_NETPP ;
+ 
+BIN = BICPF + BICNPF ;
+
+regle 851220:
+application :  iliad ;
+
+
+
+DCTMIB = (BICPMVCTV + BICPMVCTC + BICPMVCTP) * positif_ou_nul(BIPN+MIB_NETCT)
+	 + (1-positif_ou_nul(BIPN+MIB_NETCT)) * ((BICPMVCTV +BICPMVCTC +BICPMVCTP ) - abs(BIPN+MIB_NETCT))
+	 + (1-positif_ou_nul(BIPN+MIB_NETCT)) * null((BICPMVCTV +BICPMVCTC +BICPMVCTP) - abs(BIPN+MIB_NETCT)) * (BICPMVCTV +BICPMVCTC +BICPMVCTP)
+	 ;
+
+DCTMIBNP = (MIBNPDCT+COD5RZ+COD5SZ) * positif_ou_nul(BINNV+BINNC+BINNP+MIB_NETNPCT)
+	   + (1-positif_ou_nul(BINNV+BINNC+BINNP+MIB_NETNPCT)) * ((MIBNPDCT+COD5RZ+COD5SZ) - abs(BINNV+BINNC+BINNP+MIB_NETNPCT))
+	   + (1-positif_ou_nul(BINNV+BINNC+BINNP+MIB_NETNPCT)) * null((MIBNPDCT+COD5RZ+COD5SZ) - abs(BINNV+BINNC+BINNP+MIB_NETNPCT))*(MIBNPDCT+COD5RZ+COD5SZ)
+           ;
+
+regle 851230:
+application : iliad  ;                   
+
+DENPLOCAFFV = positif(present(LOCNPCGAV) + present(LOCGITCV) + present(LOCDEFNPCGAV) + present(COD5WE) + present(LOCNPV) + present(LOCGITHCV) + present(LOCDEFNPV) + present(COD5EY) + present(COD5EZ) + present(COD5WF)) ;
+DENPLOCAFFC = positif(present(LOCNPCGAC) + present(LOCGITCC) + present(LOCDEFNPCGAC) + present(COD5XE)+ present(LOCNPC) + present(LOCGITHCC) + present(LOCDEFNPC) + present(COD5FY) + present(COD5FZ) + present(COD5XF)) ;
+DENPLOCAFFP = positif(present(LOCNPCGAPAC) + present(LOCGITCP) + present(LOCDEFNPCGAPAC) + present(COD5YE)+ present(LOCNPPAC) + present(LOCGITHCP) + present(LOCDEFNPPAC) + present(COD5GY) + present(COD5GZ) + present(COD5YF)) ;
+
+DENPLOCV = (LOCNPCGAV + LOCGITCV + COD5EY - LOCDEFNPCGAV-COD5WE) + (LOCNPV + LOCGITHCV + COD5EZ - LOCDEFNPV-COD5WF) ;
+DENPLOCC = (LOCNPCGAC + LOCGITCC + COD5FY - LOCDEFNPCGAC-COD5XE) + (LOCNPC + LOCGITHCC + COD5FZ - LOCDEFNPC-COD5XF) ;
+DENPLOCP = (LOCNPCGAPAC + LOCGITCP + COD5GY - LOCDEFNPCGAPAC-COD5YE) + (LOCNPPAC + LOCGITHCP + COD5GZ - LOCDEFNPPAC-COD5YF) ;
+
+
+NPLOCCGAV=LOCNPCGAV+LOCGITCV+COD5EY-LOCDEFNPCGAV-COD5WE;
+NPLOCCGAC=LOCNPCGAC+LOCGITCC+COD5FY-LOCDEFNPCGAC-COD5XE;
+NPLOCCGAPAC=LOCNPCGAPAC+LOCGITCP+COD5GY-LOCDEFNPCGAPAC-COD5YE;
+
+NPLOCCGASSV = LOCNPCGAV + LOCGITCV - LOCDEFNPCGAV-COD5WE;
+NPLOCCGASSC = LOCNPCGAC + LOCGITCC - LOCDEFNPCGAC-COD5XE;
+NPLOCCGASSPAC = LOCNPCGAPAC + LOCGITCP - LOCDEFNPCGAPAC-COD5YE;
+
+
+
+NPLOCCGASV=positif(LOCNPCGAV+COD5EY)*((LOCNPCGAV+COD5EY)- LOCDEFNPCGAV)
+           +(1-positif(LOCNPCGAV+COD5EY))*min(0 , 0 - LOCDEFNPCGAV );
+NPLOCCGASC=positif(LOCNPCGAC+COD5FY)*((LOCNPCGAC+COD5FY)- LOCDEFNPCGAC)
+           +(1-positif(LOCNPCGAC+COD5FY))*min(0, 0 - LOCDEFNPCGAC );
+NPLOCCGASP=positif(LOCNPCGAPAC+COD5GY)*((LOCNPCGAPAC+COD5GY)-LOCDEFNPCGAPAC) 
+           +(1-positif(LOCNPCGAPAC+COD5GY))*min(0, 0 - LOCDEFNPCGAPAC );
+
+
+
+
+NPLOCCGANSV = NPLOCCGAV - NPLOCCGASV;
+NPLOCCGANSC = NPLOCCGAC - NPLOCCGASC;
+NPLOCCGANSP = NPLOCCGAPAC - NPLOCCGASP;
+
+
+NPLOCV=positif(LOCNPV+COD5EZ+LOCGITHCV-LOCDEFNPV-COD5WF)*arr((LOCNPV+COD5EZ+LOCGITHCV-LOCDEFNPV-COD5WF)*MAJREV20)
+       +(1-positif(LOCNPV+COD5EZ+LOCGITHCV-LOCDEFNPV-COD5WF))*(LOCNPV+COD5EZ+LOCGITHCV-LOCDEFNPV-COD5WF);
+
+NPLOCC=positif(LOCNPC+COD5FZ+LOCGITHCC-LOCDEFNPC-COD5XF)*arr((LOCNPC+COD5FZ+LOCGITHCC-LOCDEFNPC-COD5XF)*MAJREV20)
+       +(1-positif(LOCNPC+COD5FZ+LOCGITHCC-LOCDEFNPC-COD5XF))*(LOCNPC+COD5FZ+LOCGITHCC-LOCDEFNPC-COD5XF);
+       
+NPLOCPAC=positif(LOCNPPAC+COD5GZ+LOCGITHCP-LOCDEFNPPAC-COD5YF)*arr((LOCNPPAC+COD5GZ+LOCGITHCP-LOCDEFNPPAC-COD5YF)*MAJREV20)
+         +(1-positif(LOCNPPAC+COD5GZ+LOCGITHCP-LOCDEFNPPAC-COD5YF))*(LOCNPPAC+COD5GZ+LOCGITHCP-LOCDEFNPPAC-COD5YF);
+
+NPLOCSSV = min(0,LOCNPV + LOCGITHCV - LOCDEFNPV) 
+				       * positif_ou_nul(LOCDEFNPV- LOCNPV- LOCGITHCV ) 
+	       + arr(max(0, LOCNPV + LOCGITHCV - LOCDEFNPV) * MAJREV20) 
+				 * positif(LOCNPV + LOCGITHCV -LOCDEFNPC );
+
+NPLOCSSC = min(0,LOCNPC + LOCGITHCC - LOCDEFNPC) 
+				       * positif_ou_nul(LOCDEFNPC- LOCNPC- LOCGITHCC ) 
+	       + arr(max(0, LOCNPC + LOCGITHCC - LOCDEFNPC) * MAJREV20) 
+						 * positif(LOCNPC + LOCGITHCC - LOCDEFNPC);
+
+NPLOCSSPAC = min(0,LOCNPPAC + LOCGITHCP - LOCDEFNPPAC) 
+				       * positif_ou_nul(LOCDEFNPPAC- LOCNPPAC- LOCGITHCP ) 
+	       + arr(max(0, LOCNPPAC + LOCGITHCP - LOCDEFNPPAC) * MAJREV20) 
+						 * positif(LOCNPPAC + LOCGITHCP - LOCDEFNPPAC);
+
+
+R3LOCV = LOCNPV + COD5EZ + LOCGITHCV - LOCDEFNPV-COD5WF ;
+R3LOCC = LOCNPC + COD5FZ + LOCGITHCC - LOCDEFNPC-COD5XF ;
+R3LOCP = LOCNPPAC + COD5GZ + LOCGITHCP - LOCDEFNPPAC -COD5YF;
+
+
+
+
+NPLOCSV=positif(LOCNPV+COD5EZ)*((LOCNPV+COD5EZ)- LOCDEFNPV)
+        +((1-positif(LOCNPV+COD5EZ))*min(0, 0 - LOCDEFNPV));
+NPLOCSC=positif(LOCNPC+COD5FZ)*((LOCNPC+COD5FZ)-LOCDEFNPC)
+        +((1-positif(LOCNPC+COD5FZ))*min(0, 0 - LOCDEFNPC));
+NPLOCSP=positif(LOCNPPAC+COD5GZ)*((LOCNPPAC+COD5GZ)-LOCDEFNPPAC)
+        +((1-positif(LOCNPPAC+COD5GZ))*min(0, 0 - LOCDEFNPPAC));
+
+
+
+NPLOCNSV = NPLOCV - NPLOCSV ;
+NPLOCNSC = NPLOCC - NPLOCSC ;
+NPLOCNSP = NPLOCPAC - NPLOCSP ;
+
+regle 851240:
+application : iliad ;                   
+
+NPLOCNETTSV = NPLOCCGASV + NPLOCSV + MIBNETNPVLSV + MIBNPLOCPSV ;
+NPLOCNETTSC = NPLOCCGASC + NPLOCSC + MIBNETNPVLSC + MIBNPLOCPSC ;
+NPLOCNETTSP = NPLOCCGASP + NPLOCSP + MIBNETNPVLSP + MIBNPLOCPSP ;
+NPLOCNETTSF=NPLOCNETTSV+NPLOCNETTSC+NPLOCNETTSP;
+
+NPLOCNETV = (NPLOCCGAV + NPLOCV);
+NPLOCNETC = (NPLOCCGAC + NPLOCC);
+NPLOCNETPAC = (NPLOCCGAPAC + NPLOCPAC);
+
+regle 851245:
+application : iliad  ;
+
+
+SOMDLOC = LOCDEFNPCGAV+LOCDEFNPCGAC+LOCDEFNPCGAPAC+LOCDEFNPV+LOCDEFNPC+LOCDEFNPPAC;
+regle 851250:
+application : iliad ;                   
+
+TOTDEFLOCNP = LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6 + LNPRODEF5 + LNPRODEF4 + LNPRODEF3 + LNPRODEF2 + LNPRODEF1 ;
+
+TOTDEFLOCNPBIS = LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6 + LNPRODEF5 + LNPRODEF4 + LNPRODEF3 + LNPRODEF2 + LNPRODEF1 ;
+
+TOTDEFLOCNPPS = LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6 + LNPRODEF5
+                + LNPRODEF4 + LNPRODEF3 + LNPRODEF2 + LNPRODEF1;
+NPLOCNETF10 =( NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9));
+NPLOCNETF9 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8));
+NPLOCNETF8 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7));
+NPLOCNETF7 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8
+                                                  + LNPRODEF7 + LNPRODEF6));
+NPLOCNETF6 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7
+                                                  + LNPRODEF6 + LNPRODEF5));
+NPLOCNETF5 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7
+                                                  + LNPRODEF6 + LNPRODEF5 + LNPRODEF4));
+NPLOCNETF4 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6
+                                                  + LNPRODEF5 + LNPRODEF4 + LNPRODEF3));
+NPLOCNETF3 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6
+                                                      + LNPRODEF5 + LNPRODEF4 + LNPRODEF3 + LNPRODEF2));
+NPLOCNETF2 = (NPLOCNETV + NPLOCNETC + NPLOCNETPAC+ MIB_NETNPVLV + MIB_NETNPPLV+ MIB_NETNPVLC + MIB_NETNPPLC+ MIB_NETNPVLP + MIB_NETNPPLP
+                                                 -(LNPRODEF10 + LNPRODEF9 + LNPRODEF8 + LNPRODEF7 + LNPRODEF6
+                                                     + LNPRODEF5 + LNPRODEF4 + LNPRODEF3 + LNPRODEF2 + LNPRODEF1));
+regle 851260:
+application : iliad  ;
+
+NPLOCNETBIS = ((1-PREM8_11) * (positif(LOCNPCF1731) * positif(LOCNPCF) * max(0,DNPLOCIMPU - max(0,SOMLOCDF1731 - SOMLOCDF) - LOCNPCF1731)
+                           + (1-positif(LOCNPCF1731)) * (positif(LOCNPCF) * max(0,DNPLOCIMPU - max(0,SOMLOCDF1731 - SOMLOCDF)+ (-1) * LOCNPCF1731)
+                                                          + (1-positif(LOCNPCF)) * positif(abs(LOCNPCF1731)-abs(LOCNPCF)) * max(0,abs(LOCNPCF1731)-abs(LOCNPCF)- max(0,SOMLOCDF1731 - SOMLOCDF)))
+                                    )
+                    + PREM8_11 * max(0,((-1)*(LOCNPCF1731)+DNPLOCIMPU+LOCNPCF*(1-positif(LOCNPCF)))*(1-positif(LOCNPCF1731)) ))
+                                 * null(V_IND_TRAIT - 5);
+regle 851265:
+application : iliad  ;               
+
+NPLOCNETF =  max(0,MLOCNET+NPLOCNETV + NPLOCNETC + NPLOCNETPAC - DNPLOCIMPU +DEFLOCNPF);
+LOCPRORATA = (arr(MIBMEUV * 0.50) + arr(MIBGITEV * 0.29) + arr(MIBMEUC * 0.50) + arr(MIBGITEC * 0.29) + arr(MIBMEUP * 0.50) + arr(MIBGITEP * 0.29)
+               + LOCNPCGAV  + arr(LOCNPV * MAJREV20)  + LOCNPCGAC  + arr(LOCNPC * MAJREV20) + LOCNPCGAPAC  + arr(LOCNPPAC * MAJREV20) - NPLOCNETTSV - NPLOCNETTSC - NPLOCNETTSP)
+             / (LOCNPCGAV + arr(LOCNPV*MAJREV20) + LOCGITCV + arr(LOCGITHCV*MAJREV20) + LOCNPCGAC + arr(LOCNPC*MAJREV20) + LOCGITCC + arr(LOCGITHCC*MAJREV20)
+                + LOCNPCGAPAC + arr(LOCNPPAC*MAJREV20) + LOCGITCP + arr(LOCGITHCP*MAJREV20) - NPLOCNETV - NPLOCNETC - NPLOCNETPAC) ;
+
+
+regle 851270:
+application : iliad  ;               
+ 
+DNPLOCIMPU = max(0,min(TOTDEFLOCNP,NPLOCNETV + NPLOCNETC + NPLOCNETPAC+MLOCNET));
+DEFANTLOCSNF=max(0,min(TOTDEFLOCNP,RNPILOCSF));
+DNPLOCIMPUS=arr(DEFANTLOCSNF*NPLOCNETTSF/RNPILOCSF);
+NPLOCNETFHDEFANT = max(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC+MLOCNET);
+NPLOCNETDFANTBIS = max(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC);
+DEFNPLOCF = min(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC 
+                    + MIB_NETNPVLV + MIB_NETNPPLV
+                    + MIB_NETNPVLC + MIB_NETNPPLC
+                    + MIB_NETNPVLP + MIB_NETNPPLP
+                    -(TOTDEFLOCNPBIS-LNPRODEF10)) * null(4-V_IND_TRAIT)
+           + min(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC-(TOTDEFLOCNPBIS-LNPRODEF10)) * null(5-V_IND_TRAIT);
+DEFNPLOCB =  min(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC-(TOTDEFLOCNPBIS-LNPRODEF10));
+DEFNONPLOC = abs(DEFNPLOCF) ;
+
+regle 90020198:
+application : iliad ;
+DEFNPLOCFP = min(0,NPLOCNETV + NPLOCNETC + NPLOCNETPAC
+                    + MIB_NETNPVLV + MIB_NETNPPLV
+                    + MIB_NETNPVLC + MIB_NETNPPLC
+                    + MIB_NETNPVLP + MIB_NETNPPLP
+                    -(TOTDEFLOCNPBIS-LNPRODEF10));
+regle 851280:
+application : iliad  ;
+
+DEFLOC2 = (1-positif(NPLOCNETF2))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0)-LNPRODEF1,LNPRODEF1))
+             * positif_ou_nul(LNPRODEF1-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF1,TOTDEFLOCNP - DNPLOCIMPU)
+                  + positif(DEFLOCNPF) * min(LNPRODEF1,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1)) * null(5-V_IND_TRAIT);
+DEFLOC2BIS = (1-positif(NPLOCNETF2))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0)-LNPRODEF1,LNPRODEF1))
+             * positif_ou_nul(LNPRODEF1-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF1,TOTDEFLOCNP - DNPLOCIMPU)
+                  + positif(DEFLOCNPF) * min(LNPRODEF1,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS)) * null(5-V_IND_TRAIT);
+DEFLOC3 =(1- positif(NPLOCNETF3))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0)-LNPRODEF2,LNPRODEF2))
+             * positif_ou_nul(LNPRODEF2-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF2,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2)
+                  + positif(DEFLOCNPF) * min(LNPRODEF2,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2)) * null(5-V_IND_TRAIT);
+DEFLOC3BIS =(1- positif(NPLOCNETF3))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0)-LNPRODEF2,LNPRODEF2))
+             * positif_ou_nul(LNPRODEF2-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF2,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF2,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS)) * null(5-V_IND_TRAIT);
+DEFLOC4 =(1- positif(NPLOCNETF4))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0)-LNPRODEF3,LNPRODEF3))
+             * positif_ou_nul(LNPRODEF3-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF3,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3)
+                  + positif(DEFLOCNPF) * min(LNPRODEF3,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3)) * null(5-V_IND_TRAIT);
+DEFLOC4BIS =(1- positif(NPLOCNETF4))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0)-LNPRODEF3,LNPRODEF3))
+             * positif_ou_nul(LNPRODEF3-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF3,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF3,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS)) * null(5-V_IND_TRAIT);
+DEFLOC5 = (1- positif(NPLOCNETF5))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6 -LNPRODEF5,0)-LNPRODEF4,LNPRODEF4))
+             * positif_ou_nul(LNPRODEF4-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF4,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4)
+                  + positif(DEFLOCNPF) * min(LNPRODEF4,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4)) * null(5-V_IND_TRAIT);
+DEFLOC5BIS = (1- positif(NPLOCNETF5))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6 -LNPRODEF5,0)-LNPRODEF4,LNPRODEF4))
+             * positif_ou_nul(LNPRODEF4-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF4,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF4,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS)) * null(5-V_IND_TRAIT);
+DEFLOC6 = (1- positif(NPLOCNETF6))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0)-LNPRODEF5,LNPRODEF5))
+             * positif_ou_nul(LNPRODEF5-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF5,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5)
+                  + positif(DEFLOCNPF) * min(LNPRODEF5,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5)) * null(5-V_IND_TRAIT);
+DEFLOC6BIS = (1- positif(NPLOCNETF6))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0)-LNPRODEF5,LNPRODEF5))
+             * positif_ou_nul(LNPRODEF5-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF5,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF5,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS)) * null(5-V_IND_TRAIT);
+DEFLOC7 = (1- positif(NPLOCNETF7))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0)-LNPRODEF6,LNPRODEF6))
+             * positif_ou_nul(LNPRODEF6-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF6,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6)
+                  + positif(DEFLOCNPF) * min(LNPRODEF6,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6)) * null(5-V_IND_TRAIT);
+DEFLOC7BIS = (1- positif(NPLOCNETF7))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0)-LNPRODEF6,LNPRODEF6))
+             * positif_ou_nul(LNPRODEF6-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF6,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF6,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS)) * null(5-V_IND_TRAIT);
+DEFLOC8 = (1- positif(NPLOCNETF8))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8,0)-LNPRODEF7,LNPRODEF7))
+             * positif_ou_nul(LNPRODEF7-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF7,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7)
+                  + positif(DEFLOCNPF) * min(LNPRODEF7,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7)) * null(5-V_IND_TRAIT);
+DEFLOC8BIS = (1- positif(NPLOCNETF8))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8,0)-LNPRODEF7,LNPRODEF7))
+             * positif_ou_nul(LNPRODEF7-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9-LNPRODEF8,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF7,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF7,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS)) * null(5-V_IND_TRAIT);
+DEFLOC9 = (1- positif(NPLOCNETF9))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9,0)-LNPRODEF8,LNPRODEF8))
+             * positif_ou_nul(LNPRODEF8-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF8,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7-DEFLOC8)
+                  + positif(DEFLOCNPF) * min(LNPRODEF8,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7-DEFLOC8)) * null(5-V_IND_TRAIT);
+DEFLOC9BIS = (1- positif(NPLOCNETF9))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9,0)-LNPRODEF8,LNPRODEF8))
+             * positif_ou_nul(LNPRODEF8-max(NPLOCNETDFANTBIS-LNPRODEF10-LNPRODEF9,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF8,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS-DEFLOC8BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF8,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS-DEFLOC8BIS)) * null(5-V_IND_TRAIT);
+DEFLOC10 = (1- positif(NPLOCNETF10))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10,0)-LNPRODEF9,LNPRODEF9))
+             * positif_ou_nul(LNPRODEF9-max(NPLOCNETFHDEFANT-LNPRODEF10,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF9,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7-DEFLOC8-DEFLOC9)
+                  + positif(DEFLOCNPF) * min(LNPRODEF9,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU-DEFLOC1-DEFLOC2-DEFLOC3-DEFLOC4-DEFLOC5-DEFLOC6-DEFLOC7-DEFLOC8-DEFLOC9)) * null(5-V_IND_TRAIT);
+DEFLOC10BIS = (1- positif(NPLOCNETF10))
+             * (abs(min(max(NPLOCNETDFANTBIS-LNPRODEF10,0)-LNPRODEF9,LNPRODEF9))
+             * positif_ou_nul(LNPRODEF9-max(NPLOCNETDFANTBIS-LNPRODEF10,0))) * null(4-V_IND_TRAIT)
+                  +(null(DEFLOCNPF) * min(LNPRODEF9,TOTDEFLOCNP - DNPLOCIMPU-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS-DEFLOC8BIS-DEFLOC9BIS)
+                  + positif(DEFLOCNPF) * min(LNPRODEF9,DEFLOCNPF + TOTDEFLOCNP - DNPLOCIMPU
+                                                                 -DEFLOC1BIS-DEFLOC2BIS-DEFLOC3BIS-DEFLOC4BIS-DEFLOC5BIS-DEFLOC6BIS-DEFLOC7BIS-DEFLOC8BIS-DEFLOC9BIS)) * null(5-V_IND_TRAIT);
+
+regle 851290:
+application : iliad  ;
+
+DEFNPLOCFAV = max(0,abs(DEFNPLOCF) - DEFLOC2 - DEFLOC3 - DEFLOC4 - DEFLOC5 - DEFLOC6 - DEFLOC7 - DEFLOC8 - DEFLOC9 - DEFLOC10) ;
+
+regle 900306:
+application : iliad   ;
+DEFNPLOCFAVP = max(0,abs(DEFNPLOCFP) - DEFLOC2P - DEFLOC3P - DEFLOC4P - DEFLOC5P - DEFLOC6P - DEFLOC7P - DEFLOC8P - DEFLOC9P - DEFLOC10P);
+regle 900307:
+application : iliad   ;
+DEFLOC2P = (1-positif(NPLOCNETF2))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0)-LNPRODEF1,LNPRODEF1))
+             * positif_ou_nul(LNPRODEF1-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3-LNPRODEF2,0)));
+DEFLOC3P =(1- positif(NPLOCNETF3))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0)-LNPRODEF2,LNPRODEF2))
+             * positif_ou_nul(LNPRODEF2-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4-LNPRODEF3,0)));
+DEFLOC4P =(1- positif(NPLOCNETF4))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0)-LNPRODEF3,LNPRODEF3))
+             * positif_ou_nul(LNPRODEF3-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5-LNPRODEF4,0)));
+DEFLOC5P = (1- positif(NPLOCNETF5))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6 -LNPRODEF5,0)-LNPRODEF4,LNPRODEF4))
+             * positif_ou_nul(LNPRODEF4-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6-LNPRODEF5,0)));
+DEFLOC6P = (1- positif(NPLOCNETF6))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0)-LNPRODEF5,LNPRODEF5))
+             * positif_ou_nul(LNPRODEF5-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7-LNPRODEF6,0)));
+DEFLOC7P = (1- positif(NPLOCNETF7))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0)-LNPRODEF6,LNPRODEF6))
+             * positif_ou_nul(LNPRODEF6-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8-LNPRODEF7,0)));
+DEFLOC8P = (1- positif(NPLOCNETF8))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8,0)-LNPRODEF7,LNPRODEF7))
+             * positif_ou_nul(LNPRODEF7-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9-LNPRODEF8,0)));
+DEFLOC9P = (1- positif(NPLOCNETF9))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9,0)-LNPRODEF8,LNPRODEF8))
+             * positif_ou_nul(LNPRODEF8-max(NPLOCNETFHDEFANT-LNPRODEF10-LNPRODEF9,0)));
+DEFLOC10P = (1- positif(NPLOCNETF10))
+             * (abs(min(max(NPLOCNETFHDEFANT-LNPRODEF10,0)-LNPRODEF9,LNPRODEF9))
+             * positif_ou_nul(LNPRODEF9-max(NPLOCNETFHDEFANT-LNPRODEF10,0)));
+regle 851300:
+application : iliad  ;
+
+DEFLOC1 = null(4-V_IND_TRAIT) * positif(DEFNONPLOC) * DEFNPLOCFAVP
+           + null(5-V_IND_TRAIT) *  (
+                                        max(0,DEFLOCNPF-DNPLOCIMPU) * positif(DEFLOCNPF)
+                                        + max(0,-(NPLOCNETV+NPLOCNETC+NPLOCNETPAC+MLOCNET)) * (1-positif(DEFLOCNPF))) ;
+DEFLOC1BIS = null(4-V_IND_TRAIT) * positif(DEFNONPLOC) * DEFNPLOCFAVP
+           + null(5-V_IND_TRAIT) *  (
+                                        max(0,DEFLOCNPF-DNPLOCIMPU) * positif(DEFLOCNPF)
+                                        + max(0,-(NPLOCNETV+NPLOCNETC+NPLOCNETPAC)) * (1-positif(DEFLOCNPF))) ;
+
+
+regle 851310:
+application:iliad ;
+
+
+BICNPRBIS=BICNPR1V+BICNPR1C+BICNPR1P+BICHREV+COD5US+arr(CODCNI*MAJREV20)+BICHREC+COD5VS+arr(CODCOI*MAJREV20)+BICHREP+COD5WS+arr(CODCPI*MAJREV20);
+
+
+
+BICNPFBIS=BICNPRBIS-(MIBNPDCT+COD5RZ+COD5SZ+BICNPOCF+BICNPQCF);
+
+
+
+
+
+
+DFBICNPF = max(0 , MIBNPRNETV + MIBNPRNETC + MIBNPRNETP + MIBNPPVV + MIBNPPVC + MIBNPPVP + BICNPRBIS) ;		
+
+
+regle 851315:
+application:iliad;
+
+
+DEFBICNPFBIS = ((1-PREM8_11) * (positif(BICNPOCF1731+BICNPQCF1731) * positif(BICNPOCF+BICNPQCF)
+                                         * positif(BICNPOCF+BICNPQCF -(BICNPOCF1731+BICNPQCF1731))
+                                                  * max(0,DEFNPI - max(0,SOMBICDF1731 - SOMBICDF) - BICNPOCF1731-BICNPQCF1731)
+                        + (1-positif(BICNPOCF1731+BICNPQCF1731)) * positif(BICNPOCF+BICNPQCF)
+                                                 * max(0,DEFNPI - max(0,SOMBICDF1731 - SOMBICDF) + (-1) * (BICNPOCF1731+BICNPQCF1731))
+                                )
+             + PREM8_11 * max(0,((-1)*(BICNPOCF1731+BICNPQCF1731)-(-1)*(BICNPOCF+BICNPQCF) * (1-positif(BICNPOCF+BICNPQCF))+DEFNPI -MIBNPDCT - COD5RZ - COD5SZ) 
+	                                                    * (1-positif(BICNPOCF1731+BICNPQCF1731))
+                                + (DEFNPI + SOMBICDF1731) * positif(BICNPOCF1731+BICNPQCF1731)))
+                             * null(V_IND_TRAIT - 5);
+DEFBICNPF = (arr(max(0,DEFBICNPFBIS * (1-BICNPDPROBIS)))* (1-positif(positif(BICNPOCF1731+BICNPQCF1731)+PREM8_11))
+                     + DEFBICNPFBIS * positif(positif(BICNPOCF1731+BICNPQCF1731)+PREM8_11)) * null(V_IND_TRAIT - 5) * positif(ART1731BIS);
+
+
+regle 851320:
+application:iliad;
+
+
+BICNPDIBIS = CODCNC + arr(CODCNI*MAJREV20) + CODCOC + arr(CODCOI*MAJREV20) + CODCPC + arr(CODCPI*MAJREV20) - max(0 , BICNPQCF + min(0 , BICNPOCF)) ;
+
+
+BICNPDPROBIS=BICNPDIBIS/BICNPFBIS;
+
+regle 851325:
+application:iliad;
+
+DEFNIBICQ1=max(0,DEFNPI-max(0,BICNPQCV+BICNPQCC+BICNPQCP));
+DEFNIBICQ = max(0,DEFBICNPFBIS - DEFBICNPF);
+regle 851330:
+application : iliad ;
+
+DEFLOCNP = arr(MLOCNET + LOCNPCGAV+LOCNPV*MAJREV20+LOCGITCV+LOCGITHCV*MAJREV20+LOCNPCGAC+LOCNPC*MAJREV20+LOCGITCC+LOCGITHCC*MAJREV20
+                                                       +LOCNPCGAPAC+LOCNPPAC*MAJREV20+LOCGITCP+LOCGITHCP*MAJREV20
+						       + COD5EY+COD5EZ*MAJREV20+COD5FY+COD5FZ*MAJREV20+COD5GY+COD5GZ*MAJREV20);
+
+regle 9003097:
+application : iliad ;
+
+DEFLOCNPBIS = arr(LOCNPCGAV+LOCNPV*MAJREV20+LOCGITCV+LOCGITHCV*MAJREV20+LOCNPCGAC+LOCNPC*MAJREV20+LOCGITCC+LOCGITHCC*MAJREV20
+                                                       +LOCNPCGAPAC+LOCNPPAC*MAJREV20+LOCGITCP+LOCGITHCP*MAJREV20
+						       + COD5EY+COD5EZ*MAJREV20+COD5FY+COD5FZ*MAJREV20+COD5GY+COD5GZ*MAJREV20);
+LOCNPCF = MLOCNET+NPLOCNETV + NPLOCNETC + NPLOCNETPAC;
+regle 851340:
+application : iliad  ;
+
+DEFLOCNPF = max(0,NPLOCNETBIS) * null(V_IND_TRAIT - 5)  * positif(ART1731BIS);
+regle 852000:
+application : iliad ;
+
+
+PASBICPCV = R15KC - COD5DK + COD5DM ;
+PASBICPCC = R15LC - COD5EK + COD5EM ;
+PASBICPCP = R15MC - COD5FK + COD5FM ;
+
+regle 852010:
+application : iliad ;
+
+
+PASBICNPCV = R15NC - COD5UT + COD5UY ;
+PASBICNPCC = R15OC - COD5VT + COD5VY ;
+PASBICNPCP = R15PC - COD5VQ + COD5VV ;
+
+regle 852015:
+application : iliad ;
+
+R3CGAV = LOCNPCGAV + LOCGITCV + COD5EY ;
+R3CGAC = LOCNPCGAC + LOCGITCC + COD5FY ;
+R3CGAP = LOCNPCGAPAC + LOCGITCP + COD5GY ;
+
+regle 852020:
+application : iliad ;
+
+
+SNPLOCPASV = positif_ou_nul(NPLOCCGAV) * arr((LOCNPCGAV + LOCGITCV) - ((LOCDEFNPCGAV+COD5WE) * (LOCNPCGAV + LOCGITCV)/R3CGAV))
+             + (1 - positif_ou_nul(NPLOCCGAV)) * (LOCNPCGAV+LOCGITCV+COD5EY-LOCDEFNPCGAV-COD5WE) ;
+
+SNPLOCPASC = positif_ou_nul(NPLOCCGAC) * arr((LOCNPCGAC + LOCGITCC) - ((LOCDEFNPCGAC+COD5XE) * (LOCNPCGAC + LOCGITCC)/R3CGAC))
+             +(1 - positif_ou_nul(NPLOCCGAC)) * (LOCNPCGAC+LOCGITCC+COD5FY-LOCDEFNPCGAC-COD5XE) ;
+
+SNPLOCPASP = positif_ou_nul(NPLOCCGAPAC) * arr((LOCNPCGAPAC + LOCGITCP) - ((LOCDEFNPCGAPAC+COD5YE) * (LOCNPCGAPAC + LOCGITCP)/R3CGAP))
+             +(1 - positif_ou_nul(NPLOCCGAPAC)) * (LOCNPCGAPAC+LOCGITCP+COD5GY-LOCDEFNPCGAPAC-COD5YE) ;
+
+regle 852030:
+application : iliad ;
+
+
+PASBICPNCV = positif(R25KI - COD5DL + COD5DN) * arr((R25KI - COD5DL + COD5DN) * MAJREV20)
+             + (1 - positif(R25KI - COD5DL + COD5DN)) * (R25KI - COD5DL + COD5DN) ;
+
+PASBICPNCC = positif(R25LI - COD5EL + COD5EN) * arr((R25LI - COD5EL + COD5EN) * MAJREV20)
+             + (1 - positif(R25LI - COD5EL + COD5EN)) * (R25LI - COD5EL + COD5EN) ;
+
+PASBICPNCP = positif(R25MI - COD5FL + COD5FN) * arr((R25MI - COD5FL + COD5FN) * MAJREV20)
+             + (1 - positif(R25MI - COD5FL + COD5FN)) * (R25MI - COD5FL + COD5FN) ;
+
+regle 852040:
+application : iliad ;
+
+
+PASBICNPNCV = positif(R25NI - COD5UU + COD5UZ) * arr((R25NI - COD5UU + COD5UZ) * MAJREV20)
+              + (1 - positif(R25NI - COD5UU + COD5UZ)) * (R25NI - COD5UU + COD5UZ) ;      
+
+PASBICNPNCC = positif(R25OI - COD5VU + COD5VZ) * arr((R25OI - COD5VU + COD5VZ) * MAJREV20) 
+              + (1 - positif(R25OI - COD5VU + COD5VZ)) * (R25OI - COD5VU + COD5VZ) ;
+
+PASBICNPNCP = positif(R25PI - COD5VW + COD5VX) * arr((R25PI - COD5VW + COD5VX) * MAJREV20)
+              + (1 - positif(R25PI - COD5VW + COD5VX)) * (R25PI - COD5VW + COD5VX) ;
+
+regle 852045:
+application : iliad ;
+
+R3NOCGAV = LOCNPV + COD5EZ + LOCGITHCV ;
+R3NOCGAC = LOCNPC + COD5FZ + LOCGITHCC ;
+R3NOCGAP = LOCNPPAC + COD5GZ + LOCGITHCP ;
+
+regle 852050:
+application : iliad ;
+
+
+RNPLOCPASV = positif_ou_nul(R3NOCGAV - LOCDEFNPV-COD5WF) * arr((LOCNPV + LOCGITHCV - ((LOCDEFNPV+COD5WF) * (LOCNPV + LOCGITHCV) / R3NOCGAV)) * MAJREV20)
+             + (1 - positif_ou_nul(R3NOCGAV - LOCDEFNPV-COD5WF)) * NPLOCV ;
+
+RNPLOCPASC = positif_ou_nul(R3NOCGAC - LOCDEFNPC-COD5XF) * arr((LOCNPC + LOCGITHCC - ((LOCDEFNPC+COD5XF) * (LOCNPC + LOCGITHCC) / R3NOCGAC)) * MAJREV20)
+             + (1 - positif_ou_nul(R3NOCGAC - LOCDEFNPC-COD5XF)) * NPLOCC ;
+	   
+RNPLOCPASP = positif_ou_nul(R3NOCGAP - LOCDEFNPPAC-COD5YF) * arr((LOCNPPAC + LOCGITHCP - ((LOCDEFNPPAC+COD5YF) * (LOCNPPAC + LOCGITHCP) / R3NOCGAP)) * MAJREV20)
+             + (1 - positif_ou_nul(R3NOCGAP - LOCDEFNPPAC-COD5YF)) * NPLOCPAC ;
+	   
+regle 852065:
+application : iliad ;
+
+
+BICHQV = max(0 , BICNPOCV - DEFANTBICNPV) ;
+BICHQC = max(0 , BICNPOCC - DEFANTBICNPC) ;
+BICHQP = max(0 , BICNPOCP - DEFANTBICNPP) ;
+
+regle 852067:
+application : iliad ;
+
+
+BICQV = max(0 , BICNPQCV - max(0 , DEFANTBICNPV - BICNPOCV)) ;
+BICQC = max(0 , BICNPQCC - max(0 , DEFANTBICNPC - BICNPOCC)) ;
+BICQP = max(0 , BICNPQCP - max(0 , DEFANTBICNPP - BICNPOCP)) ;
+
+regle 852068:
+application : iliad ;
+
+RNPILOCSV = RLOCFNPIV + NPLOCCGAV + R3LOCV ;
+RNPILOCSC = RLOCFNPIC + NPLOCCGAC + R3LOCC ;
+RNPILOCSP = RLOCFNPIP + NPLOCCGAPAC + R3LOCP ;
+RNPILOCSF = RNPILOCSV + RNPILOCSC + RNPILOCSP ;
+
+regle 852070:
+application : iliad ;
+
+
+RNPILOCV = RLOCFNPIV + NPLOCNETV ;
+RNPILOCC = RLOCFNPIC + NPLOCNETC ;
+RNPILOCP = RLOCFNPIP + NPLOCNETPAC ;
+RNPILOCF = RNPILOCV + RNPILOCC + RNPILOCP ;
+
+DEFANTLOCV = positif(RNPILOCV + 0) * arr(DNPLOCIMPU * RNPILOCV / (max(0 , RNPILOCV) + max(0 , RNPILOCC) + max(0 , RNPILOCP))) ;
+
+DEFANTLOCC = positif(RNPILOCC + 0) * (positif(RNPILOCP + 0) * arr(DNPLOCIMPU * RNPILOCC / (max(0 , RNPILOCV) + max(0 , RNPILOCC) + max(0 , RNPILOCP)))
+	                              + (1 - positif(RNPILOCP + 0)) * (DNPLOCIMPU - DEFANTLOCV)) ;
+
+DEFANTLOCP = DNPLOCIMPU - DEFANTLOCV - DEFANTLOCC ;
+
+
+DEFANTLOCSV = positif(NPLOCNETTSV + 0) * arr(DNPLOCIMPUS * NPLOCNETTSV / (max(0 , NPLOCNETTSV) + max(0 , NPLOCNETTSC) + max(0 , NPLOCNETTSP))) ;
+
+DEFANTLOCSC = positif(NPLOCNETTSC + 0) * (positif(NPLOCNETTSP + 0) * arr(DNPLOCIMPUS * NPLOCNETTSC / (max(0 , NPLOCNETTSV) + max(0 , NPLOCNETTSC) + max(0 , NPLOCNETTSP)))
+	                                  + (1 - positif(NPLOCNETTSP + 0)) * (DNPLOCIMPUS - DEFANTLOCSV)) ;
+
+DEFANTLOCSP = DNPLOCIMPUS - DEFANTLOCSV - DEFANTLOCSC ;
+
+
+PASRNPLOCFV = RNPILOCV - DEFANTLOCV ;
+PASRNPLOCFC = RNPILOCC - DEFANTLOCC ;
+PASRNPLOCFP = RNPILOCP - DEFANTLOCP ;
+
+PASRNPLOCFF = PASRNPLOCFV + PASRNPLOCFC + PASRNPLOCFP ;
+
+regle 852080:
+application : iliad ;
+
+
+PRORATALOC = (MIBMEUV  *0.5 + MIBGITEV  *0.29 + MIBMEUC  *0.5 + MIBGITEC  *0.29 + MIBMEUP  *0.5 + MIBGITEP  *0.29 + LOCNPCGAV + LOCNPV  *1.25 + LOCNPCGAC
+              + LOCNPC  *1.25 + LOCNPCGAPAC + LOCNPPAC  *1.25 + COD5EY + COD5EZ  *1.25 + COD5FY + COD5FZ  *1.25 + COD5GY + COD5GZ  *1.25 - NPLOCNETTSV - NPLOCNETTSC - NPLOCNETTSP)
+	     / (LOCNPCGAV  + LOCNPV  * 1.25 + LOCGITCV  + LOCGITHCV  * 1.25 + LOCNPCGAC  + LOCNPC  * 1.25 + LOCGITCC  + LOCGITHCC  * 1.25 + LOCNPCGAPAC
+                + LOCNPPAC  * 1.25 + LOCGITCP  + LOCGITHCP  * 1.25 + COD5EY  + COD5EZ  * 1.25 + COD5FY  + COD5FZ  * 1.25 + COD5GY  + COD5GZ  * 1.25 - NPLOCNETV - NPLOCNETC - NPLOCNETPAC) ;
+NPLOCNETSV = NPLOCNETTSV - DEFANTLOCSV ;
+NPLOCNETSC = NPLOCNETTSC - DEFANTLOCSC ;
+NPLOCNETSP = NPLOCNETTSP - DEFANTLOCSP ;
+
+NPLOCNETSF = positif(DEFLOCNPF) * max(0 , NPLOCNETTSV + NPLOCNETTSC + NPLOCNETTSP + arr((DEFLOCNPF - min(DNPLOCIMPU , DEFLOCNPF)) * PRORATALOC))
+             + (1 - positif(DEFLOCNPF)) * max(0 , NPLOCNETSV + NPLOCNETSC + NPLOCNETSP) ;
+
+regle 852090:
+application : iliad ;
+
+BICNPASSV = (1 - positif(COD5AN + 0))
+            * max(0 , arr(((MIB_NETNPVV + MIB_NETNPPV + PASBICNPCV + PASBICNPNCV) * 12/min(12 , COD5UP + 12*null(COD5UP + 0)))
+	                  - (DEFANTBICNPV * (R15NC + R2MAJ5NI + MIB_NETNPVV + MIB_NETNPPV + MIBNPPVV - MIBNPDCT) / BICNPONCV))) ;
+
+BICNPASSC = (1 - positif(COD5BN + 0))
+            * max(0 , arr(((MIB_NETNPVC + MIB_NETNPPC + PASBICNPCC + PASBICNPNCC) * 12/min(12 , COD5VP + 12*null(COD5VP + 0)))
+	                  - (DEFANTBICNPC * (R15OC + R2MAJ5OI + MIB_NETNPVC + MIB_NETNPPC + MIBNPPVC - COD5RZ) / BICNPONCC))) ;
+
+BICNPASSP = (1 - positif(COD5CN + 0))
+            * max(0 , arr(((MIB_NETNPVP + MIB_NETNPPP + PASBICNPCP + PASBICNPNCP) * 12/min(12 , COD5TP + 12*null(COD5TP + 0)))
+	                  - (DEFANTBICNPP * (R15PC + R2MAJ5PI + MIB_NETNPVP + MIB_NETNPPP + MIBNPPVP - COD5SZ) / BICNPONCP))) ;
+						    
+BICNPASSVN = max(0 , arr((MIB_NETNPVV + MIB_NETNPPV + PASBICNPCV + PASBICNPNCV) 
+                         - (DEFANTBICNPV * (R15NC + R2MAJ5NI + MIB_NETNPVV + MIB_NETNPPV + MIBNPPVV - MIBNPDCT) / BICNPONCV))) ;
+
+BICNPASSCN = max(0 , arr((MIB_NETNPVC + MIB_NETNPPC + PASBICNPCC + PASBICNPNCC) 
+                         - (DEFANTBICNPC * (R15OC + R2MAJ5OI + MIB_NETNPVC + MIB_NETNPPC + MIBNPPVC - COD5RZ) / BICNPONCC))) ;
+
+BICNPASSPN = max(0 , arr((MIB_NETNPVP + MIB_NETNPPP + PASBICNPCP + PASBICNPNCP) 
+	                 - (DEFANTBICNPP * (R15PC + R2MAJ5PI + MIB_NETNPVP + MIB_NETNPPP + MIBNPPVP - COD5SZ) / BICNPONCP))) ;
+
+LOCNPASSV = (1 - positif(COD5CF + 0))
+            * max(0 , arr(((RLOCFNPIV + SNPLOCPASV + RNPLOCPASV) * 12/min(12 , COD5CD + 12*null(COD5CD + 0)))
+	                  - (DEFANTLOCV * (SNPLOCPASV + RNPLOCPASV + RLOCFNPIV) / RNPILOCV))) ;
+
+LOCNPASSC = (1 - positif(COD5CI + 0))
+            * max(0 , arr(((RLOCFNPIC + SNPLOCPASC + RNPLOCPASC) * 12/min(12 , COD5DD + 12*null(COD5DD + 0)))
+	                  - (DEFANTLOCC * (SNPLOCPASC + RNPLOCPASC + RLOCFNPIC) / RNPILOCC))) ;
+
+LOCNPASSP = (1 - positif(COD5CM + 0))
+            * max(0 , arr(((RLOCFNPIP + SNPLOCPASP + RNPLOCPASP) * 12/min(12 , COD5FD + 12*null(COD5FD + 0)))
+	                  - (DEFANTLOCP * (SNPLOCPASP + RNPLOCPASP + RLOCFNPIP) / RNPILOCP))) ;
+
+LOCNPASSVN = max(0 , arr((RLOCFNPIV + SNPLOCPASV + RNPLOCPASV) 
+	                 - (DEFANTLOCV * (SNPLOCPASV + RNPLOCPASV + RLOCFNPIV) / RNPILOCV))) ;
+
+LOCNPASSCN = max(0 , arr((RLOCFNPIC + SNPLOCPASC + RNPLOCPASC) 
+	                 - (DEFANTLOCC * (SNPLOCPASC + RNPLOCPASC + RLOCFNPIC) / RNPILOCC))) ;
+
+LOCNPASSPN = max(0 , arr((RLOCFNPIP + SNPLOCPASP + RNPLOCPASP) 
+	                 - (DEFANTLOCP * (SNPLOCPASP + RNPLOCPASP + RLOCFNPIP) / RNPILOCP))) ;
+		    
+		    
+R35NA = (1 - positif(LOCNPCGAV + 0)) * positif(LOCDEFNPCGAV + 0) * min(0, COD5EY -LOCDEFNPCGAV)
+	+ (1 - (1 - positif(LOCNPCGAV + 0)) * positif(LOCDEFNPCGAV + 0)) * arr(LOCNPCGAV-(LOCDEFNPCGAV * LOCNPCGAV / (LOCNPCGAV + COD5EY))) ;
+
+R35NK = (1 - positif(LOCNPV + 0)) * positif(LOCDEFNPV + 0) * min(0, COD5EZ - LOCDEFNPV)
+        + (1 - (1 - positif(LOCNPV + 0)) * positif(LOCDEFNPV + 0)) * arr(LOCNPV - (LOCDEFNPV * LOCNPV / (LOCNPV + COD5EZ))) ;
+       
+LOCNPASSPSV = max(0 , arr(((R35NA + R35NK + MIBNETNPVLSV + MIBNPLOCPSV) * 12 / min(12 , COD5CD + 12 * null(COD5CD + 0)))
+                          - (DEFANTLOCSV * (R35NA + R35NK + MIBNETNPVLSV + MIBNPLOCPSV) / NPLOCNETTSV))) ;
+
+R35OA = (1 - positif(LOCNPCGAC + 0)) * positif(LOCDEFNPCGAC + 0) * min(0, COD5FY -LOCDEFNPCGAC)
+	+ (1 - (1 - positif(LOCNPCGAC + 0)) * positif(LOCDEFNPCGAC + 0)) *  arr(LOCNPCGAC - (LOCDEFNPCGAC * LOCNPCGAC/(LOCNPCGAC + COD5FY))) ;
+
+R35OK = (1 - positif(LOCNPC + 0)) * positif(LOCDEFNPC + 0) * min(0, COD5FZ - LOCDEFNPC )
+        + (1 - (1 - positif(LOCNPC + 0)) * positif(LOCDEFNPC + 0)) * arr(LOCNPC - (LOCDEFNPC * LOCNPC / (LOCNPC + COD5FZ))) ;
+
+LOCNPASSPSC = max(0 , arr(((R35OA + R35OK + MIBNETNPVLSC + MIBNPLOCPSC) * 12 / min(12 , COD5DD + 12 * null(COD5DD+0)))
+                          - (DEFANTLOCSC * (R35OA + R35OK + MIBNETNPVLSC + MIBNPLOCPSC) / NPLOCNETTSC))) ;
+
+R35PA = (1 - positif(LOCNPCGAPAC + 0)) * positif(LOCDEFNPCGAPAC + 0) * min(0 ,COD5GY  - LOCDEFNPCGAPAC)
+	+ (1 - (1 - positif(LOCNPCGAPAC + 0)) * positif(LOCDEFNPCGAPAC + 0)) * arr(LOCNPCGAPAC - (LOCDEFNPCGAPAC * LOCNPCGAPAC / (LOCNPCGAPAC + COD5GY))) ;
+
+R35PK = (1 - positif(LOCNPPAC + 0)) * positif(LOCDEFNPPAC + 0) * min(0,COD5GZ - LOCDEFNPPAC)
+        + (1 - (1 - positif(LOCNPPAC + 0)) * positif(LOCDEFNPPAC +0)) * arr(LOCNPPAC - (LOCDEFNPPAC * LOCNPPAC / (LOCNPPAC + COD5GZ))) ;
+
+LOCNPASSPSP = max(0 , arr(((R35PA + R35PK + MIBNETNPVLSP + MIBNPLOCPSP) * 12 / min(12 , COD5FD + 12 * null(COD5FD + 0)))
+                          - (DEFANTLOCSP * (R35PA + R35PK + MIBNETNPVLSP + MIBNPLOCPSP) / NPLOCNETTSP))) ;
+
+LOCNPASSPSF = LOCNPASSPSV + LOCNPASSPSC + LOCNPASSPSP ;
+
+BICPROASSV = (1 - positif(COD5BF + 0)) * arr((MIB_NETVV + MIB_NETPV + PASBICPCV + PASBICPNCV) * 12/min(12 , COD5DB + 12*null(COD5DB + 0))) ;
+
+BICPROASSC = (1 - positif(COD5BI + 0)) * arr((MIB_NETVC + MIB_NETPC + PASBICPCC + PASBICPNCC) * 12/min(12 , COD5EB + 12*null(COD5EB + 0))) ;
+
+BICPROASSP = (1 - positif(COD5BH + 0)) * arr((MIB_NETVP + MIB_NETPP + PASBICPCP + PASBICPNCP) * 12/min(12 , COD5FB + 12*null(COD5FB + 0))) ;
+
+BICPROASSVN = MIB_NETVV + MIB_NETPV + PASBICPCV + PASBICPNCV ;
+
+BICPROASSCN = MIB_NETVC + MIB_NETPC + PASBICPCC + PASBICPNCC ;
+
+BICPROASSPN = MIB_NETVP + MIB_NETPP + PASBICPCP + PASBICPNCP ;
+
+
+BICASSV = max(0 , BICPROASSV + BICNPASSV + LOCNPASSV) ;
+BICASSC = max(0 , BICPROASSC + BICNPASSC + LOCNPASSC) ;
+BICASSP = max(0 , BICPROASSP + BICNPASSP + LOCNPASSP) ;
+
+BICASSVN = max(0 , BICPROASSVN + BICNPASSVN + LOCNPASSVN) ;
+BICASSCN = max(0 , BICPROASSCN + BICNPASSCN + LOCNPASSCN) ;
+BICASSPN = max(0 , BICPROASSPN + BICNPASSPN + LOCNPASSPN) ;
+
+BICASSF = BICASSV + BICASSC + BICASSP ;
+
+regle 852100:
+application : iliad ;
+
+
+BICPROONCV = BIPTAV + BIHTAV + MIB_NETVV + MIB_NETPV + MIB_NETCV ;
+BICPROONCC = BIPTAC + BIHTAC + MIB_NETVC + MIB_NETPC + MIB_NETCC ;
+BICPROONCP = BIPTAP + BIHTAP + MIB_NETVP + MIB_NETPP + MIB_NETCP ;
+
+
+BICPROQNCV = BIPTAQV + BIHTAQV ;
+BICPROQNCC = BIPTAQC + BIHTAQC ;
+BICPROQNCP = BIPTAQP + BIHTAQP ;
+
+regle 852110:
+application : iliad ;
+
+
+BICPROOCV = min(0 , BICPROONCV + BICPROQNCV) * positif(BICPROQNCV) * (1 - positif_ou_nul(BICPROONCV))
+            + BICPROONCV * (1 - positif(BICPROQNCV) * (1 - positif_ou_nul(BICPROONCV))) ;
+
+BICPROOCC = min(0 , BICPROONCC + BICPROQNCC) * positif(BICPROQNCC) * (1 - positif_ou_nul(BICPROONCC))
+            + BICPROONCC * (1 - positif(BICPROQNCC) * (1 - positif_ou_nul(BICPROONCC))) ;
+
+BICPROOCP = min(0 , BICPROONCP + BICPROQNCP) * positif(BICPROQNCP) * (1 - positif(BICPROONCP))
+            + BICPROONCP * (1 - positif(BICPROQNCP) * (1 - positif(BICPROONCP))) ;
+
+BICPROOCF = BICPROOCV + BICPROOCC + BICPROOCP ;
+
+
+BICPROQCV = max(0 , BICPROONCV + BICPROQNCV) * positif(BICPROQNCV) * (1 - positif_ou_nul(BICPROONCV))
+            + BICPROQNCV * (1 - positif(BICPROQNCV) * (1 - positif_ou_nul(BICPROONCV))) ;
+
+BICPROQCC = max(0 , BICPROONCC + BICPROQNCC) * positif(BICPROQNCC) * (1 - positif_ou_nul(BICPROONCC))
+            + BICPROQNCC * (1 - positif(BICPROQNCC) * (1 - positif_ou_nul(BICPROONCC))) ;
+
+BICPROQCP = max(0 , BICPROONCP + BICPROQNCP) * positif(BICPROQNCP) * (1 - positif_ou_nul(BICPROONCP))
+            + BICPROQNCP * (1 - positif(BICPROQNCP) * (1 - positif_ou_nul(BICPROONCP))) ;
+
+BICPROQCF = BICPROQCV + BICPROQCC + BICPROQCP ;
+
+regle 852120:
+application : iliad ;
+
+BICPROOF = min(0 , BICPROOCF + BICPROQCF) * positif(BICPROQCF) * (1 - positif_ou_nul(BICPROOCF))
+           + BICPROOCF * (1 - positif(BICPROQCF) * (1 - positif_ou_nul(BICPROOCF))) ;
+
+BICPROQF = max(0 , BICPROOCF + BICPROQCF) * positif(BICPROQCF) * (1 - positif_ou_nul(BICPROOCF))
+           + BICPROQCF * (1 - positif(BICPROQCF) * (1 - positif_ou_nul(BICPROOCF))) ;
+
+regle 852130:
+application : iliad ;
+
+
+BICNPONCV = BINTAV + BINHTAV + MIB_NETNPVV + MIB_NETNPPV + MIBNPPVV - MIBNPDCT ;
+BICNPONCC = BINTAC + BINHTAC + MIB_NETNPVC + MIB_NETNPPC + MIBNPPVC - COD5RZ ;
+BICNPONCP = BINTAP + BINHTAP + MIB_NETNPVP + MIB_NETNPPP + MIBNPPVP - COD5SZ ;
+
+
+BICNPQNCV = BINTAQV + BINHTAQV ;
+BICNPQNCC = BINTAQC + BINHTAQC ;
+BICNPQNCP = BINTAQP + BINHTAQP ;
+
+regle 852140:
+application : iliad ;
+
+
+BICNPOCV = min(0 , BICNPONCV + BICNPQNCV) * positif(BICNPQNCV) * (1 - positif_ou_nul(BICNPONCV))
+           + BICNPONCV * (1 - positif(BICNPQNCV) * (1 - positif_ou_nul(BICNPONCV))) ;
+
+BICNPOCC = min(0 , BICNPONCC + BICNPQNCC) * positif(BICNPQNCC) * (1 - positif_ou_nul(BICNPONCC))
+           + BICNPONCC * (1 - positif(BICNPQNCC) * (1 - positif_ou_nul(BICNPONCC))) ;
+
+BICNPOCP = min(0 , BICNPONCP + BICNPQNCP) * positif(BICNPQNCP) * (1 - positif_ou_nul(BICNPONCP))
+           + BICNPONCP * (1 - positif(BICNPQNCP) * (1 - positif_ou_nul(BICNPONCP))) ;
+
+BICNPOCF = BICNPOCV + BICNPOCC + BICNPOCP ;
+
+
+BICNPQCV = max(0 , BICNPONCV + BICNPQNCV) * positif(BICNPQNCV) * (1 - positif_ou_nul(BICNPONCV))
+           + BICNPQNCV * (1 - positif(BICNPQNCV) * (1 - positif_ou_nul(BICNPONCV))) ;
+
+BICNPQCC = max(0 , BICNPONCC + BICNPQNCC) * positif(BICNPQNCC) * (1 - positif_ou_nul(BICNPONCC))
+           + BICNPQNCC * (1 - positif(BICNPQNCC) * (1 - positif_ou_nul(BICNPONCC))) ;
+
+BICNPQCP = max(0 , BICNPONCP + BICNPQNCP) * positif(BICNPQNCP) * (1 - positif_ou_nul(BICNPONCP))
+           + BICNPQNCP * (1 - positif(BICNPQNCP) * (1 - positif_ou_nul(BICNPONCP))) ;
+
+BICNPQCF = BICNPQCV + BICNPQCC + BICNPQCP ;
+
+regle 852150:
+application : iliad ;
+
+BICNPOF = (1-positif(BICNPOCF)) * positif_ou_nul(BICNPQCF) * min(0,max(0,BICNPOCF-min(DEFBICNPF,DEFNPIHQ))+BICNPQCF)
+          + positif(BICNPOCF) * (max(0,BICNPOCF-DEFNPIHQ+DEFBICNPF)*(1-PREM8_11) + max(0,BICNPOCF-DEFNPIHQ+DEFBICNPF-BICNPDIBIS) * PREM8_11);
+BICNPQF = (1-positif(BICNPOCF)) * positif_ou_nul(BICNPQCF) * max(0,BICNPOCF+BICNPQCF-DEFNPIQ+DEFNIBICQ)
+          + positif(BICNPOCF) * max(0,BICNPQCF-DEFNPIQ+DEFNIBICQ) * (1-PREM8_11) + max(0,BICNPQCF-DEFNPIQ+DEFNIBICQ+BICNPDIBIS) * PREM8_11;
+
+
+BICNPREPN = positif_ou_nul(BICNPOF)*(DEFNP-DEFNPI)+(1-positif_ou_nul(BICNPOF))*abs(BICNPOF);
+
+BICNPREPN1 = positif(DEFNPI)*(DEFNP-DEFNPI-max(0,DEFBIC6-DEFNPI))+
+             (1-positif(DEFNPI))*(DEFNP-DEFBIC6+abs(min(0,BICNPOCF+BICNPQCF)));
+
+regle 852160:
+application : iliad ;
+
+BICNPOTF = positif(BICNPOF) * max(0 , BICNPOF - DEFNPI) + (1 - positif(BICNPOF)) * BICNPOF ;
+
+BICNPOTAFF = max(0 , BICNPOF) ;
+BICNPQTF = max(0 , BICNPQF - max(0 , DEFNPI - BICNPOF)) + DEFNIBICQ ;
+regle 852170:
+application : iliad ;
+
+
+BICNPTV = BICNPOCV + BICNPQCV ;
+BICNPTC = BICNPOCC + BICNPQCC ;
+BICNPTP = BICNPOCP + BICNPQCP ;
+BICNPTF = BICNPTV + BICNPTC + BICNPTP ;
+
+
+DEFANTBICNPV = positif(BICNPTV + 0) * arr(DEFNPI * BICNPTV / (max(0 , BICNPTV) + max(0 , BICNPTC) + max(0 , BICNPTP))) ;
+
+DEFANTBICNPC = positif(BICNPTC + 0) * (positif(BICNPTP + 0) * arr(DEFNPI * BICNPTC / (max(0 , BICNPTV) + max(0 , BICNPTC) + max(0 , BICNPTP)))
+                                       + (1 - positif(BICNPTP + 0)) * (DEFNPI - DEFANTBICNPV)) ;
+
+DEFANTBICNPP = DEFNPI - DEFANTBICNPV - DEFANTBICNPC ;
+
+regle 855000:
+application : iliad ;
+
+
+BICPROHMF = BIPTAQV + BIHTAQV + BIPTAQC + BIHTAQC + BIPTAQP + BIHTAQP ;
+
+regle 860000:
+application : iliad ;
+
+
+IMPUT5IU = positif(MIBNPRNETV + MIBNPRNETC + MIBNPRNETP + MIBNPPVV + MIBNPPVC + MIBNPPVP + max(0 , BICNPOCF + BICNPQCF))
+           * min(MIBNPRNETV + MIBNPRNETC + MIBNPRNETP + MIBNPPVV + MIBNPPVC + MIBNPPVP + max(0 , BICNPOCF + BICNPQCF) , MIBNPDCT + COD5RZ + COD5SZ) ;
+
+regle 860005:
+application : iliad ;
+
+
+
+
+PVINDUSPBIC = COD5UI + COD5VI + COD5WI ; 
+
+
+PVINDUSNPBIC = COD5TF + COD5UF + COD5VF ; 
+regle 860010:
+application : iliad ;
+
+
+VERSLIB = arr((COD5TJ+ COD5UJ+ COD5VJ)* (TX01/100)+ (COD5TK+ COD5UK+ COD5VK)*(TX017/100)+ (COD5TL+ COD5UL+ COD5VL)*(TX022/100));

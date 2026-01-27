@@ -12,6 +12,9 @@
 
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
+
+type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
+
 val check_all_tests :
   Mir.program ->
   string ->
@@ -22,6 +25,16 @@ val check_all_tests :
 (** [check_all_tests p folder vs ro filter] Executes [p] with all tests in
     [folder] whose name satisfy [filter]. *)
 
+val check_test :
+  Mir.program ->
+  Irj_file.input ->
+  Config.value_sort ->
+  Config.round_ops ->
+  StrSet.t ->
+  target_dbg_info list
+
 val check_one_test :
   Mir.program -> string -> Config.value_sort -> Config.round_ops -> unit
 (** Same as [check_all_tests], but for one test. *)
+
+exception InterpError of int

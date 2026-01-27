@@ -159,6 +159,7 @@ module Var = struct
     cat : CatVar.t;
     is_given_back : bool;
     typ : value_typ option;
+    table_cell : (t * int) option;
   }
 
   and scope = Tgv of tgv | Temp of t Array.t option | Ref
@@ -186,6 +187,20 @@ module Var = struct
     | Tgv tgv -> tgv.table
     | Temp table -> table
     | Ref -> None
+
+  let get_table_cell v =
+    match v.scope with Tgv tgv -> tgv.table_cell | _ -> None
+
+  let set_table_cell v tabvar index =
+    Format.printf "set_table_cell for %s (%d)@." (name_str v) v.id;
+    let scope =
+      match v.scope with
+      | Tgv tgv ->
+          let tgv = { tgv with table_cell = Some (tabvar, index) } in
+          Tgv tgv
+      | _ -> assert false
+    in
+    { v with scope }
 
   let is_table v = get_table v <> None
 
@@ -314,7 +329,18 @@ module Var = struct
       name;
       id = new_id ();
       loc = LocTgv (Pos.unmark name, init_loc cat);
-      scope = Tgv { table; alias; descr; attrs; cat; is_given_back; typ };
+      scope =
+        Tgv
+          {
+            table;
+            alias;
+            descr;
+            attrs;
+            cat;
+            is_given_back;
+            typ;
+            table_cell = None;
+          };
     }
 
   let new_temp ~(name : string Pos.marked) ~(table : t Array.t option) : t =
@@ -438,7 +464,9 @@ type variable_space = {
 
 type literal = Float of float | Undefined
 
-type case = Default | Value of literal
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
 
 (** Unary operators *)
 type unop = Not | Minus
@@ -477,14 +505,18 @@ type m_var_name = var_name Pos.marked
 
 type var_space = (m_var_name * int) option
 
+type 'v var_id = var_space * 'v
+
 type 'v access =
-  | VarAccess of var_space * 'v
-  | TabAccess of var_space * 'v * 'v m_expression
+  | VarAccess of 'v var_id
+  | TabAccess of 'v var_id * 'v m_expression
   | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
 
 and 'v m_access = 'v access Pos.marked
 
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v case = CDefault | CValue of literal | CVar of 'v m_access
+
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -513,7 +545,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -529,6 +561,72 @@ and 'v expression =
   | NbBloquantes
 
 and 'v m_expression = 'v expression Pos.marked
+
+type const = { id : string; value : literal; pos : Pos.t }
+
+type 'v dep =
+  | Tab of 'v * 'v m_expression
+  | V of 'v
+  | LiteralDep of literal
+  | Const of const
+
+(* This code was taken from Noe and adapted to the 2025 var architecture *)
+let get_used_variables (e : 'v expression) : 'v dep list =
+  let rec get_used_variables_ (e : 'v expression) (acc : 'v dep list) =
+    match e with
+    | TestInSet (_, Mark (e, _), _) | Unop (_, Mark (e, _)) ->
+        let acc = get_used_variables_ e acc in
+        acc
+    | Comparison (_, Mark (e1, _), Mark (e2, _))
+    | Binop (_, Mark (e1, _), Mark (e2, _)) ->
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        acc
+    | Conditional (Mark (e1, _), Mark (e2, _), e3) -> (
+        let acc = get_used_variables_ e1 acc in
+        let acc = get_used_variables_ e2 acc in
+        match e3 with
+        | None -> acc
+        | Some (Mark (e3, _)) -> get_used_variables_ e3 acc)
+    | FuncCall (_, args) ->
+        List.fold_left
+          (fun acc arg -> get_used_variables_ (Pos.unmark arg) acc)
+          acc args
+    | Loop (_, Mark (e, _)) -> get_used_variables_ e acc
+    | FuncCallLoop (_, _, Mark (e, _)) -> get_used_variables_ e acc
+    | Var var
+    | Size (Mark (var, _))
+    | Attribut (Mark (var, _), _)
+    | InDomain (Mark (var, _), _)
+    | Type (Mark (var, _), _) ->
+        get_used_variables_access var acc
+    | Literal { lit; origin = Some (Mark (id, pos)) } ->
+        Const { id; value = lit; pos } :: acc
+    | Literal { lit; origin = None } -> LiteralDep lit :: acc
+    | SameVariable (Mark (l, _), Mark (r, _)) ->
+        let acc = get_used_variables_access l acc in
+        get_used_variables_access r acc
+    | NbCategory _ | NbAnomalies | NbDiscordances | NbInformatives -> acc
+    | NbBloquantes -> acc
+  and get_used_variables_access var acc =
+    match var with
+    | TabAccess ((_, v), m_i) -> Tab (v, m_i) :: acc
+    | VarAccess (_, v) -> V v :: acc
+    | FieldAccess (_, Mark (v, _), _, _) -> get_used_variables_ v acc
+  in
+  get_used_variables_ e []
+
+let mk_lit_with_orig lit origin = { lit; origin }
+
+let mk_lit lit = Literal (mk_lit_with_orig lit None)
+
+let mk_lit_from_const lit constname =
+  Literal (mk_lit_with_orig lit (Some constname))
+
+let mk_atomlit lit = AtomLiteral (mk_lit_with_orig lit None)
+
+let mk_atomlit_from_const lit constname =
+  AtomLiteral (mk_lit_with_orig lit (Some constname))
 
 module Error = struct
   type typ = Anomaly | Discordance | Information
@@ -620,6 +718,10 @@ type stop_kind =
 (* Leave the iterator with the selected var
    (or the current if [None]) *)
 
+type 'v switch_expression =
+  | SEValue of 'v m_expression
+  | SESameVariable of 'v m_access
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -656,7 +758,8 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
+  | Switch of
+      ('v switch_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -683,10 +786,10 @@ let target_is_function t = t.target_result <> None
 
 let rec access_map_var f = function
   | VarAccess (m_sp_opt, v) -> VarAccess (m_sp_opt, f v)
-  | TabAccess (m_sp_opt, v, m_i) ->
+  | TabAccess ((m_sp_opt, v), m_i) ->
       let v' = f v in
       let m_i' = m_expr_map_var f m_i in
-      TabAccess (m_sp_opt, v', m_i')
+      TabAccess ((m_sp_opt, v'), m_i')
   | FieldAccess (m_sp_opt, m_i, field, id) ->
       let m_i' = m_expr_map_var f m_i in
       FieldAccess (m_sp_opt, m_i', field, id)
@@ -802,6 +905,15 @@ and formula_map_var f = function
       let fd' = formula_decl_map_var f fd in
       MultipleFormulaes (fl', fd')
 
+and case_map_var f = function
+  | CDefault -> CDefault
+  | CValue v -> CValue v
+  | CVar acc -> CVar (m_access_map_var f acc)
+
+and switch_expr_map_var f = function
+  | SEValue e -> SEValue (m_expr_map_var f e)
+  | SESameVariable m_a -> SESameVariable (m_access_map_var f m_a)
+
 and instr_map_var f g = function
   | Affectation m_f -> Affectation (Pos.map (formula_map_var f) m_f)
   | IfThenElse (m_e0, m_il0, m_il1) ->
@@ -810,9 +922,12 @@ and instr_map_var f g = function
       let m_il1' = List.map (m_instr_map_var f g) m_il1 in
       IfThenElse (m_e0', m_il0', m_il1')
   | Switch (e, l) ->
-      let e' = m_expr_map_var f e in
+      let e' = switch_expr_map_var f e in
       let l' =
-        List.map (fun (c, l) -> (c, List.map (m_instr_map_var f g) l)) l
+        List.map
+          (fun (c, l) ->
+            (List.map (case_map_var f) c, List.map (m_instr_map_var f g) l))
+          l
       in
       Switch (e', l')
   | WhenDoElse (m_eil, m_il) ->
@@ -920,7 +1035,7 @@ let fold_opt fold opt acc = match opt with Some e -> fold e acc | None -> acc
 let rec access_fold_var usage f a acc =
   match a with
   | VarAccess (m_sp_opt, v) -> acc |> f usage m_sp_opt (Some v)
-  | TabAccess (m_sp_opt, v, m_i) ->
+  | TabAccess ((m_sp_opt, v), m_i) ->
       acc |> f usage m_sp_opt (Some v) |> m_expr_fold_var f m_i
   | FieldAccess (m_sp_opt, m_i, _, _) ->
       acc |> f usage m_sp_opt None |> m_expr_fold_var f m_i
@@ -1021,6 +1136,11 @@ and formula_fold_var f fm acc =
   | MultipleFormulaes (fl, fd) ->
       acc |> formula_loop_fold_var f fl |> formula_decl_fold_var f fd
 
+and switch_expr_fold_var f se acc =
+  match se with
+  | SEValue e -> m_expr_fold_var f e acc
+  | SESameVariable v -> m_access_fold_var Info f v acc
+
 and instr_fold_var f instr acc =
   match instr with
   | Affectation m_f -> formula_fold_var f (Pos.unmark m_f) acc
@@ -1029,7 +1149,7 @@ and instr_fold_var f instr acc =
       |> fold_list (m_instr_fold_var f) m_il0
       |> fold_list (m_instr_fold_var f) m_il1
   | Switch (e, l) ->
-      acc |> m_expr_fold_var f e
+      acc |> switch_expr_fold_var f e
       |> fold_list (fun (_, l) -> fold_list (m_instr_fold_var f) l) l
   | WhenDoElse (m_eil, m_il) ->
       let fold (m_e0, m_il0, _) accu =
@@ -1110,17 +1230,14 @@ let format_value_typ fmt t =
     | Real -> "REEL")
 
 let format_literal fmt l =
-  Format.pp_print_string fmt
-    (match l with Float f -> string_of_float f | Undefined -> "indefini")
-
-let format_case fmt = function
-  | Default -> Format.pp_print_string fmt "default"
-  | Value v -> format_literal fmt v
+  match l with
+  | Float f -> Format.fprintf fmt "%g" f
+  | Undefined -> Format.pp_print_string fmt "indefini"
 
 let format_atom form_var fmt vl =
   match vl with
   | AtomVar v -> form_var fmt v
-  | AtomLiteral l -> format_literal fmt l
+  | AtomLiteral l -> format_literal fmt l.lit
 
 let format_set_value_loop form_var fmt sv =
   let form_atom = format_atom form_var in
@@ -1180,21 +1297,19 @@ let format_comp_op fmt op =
     | Eq -> "="
     | Neq -> "!=")
 
+let format_varid form_var fmt (m_sp_opt, v) =
+  let sp_str =
+    match m_sp_opt with
+    | None -> ""
+    | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
+  in
+  Pp.fpr fmt "%s%a" sp_str form_var v
+
 let format_access form_var form_expr fmt = function
-  | VarAccess (m_sp_opt, v) ->
-      let sp_str =
-        match m_sp_opt with
-        | None -> ""
-        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
-      in
-      Pp.fpr fmt "%s%a" sp_str form_var v
-  | TabAccess (m_sp_opt, v, m_i) ->
-      let sp_str =
-        match m_sp_opt with
-        | None -> ""
-        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
-      in
-      Pp.fpr fmt "%s%a[%a]" sp_str form_var v form_expr (Pos.unmark m_i)
+  | VarAccess v_id -> format_varid form_var fmt v_id
+  | TabAccess (v_id, m_i) ->
+      Pp.fpr fmt "%a[%a]" (format_varid form_var) v_id form_expr
+        (Pos.unmark m_i)
   | FieldAccess (m_sp_opt, e, f, _) ->
       let sp_str =
         match m_sp_opt with
@@ -1203,6 +1318,11 @@ let format_access form_var form_expr fmt = function
       in
       Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str form_expr (Pos.unmark e)
         (Pos.unmark f)
+
+let format_case form_var form_expr fmt = function
+  | CDefault -> Format.pp_print_string fmt "default"
+  | CValue v -> format_literal fmt v
+  | CVar acc -> format_access form_var form_expr fmt (Pos.unmark acc)
 
 let format_set_value form_var form_expr fmt sv =
   match sv with
@@ -1261,7 +1381,7 @@ let rec format_expression form_var fmt =
       Format.fprintf fmt "%a(%a%a)" format_func (Pos.unmark f)
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
-  | Literal l -> format_literal fmt l
+  | Literal { lit; _ } -> format_literal fmt lit
   | Var acc -> format_access form_var form_expr fmt acc
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"
@@ -1356,10 +1476,19 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt "if(%a):@\n@[<h 2>  %a@]else:@\n@[<h 2>  %a@]@\n"
           form_expr (Pos.unmark cond) form_instrs t form_instrs f
     | Switch (e, l) ->
-        Format.fprintf fmt "switch (%a) : (@," form_expr (Pos.unmark e);
+        Format.fprintf fmt "aiguillage ";
+        let () =
+          match e with
+          | SEValue e -> Format.fprintf fmt "(%a)" form_expr (Pos.unmark e)
+          | SESameVariable v ->
+              Format.fprintf fmt "nom (%a)" form_access (Pos.unmark v)
+        in
+        Format.fprintf fmt " : (@,";
         List.iter
           (fun (cl, l) ->
-            List.iter (Format.fprintf fmt "%a :@," format_case) cl;
+            List.iter
+              (Format.fprintf fmt "%a :@," (format_case form_var form_expr))
+              cl;
             Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
           l;
         Format.fprintf fmt "@]@,"
