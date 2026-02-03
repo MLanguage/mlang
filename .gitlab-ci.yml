@@ -1,0 +1,79 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+
+  variables:
+    OCAML_COMPILER: "4.14.2"
+#    ARTIFACTS: "artifacts/$OCAML_COMPILER"
+
+    FF_USE_FASTZIP: "true"
+    # A workaround against a bug in gitlab-runner's default
+    # unzipping implementation, which partially breaks caching for the dune _build cache.
+    # See https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27496 for more details.
+
+  rules:
+    - exists:
+        - dune-project
+
+  image: ocaml/opam:debian-testing-opam
+
+  artifacts:
+    paths:
+      - documentation
+      - bin
+
+#  cache:
+#    key: $OCAML_COMPILER
+#    paths:
+#      - _opam
+#      - _build
+
+  script:
+    # Initialisation
+    - sudo apt update
+    - sudo apt install m4 perl python3 python3.13-venv clang git build-essential lzip libgmp-dev libmpfr-dev -y
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+    - git submodule init ir-calcul
+    - git submodule update ir-calcul
+    # Installation des dépendances opam
+    - if [ -d _opam ]; then echo "we reuse the local opam switch from the CI cache"; fi
+    - if [ ! -d _opam ]; then echo "no local switch in the CI cache, we setup a new switch";
+      	 opam switch create --yes --no-install . $OCAML_COMPILER;
+         opam install dune;
+         opam install . --deps-only --yes;
+      fi
+    # Verification de l'indentation
+    - opam exec -- dune build @fmt
+    # Compilation
+    - make build
+    # Tests
+    - make test_cram
+    - OPTIMIZE=0 make tests
+    - make test_irj
+    - make test_dgfip_c_backend
+    # Compilation du binaire statique
+    - make build-static
+    # Génération de la documentation
+    - make doc-deps
+    - make doc
+    # Edition des chemins d'artefact
+    ## Artefact documentation
+    - mkdir documentation
+    - cp -r _build/default/full-doc/html/* documentation
+    ## Artefact binaire statique
+    - mkdir bin
+    - cp _build/default/src/main.exe bin/mlang
+
+create-pages:
+  stage: deploy
+
+  script:
+    - cp -r documentation public
+
+  pages: true 
+
+ #  rules:
+ #   - if: '$CI_COMMIT_BRANCH == "dev"'
