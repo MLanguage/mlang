@@ -6,3 +6,5 @@ doc.html
 *~
 /_opam
 /Makefile.config
+examples/dgfip_c/ml_primitif/.interpreter_progress
+examples/dgfip_c/ml_primitif/.mlang.hash

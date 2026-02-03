@@ -132,3 +132,6 @@ MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_D
 
 IRJ_BIN=irj_checker
 IRJ_TESTS_DIRS?=tests/2019 tests/2020 tests/2022 tests/2023
+
+INTERP_PROGRESS=examples/dgfip_c/ml_primitif/.interpreter_progress
+MLANG_HASH=examples/dgfip_c/ml_primitif/.mlang.hash

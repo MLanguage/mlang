@@ -3,12 +3,7 @@
    This program is free software: you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
+   version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
@@ -228,13 +223,34 @@ let ignored_vars_list = [ "NBPT"; "RETX.*"; "NATMAJ.*"; "TL_.*" ]
 
 type process_acc = string list * int StrMap.t
 
+(** This is the name of the progress file. It registers which tests have already
+    been run in order to skip them if the execution has been interrupted. *)
+let progress_filename = ".interpreter_progress"
+
 let check_all_tests (p : Mir.program) (test_dir : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops)
     (filter_function : string -> bool) =
+  let read_lines inc = In_channel.input_all inc |> String.split_on_char '\n' in
+  let finished_files =
+    match In_channel.with_open_text progress_filename read_lines with
+    | (exception Sys_error _) | [ "" ] ->
+        Cli.debug_print "No progress file found. Starting from scratch.@.";
+        []
+    | lines ->
+        Cli.debug_print "Skipping %d tests already executed" (List.length lines);
+        lines
+  in
+  let flags = [ Open_creat; Open_append; Open_text ] in
+  let oc = Out_channel.open_gen flags 0o666 progress_filename in
+  let write_name name =
+    Out_channel.output_string oc (name ^ "\n");
+    Out_channel.flush oc
+  in
   let arr =
     test_dir |> Sys.readdir |> Array.to_list
     |> List.filter (fun x -> not @@ Sys.is_directory (test_dir ^ "/" ^ x))
     |> List.filter filter_function
+    |> List.filter (fun s -> not (List.mem s finished_files))
     |> List.sort String.compare |> Array.of_list
   in
   let ign_vars = ignored_vars_set p ignored_vars_list in
@@ -254,14 +270,17 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       check_test p (test_dir ^ name) value_sort round_ops ign_vars;
       Config.debug_flag := true;
       Cli.result_print "%s" name;
+      write_name name;
       (name :: successes, failures)
     with
     | InterpError nbErr ->
         Cli.error_print "%s" name;
+        write_name name;
         (successes, StrMap.add name nbErr failures)
     | Errors.StructuredError (msg, pos, kont) ->
         Cli.error_print "Error in test %s: %a" name
           Errors.format_structured_error (msg, pos);
+        write_name name;
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures)
     | Interp.RuntimeError (run_error, _) -> (
@@ -269,11 +288,13 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         | Interp.StructuredError (msg, pos, kont) ->
             Cli.error_print "Error in test %s: %a" name
               Errors.format_structured_error (msg, pos);
+            write_name name;
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
         | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
             Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
+            write_name name;
             (successes, failures))
     | e ->
         Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
@@ -288,6 +309,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     *)
   in
   (* finish "done!"; *)
+  Sys.remove progress_filename;
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
   Cli.result_print "Test results: %d successes" (List.length s);

@@ -49,13 +49,25 @@ else
 	opam exec -- dune build @fmt --auto-promote | true
 endif
 
+.ONESHELL:
 dune: FORCE
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	echo $(shell pwd)
+	echo $$(pwd)
+	OLDHASH=$$(cat $(MLANG_HASH))
 	sed -i 's/(version %%VERSION%%)/(version ${shell git describe --always --dirty --tag})/' dune-project
-	LINKING_MODE='$(LINKING_MODE)' opam exec -- dune build $(DUNE_OPTIONS)
+	LINKING_MODE=$(LINKING_MODE) dune build $(DUNE_OPTIONS)
+	sha1sum _build/default/src/main.exe | awk '{print $$1}' > $(MLANG_HASH)
+	HASH=$$(cat $(MLANG_HASH))
+	echo "OLDHASH: '$$OLDHASH'"
+	echo "HASH: '$$HASH'"
+	if [ "$$HASH" = "$$OLDHASH" ]; then \
+		echo "binary is the same"; \
+	else \
+		echo "binary is new"; \
+		rm -f _build/default/$(INTERP_PROGRESS)
+	fi
 	$(call make_in_raw,,remise_a_zero_versionnage)
 endif
 
@@ -89,7 +101,7 @@ else
 endif
 
 # use: TESTS_DIR=bla make test
-tests: FORCE build
+tests: FORCE build-release
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
