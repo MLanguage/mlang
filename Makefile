@@ -40,4 +40,4 @@ clean: FORCE remise_a_zero_versionnage
 	rm -rf examples/doc 
 	dune clean
 
-ci_tests: FORCE quick_test tests test_dgfip_c_backend
+ci_tests: FORCE build test_cram tests test_irj test_dgfip_c_backend
