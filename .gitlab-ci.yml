@@ -2,7 +2,7 @@ stages:
   - build
   - deploy
 
-short-build:
+build:
   stage: build
 
   variables:
@@ -58,21 +58,11 @@ short-build:
     - make doc
     # Edition des chemins d'artefact
     ## Artefact documentation
-    - mkdir documentation
-    - cp -r _build/default/full-doc/html/* documentation
+    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
+      || (mkdir documentation && cp -r _build/default/full-doc/html/* documentation)
     ## Artefact binaire statique
-    - mkdir bin
-    - cp _build/default/src/main.exe bin/mlang
-
-long-build:
-  stage: build
-  needs:
-    - short-build
-  rules:
-    - if: $CI_COMMIT_BRANCH == "gitlab-ci"
-    - if: $CI_COMMIT_BRANCH == "dev"
-  script:
-    - make YEAR=2025 tests_corr
+    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
+      || (mkdir bin && cp _build/default/src/main.exe bin/mlang)
 
 create-pages:
   stage: deploy
@@ -82,5 +72,6 @@ create-pages:
 
   pages: true 
 
- #  rules:
- #   - if: '$CI_COMMIT_BRANCH == "dev"'
+  rules:
+   - if: '$CI_COMMIT_BRANCH == "main"'
+   - if: '$CI_COMMIT_BRANCH == "dev"'
