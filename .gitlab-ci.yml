@@ -50,10 +50,7 @@ build:
     # Compilation
     - make build
     # Tests
-    - make test_cram
-    - OPTIMIZE=0 make tests
-    - make test_irj
-    - make test_dgfip_c_backend
+    - OPTIMIZE=0 make ci_tests
     # Compilation du binaire statique
     - make build-static
     # Génération de la documentation
