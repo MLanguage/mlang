@@ -17,7 +17,7 @@ build:
     - exists:
         - dune-project
 
-  image: ocaml/opam:debian-testing-opam
+  image: ocaml/opam:debian-13-ocaml-4.14
 
   artifacts:
     paths:
