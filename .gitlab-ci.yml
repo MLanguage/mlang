@@ -1,6 +1,5 @@
 stages:
   - build
-  - deploy
 
 build:
   stage: build
@@ -53,10 +52,11 @@ build:
     # Tests
     - OPTIMIZE=0 make ci_tests
     # Compilation du binaire statique
-    - make build-static
+    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
+      || make build-static
     # Génération de la documentation
-    - make doc-deps
-    - make doc
+    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
+      || (make doc-deps && make doc)
     # Edition des chemins d'artefact
     ## Artefact documentation
     - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
@@ -64,15 +64,3 @@ build:
     ## Artefact binaire statique
     - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
       || (mkdir bin && cp _build/default/src/main.exe bin/mlang)
-
-create-pages:
-  stage: deploy
-
-  script:
-    - cp -r documentation public
-
-  pages: true 
-
-  rules:
-   - if: '$CI_COMMIT_BRANCH == "main"'
-   - if: '$CI_COMMIT_BRANCH == "dev"'
