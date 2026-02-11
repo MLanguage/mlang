@@ -668,6 +668,11 @@ struct
       | Or, Number i1, Number i2 ->
           Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
     in
+    let binop_list op l =
+      match l with
+      | [] -> assert false
+      | e :: tl -> List.fold_left (fun acc e' -> binop op acc e') e tl
+    in
     let out =
       try
         match Pos.unmark e with
@@ -703,10 +708,9 @@ struct
             let value1 = evaluate_expr ctx e1 in
             let value2 = evaluate_expr ctx e2 in
             comparison (Pos.unmark op) value1 value2
-        | Binop (op, e1, e2) ->
-            let value1 = evaluate_expr ctx e1 in
-            let value2 = evaluate_expr ctx e2 in
-            binop (Pos.unmark op) value1 value2
+        | Binop (op, l) ->
+            let values = List.map (evaluate_expr ctx) l in
+            binop_list (Pos.unmark op) values
         | Unop (op, e1) -> unop op @@ evaluate_expr ctx e1
         | Conditional (e1, e2, e3_opt) -> (
             match evaluate_expr ctx e1 with
@@ -1425,12 +1429,11 @@ let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
 
 let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
     unit =
-  begin
-    match sort with
-    | MPFR prec -> Mpfr.set_default_prec prec
-    | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
-    | Interval -> Mpfr.set_default_prec 64
-    | _ -> ()
+  begin match sort with
+  | MPFR prec -> Mpfr.set_default_prec prec
+  | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
+  | Interval -> Mpfr.set_default_prec 64
+  | _ -> ()
   end;
   match roundops with
   | ROMainframe long_size ->

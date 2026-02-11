@@ -21,7 +21,7 @@ DGFIP_TARGET_FLAGS?=-g,-O,-k4
 #      bouclant sur la table des variables restituables (IN_init_extraction).
 DGFIP_COMMON_FLAGS=-m$(YEAR),-X
 
-MLANG_DGFIP=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS)
+MLANG_DGFIP=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_DGFIP_C_OPTS) $(NO_LOCAL_VAR_FLAG)
 
 QUIET=>/dev/null # Uncomment to suppress output
 
@@ -56,7 +56,8 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	@echo "  MPP_FUNCTION=$(MPP_FUNCTION_BACKEND)"
 	@echo "  DGFIP_TARGET_FLAGS=$(DGFIP_TARGET_FLAGS)"
 	@echo "  DGFIP_COMMON_FLAGS=$(DGFIP_COMMON_FLAGS)"
-	@$(MLANG_DGFIP) \
+	@echo "  NO_LOCAL_VAR_FLAG=$(NO_LOCAL_VAR_FLAG)"
+	opam exec -- $(MLANG_DGFIP) \
 	  --income-year=$(YEAR) \
 	  --comparison_error_margin=$(COMPARISON_ERROR_MARGIN) \
 	  --dgfip_options=$(DGFIP_TARGET_FLAGS),$(DGFIP_COMMON_FLAGS) \
@@ -64,6 +65,7 @@ calc/mlang.h: $(SOURCE_FILES) $(SOURCE_EXT_FILES) | calc_dir
 	  --output calc/enchain.c \
 	  $(SOURCE_FILES) $(SOURCE_EXT_FILES) $(QUIET)
 	cd calc && rm -f $(DRIVER_FILES)
+	@echo "Compilation OK"
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -137,7 +139,11 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
+    ifdef OUTPUT_TEST_TIME_IN_DIR
+	time -f "%U" --append -o $(OUTPUT_TEST_TIME_IN_DIR)/$(CC)$(OV)_time ./cal -mode primitif -recursif ${TEST_FILES}
+    else
 	./cal -mode primitif -recursif ${TEST_FILES}
+    endif
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

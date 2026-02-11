@@ -88,6 +88,8 @@ val execution_mode : execution_mode ref
 
 val no_nondet_display : bool ref
 
+val no_local_var : bool ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -110,4 +112,5 @@ val set_opts :
   m_clean_calls:bool ->
   dgfip_options:string list option ->
   no_nondet_display:bool ->
+  no_local_var:bool ->
   [ `Displayed_dgfip_help | `Error of string | `Run ]
