@@ -24,6 +24,7 @@ build:
     paths:
       - documentation
       - bin
+    when: on_success
 
 #  cache:
 #    key: $OCAML_COMPILER
