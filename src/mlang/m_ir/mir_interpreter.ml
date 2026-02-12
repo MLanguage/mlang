@@ -1425,12 +1425,11 @@ let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
 
 let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
     unit =
-  begin
-    match sort with
-    | MPFR prec -> Mpfr.set_default_prec prec
-    | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
-    | Interval -> Mpfr.set_default_prec 64
-    | _ -> ()
+  begin match sort with
+  | MPFR prec -> Mpfr.set_default_prec prec
+  | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
+  | Interval -> Mpfr.set_default_prec 64
+  | _ -> ()
   end;
   match roundops with
   | ROMainframe long_size ->

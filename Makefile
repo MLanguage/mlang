@@ -39,3 +39,5 @@ clean: FORCE remise_a_zero_versionnage
 	rm -f doc/doc.html
 	rm -rf examples/doc 
 	dune clean
+
+ci_tests: FORCE build test_cram tests test_irj test_dgfip_c_backend
