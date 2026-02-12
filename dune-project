@@ -31,7 +31,7 @@
  (depends
   (ocaml
    (and
-    (>= "4.13.0")))
+    (>= "4.14.2")))
   (dune
    (and :build))
   (ANSITerminal
@@ -51,7 +51,7 @@
   (mlgmpidl
    (>= 1.2.12))
   (ocamlformat
-   (= 0.24.1))
+   (>= 0.24.1))
   (parmap
    (= 1.2.3))))
 
@@ -63,10 +63,10 @@
  (depends
   (ocaml
    (and
-    (>= "4.11.2")))
+    (>= "4.14.2")))
   (dune
    (and :build))
   (odoc
    (>= 1.5.3))
   (ocamlformat
-   (= 0.24.1))))
+   (>= 0.24.1))))
