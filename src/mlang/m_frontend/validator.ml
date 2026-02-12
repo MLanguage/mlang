@@ -462,6 +462,16 @@ module Err = struct
         case
     in
     Errors.raise_spanned_error msg pos
+
+  let unexpected_variable_scope ~var_scope ~expected_scope (Pos.Mark (v, pos)) =
+    let varname = Com.get_var_name v in
+    let msg =
+      Pp.spr
+        "Variable %s is a %a variable, which should be a %s variable in this \
+         context"
+        varname Com.format_simple_scope var_scope expected_scope
+    in
+    Errors.raise_spanned_error msg pos
 end
 
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
@@ -667,8 +677,8 @@ let safe_prefix (p : Mast.program) : string =
         if i >= String.length name then make_prefix []
         else (
           (if Strings.starts_with ~prefix:(Buffer.contents buf) name then
-           let c = match name.[i] with 'a' -> 'b' | _ -> 'a' in
-           Buffer.add_char buf c);
+             let c = match name.[i] with 'a' -> 'b' | _ -> 'a' in
+             Buffer.add_char buf c);
           make_prefix tl)
     | [] -> Buffer.contents buf
   in
@@ -1543,6 +1553,27 @@ let check_variable (m_sp_opt : Com.var_space) (m_vn : Com.m_var_name)
       else if Com.Var.is_temp var then
         Err.tmp_var_has_no_var_space v_name (Pos.get m_vn)
 
+let check_variable_can_be_referenced
+    (Pos.Mark (v_name, pos) as m_v : Com.m_var_name) (env : var_env) : unit =
+  let v_name = Com.get_normal_var v_name in
+  let var =
+    let id = StrMap.find v_name env.vars in
+    IntMap.find id env.prog.prog_dict
+  in
+  match var.scope with
+  | Tgv _ -> ()
+  | Ref ->
+      Errors.print_spanned_warning
+        (Format.sprintf
+           "Variable %s used to set an event reference. Make sure it is not a \
+            temporary variable, otherwise this instruction will have no \
+            effect."
+           v_name)
+        pos
+  | Temp _ ->
+      Err.unexpected_variable_scope ~var_scope:var.scope ~expected_scope:"Tgv"
+        m_v
+
 let check_expression (env : var_env) (m_expr : Mast.m_expression) : unit =
   let get_var m_v = Pos.same (Com.get_normal_var @@ Pos.unmark m_v) m_v in
   let fold_sp m_sp_opt env _acc = check_var_space m_sp_opt env in
@@ -1730,6 +1761,7 @@ let rec check_instructions (env : var_env)
                 | None -> Err.unknown_event_field f_name f_pos);
                 let m_i' = map_expr env m_i in
                 check_variable None m_v Num env;
+                check_variable_can_be_referenced m_v env;
                 let m_v' = map_var env m_v in
                 let f' =
                   Com.SingleFormula (EventFieldRef (m_i', f, iFmt, m_v'))
@@ -2513,8 +2545,8 @@ let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
     in
     let bad_out_vars = StrMap.remove vr out_vars in
     (if StrMap.card bad_in_vars > 0 then
-     let vn, vpos = StrMap.min_binding bad_in_vars in
-     Err.forbidden_in_var_in_function vn tname vpos);
+       let vn, vpos = StrMap.min_binding bad_in_vars in
+       Err.forbidden_in_var_in_function vn tname vpos);
     if StrMap.card bad_out_vars > 0 then
       let vn, vpos = StrMap.min_binding bad_out_vars in
       Err.forbidden_out_var_in_function vn tname vpos);
@@ -3341,7 +3373,8 @@ end
 let complete_verif_calls (prog : program) : program =
   let prog_targets, prog_call_map, _ =
     StrMap.fold
-      (fun tname (_, vdom_id, expr) (prog_targets, prog_call_map, verif_calls) ->
+      (fun tname (_, vdom_id, expr) (prog_targets, prog_call_map, verif_calls)
+         ->
         let verif_set =
           IntMap.fold
             (fun _verif_id verif verif_set ->
