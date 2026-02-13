@@ -189,13 +189,19 @@ let no_nondet_display =
           "Hides all non deterministic displays (display time, progress bar). \
            Used for cram tests.")
 
+let trace =
+  Arg.(
+    value & flag
+    & info [ "trace" ]
+        ~doc:"Controls whether the interpreter traces the execution")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
     $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
-    $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output)
+    $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output $ trace)
 
 let info =
   let doc =

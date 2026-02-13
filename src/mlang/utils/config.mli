@@ -97,6 +97,9 @@ val filesystem : filesystem ref
 
 val plain_output : bool ref
 
+val trace : bool ref
+(** Controls wheter the interpreter is tracing execution *)
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -120,4 +123,5 @@ val set_opts :
   dgfip_options:string list option ->
   no_nondet_display:bool ->
   plain_output:bool ->
+  trace:bool ->
   [ `Displayed_dgfip_help | `Error of string | `Run ]

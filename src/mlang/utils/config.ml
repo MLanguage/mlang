@@ -76,6 +76,8 @@ let filesystem = ref Local
 
 let plain_output = ref true
 
+let trace = ref false
+
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (no_print_cycles_ : bool) (output_file_ : string option)
@@ -84,7 +86,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (value_sort_ : value_sort) (round_ops_ : round_ops) (backend_ : backend)
     (dgfip_test_filter_ : bool) (mpp_function_ : string)
     (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode)
-    (no_nondet_display_ : bool) (plain_output_ : bool) =
+    (no_nondet_display_ : bool) (plain_output_ : bool) (trace_ : bool) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -105,6 +107,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   dgfip_flags := dgfip_flags_;
   no_nondet_display := no_nondet_display_;
   plain_output := plain_output_;
+  trace := trace_;
   match output_file_ with
   | None -> ()
   | Some o -> (
@@ -145,7 +148,7 @@ let set_opts ~(files : string list) ~(application_names : string list)
     ~(precision : string option) ~(roundops : string option)
     ~(comparison_error_margin : float option) ~(income_year : int)
     ~(m_clean_calls : bool) ~(dgfip_options : string list option)
-    ~(no_nondet_display : bool) ~(plain_output : bool) :
+    ~(no_nondet_display : bool) ~(plain_output : bool) ~(trace : bool) :
     [ `Run | `Displayed_dgfip_help | `Error of string ] =
   let exception INTERNAL_FAIL of string in
   let exception DGFIP_HELP in
@@ -223,7 +226,7 @@ let set_opts ~(files : string list) ~(application_names : string list)
       var_info_debug display_time print_cycles output optimize_unsafe_float
       m_clean_calls comparison_error_margin income_year value_sort round_ops
       backend dgfip_test_filter mpp_function dgfip_flags execution_mode
-      no_nondet_display plain_output;
+      no_nondet_display plain_output trace;
     `Run
   with
   | INTERNAL_FAIL m -> `Error m
