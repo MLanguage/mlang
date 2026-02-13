@@ -173,16 +173,31 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
   in
   StrMap.fold fold exp []
 
-let check_anos exp errSet =
-  let rais =
-    let fold e res = StrSet.add (Pos.unmark e.Com.Error.name) res in
-    Com.Error.Set.fold fold errSet StrSet.empty
+let make_dbg_info inst =
+  let dbg_info = Dbg_info.empty in
+  let add_input_var_to_info var lit dbg_info =
+    let open Dbg_info in
+    let name = Com.Var.name_str var in
+    let pos = Com.Var.name var |> Pos.get in
+    let origin =
+      Origin.make (Pos.get_file pos) (Pos.get_start_line pos)
+        (Pos.get_end_line pos) Origin.Input
+    in
+    let tick = Tick.tick () in
+    let descr =
+      match Com.Var.descr_str var with
+      | exception _ -> None
+      | descr -> Some descr
+    in
+    let runtime = Info.Runtime.make origin lit (Some name) in
+    let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
+    let static = Info.Static.make name origin true descr in
+    let statics = IntMap.add runtime.hash static dbg_info.statics in
+    let ledger = StrMap.add name tick dbg_info.ledger in
+    { dbg_info with runtimes; statics; ledger }
   in
-  let missAnos = StrSet.diff exp rais in
-  let unexAnos = StrSet.diff rais exp in
-  StrSet.iter (Cli.error_print "KO | missing error: %s") missAnos;
-  StrSet.iter (Cli.error_print "KO | unexpected error: %s") unexAnos;
-  StrSet.cardinal missAnos + StrSet.cardinal unexAnos
+  let dbg_info = Com.Var.Map.fold add_input_var_to_info inst.vars dbg_info in
+  dbg_info
 
 let check_test (program : Mir.program) (test_input : Irj_file.input)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops)
@@ -213,34 +228,14 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
         Cli.debug_print "Executing program %s" inst.label;
         (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
            Format_bir.format_program program; *)
-        let dbg_info = Dbg_info.empty in
-        let add_input_var_to_info var lit dbg_info =
-          let open Dbg_info in
-          let name = Com.Var.name_str var in
-          let pos = Com.Var.name var |> Pos.get in
-          let origin =
-            Origin.make (Pos.get_file pos) (Pos.get_start_line pos)
-              (Pos.get_end_line pos) Origin.Declared
-          in
-          let tick = Tick.tick () in
-          let descr =
-            match Com.Var.descr_str var with
-            | exception _ -> None
-            | descr -> Some descr
-          in
-          let runtime = Info.Runtime.make origin lit (Some name) in
-          let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-          let static = Info.Static.make name origin true descr in
-          let statics = IntMap.add runtime.hash static dbg_info.statics in
-          let ledger = StrMap.add name tick dbg_info.ledger in
-          { dbg_info with runtimes; statics; ledger }
-        in
         let dbg_info =
-          Com.Var.Map.fold add_input_var_to_info inst.vars dbg_info
+          match !Config.trace with
+          | false -> None
+          | true -> Some (make_dbg_info inst)
         in
         let varMap, anoSet, dbg_info =
-          Mir_interpreter.evaluate_program program inst.vars inst.events
-            value_sort round_ops (Some dbg_info)
+          Mir_interpreter.evaluate_program ?dbg_info program inst.vars
+            inst.events value_sort round_ops
         in
         let interp_errors =
           check_vars program inst.expectedVars varMap ign_vars
@@ -336,10 +331,12 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Config.warning_flag := false;
   Config.display_time := false;
   (* let _, finish = Config.create_progress_bar "Testing files" in*)
+  let trace = !Config.trace in
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
     let module Interp =
-      (val Mir_interpreter.get_interp value_sort round_ops : Mir_interpreter.S)
+      (val Mir_interpreter.get_interp value_sort round_ops ~trace
+          : Mir_interpreter.S)
     in
     try
       Config.debug_flag := false;
@@ -406,10 +403,12 @@ let check_one_test (p : Mir.program) (name : string)
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
   Config.display_time := false;
+  let trace = !Config.trace in
   (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let is_ok =
     let module Interp =
-      (val Mir_interpreter.get_interp value_sort round_ops : Mir_interpreter.S)
+      (val Mir_interpreter.get_interp value_sort round_ops ~trace
+          : Mir_interpreter.S)
     in
     try
       Config.debug_flag := false;

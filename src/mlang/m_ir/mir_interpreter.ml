@@ -23,6 +23,8 @@ let repl_debug = ref false
 module type S = sig
   type custom_float
 
+  type tracer_ctx
+
   type value = Number of custom_float | Undefined
 
   val format_value : Format.formatter -> value -> unit
@@ -46,8 +48,6 @@ module type S = sig
     base : value Array.t;
   }
 
-  type ctx_exec_ctx = CtxUndefined | CtxTarget of string | CtxRule of int
-
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
@@ -70,15 +70,16 @@ module type S = sig
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events :
       (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    mutable ctx_dbg_info : Dbg_info.t option;
-    mutable ctx_exec_ctx : ctx_exec_ctx;
+    mutable tracer_ctx : tracer_ctx;
   }
 
-  val empty_ctx : Mir.program -> Dbg_info.t option -> ctx
+  val empty_ctx : ?dbg_info:Dbg_info.t -> Mir.program -> ctx
 
   val literal_to_value : Com.literal -> value
 
   val value_to_literal : value -> Com.literal
+
+  val get_dbg_info : ctx -> Dbg_info.t option
 
   val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
 
@@ -101,7 +102,174 @@ module type S = sig
   val evaluate_program : ctx -> unit
 end
 
-module Make (N : Mir_number.NumberInterface) (RF : Mir_roundops.RoundOpsFunctor) =
+module type Tracer = sig
+  type ctx
+
+  val empty_ctx : Dbg_info.t option -> ctx
+
+  val register_temp : ctx -> Com.literal -> Com.Var.t -> unit
+
+  val register_access :
+    ctx ->
+    Com.Var.t Com.expression Pos.marked ->
+    Com.Var.t Com.access ->
+    Com.Var.t ->
+    Com.Var.t IntMap.t ->
+    Com.literal ->
+    (Com.Var.t Com.m_expression -> string) ->
+    unit
+
+  val update_execution_ctx : ctx -> int option -> string -> unit
+
+  val get_dbg_info : ctx -> Dbg_info.t option
+end
+
+module Tracer : Tracer = struct
+  type ctx_exec_ctx = CtxUndefined | CtxTarget of string | CtxRule of int
+
+  type ctx = { mutable dbg_info : Dbg_info.t; mutable exec_ctx : ctx_exec_ctx }
+
+  let get_dbg_info ctx = Some ctx.dbg_info
+
+  let empty_ctx dbg_info =
+    match dbg_info with
+    | None -> assert false
+    | Some dbg_info -> { dbg_info; exec_ctx = CtxUndefined }
+
+  let get_rule ctx =
+    match ctx.exec_ctx with
+    | CtxRule i -> Dbg_info.Origin.Rule i
+    | CtxTarget s -> Dbg_info.Origin.Target s
+    | CtxUndefined -> Errors.raise_error "Expression is located neither in a rule nor in a target."
+
+  let register_temp ctx lit var =
+    let open Dbg_info in
+    let tick = Tick.tick () in
+    let rule = get_rule ctx in
+    let value = lit in
+    let info = Info.make_from_var tick var rule value None false in
+    let dbg_info = Dbg_info.register ctx.dbg_info info in
+    ctx.dbg_info <- dbg_info
+
+  let trace_deps deps dbg_info eval_m_index =
+    let open Dbg_info in
+    let trace_dep (ticks, dbg_info) dep =
+      match dep with
+      | Com.V var ->
+          let name = Com.Var.name_str var in
+          (* For now, we add uninstantiated depedencies as undefined *)
+          begin match TickMap.find name dbg_info.ledger with
+          | exception Failure _msg ->
+              let tick = Tick.tick () in
+              let rule = Origin.Declared in
+              let value = Com.Undefined in
+              let info = Info.make_from_var tick var rule value None false in
+              let dbg_info = Dbg_info.register dbg_info info in
+              (tick :: ticks, dbg_info)
+          | tick -> (tick :: ticks, dbg_info)
+          end
+      | Const const ->
+          let name = const.Com.id in
+          begin match TickMap.find name dbg_info.ledger with
+          | tick -> (tick :: ticks, dbg_info)
+          | exception Failure _ ->
+              let tick = Tick.tick () in
+              let const = Const.make_from_pos name const.Com.value const.pos in
+              let consts = Tick.Map.add tick const dbg_info.consts in
+              let ledger = StrMap.add name tick dbg_info.ledger in
+              let dbg_info = { dbg_info with consts; ledger } in
+              (tick :: ticks, dbg_info)
+          end
+      | Tab (var, m_i) ->
+          let name = Com.Var.name_str var in
+          let idx_str = eval_m_index m_i in
+          let name = Format.asprintf "%s[%s]" name idx_str in
+          begin match TickMap.find name dbg_info.ledger with
+          | exception Failure _ ->
+              let tick = Tick.tick () in
+              let rule = Origin.Declared in
+              let lit_value = Com.Undefined in
+              let info =
+                Info.make_from_var tick var rule lit_value None false
+              in
+              let dbg_info = Dbg_info.register dbg_info info in
+              (tick :: ticks, dbg_info)
+          | tick -> (tick :: ticks, dbg_info)
+          end
+      | LiteralDep _lit -> (ticks, dbg_info)
+    in
+    List.fold_left trace_dep ([], dbg_info) deps
+
+  let register_access ctx vexpr access v program_dict value eval_m_index =
+    let open Dbg_info in
+    let deps = Com.get_used_variables @@ Pos.unmark vexpr in
+    let ticks, dbg_info = trace_deps deps ctx.dbg_info eval_m_index in
+    (* Create the tick for this  variable after the deps so that they are
+       in the right order on marple side. *)
+    let tick = Tick.tick () in
+    let access_name name =
+      match access with
+      | Com.VarAccess _ -> (
+          match Com.Var.get_table_cell v with
+          | None -> name
+          | Some (cell_id, i) ->
+              let var = IntMap.find cell_id program_dict in
+              let tab = Com.Var.name_str var in
+              Format.asprintf "%s[%d]" tab i)
+      | Com.TabAccess ((_, v), m_i) ->
+          let name = Com.Var.name_str v in
+          let idx_str = eval_m_index m_i in
+          Format.asprintf "%s[%s]" name idx_str
+      | Com.FieldAccess (_, _, _, _) -> name
+    in
+    let name = access_name @@ Com.Var.name_str v in
+    let is_input =
+      match Com.Var.cat_var_loc v with
+      | Com.CatVar.LocInput -> true
+      | (exception Failure _) | _ -> false
+    in
+    let pos = Pos.get vexpr in
+    let rule_id = get_rule ctx in
+    let descr =
+      match Com.Var.descr_str v with exception _ -> None | descr -> Some descr
+    in
+    let info = Info.make tick name pos rule_id value descr is_input in
+    let dbg_info = Dbg_info.register dbg_info info in
+    let vert = Dbg_info.Graph.V.create tick in
+    let graph = dbg_info.graph in
+    let add_edge graph deptick =
+      let dep_vert = Dbg_info.Graph.V.create deptick in
+      Dbg_info.Graph.add_edge graph vert dep_vert
+    in
+    let graph = List.fold_left add_edge graph ticks in
+    ctx.dbg_info <- { dbg_info with graph }
+
+  let update_execution_ctx ctx rule_id target_name =
+    match rule_id with
+    | None -> ctx.exec_ctx <- CtxTarget target_name
+    | Some rule_id -> ctx.exec_ctx <- CtxRule rule_id
+end
+
+module NonTracer = struct
+  type ctx = unit
+
+  let empty_ctx _ = ()
+
+  let register_temp _ _ _ = ()
+
+  let register_access _ _ _ _ _ _ _ = ()
+
+  let update_execution_ctx _ _ _ = ()
+
+  let get_dbg_info _ = None
+end
+
+module type PartialInterp = functor (T : Tracer) -> S
+
+module Make
+    (N : Mir_number.NumberInterface)
+    (RF : Mir_roundops.RoundOpsFunctor)
+    (Tracer : Tracer) =
 struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
@@ -109,6 +277,8 @@ struct
   module R = RF (N)
 
   type custom_float = N.t
+
+  type tracer_ctx = Tracer.ctx
 
   let truncatef (x : N.t) : N.t = R.truncatef x
 
@@ -148,8 +318,6 @@ struct
     base : value Array.t;
   }
 
-  type ctx_exec_ctx = CtxUndefined | CtxTarget of string | CtxRule of int
-
   type ctx = {
     ctx_prog : Mir.program;
     mutable ctx_target : Mir.target;
@@ -172,8 +340,7 @@ struct
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events :
       (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    mutable ctx_dbg_info : Dbg_info.t option;
-    mutable ctx_exec_ctx : ctx_exec_ctx;
+    mutable tracer_ctx : Tracer.ctx;
   }
 
   type pctx = {
@@ -183,7 +350,7 @@ struct
     ctx_pr : print_ctx;
   }
 
-  let empty_ctx (p : Mir.program) (dbg_info : Dbg_info.t option) : ctx =
+  let empty_ctx ?(dbg_info : Dbg_info.t option) (p : Mir.program) : ctx =
     let dummy_var = Com.Var.new_ref ~name:(Pos.without "") in
     let init_tmp_var _i = { var = dummy_var; value = Undefined } in
     let init_ref _i =
@@ -220,7 +387,7 @@ struct
       in
       Array.init (IntMap.cardinal p.program_var_spaces_idx) init
     in
-    let ctx_dbg_info = dbg_info in
+    let tracer_ctx = Tracer.empty_ctx dbg_info in
     {
       ctx_prog = p;
       ctx_target = snd (StrMap.min_binding p.program_targets);
@@ -242,8 +409,7 @@ struct
       ctx_finalized_anos = [];
       ctx_exported_anos = [];
       ctx_events = [];
-      ctx_dbg_info;
-      ctx_exec_ctx = CtxUndefined;
+      tracer_ctx;
     }
 
   let literal_to_value (l : Com.literal) : value =
@@ -512,18 +678,7 @@ struct
         in
         if Array.length var_tab > 0 then var_tab.(vi) <- value
     | Com.Var.Temp _ ->
-        begin
-          match ctx.ctx_dbg_info with
-          | None -> ()
-          | Some dbg_info ->
-              let open Dbg_info in
-              let tick = Tick.tick () in
-              let rule = get_rule ctx in
-              let value = value_to_literal value in
-              let info = Info.make_from_var tick var rule value None false in
-              let dbg_info = Dbg_info.register dbg_info info in
-              ctx.ctx_dbg_info <- Some dbg_info
-        end;
+        Tracer.register_temp ctx.tracer_ctx (value_to_literal value) var;
         ctx.ctx_tmps.(vorg + vi).value <- value
     | Com.Var.Ref -> assert false
 
@@ -574,55 +729,12 @@ struct
               | Com.Numeric _ -> events.(i).(j) <- Com.Numeric value
               | Com.RefVar v -> set_var_value ctx m_sp_opt v value)
         | Undefined -> ()));
-    match (ctx.ctx_dbg_info, get_access_var ctx access) with
-    | None, _ | _, None -> ()
-    | Some dbg_info, Some (_, v, _) ->
-        let open Dbg_info in
-        let deps = Com.get_used_variables @@ Pos.unmark vexpr in
-        let ticks, dbg_info = trace_deps deps dbg_info ctx in
-        (* Create the tick for this  variable after the deps so that they are
-           in the right order on marple side. *)
-        let tick = Tick.tick () in
-        let access_name name =
-          match access with
-          | Com.VarAccess _ -> (
-              Format.printf "var: %a@." Com.Var.pp v;
-              match Com.Var.get_table_cell v with
-              | None -> name
-              | Some (v, i) ->
-                  let tab = Com.Var.name_str v in
-                  Format.asprintf "%s[%d]" tab i)
-          | Com.TabAccess ((_, v), m_i) ->
-              let name = Com.Var.name_str v in
-              let idx_str = eval_m_index ctx m_i in
-              Format.asprintf "%s[%s]" name idx_str
-          | Com.FieldAccess (_, _, _, _) -> name
-        in
-        let name = access_name @@ Com.Var.name_str v in
-        Format.printf "setting %s@." name;
-        let is_input =
-          match Com.Var.cat_var_loc v with
-          | Com.CatVar.LocInput -> true
-          | (exception Failure _) | _ -> false
-        in
-        let pos = Pos.get vexpr in
-        let rule_id = get_rule ctx in
+    match get_access_var ctx access with
+    | None -> ()
+    | Some (_, v, _) ->
         let value = value_to_literal value in
-        let descr =
-          match Com.Var.descr_str v with
-          | exception _ -> None
-          | descr -> Some descr
-        in
-        let info = Info.make tick name pos rule_id value descr is_input in
-        let dbg_info = Dbg_info.register dbg_info info in
-        let vert = Dbg_info.Graph.V.create tick in
-        let graph = dbg_info.graph in
-        let add_edge graph deptick =
-          let dep_vert = Dbg_info.Graph.V.create deptick in
-          Dbg_info.Graph.add_edge graph vert dep_vert
-        in
-        let graph = List.fold_left add_edge graph ticks in
-        ctx.ctx_dbg_info <- Some { dbg_info with graph }
+        Tracer.register_access ctx.tracer_ctx vexpr access v
+          ctx.ctx_prog.program_dict value (eval_m_index ctx)
 
   (* print aux *)
 
@@ -689,78 +801,6 @@ struct
         pr_flush pctx
     | None -> ()
 
-  (* end of print aux *)
-  and eval_m_index ctx m_i =
-    match evaluate_expr ctx m_i with
-    | Number z -> Int64.to_string @@ N.to_int z
-    | Undefined -> "indefini"
-
-  and trace_deps deps dbg_info ctx =
-    let open Dbg_info in
-    let trace_dep (ticks, dbg_info) dep =
-      match dep with
-      | Com.V var ->
-          let name = Com.Var.name_str var in
-          Format.printf "var name: %s@." name;
-          (* For now, we add uninstantiated depedencies as undefined *)
-          begin
-            match TickMap.find name dbg_info.ledger with
-            | exception Failure _msg ->
-                (* Format.fprintf Format.err_formatter "%s" msg; *)
-                let tick = Tick.tick () in
-                (* Format.fprintf Format.err_formatter "it will have tick: %d@." *)
-                (*   tick; *)
-                let rule = Origin.Declared in
-                let value = Com.Undefined in
-                let info = Info.make_from_var tick var rule value None false in
-                let dbg_info = Dbg_info.register dbg_info info in
-                (tick :: ticks, dbg_info)
-            | tick -> (tick :: ticks, dbg_info)
-          end
-      | Const const ->
-          let name = const.Com.id in
-          begin
-            match TickMap.find name dbg_info.ledger with
-            | tick -> (tick :: ticks, dbg_info)
-            | exception Failure _ ->
-                let tick = Tick.tick () in
-                let const =
-                  Const.make_from_pos name const.Com.value const.pos
-                in
-                let consts = Tick.Map.add tick const dbg_info.consts in
-                let ledger = StrMap.add name tick dbg_info.ledger in
-                let dbg_info = { dbg_info with consts; ledger } in
-                (tick :: ticks, dbg_info)
-          end
-      | Tab (var, m_i) ->
-          let name = Com.Var.name_str var in
-          let idx_str = eval_m_index ctx m_i in
-          let name = Format.asprintf "%s[%s]" name idx_str in
-          Format.printf "tab name %s@." name;
-          begin
-            match TickMap.find name dbg_info.ledger with
-            | exception Failure _ ->
-                let tick = Tick.tick () in
-                let rule = Origin.Declared in
-                let lit_value = Com.Undefined in
-                let info =
-                  Info.make_from_var tick var rule lit_value None false
-                in
-                let dbg_info = Dbg_info.register dbg_info info in
-                (tick :: ticks, dbg_info)
-            | tick -> (tick :: ticks, dbg_info)
-          end
-      | LiteralDep _lit -> (ticks, dbg_info)
-    in
-    List.fold_left trace_dep ([], dbg_info) deps
-
-  and get_rule ctx =
-    match ctx.ctx_exec_ctx with
-    | CtxRule i -> Dbg_info.Origin.Rule i
-    | CtxTarget s -> Dbg_info.Origin.Target s
-    (* FIXME: This is a debug failure, do not release as-if *)
-    | CtxUndefined -> raise @@ Failure "no rule id"
-
   and pr_indent (pctx : pctx) e =
     match evaluate_expr pctx.ctx e with
     | Undefined -> ()
@@ -772,7 +812,14 @@ struct
     pr_value pctx mi ma (evaluate_expr pctx.ctx e);
     pr_flush pctx
 
+  (* end of print aux *)
+
   (* interpret *)
+
+  and eval_m_index ctx m_i =
+    match evaluate_expr ctx m_i with
+    | Number z -> Int64.to_string @@ N.to_int z
+    | Undefined -> "indefini"
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
@@ -1458,9 +1505,7 @@ struct
       |> Seq.find (fun (_, str) -> str = target_name)
       |> Option.map fst
     in
-    (match rule_id with
-    | None -> ctx.ctx_exec_ctx <- CtxTarget target_name
-    | Some rule_id -> ctx.ctx_exec_ctx <- CtxRule rule_id);
+    Tracer.update_execution_ctx ctx.tracer_ctx rule_id target_name;
     let rec set_args n vl al =
       match (vl, al) with
       | v :: vl', m_a :: al' -> (
@@ -1526,6 +1571,8 @@ struct
     | Stop_instruction SKApplication ->
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
+
+  let get_dbg_info ctx = Tracer.get_dbg_info ctx.tracer_ctx
 end
 
 module BigIntPrecision = struct
@@ -1584,24 +1631,34 @@ module RatMfInterp =
     (Mir_number.RationalNumber)
     (Mir_roundops.MainframeRoundOps (MainframeLongSize))
 
-let get_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
-    (module S) =
-  match (sort, roundops) with
-  | RegularFloat, RODefault -> (module FloatDefInterp)
-  | RegularFloat, ROMulti -> (module FloatMultInterp)
-  | RegularFloat, ROMainframe _ -> (module FloatMfInterp)
-  | MPFR _, RODefault -> (module MPFRDefInterp)
-  | MPFR _, ROMulti -> (module MPFRMultInterp)
-  | MPFR _, ROMainframe _ -> (module MPFRMfInterp)
-  | BigInt _, RODefault -> (module BigIntDefInterp)
-  | BigInt _, ROMulti -> (module BigIntMultInterp)
-  | BigInt _, ROMainframe _ -> (module BigIntMfInterp)
-  | Interval, RODefault -> (module IntvDefInterp)
-  | Interval, ROMulti -> (module IntvMultInterp)
-  | Interval, ROMainframe _ -> (module IntvMfInterp)
-  | Rational, RODefault -> (module RatDefInterp)
-  | Rational, ROMulti -> (module RatMultInterp)
-  | Rational, ROMainframe _ -> (module RatMfInterp)
+let get_interp (sort : Config.value_sort) (roundops : Config.round_ops)
+    ~(trace : bool) : (module S) =
+  let partial_interp : (module PartialInterp) =
+    match (sort, roundops) with
+    | RegularFloat, RODefault -> (module FloatDefInterp)
+    | RegularFloat, ROMulti -> (module FloatMultInterp)
+    | RegularFloat, ROMainframe _ -> (module FloatMfInterp)
+    | MPFR _, RODefault -> (module MPFRDefInterp)
+    | MPFR _, ROMulti -> (module MPFRMultInterp)
+    | MPFR _, ROMainframe _ -> (module MPFRMfInterp)
+    | BigInt _, RODefault -> (module BigIntDefInterp)
+    | BigInt _, ROMulti -> (module BigIntMultInterp)
+    | BigInt _, ROMainframe _ -> (module BigIntMfInterp)
+    | Interval, RODefault -> (module IntvDefInterp)
+    | Interval, ROMulti -> (module IntvMultInterp)
+    | Interval, ROMainframe _ -> (module IntvMfInterp)
+    | Rational, RODefault -> (module RatDefInterp)
+    | Rational, ROMulti -> (module RatMultInterp)
+    | Rational, ROMainframe _ -> (module RatMfInterp)
+  in
+  (* We use a small trick to not duplicate the number of interpreter by two. *)
+  let tracer : (module Tracer) =
+    match trace with false -> (module NonTracer) | true -> (module Tracer)
+  in
+  let module Tracer = (val tracer) in
+  let module PartialInterp = (val partial_interp) in
+  let module Interp = PartialInterp (Tracer) in
+  (module Interp)
 
 let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
     unit =
@@ -1622,14 +1679,15 @@ let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
       MainframeLongSize.max_long := max_long
   | _ -> ()
 
-let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
+let evaluate_program ?(dbg_info : Dbg_info.t option) (p : Mir.program)
+    (inputs : Com.literal Com.Var.Map.t)
     (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
-    (sort : Config.value_sort) (roundops : Config.round_ops)
-    (dbg_info : Dbg_info.t option) :
+    (sort : Config.value_sort) (roundops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t * Dbg_info.t option =
   prepare_interp sort roundops;
-  let module Interp = (val get_interp sort roundops : S) in
-  let ctx = Interp.empty_ctx p dbg_info in
+  let trace = !Config.trace in
+  let module Interp = (val get_interp sort roundops ~trace : S) in
+  let ctx = Interp.empty_ctx ?dbg_info p in
   Interp.update_ctx_with_inputs ctx inputs;
   Interp.update_ctx_with_events ctx events;
   Interp.evaluate_program ctx;
@@ -1657,14 +1715,21 @@ let evaluate_program (p : Mir.program) (inputs : Com.literal Com.Var.Map.t)
     let fold res (e, _) = Com.Error.Set.add e res in
     List.fold_left fold Com.Error.Set.empty ctx.ctx_exported_anos
   in
-  let dbg_info = ctx.ctx_dbg_info in
+  let dbg_info = Interp.get_dbg_info ctx in
   (varMap, anoSet, dbg_info)
 
-let evaluate_expr (p : Mir.program) (e : Mir.expression Pos.marked)
-    (sort : Config.value_sort) (roundops : Config.round_ops)
-    (dbg_info : Dbg_info.t option) : Com.literal =
-  let module Interp = (val get_interp sort roundops : S) in
+let evaluate_expr ?(dbg_info : Dbg_info.t option) (p : Mir.program)
+    (e : Mir.expression Pos.marked) (sort : Config.value_sort)
+    (roundops : Config.round_ops) : Com.literal =
+  let trace = !Config.trace in
+  let module Interp = (val get_interp sort roundops ~trace : S) in
   try
     Interp.value_to_literal
-      (Interp.evaluate_expr (Interp.empty_ctx p dbg_info) e)
+      (Interp.evaluate_expr (Interp.empty_ctx ?dbg_info p) e)
   with Stop_instruction _ -> Undefined
+
+let compare_float_numbers o a b =
+  let module FloatDefInterp = FloatDefInterp (NonTracer) in
+  let a = Mir_number.RegularFloatNumber.of_float a in
+  let b = Mir_number.RegularFloatNumber.of_float b in
+  FloatDefInterp.compare_numbers o a b
