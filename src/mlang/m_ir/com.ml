@@ -192,13 +192,9 @@ module Var = struct
     match v.scope with Tgv tgv -> tgv.table_cell | _ -> None
 
   let set_table_cell v ~id:tabvar ~idx:index =
-    let scope =
-      match v.scope with
-      | Tgv tgv ->
-          let tgv = { tgv with table_cell = Some (tabvar, index) } in
-          Tgv tgv
-      | _ -> assert false
-    in
+    let tgv = tgv v in
+    let tgv = { tgv with table_cell = Some (tabvar, index) } in
+    let scope = Tgv tgv in
     { v with scope }
 
   let is_table v = get_table v <> None

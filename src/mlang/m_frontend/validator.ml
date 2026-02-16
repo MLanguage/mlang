@@ -817,8 +817,8 @@ let get_attributes (attr_list : Mast.variable_attribute list) :
       | None -> StrMap.add attr (Pos.mark value attr_pos) attributes)
     StrMap.empty attr_list
 
-(** Alex: I'm not sure, but I believe this function maps ids to variables
-    and registers them as aliases if they already exist. *)
+(** Alex: I'm not sure, but I believe this function maps ids to variables and
+    registers them as aliases if they already exist. *)
 let check_global_var (var : Com.Var.t) (prog : program) : program =
   let name, name_pos = Pos.to_couple var.name in
   let cat =

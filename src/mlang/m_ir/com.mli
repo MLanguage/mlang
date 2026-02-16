@@ -129,7 +129,7 @@ module Var : sig
     typ : value_typ option;  (** Optional variable type *)
     table_cell : (id * int) option;
         (** Says if the variable is a table cell, ie TAB0 from the table TAB.
-       Payload is the name of the table variable *)
+            Payload is the name of the table variable *)
   }
   (** Exhaustive data on a TGV variable. *)
 
@@ -164,8 +164,12 @@ module Var : sig
       on references. *)
 
   val get_table_cell : t -> (id * int) option
+  (** [get_table_cell var] returns from which array this variable is a cell of.
+  *)
 
   val set_table_cell : t -> id:id -> idx:int -> t
+  (** [set_table_cell var id idx] sets the variable as a cell of id at index
+      idx. *)
 
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
@@ -174,7 +178,8 @@ module Var : sig
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
-  (** Returns the category of a TGV variable; fails if it is not a TGV variable. *)
+  (** Returns the category of a TGV variable; fails if it is not a TGV variable.
+  *)
 
   val size : t -> int
   (** Returns the size of a variable: the size of the array if it is a table; 1
