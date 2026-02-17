@@ -210,6 +210,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
   in
   (prog, stats)
 
+(* hyp: this function registers tehe variables to the tgv map in program *)
 let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
   let fold _ (t : Validator.target) (prog_dict, max_nb_args) =
@@ -222,6 +223,7 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           IntMap.add var.id var prog_dict
       | None -> prog_dict
     in
+    (* hyp: processing target args *)
     let prog_dict, _ =
       let idx_init =
         if is_f then -t.target_sz_tmps + 1 else -t.target_nb_refs
@@ -234,6 +236,7 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           (prog_dict, n + 1))
         (prog_dict, idx_init) t.target_args
     in
+    (* hyp: processing tmp vars *)
     let prog_dict, _ =
       let idx_init =
         let tmp_sz =
@@ -253,17 +256,14 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           (prog_dict, n + Com.Var.size var))
         t.target_tmp_vars (prog_dict, idx_init)
     in
+    (* hyp: processing cells if tmp vars are arrays *)
     let prog_dict =
       StrMap.fold
         (fun _name m_id prog_dict ->
           let var = IntMap.find (Pos.unmark m_id) prog_dict in
           match Com.Var.get_table var with
-          | Some tab ->
-              let table =
-                let map (v : Com.Var.t) = IntMap.find v.id prog_dict in
-                Some (Array.map map tab)
-              in
-              let var = Com.Var.set_table var table in
+          | Some table ->
+              let var = Com.Var.set_table var (Some table) in
               IntMap.add var.id var prog_dict
           | None -> prog_dict)
         t.target_tmp_vars prog_dict
@@ -300,9 +300,8 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
             let rec loop map tab i =
               if i = vsz then (map, tab)
               else
-                let iVar = IntMap.find tab.(i).Com.Var.id prog_dict in
+                let iVar = IntMap.find tab.(i) prog_dict in
                 let map = map_add iVar map in
-                tab.(i) <- iVar;
                 loop map tab (i + 1)
             in
             loop map tab 0

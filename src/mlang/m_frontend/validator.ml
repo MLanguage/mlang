@@ -817,6 +817,8 @@ let get_attributes (attr_list : Mast.variable_attribute list) :
       | None -> StrMap.add attr (Pos.mark value attr_pos) attributes)
     StrMap.empty attr_list
 
+(** Alex: I'm not sure, but I believe this function maps ids to variables
+    and registers them as aliases if they already exist. *)
 let check_global_var (var : Com.Var.t) (prog : program) : program =
   let name, name_pos = Pos.to_couple var.name in
   let cat =
@@ -866,9 +868,10 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
           ~attrs:(get_attributes input_var.Mast.input_attributes)
           ~cat:global_category
           ~typ:(Option.map Pos.unmark input_var.Mast.input_typ)
+          ~table_cell:None
       in
       check_global_var var prog
-  | Mast.ComputedVar (Pos.Mark (comp_var, _decl_pos)) ->
+  | Mast.ComputedVar (Pos.Mark (comp_var, _decl_pos)) -> (
       let global_category =
         let is_base =
           List.fold_left
@@ -887,38 +890,28 @@ let check_var_decl (var_decl : Mast.variable_decl) (prog : program) : program =
       let typ = Option.map Pos.unmark comp_var.Mast.comp_typ in
       let var =
         Com.Var.new_tgv ~name:m_name ~table:None ~is_given_back ~alias ~descr
-          ~attrs ~cat ~typ
+          ~attrs ~cat ~typ ~table_cell:None
       in
-      let table =
-        match comp_var.Mast.comp_table with
-        | Some (Pos.Mark (Mast.LiteralSize sz, _pos)) ->
-            let name, name_pos = Pos.to_couple m_name in
-            let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
-            let init i =
-              let m_iName =
-                Pos.mark (Strings.concat_int name iFmt i) name_pos
-              in
-              Com.Var.new_tgv ~name:m_iName ~table:None ~is_given_back ~alias
-                ~descr ~attrs ~cat ~typ
-            in
-            Some (Array.init sz init)
-        | Some _ -> assert false
-        | None -> None
-      in
-      (* Adding table reference to cells *)
-      let table =
-        match table with
-        | None -> None
-        | Some arr ->
-            Some (Array.mapi (fun i v -> Com.Var.set_table_cell v var i) arr)
-      in
-      let prog =
-        match table with
-        | Some tab -> Array.fold_left (fun p v -> check_global_var v p) prog tab
-        | None -> prog
-      in
-      let var = Com.Var.set_table var table in
-      check_global_var var prog
+      match comp_var.Mast.comp_table with
+      | Some (Pos.Mark (Mast.LiteralSize sz, _pos)) ->
+          let name, name_pos = Pos.to_couple m_name in
+          let iFmt = String.map (fun _ -> '0') (Pp.spr "%d" sz) in
+          let init i =
+            let m_iName = Pos.mark (Strings.concat_int name iFmt i) name_pos in
+            Com.Var.new_tgv ~name:m_iName ~table:None ~is_given_back ~alias
+              ~descr ~attrs ~cat ~typ
+              ~table_cell:(Some (var.id, i))
+          in
+          let arr = Array.init sz init in
+          (* register subvars, then register array *)
+          let prog =
+            Array.fold_left (fun p v -> check_global_var v p) prog arr
+          in
+          let arr = Array.map Com.Var.(fun cell -> cell.id) arr in
+          let var = Com.Var.set_table var (Some arr) in
+          check_global_var var prog
+      | Some _ -> assert false
+      | None -> check_global_var var prog)
 
 let check_variable_space_decl (vsd : Com.variable_space) (prog : program) :
     program =
@@ -2467,7 +2460,7 @@ let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
               let init i =
                 let iName = Strings.concat_int vn iFmt i in
                 let iId = Pos.unmark @@ StrMap.find iName vars in
-                IntMap.find iId env.prog.prog_dict
+                iId
               in
               Some (Array.init sz_int init)
             in

@@ -117,7 +117,7 @@ module Var : sig
 
   (** Data on a TGV variable. *)
   type tgv = {
-    table : t Array.t option;
+    table : id Array.t option;
         (** The array of cells if the variable is a table. *)
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
@@ -127,7 +127,7 @@ module Var : sig
     cat : CatVar.t;  (** Category *)
     is_given_back : bool;  (** Is the variable 'restituee'? *)
     typ : value_typ option;  (** Optional variable type *)
-    table_cell : (t * int) option;
+    table_cell : (id * int) option;
         (** Says if the variable is a table cell, ie TAB0 from the table TAB.
        Payload is the name of the table variable *)
   }
@@ -136,7 +136,7 @@ module Var : sig
   (** Where can the variable be found? *)
   and scope =
     | Tgv of tgv  (** This variable belongs to the TGV. *)
-    | Temp of t Array.t option
+    | Temp of id Array.t option
         (** This variable is temporary, maybe an array. *)
     | Ref  (** This references another variable. *)
 
@@ -159,18 +159,18 @@ module Var : sig
   val name_str : t -> string
   (** Same as [name] without the mark. *)
 
-  val get_table : t -> t Array.t option
+  val get_table : t -> id Array.t option
   (** Returns the table represented by the variable, if relevant. Returns [None]
       on references. *)
 
-  val get_table_cell : t -> (t * int) option
+  val get_table_cell : t -> (id * int) option
 
-  val set_table_cell : t -> t -> int -> t
+  val set_table_cell : t -> id:id -> idx:int -> t
 
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
 
-  val set_table : t -> t Array.t option -> t
+  val set_table : t -> id Array.t option -> t
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
@@ -237,7 +237,7 @@ module Var : sig
 
   val new_tgv :
     name:string Pos.marked ->
-    table:t Array.t option ->
+    table:id Array.t option ->
     is_given_back:bool ->
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
@@ -248,7 +248,7 @@ module Var : sig
     t
   (** Creates a new tgv variable with a unique id. *)
 
-  val new_temp : name:string Pos.marked -> table:t Array.t option -> t
+  val new_temp : name:string Pos.marked -> table:id Array.t option -> t
   (** Creates a new temporary variable with a unique id. *)
 
   val new_ref : name:string Pos.marked -> t
