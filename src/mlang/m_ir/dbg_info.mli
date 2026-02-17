@@ -46,7 +46,7 @@ module Tick : sig
 end
 
 module Graph : sig
-  include Graph.Sig.P with type V.label = int
+  include Graph.Sig.I with type V.label = int
 end
 
 module TickMap : sig

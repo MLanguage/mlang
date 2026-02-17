@@ -102,7 +102,7 @@ module Vertex = struct
   let hash t = Hashtbl.hash t
 end
 
-module Graph = Graph.Persistent.Digraph.Concrete (Vertex)
+module Graph = Graph.Imperative.Digraph.ConcreteBidirectional (Vertex)
 
 module TickMap = struct
   include StrMap
@@ -128,7 +128,7 @@ type t = {
 
 let empty =
   {
-    graph = Graph.empty;
+    graph = Graph.create ~size:10000 ();
     runtimes = Tick.Map.empty;
     statics = IntMap.empty;
     consts = IntMap.empty;
@@ -147,34 +147,36 @@ let register dbg_info Info.{ tick; name; pos; rule; value; descr; is_input } =
   let dbg_info = { dbg_info with runtimes; statics; ledger } in
   dbg_info
 
+let json_of_graph_matrix fmt info =
+  let open Format in
+  let delim = ref "" in
+  let delim2 = ref "" in
+  fprintf fmt {|{"kind": "matrix", "graph":{@. |};
+  let iter_vertex v =
+    fprintf fmt {|%s"%d": {|} !delim v;
+    let pp_succ s =
+      fprintf fmt "%s%d" !delim2 s;
+      delim2 := ","
+    in
+    delim2 := "";
+    fprintf fmt {|"outcoming": [|};
+    Graph.iter_succ pp_succ info.graph v;
+    fprintf fmt {|]@., "incoming": [|};
+    delim2 := "";
+    Graph.iter_pred pp_succ info.graph v;
+    fprintf fmt "]@.}";
+    delim := ","
+  in
+  Graph.iter_vertex iter_vertex info.graph;
+  fprintf fmt "},@."
+
 let to_json (fmt : Format.formatter) info : unit =
   let open Format in
   let open Info.Static in
   let open Info.Runtime in
   let open Const in
   let delim = ref "" in
-  Format.fprintf fmt {|{"graph":{@. "nodes": [|};
-  let pp_vertex v =
-    let var = Graph.V.label v in
-    Format.fprintf fmt {|%s@.{"data": "%d"}|} !delim var;
-    (* Small hack to avoid trailing commas *)
-    delim := ","
-  in
-  Format.printf "writing vertices...@.";
-  Graph.iter_vertex pp_vertex info.graph;
-  fprintf fmt {|],@. "edges": [|};
-  let print_edge (e : Graph.E.t) =
-    let src = Graph.E.src e in
-    let dst = Graph.E.dst e in
-    let src = Graph.V.label src in
-    let dst = Graph.V.label dst in
-    Format.fprintf fmt {|%s@.{"data": {"source": "%d", "target": "%d"}}|} !delim
-      src dst;
-    delim := ","
-  in
-  delim := "";
-  Format.printf "writing edges...@.";
-  Graph.iter_edges_e print_edge info.graph;
+  json_of_graph_matrix fmt info;
   let print_static_info hash { name; origin; is_input; descr } =
     let origin = Origin.to_json origin in
     let descr =
@@ -182,51 +184,49 @@ let to_json (fmt : Format.formatter) info : unit =
       | None -> ""
       | Some descr -> asprintf {|"descr": %S,|} descr
     in
-    Format.fprintf fmt {|%s@."%d": {"name": %S, "is_input": %b, %s %s}|} !delim
-      hash name is_input descr origin;
+    fprintf fmt {|%s@."%d": {"name": %S, "is_input": %b, %s %s}|} !delim hash
+      name is_input descr origin;
     delim := ","
   in
-  Format.fprintf fmt "]},@.";
-  Format.printf "writing info...@.";
+  Cli.debug_print "writing info...@.";
   delim := "";
-  Format.fprintf fmt {|"statics": {@.|};
+  fprintf fmt {|"statics": {@.|};
   IntMap.iter print_static_info info.statics;
-  Format.fprintf fmt "},@.";
+  fprintf fmt "},@.";
   delim := "";
-  Format.fprintf fmt {|"runtimes": {@.|};
+  fprintf fmt {|"runtimes": {@.|};
   let print_runtime_info tick { value; hash; name } =
     let name =
       match name with
       | None -> ""
       | Some name -> asprintf {|, "name" : %S|} name
     in
-    Format.fprintf fmt {|%s@."%d": {"value": "%a", "hash": %d %s}|} !delim tick
+    fprintf fmt {|%s@."%d": {"value": "%a", "hash": %d %s}|} !delim tick
       Com.format_literal value hash name;
     delim := ","
   in
   Tick.Map.iter print_runtime_info info.runtimes;
   let print_const id const =
-    Format.printf "Printing consts!!!!@.";
     let origin = Origin.to_json const.origin in
-    Format.fprintf fmt
-      {|%s@."%d": {"name": %S, "value": "%a", "kind": "const", %s}|} !delim id
-      const.name Com.format_literal const.value origin;
+    fprintf fmt
+      {|%s@."%d": {"name": %S, "value": "%a", "kind": "const", "origin": %s}|}
+      !delim id const.name Com.format_literal const.value origin;
     delim := ","
   in
   IntMap.iter print_const info.consts;
   let print_lit id lit =
-    Format.fprintf fmt {|%s@."%d": {"name": %S}|} !delim id lit;
+    fprintf fmt {|%s@."%d": {"name": %S}|} !delim id lit;
     delim := ","
   in
   IntMap.iter print_lit info.literals;
   delim := "";
   let print_interp_errors tick (error : interp_error) =
-    Format.fprintf fmt {|%s"%d": {"name": %S, "value": %a, "expected": %a}|}
-      !delim tick error.name Com.format_literal error.value Com.format_literal
+    fprintf fmt {|%s"%d": {"name": %S, "value": %a, "expected": %a}|} !delim
+      tick error.name Com.format_literal error.value Com.format_literal
       error.expected;
     delim := ","
   in
-  Format.fprintf fmt {|},@."interp_errors": {@.|};
+  fprintf fmt {|},@."interp_errors": {@.|};
   Tick.Map.iter print_interp_errors info.interp_errors;
   Format.fprintf fmt "}}@."
 
