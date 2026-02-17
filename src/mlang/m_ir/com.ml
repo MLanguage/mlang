@@ -1587,5 +1587,5 @@ and format_instructions form_var form_err fmt instrs =
 
 let format_simple_scope ppf = function
   | Var.Tgv _ -> Pp.string ppf "TGV"
-  | Var.Temp _ -> Pp.string ppf "temp"
+  | Temp _ -> Pp.string ppf "Temp"
   | Ref -> Pp.string ppf "Ref"
