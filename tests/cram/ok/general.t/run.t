@@ -1,6 +1,6 @@
 Graph Deps
   $ mlang graph_deps.m --mpp_function target -A app --run_test graph_deps.irj --no_nondet_display --trace --trace_output_file output.json
-  [WARNING] Variable X is defined more than once in the same rule
+  [WARNING] Variable "X" définie plus d'une fois dans la même règle
   
     --> graph_deps.m
      | 
@@ -12,6 +12,8 @@ Graph Deps
   36 |   X = X+I;
      |   ^
   
+  [WARNING] Auto-cycle dans la règle 1337 avec la variable "X"
+  [WARNING] Auto-cycle dans la règle 1337 avec la variable "X"
   [ERROR] KO | X attendue: 3 - evaluee: 58
   [RESULT] graph_deps.irj
   [RESULT] No failure!
@@ -423,7 +425,7 @@ Wrong
 
 Tab
   $ mlang tab.m --mpp_function target -A app --run_test tab.irj --no_nondet_display --trace --trace_output_file output.json
-  [WARNING] Variable TAB is defined more than once in the same rule
+  [WARNING] Variable "TAB" définie plus d'une fois dans la même règle
   
     --> tab.m
      | 
@@ -440,7 +442,7 @@ Tab
   13 | TAB[2] = TAB[1];
      | ^^^^^^
   
-  [WARNING] Variable Z is defined more than once in the same rule
+  [WARNING] Variable "Z" définie plus d'une fois dans la même règle
   
     --> tab.m
      | 

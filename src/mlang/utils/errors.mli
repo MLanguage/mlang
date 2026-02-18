@@ -24,47 +24,29 @@
 
 (** {2 Types and Exceptions} *)
 
+type raised_in = Validator
+
 exception
-  StructuredError of
-    (string * (string option * Pos.t) list * (unit -> unit) option)
-(** The primary exception for all structured errors. It carries:
+  BlockingError of { raised_in : raised_in; error_message : Log.structured_msg }
+(** An error that stops the execution of mlang. It carries:
+    - the location where the exeption was raised;
+    - the associated (strucuted) error message. *)
+
+exception StructuredError of (Log.structured_msg * (unit -> unit) option)
+(** A generic exception for all structured errors. It carries:
     - A main error message (string).
     - A list of associated source code locations ([Pos.t]), each with an
       optional descriptive message.
     - An optional thunk (continuation) to be executed after the error is caught
       and displayed. *)
 
-(** {2 Formatting Functions} *)
-
-val format_structured_error :
-  Format.formatter -> string * (string option * Pos.t) list -> unit
-(** [format_structured_error ppf (msg, pos)] formats a structured error for
-    **human-readable** console output. It first prints the main message,
-    followed by the code snippets corresponding to each source position,
-    retrieved via [Pos.retrieve_loc_text]. If a position has an associated
-    message, that message is printed just before its code snippet.
-
-    @param ppf The OCaml [Format] module's formatter.
-    @param error_data
-      A tuple containing the main message and the list of associated locations.
-*)
-
-val format_structured_error_gnu_format :
-  Format.formatter -> string * (string option * Pos.t) list -> unit
-(** [format_structured_error_gnu_format ppf (msg, pos_list)] formats an error
-    according to **GNU standards** (`file:line:col: message`). For each
-    location, it prints the formatted position, the main error message, and any
-    location-specific message.
-
-    @param ppf The OCaml [Format] module's formatter.
-    @param error_data
-      A tuple containing the main message and the list of associated locations.
-*)
-
 (** {2 Error Raising Functions} *)
 
 (** These are helper functions designed to simplify the process of raising a
     [StructuredError] exception with different kinds of information. *)
+
+val raise_blocking_error : raised_in:raised_in -> msg:Log.structured_msg -> 'a
+(** Raises a Blocking_error. *)
 
 val raise_error : string -> 'a
 (** Raises a simple [StructuredError] with only a main message and no associated
@@ -111,24 +93,32 @@ val raise_spanned_error_with_continuation :
       Raises the exception including the message, the span, and the
       continuation. *)
 
-(** {2 Warning Functions} *)
+val raise_multispanned_error_with_continuation :
+  string -> (string option * Pos.t) list -> (unit -> unit) option -> 'a
+(** Raises a [StructuredError] for a several source locations and includes a
+    continuation thunk. This thunk is a function that can be executed by the
+    error handler after the error message is displayed.
 
-(** These functions print formatted warnings to the console without raising an
-    exception. They use the same formatting logic as the error functions. *)
-
-val print_spanned_warning : string -> ?span_msg:string -> Pos.t -> unit
-(** Prints a warning message associated with a single source code location. The
-    output is formatted for human readability using [format_structured_error].
-
-    @param msg The main warning message.
-    @param ?span_msg An optional message specific to the provided location.
-    @param span The source code position ([Pos.t]) of the warning. *)
-
-val print_multispanned_warning : string -> (string option * Pos.t) list -> unit
-(** Prints a warning message associated with multiple source code locations. The
-    output is formatted for human readability using [format_structured_error].
-
-    @param msg The main warning message.
+    @param msg The main error message.
     @param spans
-      A list of tuples, each containing an optional message and a source
-      position. *)
+      T A list of tuples, where each contains an optional location-specific
+      message and a source code position ([Pos.t]).
+    @param kont
+      An optional function of type [unit -> unit] to be executed after error
+      reporting.
+    @raise StructuredError
+      Raises the exception including the message, the span, and the
+      continuation. *)
+
+val raise_structured_error : ?kont:(unit -> unit) -> Log.structured_msg -> 'a
+(** Raises a [StructuredError] for a structured message and includes a
+    continuation thunk. This thunk is a function that can be executed by the
+    error handler after the error message is displayed.
+
+    @param kont
+      An optional function of type [unit -> unit] to be executed after error
+      reporting.
+    @param msg The structured error message.
+    @raise StructuredError
+      Raises the exception including the message, the span, and the
+      continuation. *)

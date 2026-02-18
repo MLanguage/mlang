@@ -8,7 +8,7 @@ source_file: SYMBOL COLON INPUT SYMBOL EQUALS WITH
 ## symbol_with_pos EQUALS
 ##
 
-Valeur manquante après le symbole '='.
+Lang:missing_value_after_equal
 
 source_file: SYMBOL COLON COMPUTED SYMBOL WITH
 ##
@@ -20,7 +20,7 @@ source_file: SYMBOL COLON COMPUTED SYMBOL WITH
 ## symbol_with_pos
 ##
 
-Définition incomplète d'un attribut
+Lang:incomplete_attr_definition
 
 source_file: SYMBOL COLON COMPUTED BASE WITH
 ##
@@ -32,7 +32,7 @@ source_file: SYMBOL COLON COMPUTED BASE WITH
 ## comp_attr_or_subtyp
 ##
 
-Liste d'attributs incomplète. Avez-vous oublié de terminer la liste avec ':' ?
+Lang:incomplete_attr_list
 
 source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SYMBOL WITH
 ##
@@ -46,7 +46,19 @@ source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON IF SYMBOL 
 ## SYMBOL
 ##
 
-Symbole innattendu. Avez-vous oublié un ';'?
+Lang:unexpected_symbol
+
+source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON SYMBOL EQUALS WITH
+##
+## Ends in an error in state: 546.
+##
+## formula -> var_access EQUALS . expression [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## var_access EQUALS
+##
+
+Lang:missing_value_after_equal
 
 source_file: WITH
 ##
@@ -4620,18 +4632,6 @@ source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON SYMBOL SEM
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 116, spurious reduction of production option(with_pos(brackets)) ->
 ## In state 317, spurious reduction of production var_access -> symbol_with_pos option(with_pos(brackets))
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-source_file: FONCTION SYMBOL COLON APPLICATION COLON SYMBOL SEMICOLON SYMBOL EQUALS WITH
-##
-## Ends in an error in state: 546.
-##
-## formula -> var_access EQUALS . expression [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## var_access EQUALS
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>

@@ -201,6 +201,23 @@ let trace_output_file =
     & opt (some string) None
     & info [ "trace_output_file" ] ~doc:"The file where the trace is stored.")
 
+let message_format_opt =
+  [
+    ("h", Config.ANSI);
+    ("human", Config.ANSI);
+    ("a", Config.ANSI);
+    ("ansi", Config.ANSI);
+    ("g", GNU);
+    ("gnu", GNU);
+  ]
+
+let message_format =
+  Arg.(
+    value
+    & opt (enum message_format_opt) Config.ANSI
+    & info [ "message_format" ] ~docv:""
+        ~doc:"Selects the message format: human/GNU")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
@@ -208,7 +225,7 @@ let mlang_t f =
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
     $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output $ trace
-    $ trace_output_file)
+    $ trace_output_file $ message_format)
 
 let info =
   let doc =
@@ -276,142 +293,17 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
     (fun _ -> "\n")
     (String.split_on_char '\n' s)
 
-(**{2 Markers}*)
-
-(** Prints [[INFO]] in blue on the terminal standard output *)
-let var_info_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
-
-let time : float ref = ref (Unix.gettimeofday ())
-
-let initial_time : float ref = ref (Unix.gettimeofday ())
-
-let time_marker () =
-  let new_time = Unix.gettimeofday () in
-  let old_time = !time in
-  time := new_time;
-  let delta = (new_time -. old_time) *. 1000. in
-  if delta > 100. then
-    ANSITerminal.printf
-      [ ANSITerminal.Bold; ANSITerminal.black ]
-      "[TIME] %.0f ms\n" delta
+let indent_number (s : string) : int =
+  try
+    let rec aux (i : int) = if s.[i] = ' ' then aux (i + 1) else i in
+    aux 0
+  with Invalid_argument _ -> String.length s
 
 let format_with_style (styles : ANSITerminal.style list)
     (str : ('a, unit, string) format) =
   if !Config.plain_output (* can depend on a stylr flag *) then
     Printf.sprintf str
   else ANSITerminal.sprintf styles str
-
-(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
-    since last debug *)
-let debug_marker (f_time : bool) =
-  if f_time then time_marker ();
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
-
-(** Prints [[ERROR]] in red on the terminal error output *)
-let error_marker () =
-  ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
-
-(** Prints [[WARNING]] in yellow on the terminal standard output *)
-let warning_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
-
-(** Prints [[RESULT]] in green on the terminal standard output *)
-let result_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
-
-let clocks =
-  Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
-
-(** Prints [[🕛]] in blue on the terminal standard output *)
-let clock_marker i =
-  let new_time = Unix.gettimeofday () in
-  let initial_time = !initial_time in
-  let delta = new_time -. initial_time in
-  ANSITerminal.printf
-    [ ANSITerminal.Bold; ANSITerminal.blue ]
-    "[%s  %.1f s] "
-    clocks.(i mod Array.length clocks)
-    delta
-
-(**{2 Printers}*)
-
-let debug_print ?(endline = "\n") kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !debug_flag then
-    Format.kasprintf
-      (fun str ->
-        Format.printf "%a%s%s@?"
-          (fun _ -> debug_marker)
-          !Config.display_time str endline)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let var_info_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !Config.var_info_flag then
-    Format.kasprintf
-      (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let error_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf
-    (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str)
-    kont
-
-let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
-  if !Config.no_nondet_display then (ignore, ignore)
-  else
-    let step_ticks = 5 in
-    let ticks = ref 0 in
-    let msg = ref task in
-    let stop = ref false in
-    let timer () =
-      while true do
-        if !stop then Thread.exit ();
-        ticks := !ticks + 1;
-        if !Config.display_time then clock_marker (!ticks / step_ticks);
-        Format.printf "%s" !msg;
-        flush_all ();
-        flush_all ();
-        ANSITerminal.erase ANSITerminal.Below;
-        ANSITerminal.move_bol ();
-        Unix.sleepf 0.05
-      done
-    in
-    let _ = Thread.create timer () in
-    ( (fun current_progress_msg ->
-        msg := Format.sprintf "%s: %s" task current_progress_msg),
-      fun finish_msg ->
-        stop := true;
-        result_marker ();
-        Format.printf "%s: %s" task finish_msg;
-        ANSITerminal.erase ANSITerminal.Below;
-        ANSITerminal.move_bol ();
-        Format.printf "\n";
-        time_marker () )
-
-let warning_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !warning_flag then
-    Format.kasprintf
-      (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let result_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf
-    (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str)
-    kont
-
-let indent_number (s : string) : int =
-  try
-    let rec aux (i : int) = if s.[i] = ' ' then aux (i + 1) else i in
-    aux 0
-  with Invalid_argument _ -> String.length s
 
 let format_matched_line pos (line : string) (line_no : int) : string =
   let line_indent = indent_number line in
@@ -494,9 +386,8 @@ let retrieve_loc_text (pos : Pos.t) : string =
           let get_lines =
             match File.open_file_for_text_extraction pos with
             | exception Sys_error _ ->
-                error_print "File not found for displaying position : \"%s\""
-                  filename;
-                failwith "Pos error"
+                Format.ksprintf failwith
+                  "File not found for displaying position : %S" filename
             | get_lines -> get_lines
           in
           get_lines 1

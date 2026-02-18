@@ -64,13 +64,15 @@ let parse_lexbuf filebuf source_file =
       let pos =
         Parse_utils.mk_position (filebuf.lex_start_p, filebuf.lex_curr_p)
       in
-      let err msg =
-        Format.kasprintf (fun m -> Errors.raise_spanned_error m pos) msg
-      in
-      match String.trim (Syntax_messages.message s) with
-      | exception Not_found -> err "Erreur de syntaxe inattendue."
-      | "<YOUR SYNTAX ERROR MESSAGE HERE>" -> err "Erreur de syntaxe %i" s
-      | msg -> err "Erreur: %s" msg)
+      let err msg = Errors.raise_spanned_error msg pos in
+      match
+        String.trim (Syntax_messages.message s)
+        |> M_messages.select_parse_error_message
+      with
+      | exception Not_found -> err M_messages.Parser.unexpected_syntax_error
+      | "<YOUR SYNTAX ERROR MESSAGE HERE>" ->
+          err @@ M_messages.Parser.syntax_error ~code:s
+      | msg -> Format.ksprintf err "%s" msg)
 
 let parse_file source_file =
   let input = open_in source_file in

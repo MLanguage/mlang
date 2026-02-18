@@ -88,8 +88,7 @@ module type S = sig
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
+    | StructuredError of (Log.structured_msg * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 
@@ -338,8 +337,7 @@ struct
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
+    | StructuredError of (Log.structured_msg * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 
@@ -350,8 +348,7 @@ struct
           (Format.asprintf "Expression evaluated to %s: %a" v
              Format_mir.format_expression (Pos.unmark e))
           (Pos.get e)
-    | StructuredError (msg, pos, kont) ->
-        raise (Errors.StructuredError (msg, pos, kont))
+    | StructuredError (msg, kont) -> raise @@ Errors.StructuredError (msg, kont)
 
   let is_zero (l : value) : bool =
     match l with Number z -> N.is_zero z | _ -> false
@@ -876,14 +873,9 @@ struct
       | RuntimeError (e, ctx) ->
           if !exit_on_rte then raise_runtime_as_structured e
           else raise (RuntimeError (e, ctx))
-      | Errors.StructuredError (msg, pos, kont) ->
-          if !exit_on_rte then
-            raise
-              (Errors.StructuredError
-                 ( msg,
-                   pos @ [ (Some "Expression raising the error:", Pos.get e) ],
-                   kont ))
-          else raise (RuntimeError (StructuredError (msg, pos, kont), ctx))
+      | Errors.StructuredError (msg, kont) as exn ->
+          if !exit_on_rte then raise exn
+          else raise (RuntimeError (StructuredError (msg, kont), ctx))
     in
     if match out with Undefined -> false | Number out -> N.is_nan_or_inf out
     then

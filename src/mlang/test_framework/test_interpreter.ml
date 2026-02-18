@@ -14,8 +14,8 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
     let name = Mir.find_var_name_by_alias p name in
     try StrMap.find name p.program_vars
     with Not_found ->
-      Cli.error_print "Variable inconnue: %s" name;
-      raise (Errors.StructuredError ("Fichier de test incorrect", [], None)))
+      Log.error_print "Variable inconnue: %s" name;
+      Errors.raise_error "Fichier de test incorrect")
 
 type instance = {
   label : string;
@@ -57,9 +57,9 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           match StrMap.find_opt vn program.program_vars with
           | Some var -> Com.RefVar var
           | None ->
-              Cli.error_print "Variable inconnue: %s" vn;
+              Log.error_print "Variable inconnue: %s" vn;
               let msg = "Fichier de test incorrect" in
-              raise (Errors.StructuredError (msg, [], None)))
+              Errors.raise_error msg)
     in
     let fromDirection = function
       | "R" -> Com.Numeric (Com.Float 0.0)
@@ -67,9 +67,9 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
       | "P" -> Com.Numeric (Com.Float 2.0)
       | "C" -> Com.Numeric (Com.Float 3.0)
       | s ->
-          Cli.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
+          Log.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
             s;
-          raise (Errors.StructuredError ("Fichier de test incorrect", [], None))
+          Errors.raise_error "Fichier de test incorrect"
     in
     let toNum p = Com.Numeric (Com.Float (float p)) in
     let optToNum = function
@@ -130,7 +130,7 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
   let test_error_margin = 0.01 in
   let fold vname expected acc =
     if StrSet.mem vname ign_vars then (
-      Cli.warning_print "OK | %s ignoree" vname;
+      Log.warning_print "OK | %s ignoree" vname;
       acc)
     else
       match StrMap.find_opt vname program.program_vars with
@@ -158,17 +158,17 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
               match err with
               | None -> acc
               | Some err ->
-                  Cli.error_print "KO | %s attendue: %a - evaluee: %a" vname
+                  Log.error_print "KO | %s attendue: %a - evaluee: %a" vname
                     Com.format_literal err.expected Com.format_literal err.value;
                   err :: acc)
             else (
-              Cli.warning_print "OK | %s ignoree car non-restituee" vname;
+              Log.warning_print "OK | %s ignoree car non-restituee" vname;
               acc)
           else (
-            Cli.warning_print "Variable inconnue dans le TGV: %s" vname;
+            Log.warning_print "Variable inconnue dans le TGV: %s" vname;
             acc)
       | None ->
-          Cli.warning_print "Variable inconnue: %s" vname;
+          Log.warning_print "Variable inconnue: %s" vname;
           acc
   in
   StrMap.fold fold exp []
@@ -210,24 +210,24 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
     in
     let missAnos = StrSet.diff exp rais in
     let unexAnos = StrSet.diff rais exp in
-    StrSet.iter (Cli.error_print "KO | erreur manquante: %s") missAnos;
-    StrSet.iter (Cli.error_print "KO | erreur inattendue: %s") unexAnos;
+    StrSet.iter (Log.error_print "KO | erreur manquante: %s") missAnos;
+    StrSet.iter (Log.error_print "KO | erreur inattendue: %s") unexAnos;
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
   Config.display_time := false;
-  Cli.debug_print "Parsing %s..."
+  Log.debug_print "Parsing %s..."
     (match test_input with Filename s -> s | Contents _ -> "given contents");
   let t = Irj_file.parse_input test_input in
-  Cli.debug_print "Running test %s..." t.nom;
+  Log.debug_print "Running test %s..." t.nom;
   let insts = to_MIR_function_and_inputs program t in
   let rec check = function
     | [] -> []
     | inst :: insts ->
-        Cli.debug_print "Executing program %s" inst.label;
-        (* Cli.debug_print "Combined Program (w/o verif conds):@.%a@."
+        Log.debug_print "Executing program %s" inst.label;
+        (* Log.debug_print "Combined Program (w/o verif conds):@.%a@."
            Format_bir.format_program program; *)
         let dbg_info =
           match !Config.trace with
@@ -277,10 +277,10 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           List.length interp_errors + check_anos inst.expectedAnos anoSet
         in
         if nbErrs <= 0 then (
-          Cli.debug_print "OK!";
+          Log.debug_print "OK!";
           target_dbg_info :: check insts)
         else (
-          Cli.debug_print "KO!";
+          Log.debug_print "KO!";
           match !Config.trace with
           | true -> target_dbg_info :: check insts
           | false -> raise (InterpError nbErrs))
@@ -318,10 +318,10 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   let finished_files =
     match In_channel.with_open_text progress_filename read_lines with
     | (exception Sys_error _) | [ "" ] ->
-        Cli.debug_print "No progress file found. Starting from scratch.@.";
+        Log.debug_print "No progress file found. Starting from scratch.@.";
         []
     | lines ->
-        Cli.debug_print "Skipping %d tests already executed" (List.length lines);
+        Log.debug_print "Skipping %d tests already executed" (List.length lines);
         lines
   in
   let flags = [ Open_creat; Open_append; Open_text ] in
@@ -356,35 +356,35 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       let file = Irj_file.Filename (test_dir ^ name) in
       ignore @@ check_test p file value_sort round_ops ign_vars;
       Config.debug_flag := true;
-      Cli.result_print "%s" name;
+      Log.result_print "%s" name;
       write_name name;
       (name :: successes, failures)
     with
     | InterpError nbErr ->
-        Cli.error_print "%s" name;
+        Log.error_print "%s" name;
         write_name name;
         (successes, StrMap.add name nbErr failures)
-    | Errors.StructuredError (msg, pos, kont) ->
-        Cli.error_print "Error in test %s: %a" name
-          Errors.format_structured_error (msg, pos);
+    | Errors.StructuredError (msg, kont) ->
+        Log.error_print "Error in test %s: %a" name
+          Log.format_structured_message msg;
         write_name name;
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.StructuredError (msg, pos, kont) ->
-            Cli.error_print "Error in test %s: %a" name
-              Errors.format_structured_error (msg, pos);
+        | Interp.StructuredError (msg, kont) ->
+            Log.error_print "Error in test %s: %a" name
+              Log.format_structured_message msg;
             write_name name;
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
         | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
-            Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
+            Log.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             write_name name;
             (successes, failures))
     | e ->
-        Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
+        Log.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e
   in
   let s, f =
@@ -399,12 +399,12 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Sys.remove progress_filename;
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
-  Cli.result_print "Test results: %d successes" (List.length s);
-  if StrMap.cardinal f = 0 then Cli.result_print "No failures!"
+  Log.result_print "Test results: %d successes" (List.length s);
+  if StrMap.cardinal f = 0 then Log.result_print "No failures!"
   else (
-    Cli.warning_print "Failures:";
+    Log.warning_print "Failures:";
     StrMap.iter
-      (fun name nbErr -> Cli.error_print "\t%d errors in files %s" nbErr name)
+      (fun name nbErr -> Log.error_print "\t%d errors in files %s" nbErr name)
       f)
 
 let check_one_test (p : Mir.program) (name : string)
@@ -428,34 +428,34 @@ let check_one_test (p : Mir.program) (name : string)
       ignore
       @@ check_test p (Irj_file.Filename name) value_sort round_ops ign_vars;
       Config.debug_flag := true;
-      Cli.result_print "%s" name;
+      Log.result_print "%s" name;
       None
     with
     | InterpError nbErr -> Some nbErr
-    | Errors.StructuredError (msg, pos, kont) ->
-        Cli.error_print "Error in test %s: %a" name
-          Errors.format_structured_error (msg, pos);
+    | Errors.StructuredError (msg, kont) ->
+        Log.error_print "Error in test %s: %a" name
+          Log.format_structured_message msg;
         (match kont with None -> () | Some kont -> kont ());
         Some 0
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.StructuredError (msg, pos, kont) ->
-            Cli.error_print "Error in test %s: %a" name
-              Errors.format_structured_error (msg, pos);
+        | Interp.StructuredError (msg, kont) ->
+            Log.error_print "Error in test %s: %a" name
+              Log.format_structured_message msg;
             (match kont with None -> () | Some kont -> kont ());
             Some 0
         | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
-            Cli.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
+            Log.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             Some 0)
     | e ->
-        Cli.error_print "Uncatched exception: %s" (Printexc.to_string e);
+        Log.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e
   in
   (* finish "done!"; *)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
   match is_ok with
-  | None -> Cli.result_print "No failure!"
-  | Some 0 -> Cli.error_print "Unexpected failure"
-  | Some nbErr -> Cli.error_print "Failure: %d errors in file %s" nbErr name
+  | None -> Log.result_print "No failure!"
+  | Some 0 -> Log.error_print "Unexpected failure"
+  | Some nbErr -> Log.error_print "Failure: %d errors in file %s" nbErr name

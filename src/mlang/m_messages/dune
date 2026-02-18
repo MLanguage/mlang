@@ -1,0 +1,6 @@
+(library
+ (public_name mlang.messages)
+ (name m_messages)
+ (flags
+  (:standard -open Utils))
+ (libraries utils))

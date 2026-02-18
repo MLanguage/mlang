@@ -16,6 +16,8 @@
 
 (** Helpers for parsing *)
 
+exception Parsing_error of { msg : string; pos : Pos.t }
+
 (** {1 Frontend variable names}*)
 
 (** A parsed variable can be a regular variable or an integer literal *)

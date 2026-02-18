@@ -9,7 +9,7 @@
  (name m_frontend)
  (flags
   (:standard -open Utils -open M_ir))
- (libraries utils m_ir))
+ (libraries utils m_ir m_messages))
 
 ; Generates the Syntax_messages module
 

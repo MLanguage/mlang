@@ -35,6 +35,28 @@ type filesystem =
 
 type trace_output = Stdout | Stderr | Filename of string
 
+type message_format = ANSI | GNU
+
+module Err : sig
+  type config_err =
+    | Option_mpp_function_required
+    | Invalid_precision_option of string
+    | Invalid_long_size of string
+    | Invalid_message_format of string
+    | Invalid_roundops_option of string
+    | Unspecified_roundops
+    | No_m_files
+    | Cannot_display_time_and_force_nondeterministic_display
+
+  type dgfip_err =
+    | DGFiP_backend_without_DGFiP_options
+    | Invalid_term_in_dgfip_options
+    | Failed_parsing_of_dgfip_options
+    | Uncaught_exception_while_reading_dgfip_options
+
+  type t = Config of config_err | Dgfip of dgfip_err
+end
+
 val get_files : files -> string list
 
 val source_files : files ref
@@ -106,6 +128,8 @@ val trace_output : trace_output ref
 (** Controls the tracer output. It can either be output in stdout, stderr, or in
     a file. *)
 
+val message_format : message_format ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -131,4 +155,5 @@ val set_opts :
   plain_output:bool ->
   trace:bool ->
   trace_output_file:string option ->
-  [ `Displayed_dgfip_help | `Error of string | `Run ]
+  message_format:message_format ->
+  [ `Displayed_dgfip_help | `Error of Err.t | `Run ]

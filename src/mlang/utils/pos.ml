@@ -93,6 +93,8 @@ let none : t =
   in
   { pos_filename = "unknown t"; pos_loc = (zero_pos, zero_pos) }
 
+let is_none p = p = none
+
 let without (x : 'a) : 'a marked = Mark (x, none)
 
 let mark value pos = Mark (value, pos)

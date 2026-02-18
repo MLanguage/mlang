@@ -61,6 +61,9 @@ val format : Format.formatter -> t -> unit
 val none : t
 (** [none t] creates the null position. *)
 
+val is_none : t -> bool
+(** Returns [true] if the argument is equal to [none]. *)
+
 val without : 'a -> 'a marked
 (** [without x] marks the value [x] with the [none] position. *)
 
@@ -108,5 +111,3 @@ val get_end_column : t -> int
 
 val get_file : t -> string
 (** [get_file pos] returns the filename associated with the position. *)
-
-(** {2 Helpers} *)

@@ -1647,8 +1647,3 @@ let rec format_instruction form_var form_err =
 
 and format_instructions form_var form_err fmt instrs =
   Pp.list "" (Pp.unmark (format_instruction form_var form_err)) fmt instrs
-
-let format_simple_scope ppf = function
-  | Var.Tgv _ -> Pp.string ppf "TGV"
-  | Temp _ -> Pp.string ppf "Temp"
-  | Ref -> Pp.string ppf "Ref"

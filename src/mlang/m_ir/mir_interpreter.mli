@@ -111,8 +111,7 @@ module type S = sig
   (** Interpreter runtime errors *)
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of
-        (string * (string option * Pos.t) list * (unit -> unit) option)
+    | StructuredError of (Log.structured_msg * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 

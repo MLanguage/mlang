@@ -726,5 +726,3 @@ val format_instructions :
   Pp.t ->
   ('v, 'e) m_instruction list ->
   unit
-
-val format_simple_scope : Pp.t -> Var.scope -> unit

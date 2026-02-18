@@ -24,8 +24,6 @@ open Cmdliner
 open Irj_utils
 open Utils
 
-type message_format_enum = Human | GNU
-
 type validation_mode_enum = Strict | Corrective | Primitive
 
 type transformation_target = None | PasCalcP | PasCalcC
@@ -38,8 +36,7 @@ let gen_file generator test_data =
   Format.pp_print_newline out_fmt ();
   Format.pp_print_flush out_fmt ()
 
-let irj_check_file (f : string) (message_format : message_format_enum)
-    (validation_mode : validation_mode_enum)
+let irj_check_file (f : string) (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   try
     let test_data = Irj_file.parse_input (Filename f) in
@@ -59,7 +56,7 @@ let irj_check_file (f : string) (message_format : message_format_enum)
     in
     match transform_target with
     | None ->
-        Cli.result_print "%s: checked as %s with %d primitive codes!"
+        Log.result_print "%s: checked as %s with %d primitive codes!"
           test_data.nom
           (match test_data.rapp with
           | Some _ -> "corrective"
@@ -67,34 +64,29 @@ let irj_check_file (f : string) (message_format : message_format_enum)
           (List.length test_data.prim.entrees)
     | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
-  with Errors.StructuredError (msg, pos, kont) ->
-    (match message_format with
-    | Human ->
-        Cli.error_print "There has been an error in %S: %a" f
-          Errors.format_structured_error
-    | GNU -> Format.eprintf "%a" Errors.format_structured_error_gnu_format)
-      (msg, pos);
+  with Errors.StructuredError (msg, kont) ->
+    Log.error_print "There has been an error in %S: %a" f
+      Log.format_structured_message msg;
     (match kont with None -> () | Some kont -> kont ());
     exit 123
 
-let rec irj_checker (f : string) (message_format : message_format_enum)
-    (validation_mode : validation_mode_enum)
+let rec irj_checker (f : string) (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   if not (Sys.file_exists f) then (
-    Cli.error_print "%s: this path is not a valid file in the filesystem" f;
+    Log.error_print "%s: this path is not a valid file in the filesystem" f;
     exit 124);
   if Sys.is_directory f then
     Array.iter
       (fun sub ->
-        irj_checker (Filename.concat f sub) message_format validation_mode
-          transform_target)
+        irj_checker (Filename.concat f sub) validation_mode transform_target)
       (Sys.readdir f)
-  else irj_check_file f message_format validation_mode transform_target
+  else irj_check_file f validation_mode transform_target
 
-let irj_checker (f : string) (message_format : message_format_enum)
+let irj_checker (f : string) (message_format : Config.message_format)
     (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
-  irj_checker f message_format validation_mode transform_target
+  Config.message_format := message_format;
+  irj_checker f validation_mode transform_target
 
 let validation_mode_opt =
   [ ("strict", Strict); ("corrective", Corrective); ("primitive", Primitive) ]
@@ -110,12 +102,12 @@ let validation_mode =
            only the corresponding files are accepted, for instance primitive \
            file in corrective mode will raise an error.")
 
-let message_format_opt = [ ("human", Human); ("gnu", GNU) ]
+let message_format_opt = [ ("human", Config.ANSI); ("gnu", GNU) ]
 
 let message_format =
   Arg.(
     value
-    & opt (enum message_format_opt) Human
+    & opt (enum message_format_opt) Config.ANSI
     & info [ "m"; "message-format" ]
         ~doc:
           "Selects the format of error and warning messages emitted by the \
