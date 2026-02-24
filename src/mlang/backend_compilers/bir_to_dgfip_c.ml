@@ -1008,7 +1008,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
             pr "@;@[<v 2>if (%s) {@;" exp_def
       in
-      pr "// Switch cases  @;";
+      pr "/* Switch cases  */@;";
       (* Expression is defined *)
       let () =
         let pp_case (v, br) =
@@ -1041,10 +1041,10 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               match (default_branches, other_branches) with
               | [], _ -> ()
               | hd :: _, [] ->
-                  pr "// Default switch case@;";
+                  pr "/* Default switch case */@;";
                   pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
               | hd :: _, _ ->
-                  pr "// Default switch case@;";
+                  pr "/* Default switch case */@;";
                   pr "@;else {@[<v 2>%a@]@;}"
                     (generate_stmts env dgfip_flags p)
                     hd)
@@ -1060,13 +1060,13 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             pp_case c;
             loop_else tl
       in
-      pr "}@;// End of switch cases & default@;";
+      pr "}@;/* End of switch cases & default */@;";
       (* Expression is undefined *)
       let () =
         match undef_branches with
         | [] -> ()
         | hd :: _ ->
-            pr "// Undefined switch case@;";
+            pr "/* Undefined switch case */@;";
             pr " else %a" (generate_stmts env dgfip_flags p) hd
       in
       pr "@]}"

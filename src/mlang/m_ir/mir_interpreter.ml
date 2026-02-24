@@ -1211,21 +1211,24 @@ struct
                 if cont then merge_anos ()
           in
           merge_anos ()
-        else (
-          ctx.ctx_finalized_anos <- [];
-          let rec merge_anos () =
-            match ctx.ctx_anos with
-            | [] -> ctx.ctx_finalized_anos <- List.rev ctx.ctx_finalized_anos
-            | ((ano : Com.Error.t), arg) :: discos ->
-                if not (StrSet.mem (Pos.unmark ano.name) ctx.ctx_archived_anos)
-                then (
-                  ctx.ctx_archived_anos <-
-                    StrSet.add (Pos.unmark ano.name) ctx.ctx_archived_anos;
-                  ctx.ctx_finalized_anos <- (ano, arg) :: ctx.ctx_finalized_anos);
-                ctx.ctx_anos <- discos;
-                merge_anos ()
+        else
+          let not_in_old_anos (err, _) =
+            let name = Pos.unmark err.Com.Error.name in
+            not (StrSet.mem name ctx.ctx_archived_anos)
           in
-          merge_anos ())
+          ctx.ctx_finalized_anos <-
+            (let rec merge_anos old_anos new_anos =
+               match (old_anos, new_anos) with
+               | [], anos | anos, [] -> anos
+               | _ :: old_tl, a :: new_tl -> a :: merge_anos old_tl new_tl
+             in
+             let new_anos = List.filter not_in_old_anos ctx.ctx_anos in
+             merge_anos ctx.ctx_finalized_anos new_anos);
+          let add_ano res (err, _) =
+            StrSet.add (Pos.unmark err.Com.Error.name) res
+          in
+          ctx.ctx_archived_anos <-
+            List.fold_left add_ano ctx.ctx_archived_anos ctx.ctx_anos
     | Com.ExportErrors ->
         if mode_corr ctx then
           let rec merge_anos () =

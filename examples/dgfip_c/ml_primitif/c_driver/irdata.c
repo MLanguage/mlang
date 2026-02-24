@@ -98,7 +98,7 @@ void finalise_erreur_prim(T_irdata *irdata) {
   int trouve = 0;
   T_discord *pDisco = irdata->discords;
 
-  nettoie_erreurs_finalisees(irdata);
+  irdata->nb_err_finalise = 0;
   while (pDisco != NULL) {
     trouve = 0;
     for (i = 0; i < irdata->nb_err_archive && ! trouve; i++) {
@@ -121,12 +121,12 @@ void finalise_erreur_prim(T_irdata *irdata) {
 void exporte_erreur_prim(T_irdata *irdata) {
   int i = 0;
 
-  for (i = 0; i < irdata->nb_err_finalise; i++) {
+  for (i = 0; i < irdata->sz_err_finalise && irdata->err_finalise[i] != NULL; i++) {
     ajouter_espace(&irdata->sz_err_sortie, &irdata->err_sortie, irdata->nb_err_sortie);
     irdata->err_sortie[irdata->nb_err_sortie] = irdata->err_finalise[i];
     irdata->nb_err_sortie++;
   }
-  nettoie_erreurs_finalisees(irdata);
+  irdata->nb_err_finalise = 0;
 }
 
 void finalise_erreur(T_irdata *irdata) {
