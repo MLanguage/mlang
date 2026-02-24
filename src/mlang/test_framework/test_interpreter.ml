@@ -225,7 +225,9 @@ type process_acc = string list * int StrMap.t
 
 (** This is the name of the progress file. It registers which tests have already
     been run in order to skip them if the execution has been interrupted. *)
-let progress_filename = ".interpreter_progress"
+let progress_filename =
+  Sys.getenv_opt "INTERP_PROGRESS"
+  |> Option.fold ~none:".interpreter_progress" ~some:Fun.id
 
 let check_all_tests (p : Mir.program) (test_dir : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops)
