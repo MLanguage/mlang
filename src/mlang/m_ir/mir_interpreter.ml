@@ -122,6 +122,8 @@ module type Tracer = sig
   val update_execution_ctx : ctx -> int option -> string -> unit
 
   val get_dbg_info : ctx -> Dbg_info.t option
+
+  val register_ano : ctx -> Com.Error.t Pos.marked -> unit
 end
 
 module Tracer : Tracer = struct
@@ -174,9 +176,13 @@ module Tracer : Tracer = struct
           | tick -> (tick :: ticks, dbg_info)
           | exception Failure _ ->
               let tick = Tick.tick () in
+              let info =
+                Info.make tick name const.pos Const const.Com.value None false
+              in
               let const = Const.make_from_pos name const.Com.value const.pos in
               let consts = Tick.Map.add tick const dbg_info.consts in
               let ledger = StrMap.add name tick dbg_info.ledger in
+              let dbg_info = Dbg_info.register dbg_info info in
               let dbg_info = { dbg_info with consts; ledger } in
               (tick :: ticks, dbg_info)
           end
@@ -237,15 +243,27 @@ module Tracer : Tracer = struct
     let dbg_info = Dbg_info.register dbg_info info in
     let vert = Dbg_info.Graph.V.create tick in
     let graph = dbg_info.graph in
-    List.iter (fun deptick -> 
-      let dep_vert = Dbg_info.Graph.V.create deptick in
-      Dbg_info.Graph.add_edge graph vert dep_vert) ticks;
+    List.iter
+      (fun deptick ->
+        let dep_vert = Dbg_info.Graph.V.create deptick in
+        Dbg_info.Graph.add_edge graph vert dep_vert)
+      ticks;
     ctx.dbg_info <- { dbg_info with graph }
 
   let update_execution_ctx ctx rule_id target_name =
     match rule_id with
     | None -> ctx.exec_ctx <- CtxTarget target_name
     | Some rule_id -> ctx.exec_ctx <- CtxRule rule_id
+
+  let register_ano ctx (m_err : Com.Error.t Pos.marked) =
+    let (Pos.Mark (err, pos)) = m_err in
+    let (Pos.Mark (name, declared_pos)) = err.name in
+    let origin = Dbg_info.Origin.make_from_pos declared_pos Declared in
+    let raised_origin = Dbg_info.Origin.make_from_pos pos Anomaly in
+    let anomaly : Dbg_info.anomaly = { name; origin; raised_origin } in
+    let dbg_info = ctx.dbg_info in
+    let anomalies = anomaly :: dbg_info.anomalies in
+    ctx.dbg_info <- { dbg_info with anomalies }
 end
 
 module NonTracer = struct
@@ -256,6 +274,8 @@ module NonTracer = struct
   let register_temp _ _ _ = ()
 
   let register_access _ _ _ _ _ _ _ = ()
+
+  let register_ano _ _ = ()
 
   let update_execution_ctx _ _ _ = ()
 
@@ -1388,6 +1408,7 @@ struct
           (ctx.ctx_nb_bloquantes + if is_blocking then 1 else 0);
         let v_opt = Option.map Pos.unmark var_opt in
         ctx.ctx_anos <- ctx.ctx_anos @ [ (err, v_opt) ];
+        Tracer.register_ano ctx.tracer_ctx m_err;
         if is_blocking && ctx.ctx_nb_bloquantes >= 4 && canBlock then
           raise BlockingError
     | Com.CleanErrors ->

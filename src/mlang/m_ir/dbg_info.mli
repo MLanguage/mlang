@@ -15,6 +15,7 @@ module Origin : sig
     | Declared
     | Input
     | Target of string
+    | Anomaly
     | Const
         (** Where the variable is declared: In a rule, as input but not given,
             as input but given, in a target, or a const. *)
@@ -138,6 +139,8 @@ type interp_error = {
 (** An interpretation error -- variable [name] was equal to [value] while we
     expected [expected] *)
 
+type anomaly = { name : string; origin : Origin.t; raised_origin : Origin.t }
+
 type t = {
   graph : Graph.t;
   runtimes : Info.Runtime.t Tick.Map.t;
@@ -150,6 +153,7 @@ type t = {
   (* The map making the link between the variable name, and the last tick it has been assigned to *)
   interp_errors : interp_error Tick.Map.t;
       (* map of the errors raised by the execution *)
+  anomalies : anomaly list;
 }
 
 val empty : t

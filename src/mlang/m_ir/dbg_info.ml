@@ -1,5 +1,11 @@
 module Origin = struct
-  type code = Rule of int | Declared | Input | Target of string | Const
+  type code =
+    | Rule of int
+    | Declared
+    | Input
+    | Target of string
+    | Anomaly
+    | Const
 
   type t = { filename : string; sline : int; eline : int; code_orig : code }
 
@@ -22,10 +28,11 @@ module Origin = struct
       | Declared -> "declared"
       | Target s -> Format.asprintf "target-%s" s
       | Const -> "const"
+      | Anomaly -> "anomaly"
     in
     Format.asprintf
-      {|"origin": {"code_orig": "%s", "file": "%s", "sline": %d, "eline": %d }|}
-      code_orig origin.filename origin.sline origin.eline
+      {|{"code_orig": "%s", "file": "%s", "sline": %d, "eline": %d }|} code_orig
+      origin.filename origin.sline origin.eline
 end
 
 module Tick = struct
@@ -116,6 +123,8 @@ type interp_error = {
   expected : Com.literal;
 }
 
+type anomaly = { name : string; origin : Origin.t; raised_origin : Origin.t }
+
 type t = {
   graph : Graph.t;
   runtimes : Info.Runtime.t Tick.Map.t;
@@ -124,6 +133,7 @@ type t = {
   literals : string IntMap.t;
   ledger : Tick.t StrMap.t;
   interp_errors : interp_error Tick.Map.t;
+  anomalies : anomaly list;
 }
 
 let empty =
@@ -135,6 +145,7 @@ let empty =
     literals = IntMap.empty;
     ledger = StrMap.empty;
     interp_errors = Tick.Map.empty;
+    anomalies = [];
   }
 
 let register dbg_info Info.{ tick; name; pos; rule; value; descr; is_input } =
