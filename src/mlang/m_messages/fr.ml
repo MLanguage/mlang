@@ -79,11 +79,11 @@ module Fr : LANG = struct
   module Validator = struct
     module Warning = struct
       let autocycle ~rule_id ~var_name =
-        Log.fmake "Auto-cycle dans la règle %d avec la variable %S" rule_id
+        Ppf.fmake "Auto-cycle dans la règle %d avec la variable %S" rule_id
           var_name
 
       let reference_used_to_set_reference ~var_name ~pos =
-        Log.fmake
+        Ppf.fmake
           ~spans:[ (None, pos) ]
           "Variable %s utilisée pour référencer un champ d'événement. \
            Assurez-vous qu'il s'agisse bien d'une variable du TGV et non d'une \
@@ -92,7 +92,7 @@ module Fr : LANG = struct
           var_name
 
       let variable_defined_several_times ~var_name ~pos_list =
-        Log.fmake
+        Ppf.fmake
           ~spans:(List.map (fun l -> (None, l)) pos_list)
           "Variable %S définie plus d'une fois dans la même règle" var_name
     end

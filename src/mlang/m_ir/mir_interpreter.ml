@@ -88,7 +88,7 @@ module type S = sig
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of (Log.structured_msg * (unit -> unit) option)
+    | StructuredError of (Ppf.structured_msg * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 
@@ -337,7 +337,7 @@ struct
 
   type run_error =
     | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of (Log.structured_msg * (unit -> unit) option)
+    | StructuredError of (Ppf.structured_msg * (unit -> unit) option)
 
   exception RuntimeError of run_error * ctx
 

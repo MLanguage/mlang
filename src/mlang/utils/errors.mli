@@ -27,12 +27,12 @@
 type raised_in = Validator
 
 exception
-  BlockingError of { raised_in : raised_in; error_message : Log.structured_msg }
+  BlockingError of { raised_in : raised_in; error_message : Ppf.structured_msg }
 (** An error that stops the execution of mlang. It carries:
     - the location where the exeption was raised;
     - the associated (strucuted) error message. *)
 
-exception StructuredError of (Log.structured_msg * (unit -> unit) option)
+exception StructuredError of (Ppf.structured_msg * (unit -> unit) option)
 (** A generic exception for all structured errors. It carries:
     - A main error message (string).
     - A list of associated source code locations ([Pos.t]), each with an
@@ -45,7 +45,7 @@ exception StructuredError of (Log.structured_msg * (unit -> unit) option)
 (** These are helper functions designed to simplify the process of raising a
     [StructuredError] exception with different kinds of information. *)
 
-val raise_blocking_error : raised_in:raised_in -> msg:Log.structured_msg -> 'a
+val raise_blocking_error : raised_in:raised_in -> msg:Ppf.structured_msg -> 'a
 (** Raises a Blocking_error. *)
 
 val raise_error : string -> 'a
@@ -110,7 +110,7 @@ val raise_multispanned_error_with_continuation :
       Raises the exception including the message, the span, and the
       continuation. *)
 
-val raise_structured_error : ?kont:(unit -> unit) -> Log.structured_msg -> 'a
+val raise_structured_error : ?kont:(unit -> unit) -> Ppf.structured_msg -> 'a
 (** Raises a [StructuredError] for a structured message and includes a
     continuation thunk. This thunk is a function that can be executed by the
     error handler after the error message is displayed.

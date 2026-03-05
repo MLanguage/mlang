@@ -201,7 +201,7 @@ let to_json (fmt : Format.formatter) info : unit =
       name is_input descr origin;
     delim := ","
   in
-  Log.debug_print "writing info...@.";
+  Ppf.debug_print "writing info...@.";
   delim := "";
   fprintf fmt {|"statics": {@.|};
   IntMap.iter print_static_info info.statics;

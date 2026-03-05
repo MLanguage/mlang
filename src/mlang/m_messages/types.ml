@@ -68,13 +68,13 @@ module type LANG = sig
   (** Validator messages. *)
   module Validator : sig
     module Warning : sig
-      val autocycle : rule_id:int -> var_name:string -> Log.structured_msg
+      val autocycle : rule_id:int -> var_name:string -> Ppf.structured_msg
 
       val reference_used_to_set_reference :
-        var_name:string -> pos:Pos.t -> Log.structured_msg
+        var_name:string -> pos:Pos.t -> Ppf.structured_msg
 
       val variable_defined_several_times :
-        var_name:string -> pos_list:Pos.t list -> Log.structured_msg
+        var_name:string -> pos_list:Pos.t list -> Ppf.structured_msg
     end
 
     module Error : sig

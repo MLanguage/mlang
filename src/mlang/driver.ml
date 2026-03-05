@@ -77,7 +77,7 @@ let process_dgfip_options (backend : Config.backend)
   | Dgfip_c -> begin
       match dgfip_options with
       | None ->
-          Log.error_print
+          Ppf.error_print
             "when using the DGFiP backend, DGFiP options MUST be provided";
           raise Exit
       | Some options -> begin
@@ -87,7 +87,7 @@ let process_dgfip_options (backend : Config.backend)
           | Ok (`Ok flags) -> flags
           | Ok _ -> assert false
           | Error _ ->
-              Log.error_print "parsing of DGFiP options failed, aborting";
+              Ppf.error_print "parsing of DGFiP options failed, aborting";
               raise Exit
         end
     end
@@ -97,7 +97,7 @@ let run_single_test m_program test =
   Mir_interpreter.repl_debug := true;
   Test_interpreter.check_one_test m_program test !Config.value_sort
     !Config.round_ops;
-  Log.result_print "Test passed!"
+  Ppf.result_print "Test passed!"
 
 let run_multiple_tests m_program tests =
   let filter_function =
@@ -109,28 +109,28 @@ let run_multiple_tests m_program tests =
     !Config.round_ops filter_function
 
 let extract m_program =
-  Log.debug_print "Extracting the desired function from the whole program...";
+  Ppf.debug_print "Extracting the desired function from the whole program...";
   match !Config.backend with
   | Config.Dgfip_c ->
-      Log.debug_print "Compiling the codebase to DGFiP C...";
+      Ppf.debug_print "Compiling the codebase to DGFiP C...";
       if !Config.output_file = "" then Err.raise @@ Driver Missing_output;
       Dgfip_gen_files.generate_auxiliary_files !Config.dgfip_flags m_program;
       Bir_to_dgfip_c.generate_c_program !Config.dgfip_flags m_program
         !Config.output_file;
-      Log.debug_print "Result written to %s" !Config.output_file
+      Ppf.debug_print "Result written to %s" !Config.output_file
   | UnknownBackend -> Err.raise @@ Driver Unknown_backend
 
 let unsafe_driver () =
-  Log.debug_print "Reading M files...";
-  let progress_bar = Log.create_progress_bar "Parsing" in
+  Ppf.debug_print "Reading M files...";
+  let progress_bar = Ppf.create_progress_bar "Parsing" in
   let files = Config.get_files !Config.source_files in
   let m_program = Parsing.parse files progress_bar in
-  Log.debug_print "Elaborating...";
+  Ppf.debug_print "Elaborating...";
   let m_program = Expander.proceed m_program in
   let m_program = Validator.proceed !Config.mpp_function m_program in
   let m_program = Mast_to_mir.translate m_program in
   let m_program = Mir.expand_functions m_program in
-  Log.debug_print "Creating combined program suitable for execution...";
+  Ppf.debug_print "Creating combined program suitable for execution...";
   match !Config.execution_mode with
   | SingleTest test -> run_single_test m_program test
   | MultipleTests tests -> run_multiple_tests m_program tests
@@ -142,7 +142,7 @@ let driver () =
       Errors.raise_spanned_error msg pos
   | Errors.BlockingError { raised_in; error_message = _ } ->
       (* Error message should be printed by the module raising the error *)
-      Log.error_print "%s"
+      Ppf.error_print "%s"
       @@ M_messages.Driver.blocking_error_raised_in raised_in
 
 let set_opts (files : string list) (application_names : string list)
@@ -159,7 +159,7 @@ let set_opts (files : string list) (application_names : string list)
     =
   begin match (trace, trace_output_file) with
   | false, Some _ ->
-      Log.warning_print
+      Ppf.warning_print
         "trace_output_file has been given, but tracing has not been set."
   | _, _ -> ()
   end;
@@ -185,6 +185,6 @@ let run () =
 let main () =
   try run ()
   with Errors.StructuredError (msg, kont) as e ->
-    Log.error_print "%a" Log.format_structured_message msg;
+    Ppf.error_print "%a" Ppf.format_structured_message msg;
     (match kont with None -> () | Some kont -> kont ());
     raise e

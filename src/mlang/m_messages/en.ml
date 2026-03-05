@@ -70,17 +70,17 @@ module En : LANG = struct
   module Validator = struct
     module Warning = struct
       let autocycle ~rule_id ~var_name =
-        Log.fmake "Auto-cycle in rule %d with variable %s" rule_id var_name
+        Ppf.fmake "Auto-cycle in rule %d with variable %s" rule_id var_name
 
       let reference_used_to_set_reference ~var_name ~pos =
-        Log.fmake
+        Ppf.fmake
           ~spans:[ (None, pos) ]
           "Variable %s used to set an event reference. Make sure it is not a \
            temporary variable, otherwise this instruction will have no effect."
           var_name
 
       let variable_defined_several_times ~var_name ~pos_list =
-        Log.make
+        Ppf.make
           (Pp.spr "Variable %S is defined more than once in the same rule"
              var_name)
           ~spans:(List.map (fun l -> (None, l)) pos_list)

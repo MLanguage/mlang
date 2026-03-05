@@ -56,7 +56,7 @@ let irj_check_file (f : string) (validation_mode : validation_mode_enum)
     in
     match transform_target with
     | None ->
-        Log.result_print "%s: checked as %s with %d primitive codes!"
+        Ppf.result_print "%s: checked as %s with %d primitive codes!"
           test_data.nom
           (match test_data.rapp with
           | Some _ -> "corrective"
@@ -65,15 +65,15 @@ let irj_check_file (f : string) (validation_mode : validation_mode_enum)
     | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
   with Errors.StructuredError (msg, kont) ->
-    Log.error_print "There has been an error in %S: %a" f
-      Log.format_structured_message msg;
+    Ppf.error_print "There has been an error in %S: %a" f
+      Ppf.format_structured_message msg;
     (match kont with None -> () | Some kont -> kont ());
     exit 123
 
 let rec irj_checker (f : string) (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   if not (Sys.file_exists f) then (
-    Log.error_print "%s: this path is not a valid file in the filesystem" f;
+    Ppf.error_print "%s: this path is not a valid file in the filesystem" f;
     exit 124);
   if Sys.is_directory f then
     Array.iter

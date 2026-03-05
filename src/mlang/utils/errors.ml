@@ -17,20 +17,20 @@
 type raised_in = Validator
 
 exception
-  BlockingError of { raised_in : raised_in; error_message : Log.structured_msg }
+  BlockingError of { raised_in : raised_in; error_message : Ppf.structured_msg }
 
-exception StructuredError of (Log.structured_msg * (unit -> unit) option)
+exception StructuredError of (Ppf.structured_msg * (unit -> unit) option)
 
 let raise_blocking_error ~raised_in ~msg =
   raise (BlockingError { raised_in; error_message = msg })
 
 let raise_structured_error ?(kont : (unit -> unit) option)
-    (msg : Log.structured_msg) =
+    (msg : Ppf.structured_msg) =
   raise (StructuredError (msg, kont))
 
 let raise_multispanned_error_with_continuation (msg : string)
     (spans : (string option * Pos.t) list) (kont : (unit -> unit) option) : 'a =
-  raise_structured_error (Log.make msg ~spans) ?kont
+  raise_structured_error (Ppf.make msg ~spans) ?kont
 
 let raise_multispanned_error (msg : string)
     (spans : (string option * Pos.t) list) =

@@ -165,11 +165,11 @@ module Msg = struct
         RuleDomain (Format.asprintf "%a" (Com.DomainId.pp ()) c)
     | Chaining s -> Chaining s
 
-  let warn m = Log.warning_print "%a" Log.format_structured_message m
+  let warn m = Ppf.warning_print "%a" Ppf.format_structured_message m
 
   let error ?pos m =
-    let msg = Log.make ?spans:(Option.map (fun p -> [ (None, p) ]) pos) m in
-    Log.error_print "%a" Log.format_structured_message msg;
+    let msg = Ppf.make ?spans:(Option.map (fun p -> [ (None, p) ]) pos) m in
+    Ppf.error_print "%a" Ppf.format_structured_message msg;
     Errors.raise_blocking_error ~raised_in:Validator ~msg
 end
 
