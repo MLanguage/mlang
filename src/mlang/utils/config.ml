@@ -19,6 +19,8 @@ type files = NonEmpty of string list
 
 type filesystem = Local | Contents of string StrMap.t
 
+type trace_output = Stdout | Stderr | Filename of string
+
 (* Flags inherited from the old compiler *)
 
 let get_files = function NonEmpty l -> l
@@ -78,6 +80,8 @@ let plain_output = ref true
 
 let trace = ref false
 
+let trace_output = ref Stdout
+
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (no_print_cycles_ : bool) (output_file_ : string option)
@@ -86,7 +90,8 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (value_sort_ : value_sort) (round_ops_ : round_ops) (backend_ : backend)
     (dgfip_test_filter_ : bool) (mpp_function_ : string)
     (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode)
-    (no_nondet_display_ : bool) (plain_output_ : bool) (trace_ : bool) =
+    (no_nondet_display_ : bool) (plain_output_ : bool) (trace_ : bool)
+    (trace_output_ : trace_output) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -108,6 +113,7 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   no_nondet_display := no_nondet_display_;
   plain_output := plain_output_;
   trace := trace_;
+  trace_output := trace_output_;
   match output_file_ with
   | None -> ()
   | Some o -> (
@@ -148,7 +154,8 @@ let set_opts ~(files : string list) ~(application_names : string list)
     ~(precision : string option) ~(roundops : string option)
     ~(comparison_error_margin : float option) ~(income_year : int)
     ~(m_clean_calls : bool) ~(dgfip_options : string list option)
-    ~(no_nondet_display : bool) ~(plain_output : bool) ~(trace : bool) :
+    ~(no_nondet_display : bool) ~(plain_output : bool) ~(trace : bool)
+    ~(trace_output_file : string option) :
     [ `Run | `Displayed_dgfip_help | `Error of string ] =
   let exception INTERNAL_FAIL of string in
   let exception DGFIP_HELP in
@@ -222,11 +229,17 @@ let set_opts ~(files : string list) ~(application_names : string list)
       if display_time && no_nondet_display then
         err "Cannot display time and forcing deterministic display"
     in
+    let trace_output_file =
+      match trace_output_file with
+      | None | Some "stdout" -> Stdout
+      | Some "stderr" -> Stderr
+      | Some fname -> Filename fname
+    in
     set_all_arg_refs files application_names without_dgfip_m debug
       var_info_debug display_time print_cycles output optimize_unsafe_float
       m_clean_calls comparison_error_margin income_year value_sort round_ops
       backend dgfip_test_filter mpp_function dgfip_flags execution_mode
-      no_nondet_display plain_output trace;
+      no_nondet_display plain_output trace trace_output_file;
     `Run
   with
   | INTERNAL_FAIL m -> `Error m

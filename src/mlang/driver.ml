@@ -96,12 +96,19 @@ let set_opts (files : string list) (application_names : string list)
     (precision : string option) (roundops : string option)
     (comparison_error_margin : float option) (income_year : int)
     (m_clean_calls : bool) (dgfip_options : string list option)
-    (no_nondet_display : bool) (plain_output : bool) (trace : bool) =
+    (no_nondet_display : bool) (plain_output : bool) (trace : bool)
+    (trace_output_file : string option) =
+  begin match (trace, trace_output_file) with
+  | false, Some _ ->
+      Cli.warning_print
+        "trace_output_file has been given, but tracing has not been set."
+  | _, _ -> ()
+  end;
   Config.set_opts ~files ~application_names ~without_dgfip_m ~debug
     ~var_info_debug ~display_time ~print_cycles ~backend ~output ~run_tests
     ~dgfip_test_filter ~run_test ~mpp_function ~optimize_unsafe_float ~precision
     ~roundops ~comparison_error_margin ~income_year ~m_clean_calls
-    ~dgfip_options ~no_nondet_display ~plain_output ~trace
+    ~dgfip_options ~no_nondet_display ~plain_output ~trace ~trace_output_file
 
 let run () =
   let eval_cli =
