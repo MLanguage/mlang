@@ -258,6 +258,18 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
               in
               let dbg_info = { dbg_info with interp_errors } in
               let target_dbg_info = { dbg_info; target = inst.label } in
+              begin match !Config.trace_output with
+              | Stdout ->
+                  let fmt = Format.std_formatter in
+                  Dbg_info.to_json fmt dbg_info
+              | Stderr ->
+                  let fmt = Format.err_formatter in
+                  Dbg_info.to_json fmt dbg_info
+              | Filename filename ->
+                  let outc = Out_channel.open_text filename in
+                  let fmt = Format.formatter_of_out_channel outc in
+                  Dbg_info.to_json fmt dbg_info
+              end;
               Some target_dbg_info
           | _ -> None
         in
