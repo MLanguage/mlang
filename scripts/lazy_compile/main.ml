@@ -13,8 +13,7 @@
 
     How to compile:
 
-    $ ocamlfind ocamlc -package str -package unix -linkpkg -o lazy_compile
-    main.ml
+    $ bash build.sh
 
     TODOs:
     - logs in files;
@@ -87,11 +86,11 @@ let output_file_name cfile =
   Filename.concat Env.output_dir (Filename.chop_extension cfile ^ ".o")
 
 (** Compiles [cfile]. *)
-let compile_file ~cfile ~ofile =
+let compile_file ~cfiles_dir ~cfile ~ofile =
   let pedantic = if Env.pedantic = "0" then "" else "--pedantic " in
   let cmd =
     Format.sprintf "%s -std=c89 -I%s %s -O2 -c %s -o %s" Env.cc
-      (Filename.dirname cfile) pedantic cfile ofile
+      cfiles_dir pedantic cfile ofile
   in
   Log.log "Compiling file %S..." cfile;
   let res = run_command cmd in
@@ -357,7 +356,7 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
       let ofile = output_file_name mname in
       let compile () =
         let (_ : string) =
-          compile_file ~cfile:(full_file ~cfiles_dir mname) ~ofile
+          compile_file ~cfiles_dir ~cfile:(full_file ~cfiles_dir mname) ~ofile
         in
         (StrMap.add mname true compiled, true)
       in
