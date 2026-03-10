@@ -1,26 +1,26 @@
 (** Usage:
-    
-    $ lazy_compile --files [FILEDIR] --config [CONFIGFILE]
+
+    $ lazy_compile -F [FILEDIR] -C [CONFIGFILE]
 
     Can be configured with additional environment variables.
-    - [OUTPUT_DIR]: the dir to write the .o files (default: output). Generated if
-      it does not exist.
-    - [DEPGRAPH_FILENAME]: the file in which is serialized the dependency graph. Written
-      in [OUTPUT_DIR].
+    - [OUTPUT_DIR]: the dir to write the .o files (default: output). Generated
+      if it does not exist (default: output).
+    - [DEPGRAPH_FILENAME]: the file in which is serialized the dependency graph.
+      Written in [OUTPUT_DIR] (default: .depgraph).
     - [DEBUG]: displays debug messages (default: 0).
-    - [PEDANTIC]: makes clang pedantic (default: 1).
-    - [CC]: the C compiler to use.
+    - [PEDANTIC]: makes gcc pedantic (default: 1).
+    - [CC]: the C compiler to use (default: gcc).
 
     How to compile:
-    
-    $ ocamlfind ocamlc -package str -package unix -linkpkg -o lazy_compile main.ml
-    
+
+    $ ocamlfind ocamlc -package str -package unix -linkpkg -o lazy_compile
+    main.ml
+
     TODOs:
-    - a serious cli management;
+    - enhance cli management;
     - logs in files;
-    - versioning depgraph files or stop using Marshal (that may deserialize something
-      badly and make the script fail even badlier). 
-*)
+    - versioning depgraph files or stop using Marshal (that may deserialize
+      something badly and make the script fail even badlier). *)
 
 module StrSet = Set.Make (String)
 module StrMap = Map.Make (String)
@@ -41,7 +41,7 @@ module Env = struct
 
   let pedantic = getenv ~default:"1" "PEDANTIC"
 
-  let cc = getenv ~default:"clang" "CC"
+  let cc = getenv ~default:"gcc" "CC"
 end
 
 (** Debug & error logs. *)
@@ -78,7 +78,7 @@ let output_file_name cfile =
 let compile_file ~cfile ~ofile =
   let pedantic = if Env.pedantic = "0" then "" else "--pedantic " in
   let cmd =
-    Format.sprintf "%s -std=c89 %s -O2 -c %s -o %s" Env.cc pedantic cfile ofile
+    Format.sprintf "%s -std=c89 -I%s %s -O2 -c %s -o %s" Env.cc (Filename.dirname cfile) pedantic cfile ofile
   in
   Log.log "Compiling file %S...@." cfile;
   let res = run_command cmd in
@@ -86,9 +86,8 @@ let compile_file ~cfile ~ofile =
   Log.log "Compilation of file %S complete -> %S@." cfile ofile;
   res
 
-(** Returns the full C file name from its base name.
-    By default, unless we are reading files, we only manipulate files through their
-    basename. *)
+(** Returns the full C file name from its base name. By default, unless we are
+    reading files, we only manipulate files through their basename. *)
 let full_file ~cfiles_dir f = Filename.concat cfiles_dir f
 
 (** Pretty prints a list. *)
@@ -107,10 +106,10 @@ let pp_str_map ~sep ~pp fmt m =
     m
 
 (** A module for dependency graphs. This graph will be saved after the project
-    compilation for future compilation.
-    When the script starts, it will read the old graph and compare the files digests.
-    If a file does not have the same digest in the two graph, its compilation (and the
-    compilation of all the files depending on it) must be restarted. *)
+    compilation for future compilation. When the script starts, it will read the
+    old graph and compare the files digests. If a file does not have the same
+    digest in the two graph, its compilation (and the compilation of all the
+    files depending on it) must be restarted. *)
 module DepGraph = struct
   type file =
     (* Files that needs to be compiled.  *)
@@ -160,14 +159,12 @@ module DepGraph = struct
       (pp_str_map ~sep:(",", "@,") ~pp:pp_file)
       t.graph
 
-  (** The regexp that matches the following substrings:
-      #include<str>
-      #include"str"
-      #include<str"
-      #include"str>
+  (** The regexp that matches the following substrings: #include<str>
+      #include"str" #include<str" #include"str>
 
-      Why the last two? Because we will compile the C files eventually and invalid
-      C intructions will be rejected, so why bother. TODO: make it better if you want. *)
+      Why the last two? Because we will compile the C files eventually and
+      invalid C intructions will be rejected, so why bother. TODO: make it
+      better if you want. *)
   let magic_regexp = Str.regexp {|^.*#include \(<\|"\)\(.*\)\(>\|"\)|}
 
   (** Checks if a line is a C include. If so, returns the file included.
@@ -191,10 +188,10 @@ module DepGraph = struct
     in
     loop []
 
-  (** Adds a file to the graph. The file must have been declared in either
-      the field [mlang_generated] or the [ext_dep one]; otherwise, raises
-      [MissingFileDeclaration].
-      If it already belongs to the graph, does nothing. *)
+  (** Adds a file to the graph. The file must have been declared in either the
+      field [mlang_generated] or the [ext_dep one]; otherwise, raises
+      [MissingFileDeclaration]. If it already belongs to the graph, does
+      nothing. *)
   let rec add_file_to_graph ~cfiles_dir t filename =
     if StrMap.mem filename t.graph then (* Already treated *)
       t
@@ -232,8 +229,8 @@ module DepGraph = struct
           raise (MissingFileDeclaration filename)
 
   (** From a list of mlang files and external dependencies, returns the graph
-      with all the mlang files and its dependencies.
-      Fails with [MissingFileDeclaration] if an mlang file depends on a file that is
+      with all the mlang files and its dependencies. Fails with
+      [MissingFileDeclaration] if an mlang file depends on a file that is
       neither in [mlang_generated] nor [ext_dep]. *)
   let build_graph ~cfiles_dir mlang_generated ext_dep =
     let empty_graph = { graph = StrMap.empty; mlang_generated; ext_dep } in
@@ -246,8 +243,8 @@ module DepGraph = struct
     Marshal.to_channel out g [ No_sharing ];
     close_out out
 
-  (** Reads a graph serialized by [write]. In case of failure, returns
-      an empty graph. *)
+  (** Reads a graph serialized by [write]. In case of failure, returns an empty
+      graph. *)
   let read () =
     try
       let c = open_in (Filename.concat Env.output_dir Env.graph_filename) in
@@ -256,8 +253,8 @@ module DepGraph = struct
       { graph = StrMap.empty; mlang_generated = []; ext_dep = [] }
 end
 
-(** Handles the configuration file.
-    The configuration file syntax is the following:
+(** Handles the configuration file. The configuration file syntax is the
+    following:
     - "# External dependencies"
     - A list of pairs "file:command" where 'file' is the name of the external
       dependency as it would appear in the C file including it, and 'command' is
@@ -269,7 +266,8 @@ module Config = struct
   (** The regexp for reading the external dependencies pairs. *)
   let ext_dep_regexp = Str.regexp {|^\(.*\):\(.*\)$|}
 
-  (** Reads [config_file] and builds the external depenency list of the project. *)
+  (** Reads [config_file] and builds the external depenency list of the project.
+  *)
   let read ~config_file =
     let chan = open_in config_file in
     let rec empty_header_then_deps () =
@@ -307,28 +305,23 @@ let get_cfiles_of_dir cfiles_dir =
   let files = Sys.readdir cfiles_dir in
   Array.fold_left
     (fun acc f ->
-      if f = ""
-      then acc
+      if f = "" then acc
       else
-      match Filename.extension f, f.[0] with
-      | (".c" | ".h"), ('a'..'z' | 'A'..'Z' | '0'..'9') -> f :: acc
-      | _ -> acc)
-    []
-    files
-;;
-     
+        match (Filename.extension f, f.[0]) with
+        | (".c" | ".h"), ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9') -> f :: acc
+        | _ -> acc)
+    [] files
 
-(** Intermediary function;
-    From an [old] dependency map corresponding to an old compilation, and
-    a [new_] dependency map built from a configuration file, compiles a graph node
-    (that should come from [new_]). The [compiled] map stores for each file basename
-    a boolean stating the files depending on it will need to be recompiled ([true]) or
-    do not need recompilation ([false]).
-    If the node is an external dependency, checks if the version is the same than in
-    [old]. If so, maps it in [compiled] to [false], otherwise to [true].
+(** Intermediary function; From an [old] dependency map corresponding to an old
+    compilation, and a [new_] dependency map built from a configuration file,
+    compiles a graph node (that should come from [new_]). The [compiled] map
+    stores for each file basename a boolean stating the files depending on it
+    will need to be recompiled ([true]) or do not need recompilation ([false]).
+    If the node is an external dependency, checks if the version is the same
+    than in [old]. If so, maps it in [compiled] to [false], otherwise to [true].
     If the node is an mlang generated file, compiles all its dependencies &
-    checks if one needed to be recompiled: if so, maps it in [compiled] to [true],
-    otherwise to [false]. *)
+    checks if one needed to be recompiled: if so, maps it in [compiled] to
+    [true], otherwise to [false]. *)
 let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
     (compiled : bool StrMap.t) : DepGraph.file -> bool StrMap.t * bool =
   function
@@ -336,19 +329,21 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
       let should_recompile =
         match StrMap.find edname old.graph with
         | exception Not_found ->
-            Log.err "[Warning] External dependency %S not found in old graph"
+            Log.debug "[Warning] External dependency %S not found in old graph@."
               edname;
             true
         | Mlang_gen _ ->
-            Log.err
+            Log.debug
               "[Warning] External dependency %S defined as mlang file in old \
-               graph"
+               graph@."
               edname;
             true
         | Ext_dep { edvers = edvers'; _ } -> edvers <> edvers'
       in
       (compiled, should_recompile)
   | Mlang_gen { mname; mhash; mdeps } -> (
+      Log.debug "Compiling mlang generated file %S@." mname;
+      Log.debug "Dependencies: %i@." (List.length mdeps);
       let ofile = output_file_name mname in
       let compile () =
         let (_ : string) =
@@ -360,23 +355,27 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
       match StrMap.find mname compiled with
       | b -> (compiled, b)
       | exception Not_found -> (
+          (* Compiles dependencies *)
+          let compiled, should_recompile =
+            List.fold_left
+              (fun (set, should_recomp_acc) dep ->
+                Log.debug "Compile dependency %S@." dep;
+                let set, should_recomp =
+                  compile_node_ ~cfiles_dir ~old ~new_ set
+                    (StrMap.find dep new_.graph)
+                in
+                (set, should_recomp_acc || should_recomp))
+              (compiled, false) mdeps
+          in
+          (* TODO: recompile here *)
           match StrMap.find mname old.graph with
           | Ext_dep _ | (exception Not_found) -> compile ()
-          | Mlang_gen { mhash = mhash'; _ } when mhash <> mhash' -> compile ()
-          | Mlang_gen _ ->
-              (* Compiles dependencies *)
-              let compiled, should_recompile =
-                List.fold_left
-                  (fun (set, should_recomp_acc) dep ->
-                    let set, should_recomp =
-                      compile_node_ ~cfiles_dir ~old ~new_ set
-                        (StrMap.find dep new_.graph)
-                    in
-                    (set, should_recomp_acc || should_recomp))
-                  (compiled, false) mdeps
-              in
-              if should_recompile || not (Sys.file_exists ofile) then compile ()
-              else dont_recompile ()))
+          | Mlang_gen { mhash = mhash'; _ }
+            when mhash <> mhash' || should_recompile
+                 || not (Sys.file_exists ofile) ->
+              Log.debug "Must compile";
+              compile ()
+          | Mlang_gen _ -> dont_recompile ()))
 
 (** Compiles the mlang_generated files of a graph. *)
 let compile_graph ~cfiles_dir ~old ~new_ =
@@ -412,7 +411,8 @@ let compile ~cfiles_dir ~config_file =
       newly_compiled;
     DepGraph.write new_)
 
-(** Checks the cfiles dir exists. Also, creates the output dir if it does not exist. *)
+(** Checks the cfiles dir exists. Also, creates the output dir if it does not
+    exist. *)
 let init ~cfiles_dir =
   (* Checking existence of cfiles_dir *)
   let () =
@@ -425,7 +425,7 @@ let init ~cfiles_dir =
   (* Checking existence of output dir *)
   let () =
     match Sys.is_directory Env.output_dir with
-    | exception Sys_error _ -> Sys.mkdir Env.output_dir 0x700
+    | exception Sys_error _ -> Sys.mkdir Env.output_dir 0o777
     | true -> ()
     | false ->
         Format.ksprintf failwith "File %S is not a directory" Env.output_dir
@@ -433,14 +433,9 @@ let init ~cfiles_dir =
   ()
 
 let main () =
-  match Array.to_list Sys.argv with
-  | [] -> assert false
-  | _ :: "--config" :: config_file :: "--files" :: cfiles_dir :: _
-  | _ :: "--files" :: cfiles_dir :: "--config" :: config_file :: _ ->
-      compile ~cfiles_dir ~config_file
-  | _ ->
-      Printf.printf "Syntaxe :\n%s --config cfiles_dir --files fichier_config\n"
-        Sys.argv.(0);
-      exit 31
+  let () = Cli.read_args () in
+  let cfiles_dir = Cli.cfiles_dir () and config_file = Cli.config_file () in
+  init ~cfiles_dir;
+  compile ~cfiles_dir ~config_file
 
 let () = main ()
