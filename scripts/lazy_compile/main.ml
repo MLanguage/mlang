@@ -17,7 +17,6 @@
     main.ml
 
     TODOs:
-    - enhance cli management;
     - logs in files;
     - versioning depgraph files or stop using Marshal (that may deserialize
       something badly and make the script fail even badlier). *)
@@ -46,15 +45,28 @@ end
 
 (** Debug & error logs. *)
 module Log = struct
+  let dbg = int_of_string_opt Env.debug
+
   let debug : 'a. ('a, Format.formatter, unit) format -> 'a =
-   fun pp ->
-    match Env.debug with
-    | "0" -> Format.(ifprintf std_formatter) pp
-    | _ -> Format.printf pp
+   fun ppf ->
+    match dbg with
+    | Some i when i >= 2 ->
+        Format.(fprintf std_formatter ("[DBG] " ^^ ppf ^^ "@."))
+    | _ -> Format.(ifprintf std_formatter ppf)
 
-  let err : 'a. ('a, Format.formatter, unit) format -> 'a = Format.eprintf
+  let warn : 'a. ('a, Format.formatter, unit) format -> 'a =
+   fun ppf ->
+    match dbg with
+    | Some i when i >= 1 ->
+        Format.(fprintf std_formatter ("[WRN] " ^^ ppf ^^ "@."))
+    | _ -> Format.(ifprintf std_formatter ppf)
 
-  let log : 'a. ('a, Format.formatter, unit) format -> 'a = Format.printf
+  let err : 'a. ('a, Format.formatter, unit) format -> 'a =
+   fun ppf ->
+    Format.(fprintf err_formatter ("[ERR] " ^^ ppf ^^ "@."))
+
+  let log : 'a. ('a, Format.formatter, unit) format -> 'a =
+   fun ppf -> Format.(fprintf std_formatter ("[APP] " ^^ ppf ^^ "@."))
 end
 
 (** Runs a command and returns its output as a string *)
@@ -78,12 +90,13 @@ let output_file_name cfile =
 let compile_file ~cfile ~ofile =
   let pedantic = if Env.pedantic = "0" then "" else "--pedantic " in
   let cmd =
-    Format.sprintf "%s -std=c89 -I%s %s -O2 -c %s -o %s" Env.cc (Filename.dirname cfile) pedantic cfile ofile
+    Format.sprintf "%s -std=c89 -I%s %s -O2 -c %s -o %s" Env.cc
+      (Filename.dirname cfile) pedantic cfile ofile
   in
-  Log.log "Compiling file %S...@." cfile;
+  Log.log "Compiling file %S..." cfile;
   let res = run_command cmd in
-  Log.log "%s@." res;
-  Log.log "Compilation of file %S complete -> %S@." cfile ofile;
+  Log.log "%s" res;
+  Log.log "Compilation of file %S complete -> %S" cfile ofile;
   res
 
 (** Returns the full C file name from its base name. By default, unless we are
@@ -329,21 +342,18 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
       let should_recompile =
         match StrMap.find edname old.graph with
         | exception Not_found ->
-            Log.debug "[Warning] External dependency %S not found in old graph@."
-              edname;
+            Log.warn "External dependency %S not found in old graph" edname;
             true
         | Mlang_gen _ ->
-            Log.debug
-              "[Warning] External dependency %S defined as mlang file in old \
-               graph@."
+            Log.warn "External dependency %S defined as mlang file in old graph"
               edname;
             true
         | Ext_dep { edvers = edvers'; _ } -> edvers <> edvers'
       in
       (compiled, should_recompile)
   | Mlang_gen { mname; mhash; mdeps } -> (
-      Log.debug "Compiling mlang generated file %S@." mname;
-      Log.debug "Dependencies: %i@." (List.length mdeps);
+      Log.debug "Compiling mlang generated file %S" mname;
+      Log.debug "Dependencies: %i" (List.length mdeps);
       let ofile = output_file_name mname in
       let compile () =
         let (_ : string) =
@@ -359,7 +369,7 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
           let compiled, should_recompile =
             List.fold_left
               (fun (set, should_recomp_acc) dep ->
-                Log.debug "Compile dependency %S@." dep;
+                Log.debug "Compile dependency %S" dep;
                 let set, should_recomp =
                   compile_node_ ~cfiles_dir ~old ~new_ set
                     (StrMap.find dep new_.graph)
@@ -373,7 +383,6 @@ let rec compile_node_ ~cfiles_dir ~(old : DepGraph.t) ~(new_ : DepGraph.t)
           | Mlang_gen { mhash = mhash'; _ }
             when mhash <> mhash' || should_recompile
                  || not (Sys.file_exists ofile) ->
-              Log.debug "Must compile";
               compile ()
           | Mlang_gen _ -> dont_recompile ()))
 
@@ -389,7 +398,7 @@ let compile_graph ~cfiles_dir ~old ~new_ =
 
 (** Compiles the file specified in the [config_file]. *)
 let compile ~cfiles_dir ~config_file =
-  Log.log "Stating compilation...@.";
+  Log.log "Starting compilation...";
   let old = DepGraph.read () in
   Log.debug "Old graph: %a" DepGraph.pp old;
   let new_ =
@@ -403,10 +412,10 @@ let compile ~cfiles_dir ~config_file =
     StrMap.fold (fun k b acc -> if b then k :: acc else acc) m []
   in
   if newly_compiled = [] then
-    Log.log "Nothing changed. Not recompiling project.@."
+    Log.log "Nothing changed. Not recompiling project."
   else (
-    Log.log "Compilation over.@.";
-    Log.log "Files compiled: %a@."
+    Log.log "Compilation over.";
+    Log.log "Files compiled: %a"
       (pp_list ~sep:", " ~pp:Format.pp_print_string)
       newly_compiled;
     DepGraph.write new_)
