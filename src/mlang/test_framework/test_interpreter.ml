@@ -173,8 +173,9 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
   in
   StrMap.fold fold exp []
 
-let make_dbg_info inst =
-  let dbg_info = Dbg_info.empty in
+let make_dbg_info inst aliases =
+  let aliases = StrMap.map (fun v -> Com.Var.name_str v) aliases in
+  let dbg_info = Dbg_info.make_empty ~aliases in
   let add_input_var_to_info var lit dbg_info =
     let open Dbg_info in
     let name = Com.Var.name_str var in
@@ -231,7 +232,7 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
         let dbg_info =
           match !Config.trace with
           | false -> None
-          | true -> Some (make_dbg_info inst)
+          | true -> Some (make_dbg_info inst program.program_alias)
         in
         let varMap, anoSet, dbg_info =
           Mir_interpreter.evaluate_program ?dbg_info program inst.vars
