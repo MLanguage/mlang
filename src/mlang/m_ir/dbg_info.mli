@@ -154,10 +154,12 @@ type t = {
   interp_errors : interp_error Tick.Map.t;
       (* map of the errors raised by the execution *)
   anomalies : anomaly list;
+  aliases : string StrMap.t;
 }
 
-val empty : t
-(** Empty dbg_info. *)
+val make_empty : aliases:string StrMap.t -> t
+(** [make_empty aliases] makes an empty dbg_info with the aliases map prefilled.
+*)
 
 val register : t -> Info.t -> t
 (** Takes the current env and tracing info. It splits it into runtime and static

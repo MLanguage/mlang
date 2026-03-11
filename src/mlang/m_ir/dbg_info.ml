@@ -134,9 +134,10 @@ type t = {
   ledger : Tick.t StrMap.t;
   interp_errors : interp_error Tick.Map.t;
   anomalies : anomaly list;
+  aliases : string StrMap.t;
 }
 
-let empty =
+let make_empty ~aliases =
   {
     graph = Graph.create ~size:10000 ();
     runtimes = Tick.Map.empty;
@@ -146,6 +147,7 @@ let empty =
     ledger = StrMap.empty;
     interp_errors = Tick.Map.empty;
     anomalies = [];
+    aliases;
   }
 
 let register dbg_info Info.{ tick; name; pos; rule; value; descr; is_input } =
@@ -239,7 +241,14 @@ let to_json (fmt : Format.formatter) info : unit =
   in
   fprintf fmt {|},@."interp_errors": {@.|};
   Tick.Map.iter print_interp_errors info.interp_errors;
-  Format.fprintf fmt "}}@."
+  delim := "";
+  let print_alias alias name =
+    fprintf fmt {|%s@.%S: %S|} !delim name alias;
+    delim := ","
+  in
+  fprintf fmt {|},@."aliases": {|};
+  StrMap.iter print_alias info.aliases;
+  fprintf fmt "@.}}@."
 
 let write_json_file filename info =
   let filename = filename ^ ".json" in
