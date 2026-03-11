@@ -50,16 +50,15 @@ let run_command (cmd : string) : string =
   ignore (Unix.close_process_in ic);
   Buffer.contents buf
 
-(** Debug & error logs. *)
 module Log = struct
   let dbg = int_of_string_opt Env.debug
 
-  let debug : 'a. ('a, Format.formatter, unit) format -> 'a =
+  let log : 'a. ('a, Format.formatter, unit) format -> 'a =
+    fun ppf -> Format.(fprintf std_formatter ("[APP] " ^^ ppf ^^ "@."))
+  
+  let err : 'a. ('a, Format.formatter, unit) format -> 'a =
     fun ppf ->
-    match dbg with
-    | Some i when i >= 2 ->
-       Format.(fprintf std_formatter ("[DBG] " ^^ ppf ^^ "@."))
-    | _ -> Format.(ifprintf std_formatter ppf)
+    Format.(fprintf err_formatter ("[ERR] " ^^ ppf ^^ "@."))
 
   let warn : 'a. ('a, Format.formatter, unit) format -> 'a =
     fun ppf ->
@@ -68,10 +67,11 @@ module Log = struct
        Format.(fprintf std_formatter ("[WRN] " ^^ ppf ^^ "@."))
     | _ -> Format.(ifprintf std_formatter ppf)
 
-  let err : 'a. ('a, Format.formatter, unit) format -> 'a =
+  let debug : 'a. ('a, Format.formatter, unit) format -> 'a =
     fun ppf ->
-    Format.(fprintf err_formatter ("[ERR] " ^^ ppf ^^ "@."))
+    match dbg with
+    | Some i when i >= 2 ->
+       Format.(fprintf std_formatter ("[DBG] " ^^ ppf ^^ "@."))
+    | _ -> Format.(ifprintf std_formatter ppf)
 
-  let log : 'a. ('a, Format.formatter, unit) format -> 'a =
-    fun ppf -> Format.(fprintf std_formatter ("[APP] " ^^ ppf ^^ "@."))
 end

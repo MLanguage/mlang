@@ -5,30 +5,23 @@
     digest in the two graph, its compilation (and the compilation of all the
     files depending on it) must be restarted. *)
 
-type file =
-  | Mlang_gen of { mname : string; mhash : Digest.t; mdeps : string list; }
-  | Ext_dep of { edname : string; edvers : string; }
-
-type t = {
-    graph : file Utils.StrMap.t;
-    mlang_generated : string list;
-    ext_dep : (string * string) list;
-  }
+type t
 
 exception MissingFileDeclaration of string
-
-val pp_file : Format.formatter -> file -> unit
+(** This is raised when we try to add a file to the graph that is not in the
+    mlang_generated list nor in the ext_dep. *)
 
 val pp : Format.formatter -> t -> unit
+(** Pretty prints a dependency graph. *)
 
-val line_states_it_depends_on : string -> string option
+val make :
+  cfiles_dir:string -> ext_dep:(string * string) list -> t
+(** Reads the cfiles_dir directory and builds the corresponding dependency graph. *)
 
-val file_states_it_depends_on : string -> string list
-
-val add_file_to_graph : cfiles_dir:string -> t -> string -> t
-
-val build_graph :
-  cfiles_dir:string -> string list -> (string * string) list -> t
+val compile: cfiles_dir:string -> old:t -> new_:t -> bool Utils.StrMap.t
+(** Compiles the graph files in the correct dependency order.
+    [old] holds the previous dependency graph, so that only files that have been updated
+    are recompiled. *)
 
 val write : t -> unit
 
