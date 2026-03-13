@@ -237,11 +237,9 @@ module Tracer : Tracer = struct
     let dbg_info = Dbg_info.register dbg_info info in
     let vert = Dbg_info.Graph.V.create tick in
     let graph = dbg_info.graph in
-    let add_edge graph deptick =
+    List.iter (fun deptick -> 
       let dep_vert = Dbg_info.Graph.V.create deptick in
-      Dbg_info.Graph.add_edge graph vert dep_vert
-    in
-    let graph = List.fold_left add_edge graph ticks in
+      Dbg_info.Graph.add_edge graph vert dep_vert) ticks;
     ctx.dbg_info <- { dbg_info with graph }
 
   let update_execution_ctx ctx rule_id target_name =
@@ -264,7 +262,7 @@ module NonTracer = struct
   let get_dbg_info _ = None
 end
 
-module type PartialInterp = functor (T : Tracer) -> S
+module type PartialInterp = functor (_ : Tracer) -> S
 
 module Make
     (N : Mir_number.NumberInterface)
