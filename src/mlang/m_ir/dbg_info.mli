@@ -2,13 +2,16 @@
     M code. In order to save some space, we split tracing information into two
     categories, static information and runtime information. Runtime information
     includes the name of the variable, the point in time at which its value is
-    assigned, and the value it's assigned.
+    assigned, and the value it's assigned. Point-in-time are represented using
+    ints named [Ticks]. They are supposed to be unique.
 
     Static information includes the name and location of the variable (filename,
     line, ...), its description. Static Information is indexed by some hash
-    derived from some runtime info. *)
+    derived from some runtime info.
 
-(** Origin describes the origin of variables. *)
+    Location information and type of information are informed via the [Origin.t]
+    type. It's used to track effects and declarations. *)
+
 module Origin : sig
   type code =
     | Rule of int
@@ -17,11 +20,14 @@ module Origin : sig
     | Target of string
     | Anomaly
     | Const
-        (** Where the variable is declared: In a rule, as input but not given,
-            as input but given, in a target, or a const. *)
+        (** Information about the type of origin -- in a target or rule if it's
+            an assignation, or whether it's an anomaly, a const, given as
+            input... *)
 
   type t = { filename : string; sline : int; eline : int; code_orig : code }
-  (** The origin of variable *)
+  (** Type of an origin. file position information is given as filename,
+      starting line and end line. Type of origin and additional information is
+      given in code. *)
 
   val make : string -> int -> int -> code -> t
   (** [make filename start_line end_line code_origin] *)
@@ -38,7 +44,7 @@ end
 
 module Tick : sig
   type t = int
-  (** One unit of calculation *)
+  (** Marker of one unit of calculation *)
 
   val tick : unit -> t
   (** Returns a new, non-used tick *)
@@ -140,6 +146,8 @@ type interp_error = {
     expected [expected] *)
 
 type anomaly = { name : string; origin : Origin.t; raised_origin : Origin.t }
+(** An anomaly -- [origin] informs the declaration if the anomaly, while
+    [raised_origin] informs where the anomaly was raised. *)
 
 type t = {
   graph : Graph.t;
@@ -152,9 +160,9 @@ type t = {
   ledger : Tick.t StrMap.t;
   (* The map making the link between the variable name, and the last tick it has been assigned to *)
   interp_errors : interp_error Tick.Map.t;
-      (* map of the errors raised by the execution *)
-  anomalies : anomaly list;
-  aliases : string StrMap.t;
+  (* map of the errors raised by the execution. *)
+  anomalies : anomaly list;  (** Lists the anomaly raised by an execution. *)
+  aliases : string StrMap.t;  (** Lists the aliases used as inputs. *)
 }
 
 val make_empty : aliases:string StrMap.t -> t
