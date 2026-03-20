@@ -70,7 +70,7 @@ module type S = sig
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events :
       (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    mutable tracer_ctx : tracer_ctx;
+    tracer_ctx : tracer_ctx;
   }
 
   val empty_ctx : ?dbg_info:Dbg_info.t -> Mir.program -> ctx
@@ -340,7 +340,7 @@ struct
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events :
       (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    mutable tracer_ctx : Tracer.ctx;
+    tracer_ctx : Tracer.ctx;
   }
 
   type pctx = {
@@ -1500,8 +1500,7 @@ struct
        to annotate the value we'll set later in the dbg_info. *)
     let target_name = Pos.unmark target.target_name in
     let rule_id =
-      ctx.ctx_prog.program_rules
-      |> IntMap.to_seq
+      ctx.ctx_prog.program_rules |> IntMap.to_seq
       |> Seq.find (fun (_, str) -> str = target_name)
       |> Option.map fst
     in

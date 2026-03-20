@@ -91,7 +91,7 @@ module type S = sig
     mutable ctx_exported_anos : (Com.Error.t * string option) list;
     mutable ctx_events :
       (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    mutable tracer_ctx : tracer_ctx;
+    tracer_ctx : tracer_ctx;
   }
   (** Interpretation context *)
 
