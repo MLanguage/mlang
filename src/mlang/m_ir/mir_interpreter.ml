@@ -263,10 +263,10 @@ struct
       unit =
     let value_inputs =
       Com.Var.Map.mapi
-        (fun v l ->
+        (fun _v l ->
           match l with
           | Com.Undefined -> Undefined
-          | Com.Float f -> Number (N.of_float_input v f))
+          | Com.Float f -> Number (N.of_float f))
         inputs
     in
     let default_space =
