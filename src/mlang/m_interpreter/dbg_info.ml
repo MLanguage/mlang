@@ -1,3 +1,5 @@
+open M_ir
+
 module Origin = struct
   type code =
     | Rule of int

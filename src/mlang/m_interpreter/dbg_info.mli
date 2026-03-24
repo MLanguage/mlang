@@ -12,6 +12,8 @@
     Location information and type of information are informed via the [Origin.t]
     type. It's used to track effects and declarations. *)
 
+open M_ir
+
 module Origin : sig
   type code =
     | Rule of int

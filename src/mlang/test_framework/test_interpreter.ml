@@ -8,6 +8,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+open M_interpreter
+
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
   with Not_found -> (
@@ -118,7 +120,7 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
 
 exception InterpError of int
 
-type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
+type target_dbg_info = { target : string; dbg_info : M_interpreter.Dbg_info.t }
 
 type interp_error = {
   name : string;

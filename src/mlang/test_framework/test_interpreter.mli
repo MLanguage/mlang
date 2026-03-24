@@ -13,7 +13,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-type target_dbg_info = { target : string; dbg_info : Dbg_info.t }
+type target_dbg_info = { target : string; dbg_info : M_interpreter.Dbg_info.t }
 
 val check_all_tests :
   Mir.program ->
