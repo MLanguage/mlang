@@ -47,55 +47,19 @@ module type S = sig
   (** Comes from the instantation of the functor describing how we want to trace
       the execution (plainly, or not-at-all) *)
 
-  (** Functor-specific program values *)
-  type value = Number of custom_float | Undefined
+  type value = custom_float Types.value
+
+  type ctx_tmp_var = custom_float Types.ctx_tmp_var
+
+  type ctx_var_space = custom_float Types.ctx_var_space
+
+  type ctx = (custom_float, tracer_ctx) Types.ctx
+
+  exception RuntimeError of Types.run_error * ctx
 
   val format_value : Format.formatter -> value -> unit
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  type ctx_tmp_var = { mutable var : Com.Var.t; mutable value : value }
-
-  type ctx_ref_var = {
-    mutable var : Com.Var.t;
-    mutable var_space : Com.variable_space;
-    mutable ref_var : Com.Var.t;
-    mutable org : int;
-  }
-
-  type print_ctx = { mutable indent : int; mutable is_newline : bool }
-
-  type ctx_var_space = {
-    input : value Array.t;
-    computed : value Array.t;
-    base : value Array.t;
-  }
-
-  type ctx = {
-    ctx_prog : Mir.program;
-    mutable ctx_target : Mir.target;
-    mutable ctx_var_space : int;
-    ctx_var_spaces : ctx_var_space Array.t;
-    ctx_tmps : ctx_tmp_var Array.t;
-    mutable ctx_tmps_org : int;
-    ctx_ref : ctx_ref_var Array.t;
-    mutable ctx_ref_org : int;
-    ctx_tab_map : Com.Var.t Array.t;
-    ctx_pr_out : print_ctx;
-    ctx_pr_err : print_ctx;
-    mutable ctx_anos : (Com.Error.t * string option) list;
-    mutable ctx_nb_anos : int;
-    mutable ctx_nb_discos : int;
-    mutable ctx_nb_infos : int;
-    mutable ctx_nb_bloquantes : int;
-    mutable ctx_archived_anos : StrSet.t;
-    mutable ctx_finalized_anos : (Com.Error.t * string option) list;
-    mutable ctx_exported_anos : (Com.Error.t * string option) list;
-    mutable ctx_events :
-      (value, Com.Var.t) Com.event_value Array.t Array.t list;
-    tracer_ctx : tracer_ctx;
-  }
-  (** Interpretation context *)
 
   val empty_ctx : ?dbg_info:Dbg_info.t -> Mir.program -> ctx
 
@@ -110,19 +74,9 @@ module type S = sig
   val update_ctx_with_events :
     ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
 
-  (** Interpreter runtime errors *)
-  type run_error =
-    | NanOrInf of string * Mir.expression Pos.marked
-    | StructuredError of (Ppf.structured_msg * (unit -> unit) option)
-
-  exception RuntimeError of run_error * ctx
-
-  val raise_runtime_as_structured : run_error -> 'a
-  (** Raises a runtime error with a formatted error message and context *)
+  val raise_runtime_as_structured : Types.run_error -> 'a
 
   val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
-  (** Returns the comparison between two numbers in the rounding and precision
-      context of the interpreter. *)
 
   val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 

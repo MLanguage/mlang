@@ -372,13 +372,13 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         (successes, failures)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.StructuredError (msg, kont) ->
-            Ppf.error_print "Error in test %s: %a" name
-              Ppf.format_structured_message msg;
+        | M_interpreter.Types.StructuredError (msg, kont) ->
+            Ppr.error_print "Error in test %s: %a" name
+              Ppf.format_structured_error msg;
             write_name name;
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
-        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
+        | NanOrInf (msg, Pos.Mark (_, pos)) ->
             Ppf.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             write_name name;
@@ -439,12 +439,12 @@ let check_one_test (p : Mir.program) (name : string)
         Some 0
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
-        | Interp.StructuredError (msg, kont) ->
+        | M_interpreter.Types.StructuredError (msg, kont) ->
             Ppf.error_print "Error in test %s: %a" name
               Ppf.format_structured_message msg;
             (match kont with None -> () | Some kont -> kont ());
             Some 0
-        | Interp.NanOrInf (msg, Pos.Mark (_, pos)) ->
+        | NanOrInf (msg, Pos.Mark (_, pos)) ->
             Ppf.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
               msg Pos.format pos;
             Some 0)
