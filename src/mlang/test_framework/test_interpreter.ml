@@ -235,7 +235,7 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
           | true -> Some (make_dbg_info inst program.program_alias)
         in
         let varMap, anoSet, dbg_info =
-          Mir_interpreter.evaluate_program ?dbg_info program inst.vars
+          M_interpreter.Eval.evaluate_program ?dbg_info program inst.vars
             inst.events value_sort round_ops
         in
         let interp_errors =
@@ -338,7 +338,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     |> List.sort String.compare |> Array.of_list
   in
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  Mir_interpreter.exit_on_rte := false;
+  M_interpreter.Eval.exit_on_rte := false;
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
@@ -348,8 +348,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   let process (name : string) ((successes, failures) : process_acc) :
       process_acc =
     let module Interp =
-      (val Mir_interpreter.get_interp value_sort round_ops ~trace
-          : Mir_interpreter.S)
+      (val M_interpreter.Eval.get_interp value_sort round_ops ~trace
+          : M_interpreter.Eval.S)
     in
     try
       Config.debug_flag := false;
@@ -410,7 +410,7 @@ let check_all_tests (p : Mir.program) (test_dir : string)
 let check_one_test (p : Mir.program) (name : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  Mir_interpreter.exit_on_rte := false;
+  M_interpreter.Eval.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
@@ -420,8 +420,8 @@ let check_one_test (p : Mir.program) (name : string)
   (* let _, finish = Config.create_progress_bar "Testing files" in*)
   let is_ok =
     let module Interp =
-      (val Mir_interpreter.get_interp value_sort round_ops ~trace
-          : Mir_interpreter.S)
+      (val M_interpreter.Eval.get_interp value_sort round_ops ~trace
+          : M_interpreter.Eval.S)
     in
     try
       Config.debug_flag := false;

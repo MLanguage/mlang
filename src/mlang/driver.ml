@@ -94,7 +94,7 @@ let process_dgfip_options (backend : Config.backend)
   | UnknownBackend -> Dgfip_options.default_flags
 
 let run_single_test m_program test =
-  Mir_interpreter.repl_debug := true;
+  M_interpreter.Eval.repl_debug := true;
   Test_interpreter.check_one_test m_program test !Config.value_sort
     !Config.round_ops;
   Ppf.result_print "Test passed!"

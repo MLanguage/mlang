@@ -14,6 +14,8 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+open M_ir
+
 (** Interpretation of BIR programs *)
 
 (**{1 Program values}*)

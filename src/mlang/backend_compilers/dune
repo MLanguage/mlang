@@ -3,4 +3,4 @@
  (public_name mlang.backend_compilers)
  (flags
   (:standard -open Utils -open M_ir -open M_frontend))
- (libraries m_frontend m_ir utils menhirLib parmap))
+ (libraries m_frontend m_ir m_interpreter utils menhirLib parmap))
