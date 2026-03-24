@@ -49,30 +49,30 @@ module type S = sig
 
   type value = custom_float Types.value
 
-  type ctx_tmp_var = custom_float Types.ctx_tmp_var
+  type ctx_tmp_var = custom_float Context.ctx_tmp_var
 
-  type ctx_var_space = custom_float Types.ctx_var_space
+  type ctx_var_space = custom_float Context.ctx_var_space
 
-  type ctx = (custom_float, tracer_ctx) Types.ctx
+  type ctx = (custom_float, tracer_ctx) Context.t
 
   exception RuntimeError of Types.run_error * ctx
+
+  val empty_ctx :
+    ?dbg_info:Dbg_info.t ->
+    ?inputs:Com.literal Com.Var.Map.t ->
+    ?events:(Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
+    Mir.program ->
+    ctx
 
   val format_value : Format.formatter -> value -> unit
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  val empty_ctx : ?dbg_info:Dbg_info.t -> Mir.program -> ctx
 
   val literal_to_value : Com.literal -> value
 
   val value_to_literal : value -> Com.literal
 
   val get_dbg_info : ctx -> Dbg_info.t option
-
-  val update_ctx_with_inputs : ctx -> Com.literal Com.Var.Map.t -> unit
-
-  val update_ctx_with_events :
-    ctx -> (Com.literal, Com.Var.t) Com.event_value StrMap.t list -> unit
 
   val raise_runtime_as_structured : Types.run_error -> 'a
 
