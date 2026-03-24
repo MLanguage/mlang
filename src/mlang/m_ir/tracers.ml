@@ -48,9 +48,10 @@ module Tracer : S = struct
   let get_dbg_info ctx = Some ctx.dbg_info
 
   let empty_ctx dbg_info =
-    match dbg_info with
-    | None -> assert false
-    | Some dbg_info -> { dbg_info; exec_ctx = CtxUndefined }
+    let dbg_info =
+      Option.value dbg_info ~default:(Dbg_info.make_empty ~aliases:StrMap.empty)
+    in
+    { dbg_info; exec_ctx = CtxUndefined }
 
   let get_rule ctx =
     match ctx.exec_ctx with
