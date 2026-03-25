@@ -16,6 +16,8 @@ type 'a ctx_var_space = {
   base : 'a value Array.t;
 }
 
+type ctx_print = { mutable indent : int; mutable is_newline : bool }
+
 type ('a, 'tc) t = {
   ctx_prog : Mir.program;
   mutable ctx_target : Mir.target;
@@ -26,8 +28,8 @@ type ('a, 'tc) t = {
   ctx_ref : ctx_ref_var Array.t;
   mutable ctx_ref_org : int;
   ctx_tab_map : Com.Var.t Array.t;
-  ctx_pr_out : print_ctx;
-  ctx_pr_err : print_ctx;
+  ctx_pr_out : ctx_print;
+  ctx_pr_err : ctx_print;
   mutable ctx_anos : (Com.Error.t * string option) list;
   mutable ctx_nb_anos : int;
   mutable ctx_nb_discos : int;

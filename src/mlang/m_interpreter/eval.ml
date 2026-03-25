@@ -88,13 +88,6 @@ struct
 
   type ctx = (custom_float, tracer_ctx) Context.t
 
-  type pctx = {
-    std : Com.print_std;
-    ctx : ctx;
-    std_fmt : Format.formatter;
-    ctx_pr : print_ctx;
-  }
-
   exception RuntimeError of Types.run_error * ctx
 
   let truncatef (x : N.t) : N.t = R.truncatef x
@@ -376,79 +369,31 @@ struct
 
   (* print aux *)
 
-  and pr_ctx std ctx =
-    match std with
-    | Com.StdOut ->
-        { std; ctx; std_fmt = Format.std_formatter; ctx_pr = ctx.ctx_pr_out }
-    | Com.StdErr ->
-        { std; ctx; std_fmt = Format.err_formatter; ctx_pr = ctx.ctx_pr_err }
+  and pr_string pctx s =
+    Printer.string pctx s;
+    Printer.flush pctx
 
-  and pr_flush (pctx : pctx) =
-    match pctx.std with
-    | Com.StdOut -> ()
-    | Com.StdErr -> Format.pp_print_flush pctx.std_fmt ()
-
-  and pr_out_indent (pctx : pctx) =
-    if pctx.ctx_pr.is_newline then (
-      for _i = 1 to pctx.ctx_pr.indent do
-        Format.fprintf pctx.std_fmt " "
-      done;
-      pctx.ctx_pr.is_newline <- false)
-
-  and pr_raw (pctx : pctx) s =
-    let len = String.length s in
-    let rec aux = function
-      | n when n >= len -> ()
-      | n -> (
-          match s.[n] with
-          | '\n' ->
-              Format.fprintf pctx.std_fmt "\n";
-              pr_flush pctx;
-              pctx.ctx_pr.is_newline <- true;
-              aux (n + 1)
-          | c ->
-              pr_out_indent pctx;
-              Format.fprintf pctx.std_fmt "%c" c;
-              aux (n + 1))
-    in
-    aux 0
-
-  and pr_set_indent (pctx : pctx) diff =
-    pctx.ctx_pr.indent <- max 0 (pctx.ctx_pr.indent + diff)
-
-  and pr_value (pctx : pctx) mi ma value =
-    pr_raw pctx (Pp.spr "%a" (format_value_prec mi ma) value)
-
-  and pr_info (pctx : pctx) info (vsd : Com.variable_space) var =
-    if not vsd.vs_by_default then (
-      pr_raw pctx (Pos.unmark vsd.vs_name);
-      pr_raw pctx ".");
-    let _, v, _ = Context.get_var pctx.ctx None var in
-    match info with
-    | Com.Name -> pr_raw pctx (Com.Var.name_str v)
-    | Com.Alias -> pr_raw pctx (Com.Var.alias_str v)
-
-  and pr_string (pctx : pctx) s =
-    pr_raw pctx s;
-    pr_flush pctx
-
-  and pr_access (pctx : pctx) info acc =
-    match get_access_var pctx.ctx acc with
+  and pr_access ~ctx (pctx : Printer.t) info acc =
+    match get_access_var ctx acc with
     | Some (vsd, var, _) ->
-        pr_info pctx info vsd var;
-        pr_flush pctx
+        let _, v, _ = Context.get_var ctx None var in
+        Printer.info pctx info vsd v;
+        Printer.flush pctx
     | None -> ()
 
-  and pr_indent (pctx : pctx) e =
-    match evaluate_expr pctx.ctx e with
+  and pr_indent ~ctx (pctx : Printer.t) e =
+    match evaluate_expr ctx e with
     | Undefined -> ()
     | Number x ->
         let diff = Int64.to_int @@ N.to_int @@ roundf x in
-        pr_set_indent pctx diff
+        Printer.set_indent pctx diff
 
-  and pr_expr (pctx : pctx) mi ma e =
-    pr_value pctx mi ma (evaluate_expr pctx.ctx e);
-    pr_flush pctx
+  and pr_expr ~ctx (pctx : Printer.t) (mi : int) ma e =
+    e
+    |> evaluate_expr ctx
+    |> Pp.spr "%a" (format_value_prec mi ma)
+    |> Printer.raw pctx;
+    Printer.flush pctx
 
   (* end of print aux *)
 
@@ -778,16 +723,17 @@ struct
         let vsd = Context.get_var_space ctx m_sp_opt in
         evaluate_target canBlock ctx tf args vsd
     | Com.Print (std, args) ->
-        let pctx = pr_ctx std ctx in
+        let pctx = Printer.make std ctx in
         List.iter
           (fun (arg : Com.Var.t Com.print_arg Pos.marked) ->
             match Pos.unmark arg with
             | PrintString s -> pr_string pctx s
-            | PrintAccess (info, m_a) -> pr_access pctx info (Pos.unmark m_a)
-            | PrintIndent e -> pr_indent pctx e
-            | PrintExpr (e, mi, ma) -> pr_expr pctx mi ma e)
+            | PrintAccess (info, m_a) ->
+                pr_access ~ctx pctx info (Pos.unmark m_a)
+            | PrintIndent e -> pr_indent ~ctx pctx e
+            | PrintExpr (e, mi, ma) -> pr_expr ~ctx pctx mi ma e)
           args;
-        pr_flush pctx
+        Printer.flush pctx
     | Com.Iterate ((var : Com.Var.t), al, var_params, stmts) -> (
         try
           List.iter
