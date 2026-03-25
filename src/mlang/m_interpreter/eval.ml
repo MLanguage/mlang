@@ -66,15 +66,11 @@ end
 
 module type PartialInterp = functor (_ : Tracers.S) -> S
 
-module Make
-    (N : Mir_number.NumberInterface)
-    (RF : Mir_roundops.RoundOpsFunctor)
-    (Tracer : Tracers.S) =
-struct
+module Make (N : Number.S) (Tracer : Tracers.S) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
-  module R = RF (N)
+  (* module R = RF (N) *)
 
   type custom_float = N.t
 
@@ -90,9 +86,9 @@ struct
 
   exception RuntimeError of Types.run_error * ctx
 
-  let truncatef (x : N.t) : N.t = R.truncatef x
+  let truncatef (x : N.t) : N.t = N.truncatef x
 
-  let roundf (x : N.t) = R.roundf x
+  let roundf (x : N.t) = N.roundf x
 
   let false_value () = Number (N.zero ())
 
@@ -389,8 +385,7 @@ struct
         Printer.set_indent pctx diff
 
   and pr_expr ~ctx (pctx : Printer.t) (mi : int) ma e =
-    e
-    |> evaluate_expr ctx
+    e |> evaluate_expr ctx
     |> Pp.spr "%a" (format_value_prec mi ma)
     |> Printer.raw pctx;
     Printer.flush pctx
@@ -1165,53 +1160,21 @@ module MainframeLongSize = struct
   let max_long = ref Int64.max_int
 end
 
-module FloatDefInterp =
-  Make (Mir_number.RegularFloatNumber) (Mir_roundops.DefaultRoundOps)
-module FloatMultInterp =
-  Make (Mir_number.RegularFloatNumber) (Mir_roundops.MultiRoundOps)
-module FloatMfInterp =
-  Make
-    (Mir_number.RegularFloatNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module MPFRDefInterp =
-  Make (Mir_number.MPFRNumber) (Mir_roundops.DefaultRoundOps)
-module MPFRMultInterp =
-  Make (Mir_number.MPFRNumber) (Mir_roundops.MultiRoundOps)
-module MPFRMfInterp =
-  Make
-    (Mir_number.MPFRNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module BigIntDefInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.DefaultRoundOps)
-module BigIntMultInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.MultiRoundOps)
-module BigIntMfInterp =
-  Make
-    (Mir_number.BigIntFixedPointNumber
-       (BigIntPrecision))
-       (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module IntvDefInterp =
-  Make (Mir_number.IntervalNumber) (Mir_roundops.DefaultRoundOps)
-module IntvMultInterp =
-  Make (Mir_number.IntervalNumber) (Mir_roundops.MultiRoundOps)
-module IntvMfInterp =
-  Make
-    (Mir_number.IntervalNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
-module RatDefInterp =
-  Make (Mir_number.RationalNumber) (Mir_roundops.DefaultRoundOps)
-module RatMultInterp =
-  Make (Mir_number.RationalNumber) (Mir_roundops.MultiRoundOps)
-module RatMfInterp =
-  Make
-    (Mir_number.RationalNumber)
-    (Mir_roundops.MainframeRoundOps (MainframeLongSize))
+module FloatDefInterp = Make (Number.FloatDef)
+module FloatMultInterp = Make (Number.FloatMult)
+module FloatMfInterp = Make (Number.FloatMf)
+module MPFRDefInterp = Make (Number.MPFRDef)
+module MPFRMultInterp = Make (Number.MPFRMult)
+module MPFRMfInterp = Make (Number.MPFRMf)
+module BigIntDefInterp = Make (Number.BigIntDef)
+module BigIntMultInterp = Make (Number.BigIntMult)
+module BigIntMfInterp = Make (Number.BigIntMf)
+module IntvDefInterp = Make (Number.IntvDef)
+module IntvMultInterp = Make (Number.IntvMult)
+module IntvMfInterp = Make (Number.IntvMf)
+module RatDefInterp = Make (Number.RatDef)
+module RatMultInterp = Make (Number.RatMult)
+module RatMfInterp = Make (Number.RatMf)
 
 let get_interp (sort : Config.value_sort) (roundops : Config.round_ops)
     ~(trace : bool) : (module S) =
