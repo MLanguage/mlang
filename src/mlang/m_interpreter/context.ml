@@ -124,10 +124,19 @@ let get_var (ctx : _ t) (m_sp_opt : Com.var_space) (var : Com.Var.t) :
       in
       (vsd, rv.ref_var, rv.org)
 
+let unsafe_get_var_tab (ctx : _ t) (var : Com.Var.t) (i : int) =
+  ctx.ctx_tab_map.(Com.Var.loc_tab_idx var + 1 + i)
+
 let get_var_tab (ctx : _ t) (var : Com.Var.t) (i : int) : Com.Var.t =
-  match Com.Var.get_table var with
-  | Some _ -> ctx.ctx_tab_map.(Com.Var.loc_tab_idx var + 1 + i)
-  | None -> assert false
+  assert (Com.Var.is_table var);
+  unsafe_get_var_tab ctx var i
+
+let get_vars_tab (ctx : _ t) (var : Com.Var.t) : Com.Var.t list =
+  assert (Com.Var.is_table var);
+  let rec loop sz l =
+    if sz <= 0 then l else loop (sz - 1) (unsafe_get_var_tab ctx var sz :: l)
+  in
+  loop (Com.Var.size var) []
 
 let get_var_value_org (ctx : ('a, _) t) (vsd : Com.variable_space)
     (var : Com.Var.t) (vorg : int) : 'a value =

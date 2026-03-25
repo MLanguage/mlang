@@ -70,7 +70,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
-  (* module R = RF (N) *)
+  module Fun = Functions.Make (N)
 
   type custom_float = N.t
 
@@ -85,14 +85,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
   type ctx = (custom_float, tracer_ctx) Context.t
 
   exception RuntimeError of Types.run_error * ctx
-
-  let truncatef (x : N.t) : N.t = N.truncatef x
-
-  let roundf (x : N.t) = N.roundf x
-
-  let false_value () = Number (N.zero ())
-
-  let true_value () = Number (N.one ())
 
   let format_value (fmt : Format.formatter) (x : value) =
     match x with
@@ -381,7 +373,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     match evaluate_expr ctx e with
     | Undefined -> ()
     | Number x ->
-        let diff = Int64.to_int @@ N.to_int @@ roundf x in
+        let diff = Int64.to_int @@ N.to_int @@ N.roundf x in
         Printer.set_indent pctx diff
 
   and pr_expr ~ctx (pctx : Printer.t) (mi : int) ma e =
@@ -398,6 +390,46 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     match evaluate_expr ctx m_i with
     | Number z -> Int64.to_string @@ N.to_int z
     | Undefined -> "indefini"
+
+  and evaluate_fun_call ctx (f : Com.func)
+      (args : Com.Var.t Com.m_expression list) =
+    match (f, args) with
+    | ArrFunc, [ arg ] -> Fun.arr @@ evaluate_expr ctx arg
+    | InfFunc, [ arg ] -> Fun.inf @@ evaluate_expr ctx arg
+    | PresentFunc, [ arg ] -> Fun.present @@ evaluate_expr ctx arg
+    | Supzero, [ arg ] -> Fun.supzero @@ evaluate_expr ctx arg
+    | AbsFunc, [ arg ] -> Fun.abs @@ evaluate_expr ctx arg
+    | MinFunc, [ a1; a2 ] ->
+        Fun.min (evaluate_expr ctx a1) (evaluate_expr ctx a2)
+    | MaxFunc, [ a1; a2 ] ->
+        Fun.max (evaluate_expr ctx a1) (evaluate_expr ctx a2)
+    | Multimax, [ a1; acc ] ->
+        let a2 =
+          match Pos.unmark acc with
+          | Com.Var v -> begin
+              match get_access_var ctx v with
+              | None -> []
+              | Some (vsd, var, vorg) ->
+                  if Com.Var.is_table var then
+                    List.map
+                      (fun v -> Context.get_var_value_org ctx vsd v vorg)
+                      (Context.get_vars_tab ctx var)
+                  else [ Context.get_var_value_org ctx vsd var vorg ]
+            end
+          | _ -> []
+        in
+        Fun.multimax (evaluate_expr ctx a1) a2
+    | NbEvents, [] -> Fun.nb_events ctx
+    | Func fn, args ->
+        let fd = StrMap.find fn ctx.ctx_prog.program_functions in
+        evaluate_function ctx fd args
+    | ( ( ArrFunc | InfFunc | PresentFunc | Supzero | AbsFunc | MinFunc
+        | MaxFunc | Multimax | NbEvents ),
+        _ ) ->
+        Errors.raise_error "arity error"
+    | (SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber | ComplNumber), _
+      ->
+        Errors.raise_error "not implemented"
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
@@ -493,95 +525,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         | Literal { lit = Undefined; _ } -> Undefined
         | Literal { lit = Float f; _ } -> Number (N.of_float f)
         | Var access -> get_access_value ctx access
-        | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (roundf x)
-            | Undefined -> Undefined (*nope:Float 0.*))
-        | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Number x -> Number (truncatef x)
-            | Undefined -> Undefined (*Float 0.*))
-        | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> false_value ()
-            | _ -> true_value ())
-        | FuncCall (Pos.Mark (Supzero, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f as n ->
-                if compare_numbers Com.Lte f (N.zero ()) then Undefined else n)
-        | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) -> (
-            match evaluate_expr ctx arg with
-            | Undefined -> Undefined
-            | Number f -> Number (N.abs f))
-        | FuncCall (Pos.Mark (MinFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.min (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.min fl fr))
-        | FuncCall (Pos.Mark (MaxFunc, _), [ arg1; arg2 ]) -> (
-            match (evaluate_expr ctx arg1, evaluate_expr ctx arg2) with
-            | Undefined, Undefined -> Undefined
-            | Undefined, Number f | Number f, Undefined ->
-                Number (N.max (N.zero ()) f)
-            | Number fl, Number fr -> Number (N.max fl fr))
-        | FuncCall (Pos.Mark (Multimax, _), [ arg1; arg2 ]) -> (
-            match evaluate_expr ctx arg1 with
-            | Undefined -> Undefined
-            | Number f -> (
-                let nb = Int64.to_int @@ N.to_int @@ roundf f in
-                let var_opt =
-                  match Pos.unmark arg2 with
-                  | Var access -> get_access_var ctx access
-                  | _ -> None
-                in
-                match var_opt with
-                | None -> Undefined
-                | Some (vsd, var, vorg) ->
-                    if Com.Var.is_table var then
-                      let rec loop res i =
-                        if i >= Com.Var.size var || i >= nb then res
-                        else
-                          let var_i = Context.get_var_tab ctx var i in
-                          let val_i =
-                            Context.get_var_value_org ctx vsd var_i vorg
-                          in
-                          let res =
-                            match (res, val_i) with
-                            | Undefined, _ -> val_i
-                            | Number _, Undefined -> res
-                            | Number nr, Number ni ->
-                                if N.(nr <. ni) then val_i else res
-                          in
-                          loop res (i + 1)
-                      in
-                      loop Undefined 0
-                    else if nb >= 1 then
-                      Context.get_var_value_org ctx vsd var vorg
-                    else Undefined))
-        | FuncCall (Pos.Mark (NbEvents, _), _) ->
-            let card = Array.length (List.hd ctx.ctx_events) in
-            Number (N.of_int @@ Int64.of_int @@ card)
-        | FuncCall (Pos.Mark (Func fn, _), args) ->
-            let fd = StrMap.find fn ctx.ctx_prog.program_functions in
-            evaluate_function ctx fd args
-        | FuncCall (Pos.Mark (AbsFunc, _), _)
-        | FuncCall (Pos.Mark (Supzero, _), _)
-        | FuncCall (Pos.Mark (PresentFunc, _), _)
-        | FuncCall (Pos.Mark (ArrFunc, _), _)
-        | FuncCall (Pos.Mark (MinFunc, _), _)
-        | FuncCall (Pos.Mark (MaxFunc, _), _)
-        | FuncCall (Pos.Mark (Multimax, _), _)
-        | FuncCall (Pos.Mark (InfFunc, _), _) ->
-            Errors.raise_error "arity error"
-        | FuncCall
-            ( Mark
-                ( ( SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber
-                  | ComplNumber ),
-                  _ ),
-              _ ) ->
-            Errors.raise_error "not implemented"
+        | FuncCall (Pos.Mark (f, _), args) -> evaluate_fun_call ctx f args
         | Attribut (m_acc, a) -> (
             match get_access_var ctx (Pos.unmark m_acc) with
             | Some (_, v, _) -> (

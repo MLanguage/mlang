@@ -55,6 +55,8 @@ val get_var :
 
 val get_var_tab : ('a, 'b) t -> Com.Var.t -> int -> Com.Var.t
 
+val get_vars_tab : ('a, 'b) t -> Com.Var.t -> Com.Var.t list
+
 val get_var_value_org :
   ('a, 'b) t -> Com.variable_space -> Com.Var.t -> int -> 'a value
 

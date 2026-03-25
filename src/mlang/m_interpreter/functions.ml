@@ -1,0 +1,59 @@
+open M_ir
+open Types
+
+module Make (N : Number.S) = struct
+  let false_value () = Number (N.zero ())
+
+  let true_value () = Number (N.one ())
+
+  let arr = function
+    | Number x -> Number (N.roundf x)
+    | Undefined -> Undefined (*nope:Float 0.*)
+
+  let inf = function
+    | Number x -> Number (N.truncatef x)
+    | Undefined -> Undefined
+
+  let present = function Undefined -> false_value () | _ -> true_value ()
+
+  let supzero = function
+    | Undefined -> Undefined
+    | Number f as n -> if N.compare Com.Lte f (N.zero ()) then Undefined else n
+
+  let abs = function Undefined -> Undefined | Number f -> Number (N.abs f)
+
+  let min i j =
+    match (i, j) with
+    | Undefined, Undefined -> Undefined
+    | Undefined, Number f | Number f, Undefined -> Number (N.min (N.zero ()) f)
+    | Number fl, Number fr -> Number (N.min fl fr)
+
+  let max i j =
+    match (i, j) with
+    | Undefined, Undefined -> Undefined
+    | Undefined, Number f | Number f, Undefined -> Number (N.max (N.zero ()) f)
+    | Number fl, Number fr -> Number (N.max fl fr)
+
+  let multimax (i : N.t value) (j : N.t value list) : N.t value =
+    match i with
+    | Undefined -> Undefined
+    | Number f ->
+        let nb = Int64.to_int @@ N.to_int @@ N.roundf f in
+        let rec loop res cpt = function
+          | [] -> res
+          | _ when cpt >= nb -> res
+          | Undefined :: tl -> loop res (cpt + 1) tl
+          | (Number v as hd) :: tl ->
+              let res =
+                match res with
+                | Undefined -> hd
+                | Number nr -> if N.(nr <. v) then hd else res
+              in
+              loop res (cpt + 1) tl
+        in
+        loop Undefined 0 j
+
+  let nb_events (ctx : (N.t, _) Context.t) =
+    let card = Array.length (List.hd ctx.ctx_events) in
+    Number (N.of_int @@ Int64.of_int @@ card)
+end
