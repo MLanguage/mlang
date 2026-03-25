@@ -1096,14 +1096,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
   let get_dbg_info (ctx : _ Context.t) = Tracer.get_dbg_info ctx.tracer_ctx
 end
 
-module BigIntPrecision = struct
-  let scaling_factor_bits = ref 64
-end
-
-module MainframeLongSize = struct
-  let max_long = ref Int64.max_int
-end
-
 module FloatDefInterp = Make (Number.FloatDef)
 module FloatMultInterp = Make (Number.FloatMult)
 module FloatMfInterp = Make (Number.FloatMf)
@@ -1151,31 +1143,12 @@ let get_interp (sort : Config.value_sort) (roundops : Config.round_ops)
   let module Interp = PartialInterp (Tracer) in
   (module Interp)
 
-let prepare_interp (sort : Config.value_sort) (roundops : Config.round_ops) :
-    unit =
-  begin match sort with
-  | MPFR prec -> Mpfr.set_default_prec prec
-  | BigInt prec -> BigIntPrecision.scaling_factor_bits := prec
-  | Interval -> Mpfr.set_default_prec 64
-  | _ -> ()
-  end;
-  match roundops with
-  | ROMainframe long_size ->
-      let max_long =
-        if long_size = 32 then Int64.of_int32 Int32.max_int
-        else if long_size = 64 then Int64.max_int
-        else assert false
-        (* checked when parsing command line *)
-      in
-      MainframeLongSize.max_long := max_long
-  | _ -> ()
-
 let evaluate_program ?(dbg_info : Dbg_info.t option) (p : Mir.program)
     (inputs : Com.literal Com.Var.Map.t)
     (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list)
     (sort : Config.value_sort) (roundops : Config.round_ops) :
     Com.literal Com.Var.Map.t * Com.Error.Set.t * Dbg_info.t option =
-  prepare_interp sort roundops;
+  Number.setup_precision sort roundops;
   let trace = !Config.trace in
   let module Interp = (val get_interp sort roundops ~trace : S) in
   let ctx = Interp.empty_ctx ?dbg_info ~inputs ~events p in
