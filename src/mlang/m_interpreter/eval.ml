@@ -267,6 +267,48 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         set_var_value_org ctx vsd var_i vorg value
       else set_var_value_org ctx vsd var vorg value
 
+  let comparison op new_e1 new_e2 =
+    match (op, new_e1, new_e2) with
+    | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
+      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
+       Undefined
+    | op, Number i1, Number i2 ->
+       Number (real_of_bool @@ compare_numbers op i1 i2)
+  
+  let unop op new_e1 =
+    match (op, new_e1) with
+    | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
+    | Com.Minus, Number f1 -> Number N.(zero () -. f1)
+    | Com.(Not | Minus), Undefined -> Undefined
+  
+  let binop op new_e1 new_e2 =
+    let open Com in
+    match (op, new_e1, new_e2) with
+    | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
+    | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
+    | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
+    | Add, Undefined, Undefined -> Undefined
+    | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
+    | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
+    | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
+    | Sub, Undefined, Undefined -> Undefined
+    | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
+    | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
+    | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
+    | Div, _, l2 when is_zero l2 -> Number (N.zero ())
+    | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
+    | Mod, Undefined, _ | Mod, _, Undefined -> Undefined (* yes... *)
+    | Mod, _, l2 when is_zero l2 -> Number (N.zero ())
+    | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
+    | And, Undefined, _ | And, _, Undefined -> Undefined
+    | Or, Undefined, Undefined -> Undefined
+    | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
+    | And, Number i1, Number i2 ->
+       Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
+    | Or, Number i1, Number i2 ->
+       Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
+    
+
   let rec get_access_value (ctx : ctx) access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> Context.get_var_value ctx m_sp_opt v
@@ -433,47 +475,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
 
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
-    let comparison op new_e1 new_e2 =
-      match (op, new_e1, new_e2) with
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), _, Undefined
-      | Com.(Gt | Gte | Lt | Lte | Eq | Neq), Undefined, _ ->
-          Undefined
-      | op, Number i1, Number i2 ->
-          Number (real_of_bool @@ compare_numbers op i1 i2)
-    in
-    let unop op new_e1 =
-      match (op, new_e1) with
-      | Com.Not, Number b1 -> Number (real_of_bool (not (bool_of_real b1)))
-      | Com.Minus, Number f1 -> Number N.(zero () -. f1)
-      | Com.(Not | Minus), Undefined -> Undefined
-    in
-    let binop op new_e1 new_e2 =
-      let open Com in
-      match (op, new_e1, new_e2) with
-      | Add, Number i1, Number i2 -> Number N.(i1 +. i2)
-      | Add, Number i1, Undefined -> Number N.(i1 +. zero ())
-      | Add, Undefined, Number i2 -> Number N.(zero () +. i2)
-      | Add, Undefined, Undefined -> Undefined
-      | Sub, Number i1, Number i2 -> Number N.(i1 -. i2)
-      | Sub, Number i1, Undefined -> Number N.(i1 -. zero ())
-      | Sub, Undefined, Number i2 -> Number N.(zero () -. i2)
-      | Sub, Undefined, Undefined -> Undefined
-      | Mul, _, Undefined | Mul, Undefined, _ -> Undefined
-      | Mul, Number i1, Number i2 -> Number N.(i1 *. i2)
-      | Div, Undefined, _ | Div, _, Undefined -> Undefined (* yes... *)
-      | Div, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Div, Number i1, Number i2 -> Number N.(i1 /. i2)
-      | Mod, Undefined, _ | Mod, _, Undefined -> Undefined (* yes... *)
-      | Mod, _, l2 when is_zero l2 -> Number (N.zero ())
-      | Mod, Number i1, Number i2 -> Number N.(i1 %. i2)
-      | And, Undefined, _ | And, _, Undefined -> Undefined
-      | Or, Undefined, Undefined -> Undefined
-      | Or, Undefined, Number i | Or, Number i, Undefined -> Number i
-      | And, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 && bool_of_real i2))
-      | Or, Number i1, Number i2 ->
-          Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
-    in
     let out =
       try
         match Pos.unmark e with
