@@ -313,7 +313,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
   let comp (o : Com.comp_op) =
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
-        if M_interpreter.Eval.compare_float_numbers o f1 f2 then Dtrue
+        if M_ir.Mir_number.RegularFloatNumber.compare o f1 f2 then Dtrue
         else Dfalse
     | Dvar v1, Dvar v2 ->
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)

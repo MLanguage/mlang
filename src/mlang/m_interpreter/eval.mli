@@ -39,21 +39,17 @@ val repl_debug : bool ref
 
 (** Signature of the modules produced by the functor *)
 module type S = sig
-  type custom_float
-  (** Comes from the instantiation of the functor by a kind of floating-point
-      value *)
+  module N : Number.S
 
-  type tracer_ctx
-  (** Comes from the instantation of the functor describing how we want to trace
-      the execution (plainly, or not-at-all) *)
+  module Tracer : Tracers.S
 
-  type value = custom_float Types.value
+  type value = N.t Types.value
 
-  type ctx_tmp_var = custom_float Context.ctx_tmp_var
+  type ctx_tmp_var = N.t Context.ctx_tmp_var
 
-  type ctx_var_space = custom_float Context.ctx_var_space
+  type ctx_var_space = N.t Context.ctx_var_space
 
-  type ctx = (custom_float, tracer_ctx) Context.t
+  type ctx = (N.t, Tracer.ctx) Context.t
 
   exception RuntimeError of Types.run_error * ctx
 
@@ -68,15 +64,9 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  val literal_to_value : Com.literal -> value
-
-  val value_to_literal : value -> Com.literal
-
   val get_dbg_info : ctx -> Dbg_info.t option
 
   val raise_runtime_as_structured : Types.run_error -> 'a
-
-  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
 
   val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 
@@ -101,6 +91,72 @@ end
     - Multi: use the rouding operations of the PC/multi-thread context
     - Mf: use the rounding operations of the mainframe context *)
 
+module Runner : sig
+  module NoTracing : sig
+    module FloatDefInterp : S
+
+    module FloatMultInterp : S
+
+    module FloatMfInterp : S
+
+    module MPFRDefInterp : S
+
+    module MPFRMultInterp : S
+
+    module MPFRMfInterp : S
+
+    module BigIntDefInterp : S
+
+    module BigIntMultInterp : S
+
+    module BigIntMfInterp : S
+
+    module IntvDefInterp : S
+
+    module IntvMultInterp : S
+
+    module IntvMfInterp : S
+
+    module RatDefInterp : S
+
+    module RatMultInterp : S
+
+    module RatMfInterp : S
+  end
+
+  module WithTracing : sig
+    module FloatDefInterp : S
+
+    module FloatMultInterp : S
+
+    module FloatMfInterp : S
+
+    module MPFRDefInterp : S
+
+    module MPFRMultInterp : S
+
+    module MPFRMfInterp : S
+
+    module BigIntDefInterp : S
+
+    module BigIntMultInterp : S
+
+    module BigIntMfInterp : S
+
+    module IntvDefInterp : S
+
+    module IntvMultInterp : S
+
+    module IntvMfInterp : S
+
+    module RatDefInterp : S
+
+    module RatMultInterp : S
+
+    module RatMfInterp : S
+  end
+end
+
 (** {1 Generic interpretation API}*)
 
 val get_interp :
@@ -124,5 +180,3 @@ val evaluate_expr :
   Config.round_ops ->
   Com.literal
 (** Interprets only an expression *)
-
-val compare_float_numbers : Com.comp_op -> float -> float -> bool

@@ -7,6 +7,10 @@ module type S = sig
   include M_ir.Mir_number.NumberInterface
 
   include M_ir.Mir_roundops.RoundOpsInterface with type t := t
+
+  val to_literal : t Types.value -> M_ir.Com.literal
+
+  val of_literal : M_ir.Com.literal -> t Types.value
 end
 
 module Make

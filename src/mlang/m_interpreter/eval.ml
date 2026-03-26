@@ -24,17 +24,17 @@ let exit_on_rte = ref true
 let repl_debug = ref false
 
 module type S = sig
-  type custom_float
+  module N : Number.S
 
-  type tracer_ctx
+  module Tracer : Tracers.S
 
-  type value = custom_float Types.value
+  type value = N.t Types.value
 
-  type ctx_tmp_var = custom_float Context.ctx_tmp_var
+  type ctx_tmp_var = N.t Context.ctx_tmp_var
 
-  type ctx_var_space = custom_float Context.ctx_var_space
+  type ctx_var_space = N.t Context.ctx_var_space
 
-  type ctx = (custom_float, tracer_ctx) Context.t
+  type ctx = (N.t, Tracer.ctx) Context.t
 
   exception RuntimeError of Types.run_error * ctx
 
@@ -49,15 +49,9 @@ module type S = sig
 
   val format_value_prec : int -> int -> Format.formatter -> value -> unit
 
-  val literal_to_value : Com.literal -> value
-
-  val value_to_literal : value -> Com.literal
-
   val get_dbg_info : ctx -> Dbg_info.t option
 
   val raise_runtime_as_structured : Types.run_error -> 'a
-
-  val compare_numbers : Com.comp_op -> custom_float -> custom_float -> bool
 
   val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 
@@ -66,10 +60,13 @@ end
 
 module type PartialInterp = functor (_ : Tracers.S) -> S
 
-module Make (N : Number.S) (Tracer : Tracers.S) = struct
+module Make (N : Number.S) (Tracer : Tracers.S) :
+  S with module N = N and module Tracer = Tracer = struct
   (* Careful : this behavior mimics the one imposed by the original Mlang
      compiler... *)
 
+  module N = N
+  module Tracer = Tracer
   module Fun = Functions.Make (N)
 
   type custom_float = N.t
@@ -84,6 +81,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
 
   type ctx = (custom_float, tracer_ctx) Context.t
 
+  module C = Context.Make (N) (Tracer)
+
   exception RuntimeError of Types.run_error * ctx
 
   let format_value (fmt : Format.formatter) (x : value) =
@@ -97,43 +96,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     | Undefined -> Com.format_literal fmt Com.Undefined
     | Number x -> N.format_prec_t mi ma fmt x
 
-  let literal_to_value (l : Com.literal) : value =
-    match l with
-    | Com.Undefined -> Undefined
-    | Com.Float f -> Number (N.of_float f)
-
-  let value_to_literal (l : value) : Com.literal =
-    match l with
-    | Undefined -> Com.Undefined
-    | Number f -> Com.Float (N.to_float f)
-
-  let update_ctx_with_inputs (ctx : ctx) (inputs : Com.literal Com.Var.Map.t) :
-      unit =
-    Context.with_inputs ctx
-    @@ Com.Var.Map.map
-         (fun l ->
-           match l with
-           | Com.Undefined -> Undefined
-           | Com.Float f -> Number (N.of_float f))
-         inputs
-
-  let update_ctx_with_events (ctx : ctx)
-      (events : (Com.literal, Com.Var.t) Com.event_value StrMap.t list) : unit =
-    Context.with_events ctx
-    @@ List.map
-         (StrMap.map (function
-           | Com.(Numeric Undefined) -> Com.Numeric Undefined
-           | Numeric (Float f) -> Numeric (Number (N.of_float f))
-           | RefVar v -> RefVar v))
-         events
-
-  let empty_ctx ?dbg_info ?(inputs = Com.Var.Map.empty) ?(events = [])
-      (p : Mir.program) : ctx =
-    let tracer_ctx = Tracer.empty_ctx dbg_info in
-    let ctx = Context.empty_ctx ~tracer_ctx p in
-    update_ctx_with_inputs ctx inputs;
-    update_ctx_with_events ctx events;
-    ctx
+  let empty_ctx ?dbg_info ?inputs ?events (p : Mir.program) : ctx =
+    C.empty_ctx ?dbg_info ?inputs ?events p
 
   let raise_runtime_as_structured (e : run_error) =
     match e with
@@ -166,50 +130,13 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     match StrMap.find_opt "MODE_CORR" ctx.ctx_prog.program_vars with
     | Some var -> (
         let vsd = ctx.ctx_prog.program_var_space_def in
-        let _, var, vorg = Context.get_var ctx None var in
-        match Context.get_var_value_org ctx vsd var vorg with
+        let _, var, vorg = C.get_var ctx None var in
+        match C.get_var_value_org ctx vsd var vorg with
         | Undefined -> false
         | Number n -> compare_numbers Eq n (N.one ()))
     | None -> false
 
   exception BlockingError
-
-  let set_var_value_org (ctx : ctx) (vsd : Com.variable_space) (var : Com.Var.t)
-      (vorg : int) (value : value) : unit =
-    let vi = Com.Var.loc_idx var in
-    match var.scope with
-    | Com.Var.Tgv _ ->
-        let var_space = ctx.ctx_var_spaces.(vsd.vs_id) in
-        let var_tab =
-          match Com.Var.cat_var_loc var with
-          | LocInput -> var_space.input
-          | LocComputed -> var_space.computed
-          | LocBase -> var_space.base
-        in
-        if Array.length var_tab > 0 then var_tab.(vi) <- value
-    | Com.Var.Temp _ ->
-        Tracer.register_temp ctx.tracer_ctx (value_to_literal value) var;
-        ctx.ctx_tmps.(vorg + vi).value <- value
-    | Com.Var.Ref -> assert false
-
-  let set_var_value (ctx : ctx) (m_sp_opt : Com.var_space) (var : Com.Var.t)
-      (value : value) : unit =
-    let vsd, v, vorg = Context.get_var ctx m_sp_opt var in
-    if Com.Var.is_table v then
-      for i = 0 to Com.Var.size v - 1 do
-        let v_i = Context.get_var_tab ctx v i in
-        set_var_value_org ctx vsd v_i vorg value
-      done
-    else set_var_value_org ctx vsd v vorg value
-
-  let set_var_value_tab (ctx : ctx) (m_sp_opt : Com.var_space) (v : Com.Var.t)
-      (i : int) (value : value) : unit =
-    let vsd, var, vorg = Context.get_var ctx m_sp_opt v in
-    if 0 <= i && i < Com.Var.size var then
-      if Com.Var.is_table var then
-        let var_i = Context.get_var_tab ctx var i in
-        set_var_value_org ctx vsd var_i vorg value
-      else set_var_value_org ctx vsd var vorg value
 
   let comparison op new_e1 new_e2 =
     match (op, new_e1, new_e2) with
@@ -252,93 +179,13 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     | Or, Number i1, Number i2 ->
         Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
 
-  let rec get_access_value (ctx : ctx) access =
-    match access with
-    | Com.VarAccess (m_sp_opt, v) -> Context.get_var_value ctx m_sp_opt v
-    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
-        match evaluate_expr ctx m_idx with
-        | Number z when N.(z <. zero ()) -> Number (N.zero ())
-        | Number z ->
-            let i = Int64.to_int @@ N.to_int z in
-            Context.get_var_value_tab ctx m_sp_opt v i
-        | Undefined -> Undefined)
-    | Com.FieldAccess (m_sp_opt, e, _, j) -> (
-        match evaluate_expr ctx e with
-        | Number z ->
-            let i = Int64.to_int @@ N.to_int z in
-            let events = List.hd ctx.ctx_events in
-            if 0 <= i && i < Array.length events then
-              match events.(i).(j) with
-              | Com.Numeric n -> n
-              | Com.RefVar v -> Context.get_var_value ctx m_sp_opt v
-            else Undefined
-        | Undefined -> Undefined)
-
-  and get_access_var ctx access =
-    match access with
-    | Com.VarAccess (m_sp_opt, v) ->
-        let vsd, v, vorg = Context.get_var ctx m_sp_opt v in
-        Some (vsd, v, vorg)
-    | Com.TabAccess ((m_sp_opt, m_v), m_i) -> (
-        match evaluate_expr ctx m_i with
-        | Number z ->
-            let vsd, v, vorg = Context.get_var ctx m_sp_opt m_v in
-            let i = Int64.to_int @@ N.to_int z in
-            if 0 <= i && i < Com.Var.size v then
-              if Com.Var.is_table v then
-                let v_i = Context.get_var_tab ctx v i in
-                Some (vsd, v_i, vorg)
-              else Some (vsd, v, vorg)
-            else None
-        | Undefined -> None)
-    | Com.FieldAccess (m_sp_opt, m_e, _, j) -> (
-        match evaluate_expr ctx m_e with
-        | Number z ->
-            let i = Int64.to_int @@ N.to_int z in
-            let events = List.hd ctx.ctx_events in
-            if 0 <= i && i < Array.length events then
-              match events.(i).(j) with
-              | Com.RefVar v ->
-                  let vsd, var, vorg = Context.get_var ctx m_sp_opt v in
-                  Some (vsd, var, vorg)
-              | Com.Numeric _ -> None
-            else None
-        | _ -> None)
-
-  and evaluate_switch_expr (ctx : ctx) s_e =
+  let rec evaluate_switch_expr (ctx : ctx) s_e =
     match s_e with
     | Com.SEValue e -> (
         match evaluate_expr ctx e with
         | Undefined -> `Undefined
         | Number n -> `Value n)
     | SESameVariable v -> `Var v
-
-  and set_access ctx access vexpr =
-    let value = evaluate_expr ctx vexpr in
-    (match access with
-    | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
-    | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
-        match evaluate_expr ctx m_idx with
-        | Number z ->
-            let i = Int64.to_int @@ N.to_int z in
-            set_var_value_tab ctx m_sp_opt v i value
-        | Undefined -> ())
-    | Com.FieldAccess (m_sp_opt, e, _, j) -> (
-        match evaluate_expr ctx e with
-        | Number z -> (
-            let i = Int64.to_int @@ N.to_int z in
-            let events = List.hd ctx.ctx_events in
-            if 0 <= i && i < Array.length events then
-              match events.(i).(j) with
-              | Com.Numeric _ -> events.(i).(j) <- Com.Numeric value
-              | Com.RefVar v -> set_var_value ctx m_sp_opt v value)
-        | Undefined -> ()));
-    match get_access_var ctx access with
-    | None -> ()
-    | Some (_, v, _) ->
-        let value = value_to_literal value in
-        Tracer.register_access ctx.tracer_ctx vexpr access v
-          ctx.ctx_prog.program_dict value (eval_m_index ctx)
 
   (* print aux *)
 
@@ -347,9 +194,9 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     Printer.flush pctx
 
   and pr_access ~ctx (pctx : Printer.t) info acc =
-    match get_access_var ctx acc with
+    match C.get_access_var ~eval:evaluate_expr ctx acc with
     | Some (vsd, var, _) ->
-        let _, v, _ = Context.get_var ctx None var in
+        let _, v, _ = C.get_var ctx None var in
         Printer.info pctx info vsd v;
         Printer.flush pctx
     | None -> ()
@@ -369,12 +216,15 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
 
   (* end of print aux *)
 
-  (* interpret *)
+  (* Useful aliases *)
 
-  and eval_m_index ctx m_i =
-    match evaluate_expr ctx m_i with
-    | Number z -> Int64.to_string @@ N.to_int z
-    | Undefined -> "indefini"
+  and get_access_value ctx = C.get_access_value ~eval:evaluate_expr ctx
+
+  and get_access_var ctx = C.get_access_var ~eval:evaluate_expr ctx
+
+  and set_access ctx = C.set_access ~eval:evaluate_expr ctx
+
+  (* interpret *)
 
   and evaluate_fun_call ctx (f : Com.func)
       (args : Com.Var.t Com.m_expression list) =
@@ -397,9 +247,9 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
               | Some (vsd, var, vorg) ->
                   if Com.Var.is_table var then
                     List.map
-                      (fun v -> Context.get_var_value_org ctx vsd v vorg)
-                      (Context.get_vars_tab ctx var)
-                  else [ Context.get_var_value_org ctx vsd var vorg ]
+                      (fun v -> C.get_var_value_org ctx vsd v vorg)
+                      (C.get_vars_tab ctx var)
+                  else [ C.get_var_value_org ctx vsd var vorg ]
             end
           | _ -> []
         in
@@ -546,7 +396,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
             if 0 <= i && i < Array.length events then
               match events.(i).(j) with
               | Com.RefVar _ ->
-                  let _, v, _ = Context.get_var ctx None var in
+                  let _, v, _ = C.get_var ctx None var in
                   if Com.Var.is_tgv v && not (Com.Var.is_table v) then
                     events.(i).(j) <- Com.RefVar v
               | Com.Numeric _ -> ())
@@ -603,7 +453,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
     | Com.VerifBlock stmts -> evaluate_stmts true ctx stmts
     | Com.ComputeTarget (Pos.Mark (tn, _), args, m_sp_opt) ->
         let tf = StrMap.find tn ctx.ctx_prog.program_targets in
-        let vsd = Context.get_var_space ctx m_sp_opt in
+        let vsd = C.get_var_space ctx m_sp_opt in
         evaluate_target canBlock ctx tf args vsd
     | Com.Print (std, args) ->
         let pctx = Printer.make std ctx in
@@ -623,7 +473,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
             (fun m_a ->
               match get_access_var ctx @@ Pos.unmark m_a with
               | Some (vsd, v, vorg) ->
-                  Context.set_var_ref ctx var vsd v vorg;
+                  C.set_var_ref ctx var vsd v vorg;
                   evaluate_stmts canBlock ctx stmts
               | None -> ())
             al;
@@ -636,8 +486,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
                       Com.CatVar.compare (Com.Var.cat v) vc = 0
                       && not (Com.Var.is_table v)
                     then (
-                      let vsd, v, org = Context.get_var ctx m_sp_opt v in
-                      Context.set_var_ref ctx var vsd v org;
+                      let vsd, v, org = C.get_var ctx m_sp_opt v in
+                      C.set_var_ref ctx var vsd v org;
                       match evaluate_expr ctx expr with
                       | Number z when N.(z =. one ()) ->
                           evaluate_stmts canBlock ctx stmts
@@ -662,8 +512,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
                   let cmp = N.(if zStep > zero () then ( <=. ) else ( >=. )) in
                   let rec loop i =
                     if cmp i z1 then (
-                      let vsd, var, vorg = Context.get_var ctx None var in
-                      set_var_value_org ctx vsd var vorg (Number i);
+                      let vsd, var, vorg = C.get_var ctx None var in
+                      C.set_var_value_org ctx vsd var vorg (Number i);
                       evaluate_stmts canBlock ctx stmts;
                       loop N.(i +. zStep))
                   in
@@ -682,13 +532,13 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
             let rec loop backup_vars i =
               if i >= sz then backup_vars
               else
-                let v_i = Context.get_var_tab ctx var i in
-                let value = Context.get_var_value_org ctx vsd v_i vorg in
+                let v_i = C.get_var_tab ctx var i in
+                let value = C.get_var_value_org ctx vsd v_i vorg in
                 loop ((vsd, v_i, vorg, value) :: backup_vars) (i + 1)
             in
             loop backup_vars 0
           else
-            let value = Context.get_var_value_org ctx vsd var vorg in
+            let value = C.get_var_value_org ctx vsd var vorg in
             (vsd, var, vorg, value) :: backup_vars
         in
         let backup_vars =
@@ -707,8 +557,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
                   StrMap.fold
                     (fun _ v backup_vars ->
                       if Com.CatVar.compare (Com.Var.cat v) vc = 0 then (
-                        let vsd, v', vorg = Context.get_var ctx m_sp_opt v in
-                        Context.set_var_ref ctx var vsd v' vorg;
+                        let vsd, v', vorg = C.get_var ctx m_sp_opt v in
+                        C.set_var_ref ctx var vsd v' vorg;
                         match evaluate_expr ctx expr with
                         | Number z when N.(z =. one ()) ->
                             backup backup_vars vsd v' vorg
@@ -740,7 +590,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
               let rec aux backup_evts i =
                 if i < Array.length events0 then (
                   let vi = N.of_int @@ Int64.of_int i in
-                  set_var_value ctx None var (Number vi);
+                  C.set_var_value ctx None var (Number vi);
                   match evaluate_expr ctx expr with
                   | Number z when N.(z =. one ()) ->
                       let evt = events0.(i) in
@@ -755,7 +605,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         let then_ () =
           List.iter
             (fun (vsd, v, vorg, value) ->
-              set_var_value_org ctx vsd v vorg value)
+              C.set_var_value_org ctx vsd v vorg value)
             backup_vars;
           let events0 = List.hd ctx.ctx_events in
           List.iter (fun (i, evt) -> events0.(i) <- evt) backup_evts
@@ -808,7 +658,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
                 if i >= Array.length events0 then Array.of_list (List.rev res)
                 else
                   let vi = Number (N.of_int @@ Int64.of_int i) in
-                  set_var_value ctx None var vi;
+                  C.set_var_value ctx None var vi;
                   let res' =
                     match evaluate_expr ctx expr with
                     | Number z when N.(z =. one ()) -> events0.(i) :: res
@@ -830,9 +680,9 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         | Some (var0, var1, expr) ->
             let sort_fun i _ j _ =
               let vi = Number (N.of_int @@ Int64.of_int i) in
-              set_var_value ctx None var0 vi;
+              C.set_var_value ctx None var0 vi;
               let vj = Number (N.of_int @@ Int64.of_int j) in
-              set_var_value ctx None var1 vj;
+              C.set_var_value ctx None var1 vj;
               match evaluate_expr ctx expr with
               | Number z when N.(z =. zero ()) -> false
               | Number _ -> true
@@ -964,55 +814,100 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 
-  let get_dbg_info (ctx : _ Context.t) = Tracer.get_dbg_info ctx.tracer_ctx
+  let get_dbg_info (ctx : _ Context.t) = C.get_dbg_info ctx
 end
 
-module FloatDefInterp = Make (Number.FloatDef)
-module FloatMultInterp = Make (Number.FloatMult)
-module FloatMfInterp = Make (Number.FloatMf)
-module MPFRDefInterp = Make (Number.MPFRDef)
-module MPFRMultInterp = Make (Number.MPFRMult)
-module MPFRMfInterp = Make (Number.MPFRMf)
-module BigIntDefInterp = Make (Number.BigIntDef)
-module BigIntMultInterp = Make (Number.BigIntMult)
-module BigIntMfInterp = Make (Number.BigIntMf)
-module IntvDefInterp = Make (Number.IntvDef)
-module IntvMultInterp = Make (Number.IntvMult)
-module IntvMfInterp = Make (Number.IntvMf)
-module RatDefInterp = Make (Number.RatDef)
-module RatMultInterp = Make (Number.RatMult)
-module RatMfInterp = Make (Number.RatMf)
+module type RunnerKind = sig
+  module FloatDefInterp : S
+
+  module FloatMultInterp : S
+
+  module FloatMfInterp : S
+
+  module MPFRDefInterp : S
+
+  module MPFRMultInterp : S
+
+  module MPFRMfInterp : S
+
+  module BigIntDefInterp : S
+
+  module BigIntMultInterp : S
+
+  module BigIntMfInterp : S
+
+  module IntvDefInterp : S
+
+  module IntvMultInterp : S
+
+  module IntvMfInterp : S
+
+  module RatDefInterp : S
+
+  module RatMultInterp : S
+
+  module RatMfInterp : S
+end
+
+module Runner = struct
+  module NoTracing = struct
+    module FloatDefInterp = Make (Number.FloatDef) (Tracers.NonTracer)
+    module FloatMultInterp = Make (Number.FloatMult) (Tracers.NonTracer)
+    module FloatMfInterp = Make (Number.FloatMf) (Tracers.NonTracer)
+    module MPFRDefInterp = Make (Number.MPFRDef) (Tracers.NonTracer)
+    module MPFRMultInterp = Make (Number.MPFRMult) (Tracers.NonTracer)
+    module MPFRMfInterp = Make (Number.MPFRMf) (Tracers.NonTracer)
+    module BigIntDefInterp = Make (Number.BigIntDef) (Tracers.NonTracer)
+    module BigIntMultInterp = Make (Number.BigIntMult) (Tracers.NonTracer)
+    module BigIntMfInterp = Make (Number.BigIntMf) (Tracers.NonTracer)
+    module IntvDefInterp = Make (Number.IntvDef) (Tracers.NonTracer)
+    module IntvMultInterp = Make (Number.IntvMult) (Tracers.NonTracer)
+    module IntvMfInterp = Make (Number.IntvMf) (Tracers.NonTracer)
+    module RatDefInterp = Make (Number.RatDef) (Tracers.NonTracer)
+    module RatMultInterp = Make (Number.RatMult) (Tracers.NonTracer)
+    module RatMfInterp = Make (Number.RatMf) (Tracers.NonTracer)
+  end
+
+  module WithTracing = struct
+    module FloatDefInterp = Make (Number.FloatDef) (Tracers.Tracer)
+    module FloatMultInterp = Make (Number.FloatMult) (Tracers.Tracer)
+    module FloatMfInterp = Make (Number.FloatMf) (Tracers.Tracer)
+    module MPFRDefInterp = Make (Number.MPFRDef) (Tracers.Tracer)
+    module MPFRMultInterp = Make (Number.MPFRMult) (Tracers.Tracer)
+    module MPFRMfInterp = Make (Number.MPFRMf) (Tracers.Tracer)
+    module BigIntDefInterp = Make (Number.BigIntDef) (Tracers.Tracer)
+    module BigIntMultInterp = Make (Number.BigIntMult) (Tracers.Tracer)
+    module BigIntMfInterp = Make (Number.BigIntMf) (Tracers.Tracer)
+    module IntvDefInterp = Make (Number.IntvDef) (Tracers.Tracer)
+    module IntvMultInterp = Make (Number.IntvMult) (Tracers.Tracer)
+    module IntvMfInterp = Make (Number.IntvMf) (Tracers.Tracer)
+    module RatDefInterp = Make (Number.RatDef) (Tracers.Tracer)
+    module RatMultInterp = Make (Number.RatMult) (Tracers.Tracer)
+    module RatMfInterp = Make (Number.RatMf) (Tracers.Tracer)
+  end
+end
 
 let get_interp (sort : Config.value_sort) (roundops : Config.round_ops)
     ~(trace : bool) : (module S) =
-  let partial_interp : (module PartialInterp) =
-    match (sort, roundops) with
-    | RegularFloat, RODefault -> (module FloatDefInterp)
-    | RegularFloat, ROMulti -> (module FloatMultInterp)
-    | RegularFloat, ROMainframe _ -> (module FloatMfInterp)
-    | MPFR _, RODefault -> (module MPFRDefInterp)
-    | MPFR _, ROMulti -> (module MPFRMultInterp)
-    | MPFR _, ROMainframe _ -> (module MPFRMfInterp)
-    | BigInt _, RODefault -> (module BigIntDefInterp)
-    | BigInt _, ROMulti -> (module BigIntMultInterp)
-    | BigInt _, ROMainframe _ -> (module BigIntMfInterp)
-    | Interval, RODefault -> (module IntvDefInterp)
-    | Interval, ROMulti -> (module IntvMultInterp)
-    | Interval, ROMainframe _ -> (module IntvMfInterp)
-    | Rational, RODefault -> (module RatDefInterp)
-    | Rational, ROMulti -> (module RatMultInterp)
-    | Rational, ROMainframe _ -> (module RatMfInterp)
+  let (module R : RunnerKind) =
+    if trace then (module Runner.WithTracing) else (module Runner.NoTracing)
   in
-  (* We use a small trick to not duplicate the number of interpreter by two. *)
-  let tracer : (module Tracers.S) =
-    match trace with
-    | false -> (module Tracers.NonTracer)
-    | true -> (module Tracers.Tracer)
-  in
-  let module Tracer = (val tracer) in
-  let module PartialInterp = (val partial_interp) in
-  let module Interp = PartialInterp (Tracer) in
-  (module Interp)
+  match (sort, roundops) with
+  | RegularFloat, RODefault -> (module R.FloatDefInterp)
+  | RegularFloat, ROMulti -> (module R.FloatMultInterp)
+  | RegularFloat, ROMainframe _ -> (module R.FloatMfInterp)
+  | MPFR _, RODefault -> (module R.MPFRDefInterp)
+  | MPFR _, ROMulti -> (module R.MPFRMultInterp)
+  | MPFR _, ROMainframe _ -> (module R.MPFRMfInterp)
+  | BigInt _, RODefault -> (module R.BigIntDefInterp)
+  | BigInt _, ROMulti -> (module R.BigIntMultInterp)
+  | BigInt _, ROMainframe _ -> (module R.BigIntMfInterp)
+  | Interval, RODefault -> (module R.IntvDefInterp)
+  | Interval, ROMulti -> (module R.IntvMultInterp)
+  | Interval, ROMainframe _ -> (module R.IntvMfInterp)
+  | Rational, RODefault -> (module R.RatDefInterp)
+  | Rational, ROMulti -> (module R.RatMultInterp)
+  | Rational, ROMainframe _ -> (module R.RatMfInterp)
 
 let evaluate_program ?(dbg_info : Dbg_info.t option) (p : Mir.program)
     (inputs : Com.literal Com.Var.Map.t)
@@ -1038,7 +933,7 @@ let evaluate_program ?(dbg_info : Dbg_info.t option) (p : Mir.program)
           | LocComputed -> default_space.computed.(Com.Var.loc_idx var)
           | LocBase -> default_space.base.(Com.Var.loc_idx var)
         in
-        let fVal = Interp.value_to_literal litt in
+        let fVal = Interp.N.to_literal litt in
         Com.Var.Map.add var fVal res
       else res
     in
@@ -1057,12 +952,5 @@ let evaluate_expr ?(dbg_info : Dbg_info.t option) (p : Mir.program)
   let trace = !Config.trace in
   let module Interp = (val get_interp sort roundops ~trace : S) in
   try
-    Interp.value_to_literal
-      (Interp.evaluate_expr (Interp.empty_ctx ?dbg_info p) e)
+    Interp.N.to_literal (Interp.evaluate_expr (Interp.empty_ctx ?dbg_info p) e)
   with Stop_instruction _ -> Undefined
-
-let compare_float_numbers o a b =
-  let module FloatDefInterp = FloatDefInterp (Tracers.NonTracer) in
-  let a = Mir_number.RegularFloatNumber.of_float a in
-  let b = Mir_number.RegularFloatNumber.of_float b in
-  FloatDefInterp.compare_numbers o a b

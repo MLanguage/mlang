@@ -12,6 +12,10 @@ module type S = sig
   include Mir_number.NumberInterface
 
   include Mir_roundops.RoundOpsInterface with type t := t
+
+  val to_literal : t Types.value -> Com.literal
+
+  val of_literal : Com.literal -> t Types.value
 end
 
 module Make
@@ -20,6 +24,16 @@ module Make
 struct
   include N
   include RF (N)
+
+  let to_literal (l : t Types.value) : Com.literal =
+    match l with
+    | Undefined -> Com.Undefined
+    | Number f -> Com.Float (to_float f)
+
+  let of_literal (l : Com.literal) : t Types.value =
+    match l with
+    | Com.Undefined -> Undefined
+    | Com.Float f -> Number (of_float f)
 end
 
 module FloatDef =
