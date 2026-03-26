@@ -216,6 +216,14 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   (* end of print aux *)
 
+  and same_variable ctx m_acc m_acc' : bool =
+    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
+    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
+    match (v0_opt, v1_opt) with
+    | Some (_, v0, _), Some (_, v1, _) ->
+        Com.Var.name_str v0 = Com.Var.name_str v1
+    | _, _ -> false
+
   (* Useful aliases *)
 
   and get_access_value ctx = C.get_access_value ~eval:evaluate_expr ctx
@@ -226,9 +234,9 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   (* interpret *)
 
-  and evaluate_fun_call ctx (f : Com.func)
+  and evaluate_fun_call ctx (f : Com.func Pos.marked)
       (args : Com.Var.t Com.m_expression list) =
-    match (f, args) with
+    match (Pos.unmark f, args) with
     | ArrFunc, [ arg ] -> Fun.arr @@ evaluate_expr ctx arg
     | InfFunc, [ arg ] -> Fun.inf @@ evaluate_expr ctx arg
     | PresentFunc, [ arg ] -> Fun.present @@ evaluate_expr ctx arg
@@ -266,92 +274,119 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
       ->
         Errors.raise_error "not implemented"
 
+  and evaluate_test_in_set ctx positive e0 values =
+    let value0 = evaluate_expr ctx e0 in
+    let or_chain =
+      List.fold_left
+        (fun or_chain set_value ->
+          let equal_test =
+            match set_value with
+            | Com.VarValue (Pos.Mark (access, _)) ->
+                let value = get_access_value ctx access in
+                comparison Com.Eq value0 value
+            | Com.FloatValue i ->
+                let value_i = Number (N.of_float @@ Pos.unmark i) in
+                comparison Com.Eq value0 value_i
+            | Com.IntervalValue (bn, en) ->
+                let value_bn =
+                  Number (N.of_float @@ float_of_int @@ Pos.unmark bn)
+                in
+                let value_en =
+                  Number (N.of_float @@ float_of_int @@ Pos.unmark en)
+                in
+                binop Com.And
+                  (comparison Com.Gte value0 value_bn)
+                  (comparison Com.Lte value0 value_en)
+          in
+          binop Com.Or or_chain equal_test)
+        Undefined values
+    in
+    if positive then or_chain else unop Com.Not or_chain
+
+  and evaluate_comparison ctx op e1 e2 =
+    let value1 = evaluate_expr ctx e1 in
+    let value2 = evaluate_expr ctx e2 in
+    comparison (Pos.unmark op) value1 value2
+
+  and evaluate_binop ctx op e1 e2 =
+    let value1 = evaluate_expr ctx e1 in
+    let value2 = evaluate_expr ctx e2 in
+    binop (Pos.unmark op) value1 value2
+
+  and evaluate_unop ctx op e = unop op @@ evaluate_expr ctx e
+
+  and evaluate_conditional ctx cond th el =
+    match evaluate_expr ctx cond with
+    | Number z when N.(z =. zero ()) -> (
+        match el with None -> Undefined | Some el -> evaluate_expr ctx el)
+    | Number _ -> evaluate_expr ctx th
+    | Undefined -> Undefined
+
+  and evaluate_literal _ = function
+    | Com.{ lit = Undefined; _ } -> Undefined
+    | { lit = Float f; _ } -> Number (N.of_float f)
+
+  and evaluate_attribut ctx m_acc a =
+    match get_access_var ctx (Pos.unmark m_acc) with
+    | Some (_, v, _) -> (
+        match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs v) with
+        | Some l -> Number (N.of_float (float (Pos.unmark l)))
+        | None -> Undefined)
+    | None -> Undefined
+
+  and evaluate_size ctx m_acc =
+    match get_access_var ctx (Pos.unmark m_acc) with
+    | Some (_, v, _) -> Number (N.of_float @@ float @@ Com.Var.size v)
+    | None -> Undefined
+
+  and evaluate_type ctx m_acc m_typ =
+    match get_access_var ctx (Pos.unmark m_acc) with
+    | Some (_, v, _) ->
+        if Com.Var.is_tgv v && Com.Var.typ v = Some (Pos.unmark m_typ) then
+          Number (N.one ())
+        else Number (N.zero ())
+    | None -> Undefined
+
+  and evaluate_same_variable ctx m_acc0 m_acc1 =
+    if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
+    else Number (N.zero ())
+
+  and evaluate_in_domain ctx m_acc cvm =
+    match get_access_var ctx (Pos.unmark m_acc) with
+    | Some (_, v, _) ->
+        if Com.Var.is_tgv v && Com.CatVar.Map.mem (Com.Var.cat v) cvm then
+          Number (N.one ())
+        else Number (N.zero ())
+    | None -> Number (N.zero ())
+
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
     let out =
       try
         match Pos.unmark e with
         | Com.TestInSet (positive, e0, values) ->
-            let value0 = evaluate_expr ctx e0 in
-            let or_chain =
-              List.fold_left
-                (fun or_chain set_value ->
-                  let equal_test =
-                    match set_value with
-                    | Com.VarValue (Pos.Mark (access, _)) ->
-                        let value = get_access_value ctx access in
-                        comparison Com.Eq value0 value
-                    | Com.FloatValue i ->
-                        let value_i = Number (N.of_float @@ Pos.unmark i) in
-                        comparison Com.Eq value0 value_i
-                    | Com.IntervalValue (bn, en) ->
-                        let value_bn =
-                          Number (N.of_float @@ float_of_int @@ Pos.unmark bn)
-                        in
-                        let value_en =
-                          Number (N.of_float @@ float_of_int @@ Pos.unmark en)
-                        in
-                        binop Com.And
-                          (comparison Com.Gte value0 value_bn)
-                          (comparison Com.Lte value0 value_en)
-                  in
-                  binop Com.Or or_chain equal_test)
-                Undefined values
-            in
-            if positive then or_chain else unop Com.Not or_chain
-        | Comparison (op, e1, e2) ->
-            let value1 = evaluate_expr ctx e1 in
-            let value2 = evaluate_expr ctx e2 in
-            comparison (Pos.unmark op) value1 value2
-        | Binop (op, e1, e2) ->
-            let value1 = evaluate_expr ctx e1 in
-            let value2 = evaluate_expr ctx e2 in
-            binop (Pos.unmark op) value1 value2
+            evaluate_test_in_set ctx positive e0 values
+        | Comparison (op, e1, e2) -> evaluate_comparison ctx op e1 e2
+        | Binop (op, e1, e2) -> evaluate_binop ctx op e1 e2
         | Unop (op, e1) -> unop op @@ evaluate_expr ctx e1
-        | Conditional (e1, e2, e3_opt) -> (
-            match evaluate_expr ctx e1 with
-            | Number z when N.(z =. zero ()) -> (
-                match e3_opt with
-                | None -> Undefined
-                | Some e3 -> evaluate_expr ctx e3)
-            | Number _ -> evaluate_expr ctx e2
-            | Undefined -> Undefined)
-        | Literal { lit = Undefined; _ } -> Undefined
-        | Literal { lit = Float f; _ } -> Number (N.of_float f)
+        | Conditional (e1, e2, e3_opt) -> evaluate_conditional ctx e1 e2 e3_opt
+        | Literal l -> evaluate_literal ctx l
         | Var access -> get_access_value ctx access
-        | FuncCall (Pos.Mark (f, _), args) -> evaluate_fun_call ctx f args
-        | Attribut (m_acc, a) -> (
-            match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (_, v, _) -> (
-                match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs v) with
-                | Some l -> Number (N.of_float (float (Pos.unmark l)))
-                | None -> Undefined)
-            | None -> Undefined)
-        | Size m_acc -> (
-            match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (_, v, _) -> Number (N.of_float @@ float @@ Com.Var.size v)
-            | None -> Undefined)
-        | Type (m_acc, m_typ) -> (
-            match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (_, v, _) ->
-                if Com.Var.is_tgv v && Com.Var.typ v = Some (Pos.unmark m_typ)
-                then Number (N.one ())
-                else Number (N.zero ())
-            | None -> Undefined)
+        | FuncCall (f, args) -> evaluate_fun_call ctx f args
+        | Attribut (m_acc, a) -> evaluate_attribut ctx m_acc a
+        | Size m_acc -> evaluate_size ctx m_acc
+        | Type (m_acc, m_typ) -> evaluate_type ctx m_acc m_typ
         | SameVariable (m_acc0, m_acc1) ->
-            if same_variable ctx m_acc0 m_acc1 then Number (N.one ())
-            else Number (N.zero ())
-        | InDomain (m_acc, cvm) -> (
-            match get_access_var ctx (Pos.unmark m_acc) with
-            | Some (_, v, _) ->
-                if Com.Var.is_tgv v && Com.CatVar.Map.mem (Com.Var.cat v) cvm
-                then Number (N.one ())
-                else Number (N.zero ())
-            | None -> Number (N.zero ()))
-        | NbAnomalies -> Number (N.of_float (float ctx.ctx_nb_anos))
-        | NbDiscordances -> Number (N.of_float (float ctx.ctx_nb_discos))
-        | NbInformatives -> Number (N.of_float (float ctx.ctx_nb_infos))
-        | NbBloquantes -> Number (N.of_float (float ctx.ctx_nb_bloquantes))
+            evaluate_same_variable ctx m_acc0 m_acc1
+        | InDomain (m_acc, cvm) -> evaluate_in_domain ctx m_acc cvm
+        | NbAnomalies ->
+           Number (N.of_float @@ float_of_int @@ Anomaly.nb_anomalies ctx)
+        | NbDiscordances ->
+           Number (N.of_float @@ float_of_int @@ Anomaly.nb_discordances ctx)
+        | NbInformatives ->
+           Number (N.of_float @@ float_of_int @@ Anomaly.nb_informatives ctx)
+        | NbBloquantes ->
+           Number (N.of_float @@ float_of_int @@ Anomaly.nb_bloquantes ctx)
         | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
       with
       | RuntimeError (e, ctx) ->
@@ -373,14 +408,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
       if !exit_on_rte then raise_runtime_as_structured e
       else raise (RuntimeError (e, ctx))
     else out
-
-  and same_variable ctx m_acc m_acc' : bool =
-    let v0_opt = get_access_var ctx (Pos.unmark m_acc) in
-    let v1_opt = get_access_var ctx (Pos.unmark m_acc') in
-    match (v0_opt, v1_opt) with
-    | Some (_, v0, _), Some (_, v1, _) ->
-        Com.Var.name_str v0 = Com.Var.name_str v1
-    | _, _ -> false
 
   and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
       unit =

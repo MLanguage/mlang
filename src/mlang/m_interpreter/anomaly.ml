@@ -78,3 +78,11 @@ let export ~mode_corr ctx =
   else (
     ctx.ctx_exported_anos <- ctx.ctx_exported_anos @ ctx.ctx_finalized_anos;
     ctx.ctx_finalized_anos <- [])
+
+let nb_anomalies ctx = ctx.ctx_nb_anos
+
+let nb_discordances ctx = ctx.ctx_nb_discos
+
+let nb_informatives ctx = ctx.ctx_nb_infos
+
+let nb_bloquantes ctx = ctx.ctx_nb_bloquantes

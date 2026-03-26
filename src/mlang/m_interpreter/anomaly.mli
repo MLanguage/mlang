@@ -15,3 +15,11 @@ val finalize : mode_corr:bool -> _ Context.t -> unit
 val export : mode_corr:bool -> _ Context.t -> unit
 (** Moves the finalized anomalies to the exported anomalies (and the archived
     anomalies if [mode_corr] is [true]). *)
+
+val nb_anomalies : _ Context.t -> int
+
+val nb_discordances : _ Context.t -> int
+
+val nb_informatives : _ Context.t -> int
+
+val nb_bloquantes : _ Context.t -> int
