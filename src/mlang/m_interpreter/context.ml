@@ -16,8 +16,6 @@ type 'a ctx_var_space = {
   base : 'a value Array.t;
 }
 
-type ctx_print = { mutable indent : int; mutable is_newline : bool }
-
 type ('a, 'tc) t = {
   ctx_prog : Mir.program;
   mutable ctx_target : Mir.target;
@@ -28,8 +26,8 @@ type ('a, 'tc) t = {
   ctx_ref : ctx_ref_var Array.t;
   mutable ctx_ref_org : int;
   ctx_tab_map : Com.Var.t Array.t;
-  ctx_pr_out : ctx_print;
-  ctx_pr_err : ctx_print;
+  ctx_pr_out : Printer.t;
+  ctx_pr_err : Printer.t;
   mutable ctx_anos : (Com.Error.t * string option) list;
   mutable ctx_nb_anos : int;
   mutable ctx_nb_discos : int;
@@ -168,8 +166,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         ctx_ref = Array.init p.program_stats.nb_all_refs init_ref;
         ctx_ref_org = 0;
         ctx_tab_map;
-        ctx_pr_out = { indent = 0; is_newline = true };
-        ctx_pr_err = { indent = 0; is_newline = true };
+        ctx_pr_out = Printer.make Com.StdOut;
+        ctx_pr_err = Printer.make Com.StdErr;
         ctx_anos = [];
         ctx_nb_anos = 0;
         ctx_nb_discos = 0;

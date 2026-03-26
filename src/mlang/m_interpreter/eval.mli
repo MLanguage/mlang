@@ -45,10 +45,6 @@ module type S = sig
 
   type value = N.t Types.value
 
-  type ctx_tmp_var = N.t Context.ctx_tmp_var
-
-  type ctx_var_space = N.t Context.ctx_var_space
-
   type ctx = (N.t, Tracer.ctx) Context.t
 
   exception RuntimeError of Types.run_error * ctx

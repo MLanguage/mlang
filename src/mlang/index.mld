@@ -29,9 +29,24 @@ and basically all programs typecheck ; however {!module: Mlang.M_frontend.Valida
   Mlang.M_ir.Com
   Mlang.M_ir.Format_mir
   Mlang.M_ir.Mir
-  Mlang.M_ir.Mir_interpreter
   Mlang.M_ir.Mir_number
   Mlang.M_ir.Mir_roundops }
+
+{1 Interpreter}
+
+The intepreter is the reference for the M semantics. The C code Mlang generates must
+follow it.
+The main interpreter module is {!module: Mlang.Mir_interpreter.Eval} which defines two
+functions: {!Mlang.Mir_interpreter.Eval.evaluate_program} and {!Mlang.Mir_interpreter.Eval.evaluate_expr}. It also defines several modules that evaluates programs and expression
+with different float precisions.
+
+{!modules:
+  Mlang.Mir_interpreter.Anomaly
+  Mlang.Mir_interpreter.Context
+  Mlang.Mir_interpreter.Eval
+  Mlang.Mir_interpreter.Functions
+  Mlang.Mir_interpreter.Print
+  Mlang.Mir_interpreter.Types }
 
 {1 Testing}
 

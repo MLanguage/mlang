@@ -1,17 +1,15 @@
 open M_ir
 
-type t = {
-  std : Com.print_std;
-  std_fmt : Format.formatter;
-  ctx_pr : Context.ctx_print;
-}
+type ctx = { mutable indent : int; mutable is_newline : bool }
 
-let make std (ctx : _ Context.t) =
+type t = { std : Com.print_std; std_fmt : Format.formatter; ctx_pr : ctx }
+
+let fresh_ctx () = { indent = 0; is_newline = false }
+
+let make std =
   match std with
-  | Com.StdOut ->
-      { std; std_fmt = Format.std_formatter; ctx_pr = ctx.ctx_pr_out }
-  | Com.StdErr ->
-      { std; std_fmt = Format.err_formatter; ctx_pr = ctx.ctx_pr_err }
+  | Com.StdOut -> { std; std_fmt = Format.std_formatter; ctx_pr = fresh_ctx () }
+  | Com.StdErr -> { std; std_fmt = Format.err_formatter; ctx_pr = fresh_ctx () }
 
 let flush (pctx : t) =
   match pctx.std with

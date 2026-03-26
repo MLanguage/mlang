@@ -2,7 +2,7 @@ open M_ir
 
 type t
 
-val make : Com.print_std -> ('a, 'b) Context.t -> t
+val make : Com.print_std -> t
 
 val flush : t -> unit
 
