@@ -409,13 +409,13 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
       else raise (RuntimeError (e, ctx))
     else out
 
-  and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
-      unit =
-    match Pos.unmark stmt with
-    | Com.Affectation (Pos.Mark (SingleFormula (VarDecl (m_acc, vexpr)), _)) ->
+  (* stmt evaluation *)
+
+  and evaluate_affectation ctx a =
+    match Pos.unmark a with
+    | Com.SingleFormula (VarDecl (m_acc, vexpr))->
         set_access ctx (Pos.unmark m_acc) vexpr
-    | Com.Affectation
-        (Pos.Mark (SingleFormula (EventFieldRef (idx, _, j, var)), _)) -> (
+    | SingleFormula (EventFieldRef (idx, _, j, var)) -> (
         match evaluate_expr ctx idx with
         | Number z when N.(z >=. zero ()) -> (
             let i = Int64.to_int @@ N.to_int z in
@@ -428,42 +428,51 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
                     events.(i).(j) <- Com.RefVar v
               | Com.Numeric _ -> ())
         | _ -> ())
-    | Com.Affectation (Pos.Mark (Com.MultipleFormulaes _, _)) -> assert false
-    | Com.IfThenElse (b, t, f) -> (
-        match evaluate_expr ctx b with
-        | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx f
-        | Number _ -> evaluate_stmts canBlock ctx t
-        | Undefined -> ())
-    | Com.Switch (c, l) -> (
-        let exception INTERNAL_STOP_SWITCH in
-        let then_ () = raise INTERNAL_STOP_SWITCH in
-        let v = evaluate_switch_expr ctx c in
-        let default = ref None in
-        try
+    | Com.MultipleFormulaes _ -> assert false
+
+  and evaluate_ite canBlock ctx c t e =
+    match evaluate_expr ctx c with
+    | Number z when N.(z =. zero ()) -> evaluate_stmts canBlock ctx e
+    | Number _ -> evaluate_stmts canBlock ctx t
+    | Undefined -> ()
+
+  and evaluate_switch canBlock ctx c l = 
+    let exception INTERNAL_STOP_SWITCH in
+    let then_ () = raise INTERNAL_STOP_SWITCH in
+    let v = evaluate_switch_expr ctx c in
+    let default = ref None in
+    try
+      List.iter
+        (fun (cases, stmts) ->
           List.iter
-            (fun (cases, stmts) ->
-              List.iter
-                (fun case ->
-                  match (case, v) with
-                  | Com.CDefault, _ ->
-                      (* Trigged only if all other cases fail *)
-                      default := Some stmts
-                  | CValue Undefined, `Undefined ->
-                      evaluate_stmts ~then_ canBlock ctx stmts
-                  | CValue _, `Undefined | CValue Undefined, _ -> ()
-                  | CValue (Float f), `Value v ->
-                      if N.of_float f = v then
-                        evaluate_stmts ~then_ canBlock ctx stmts
-                  | CValue _, `Var _ ->
-                      failwith "Cannot match value with variable"
-                  | CVar m_acc, `Var v ->
-                      if same_variable ctx m_acc v then
-                        evaluate_stmts ~then_ canBlock ctx stmts
-                  | CVar _, (`Value _ | `Undefined) ->
-                      failwith "Cannot match variable with value")
-                cases)
-            l
-        with INTERNAL_STOP_SWITCH -> ())
+            (fun case ->
+              match (case, v) with
+              | Com.CDefault, _ ->
+                 (* Trigged only if all other cases fail *)
+                 default := Some stmts
+              | CValue Undefined, `Undefined ->
+                 evaluate_stmts ~then_ canBlock ctx stmts
+              | CValue _, `Undefined | CValue Undefined, _ -> ()
+              | CValue (Float f), `Value v ->
+                 if N.of_float f = v then
+                   evaluate_stmts ~then_ canBlock ctx stmts
+              | CValue _, `Var _ ->
+                 failwith "Cannot match value with variable"
+              | CVar m_acc, `Var v ->
+                 if same_variable ctx m_acc v then
+                   evaluate_stmts ~then_ canBlock ctx stmts
+              | CVar _, (`Value _ | `Undefined) ->
+                 failwith "Cannot match variable with value")
+            cases)
+        l
+    with INTERNAL_STOP_SWITCH -> ()
+
+  and evaluate_stmt (canBlock : bool) (ctx : ctx) (stmt : Mir.m_instruction) :
+      unit =
+    match Pos.unmark stmt with
+    | Com.Affectation a -> evaluate_affectation ctx a
+    | Com.IfThenElse (b, t, f) -> evaluate_ite canBlock ctx b t f
+    | Com.Switch (c, l) -> evaluate_switch canBlock ctx c l
     | Com.WhenDoElse (wdl, ed) ->
         let rec aux = function
           | (expr, dl, _) :: l -> (
