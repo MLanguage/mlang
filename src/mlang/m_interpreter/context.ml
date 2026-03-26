@@ -180,3 +180,68 @@ let set_var_ref (ctx : _ t) (var : Com.Var.t) (var_space : Com.variable_space)
       ctx.ctx_ref.(ctx.ctx_ref_org + i).ref_var <- ref_var;
       ctx.ctx_ref.(ctx.ctx_ref_org + i).org <- org
   | _ -> assert false
+
+let with_inputs (ctx : ('a, 'b) t) (inputs : 'a Types.value Com.Var.Map.t) :
+    unit =
+  let default_space =
+    ctx.ctx_var_spaces.(ctx.ctx_prog.program_var_space_def.vs_id)
+  in
+  Com.Var.Map.iter
+    (fun (var : Com.Var.t) value ->
+      match Com.Var.cat_var_loc var with
+      | LocInput -> default_space.input.(Com.Var.loc_idx var) <- value
+      | LocComputed -> default_space.computed.(Com.Var.loc_idx var) <- value
+      | LocBase -> default_space.base.(Com.Var.loc_idx var) <- value)
+    inputs
+
+let with_events (ctx : ('a, 'b) t)
+    (events : ('a Types.value, Com.Var.t) Com.event_value StrMap.t list) : unit
+    =
+  let nbEvt = List.length events in
+  let ctx_event_tab = Array.make nbEvt [||] in
+  let fold idx (evt : ('a Types.value, Com.Var.t) Com.event_value StrMap.t) =
+    let nbProgFields = StrMap.cardinal ctx.ctx_prog.program_event_fields in
+    let map = Array.make nbProgFields (Com.Numeric Undefined) in
+    for id = 0 to nbProgFields - 1 do
+      let fname = IntMap.find id ctx.ctx_prog.program_event_field_idxs in
+      let ef = StrMap.find fname ctx.ctx_prog.program_event_fields in
+      if ef.is_var then
+        map.(id) <-
+          Com.RefVar (snd (StrMap.min_binding ctx.ctx_prog.program_vars))
+    done;
+    let iter' fname ev =
+      match StrMap.find_opt fname ctx.ctx_prog.program_event_fields with
+      | Some ef -> (
+          match (ev, ef.is_var) with
+          | Com.Numeric _, false | Com.RefVar _, true -> map.(ef.index) <- ev
+          | _ -> Errors.raise_error "wrong event field type")
+      | None -> Errors.raise_error "unknown event field"
+    in
+    StrMap.iter iter' evt;
+    ctx_event_tab.(idx) <- map;
+    idx + 1
+  in
+  ignore (List.fold_left fold 0 events);
+  (* let max_field_length =
+         StrMap.fold
+           (fun s _ r -> max r (String.length s))
+           ctx.ctx_prog.program_event_fields 0
+       in
+       let pp_field fmt s =
+         let l = String.length s in
+         Format.fprintf fmt "%s%s" s (String.make (max_field_length - l + 1) ' ')
+       in
+       let pp_ev fmt = function
+         | Com.Numeric Undefined -> Pp.string fmt "indefini"
+         | Com.Numeric (Number v) -> N.format_t fmt v
+         | Com.RefVar v -> Pp.string fmt (Com.Var.name_str v)
+       in
+       for i = 0 to Array.length ctx_event_tab - 1 do
+         Format.eprintf "%d@." i;
+         let map = ctx_event_tab.(i) in
+         for j = 0 to Array.length map - 1 do
+           let s = IntMap.find j ctx.ctx_prog.program_event_field_idxs in
+           Format.eprintf "  %a%a@." pp_field s pp_ev map.(j)
+         done
+       done;*)
+  ctx.ctx_events <- [ ctx_event_tab ]

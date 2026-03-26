@@ -67,3 +67,10 @@ val get_var_value_tab :
 
 val set_var_ref :
   ('a, 'b) t -> Com.Var.t -> Com.variable_space -> Com.Var.t -> int -> unit
+
+val with_inputs : ('a, 'b) t -> 'a Types.value Com.Var.Map.t -> unit
+
+val with_events :
+  ('a, 'b) t ->
+  ('a Types.value, Com.Var.t) Com.event_value StrMap.t list ->
+  unit
