@@ -214,7 +214,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
   let get_vars_tab (ctx : _ t) (var : Com.Var.t) : Com.Var.t list =
     assert (Com.Var.is_table var);
     let rec loop sz l =
-      if sz <= 0 then l else loop (sz - 1) (unsafe_get_var_tab ctx var sz :: l)
+      if sz <= 0 then l
+      else loop (sz - 1) (unsafe_get_var_tab ctx var (sz - 1) :: l)
     in
     loop (Com.Var.size var) []
 
