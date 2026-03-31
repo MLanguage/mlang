@@ -55,18 +55,17 @@ module type S = sig
     ?events:(Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
     Mir.program ->
     ctx
-
-  val format_value : Format.formatter -> value -> unit
-
-  val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  val get_dbg_info : ctx -> Dbg_info.t option
-
-  val raise_runtime_as_structured : Types.run_error -> 'a
+  (** Creates an empty interpretation context. *)
 
   val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
+  (** Evaluates an expression. *)
 
   val evaluate_program : ctx -> unit
+  (** Evaluates the main target of the program the context was initialized with.
+  *)
+
+  val get_dbg_info : ctx -> Dbg_info.t option
+  (** Returns the tracer debugging information, if relevant. *)
 end
 
 (** The different interpreters, which combine a representation of numbers and

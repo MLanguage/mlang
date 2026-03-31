@@ -9,8 +9,17 @@ module type S = sig
   include M_ir.Mir_roundops.RoundOpsInterface with type t := t
 
   val to_literal : t Types.value -> M_ir.Com.literal
+  (** Translates a value into an M literal *)
 
   val of_literal : M_ir.Com.literal -> t Types.value
+  (** Translates a M literal into a value *)
+
+  val format_value : Format.formatter -> t Types.value -> unit
+  (** Pretty printer for a value *)
+
+  val format_value_prec :
+    int -> int -> Format.formatter -> t Types.value -> unit
+  (** Pretty printer for a value, with min/max precision *)
 end
 
 module Make

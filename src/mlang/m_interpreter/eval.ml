@@ -41,17 +41,11 @@ module type S = sig
     Mir.program ->
     ctx
 
-  val format_value : Format.formatter -> value -> unit
-
-  val format_value_prec : int -> int -> Format.formatter -> value -> unit
-
-  val get_dbg_info : ctx -> Dbg_info.t option
-
-  val raise_runtime_as_structured : Types.run_error -> 'a
-
   val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
 
   val evaluate_program : ctx -> unit
+
+  val get_dbg_info : ctx -> Dbg_info.t option
 end
 
 module type PartialInterp = functor (_ : Tracers.S) -> S
@@ -76,17 +70,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
   module C = Context.Make (N) (Tracer)
 
   exception RuntimeError of Types.run_error * ctx
-
-  let format_value (fmt : Format.formatter) (x : value) =
-    match x with
-    | Undefined -> Com.format_literal fmt Com.Undefined
-    | Number x -> N.format_t fmt x
-
-  let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
-      (x : value) =
-    match x with
-    | Undefined -> Com.format_literal fmt Com.Undefined
-    | Number x -> N.format_prec_t mi ma fmt x
 
   let empty_ctx ?dbg_info ?inputs ?events (p : Mir.program) : ctx =
     C.empty_ctx ?dbg_info ?inputs ?events p
@@ -189,8 +172,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   (* print aux *)
 
-  and pr_string pctx s =
-    Printer.string pctx s
+  and pr_string pctx s = Printer.string pctx s
 
   and pr_access ~ctx (pctx : Printer.t) info acc =
     match C.get_access_var ~eval:evaluate_expr ctx acc with
@@ -209,7 +191,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   and pr_expr ~ctx (pctx : Printer.t) (mi : int) ma e =
     e |> evaluate_expr ctx
-    |> Pp.spr "%a" (format_value_prec mi ma)
+    |> Pp.spr "%a" (N.format_value_prec mi ma)
     |> Printer.raw pctx;
     Printer.flush pctx
 

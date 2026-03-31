@@ -16,6 +16,11 @@ module type S = sig
   val to_literal : t Types.value -> Com.literal
 
   val of_literal : Com.literal -> t Types.value
+
+  val format_value : Format.formatter -> t Types.value -> unit
+
+  val format_value_prec :
+    int -> int -> Format.formatter -> t Types.value -> unit
 end
 
 module Make
@@ -34,6 +39,17 @@ struct
     match l with
     | Com.Undefined -> Undefined
     | Com.Float f -> Number (of_float f)
+
+  let format_value (fmt : Format.formatter) (x : N.t Types.value) =
+    match x with
+    | Undefined -> Com.format_literal fmt Com.Undefined
+    | Number x -> N.format_t fmt x
+
+  let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter)
+      (x : N.t Types.value) =
+    match x with
+    | Undefined -> Com.format_literal fmt Com.Undefined
+    | Number x -> N.format_prec_t mi ma fmt x
 end
 
 module FloatDef =
