@@ -375,8 +375,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     | Interp.RuntimeError (run_error, _) -> (
         match run_error with
         | M_interpreter.Types.StructuredError (msg, kont) ->
-            Ppr.error_print "Error in test %s: %a" name
-              Ppf.format_structured_error msg;
+            Ppf.error_print "Error in test %s: %a" name
+              Ppf.format_structured_message msg;
             write_name name;
             (match kont with None -> () | Some kont -> kont ());
             (successes, failures)
