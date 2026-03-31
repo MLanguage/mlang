@@ -171,6 +171,14 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
     | Or, Number i1, Number i2 ->
         Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
 
+  (** Fails if the value is a nan or infinite. *)
+  let fail_if_nan_or_inf ctx e = function
+    | Number n when N.is_nan_or_inf n ->
+        let e = NanOrInf (Format.asprintf "%a" N.format_t n, e) in
+        if !exit_on_rte then raise_runtime_as_structured e
+        else raise (RuntimeError (e, ctx))
+    | _ -> ()
+
   let rec evaluate_switch_expr (ctx : ctx) s_e =
     match s_e with
     | Com.SEValue e -> (
@@ -388,18 +396,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
           if !exit_on_rte then raise exn
           else raise (RuntimeError (StructuredError (msg, kont), ctx))
     in
-    if match out with Undefined -> false | Number out -> N.is_nan_or_inf out
-    then
-      let e =
-        NanOrInf
-          ( (match out with
-            | Undefined -> assert false
-            | Number out -> Format.asprintf "%a" N.format_t out),
-            e )
-      in
-      if !exit_on_rte then raise_runtime_as_structured e
-      else raise (RuntimeError (e, ctx))
-    else out
+    fail_if_nan_or_inf ctx e out;
+    out
 
   (* stmt evaluation *)
 
