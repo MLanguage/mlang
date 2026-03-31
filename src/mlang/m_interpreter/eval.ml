@@ -190,8 +190,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
   (* print aux *)
 
   and pr_string pctx s =
-    Printer.string pctx s;
-    Printer.flush pctx
+    Printer.string pctx s
 
   and pr_access ~ctx (pctx : Printer.t) info acc =
     match C.get_access_var ~eval:evaluate_expr ctx acc with
