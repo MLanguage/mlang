@@ -230,7 +230,20 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   and get_access_var ctx = C.get_access_var ~eval:evaluate_expr ctx
 
-  and set_access ctx = C.set_access ~eval:evaluate_expr ctx
+  and eval_m_index (ctx : ctx) m_i =
+    match evaluate_expr ctx m_i with
+    | Number z -> Int64.to_string @@ N.to_int z
+    | Undefined -> "indefini"
+
+  and set_access ctx acc vexpr =
+    let value = evaluate_expr ctx vexpr in
+    C.set_access ~eval:evaluate_expr ctx acc value;
+    match C.get_access_var ~eval:evaluate_expr ctx acc with
+    | None -> ()
+    | Some (_, v, _) ->
+        let value = N.to_literal value in
+        Tracer.register_access ctx.tracer_ctx vexpr acc v
+          ctx.ctx_prog.program_dict value (eval_m_index ctx)
 
   (* interpret *)
 
@@ -854,7 +867,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()
 
-  let get_dbg_info (ctx : _ Context.t) = C.get_dbg_info ctx
+  let get_dbg_info (ctx : ctx) = Tracer.get_dbg_info ctx.tracer_ctx
 end
 
 module type RunnerKind = sig

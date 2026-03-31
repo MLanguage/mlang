@@ -299,11 +299,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
         set_var_value_org ctx vsd var_i vorg value
       else set_var_value_org ctx vsd var vorg value
 
-  let eval_m_index ~eval (ctx : (N.t, Tracer.ctx) t) m_i =
-    match eval ctx m_i with
-    | Number z -> Int64.to_string @@ N.to_int z
-    | Undefined -> "indefini"
-
   let get_access_value ~eval (ctx : ctx) access =
     match access with
     | Com.VarAccess (m_sp_opt, v) -> get_var_value ctx m_sp_opt v
@@ -357,9 +352,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
             else None
         | _ -> None)
 
-  let set_access ~eval (ctx : ctx) access vexpr =
-    let value = eval ctx vexpr in
-    (match access with
+  let set_access ~eval (ctx : ctx) access value =
+    match access with
     | Com.VarAccess (m_sp_opt, v) -> set_var_value ctx m_sp_opt v value
     | Com.TabAccess ((m_sp_opt, v), m_idx) -> (
         match eval ctx m_idx with
@@ -376,13 +370,5 @@ module Make (N : Number.S) (Tracer : Tracers.S) = struct
               match events.(i).(j) with
               | Com.Numeric _ -> events.(i).(j) <- Com.Numeric value
               | Com.RefVar v -> set_var_value ctx m_sp_opt v value)
-        | Undefined -> ()));
-    match get_access_var ~eval ctx access with
-    | None -> ()
-    | Some (_, v, _) ->
-        let value = N.to_literal value in
-        Tracer.register_access ctx.tracer_ctx vexpr access v
-          ctx.ctx_prog.program_dict value (eval_m_index ~eval ctx)
-
-  let get_dbg_info (ctx : ctx) = Tracer.get_dbg_info ctx.tracer_ctx
+        | Undefined -> ())
 end
