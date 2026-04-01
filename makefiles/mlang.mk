@@ -66,7 +66,7 @@ else
 		echo "binary is the same"; \
 	else \
 		echo "binary is new"; \
-		rm -f _build/default/$(INTERP_PROGRESS)
+		rm -f $(INTERP_PROGRESS)
 	fi
 	$(call make_in_raw,,remise_a_zero_versionnage)
 endif
