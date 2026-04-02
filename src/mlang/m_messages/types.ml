@@ -50,6 +50,19 @@ module type LANG = sig
     val unknown_backend : string
   end
 
+  module Interpreter : sig
+    val invalid_expression_value : expr:string -> value:string -> string
+
+    val invalid_matching_in_switch :
+      case:string ->
+      matched:[ `Undefined | `Value of string | `Var of string ] ->
+      string
+
+    val unimplemented : func:string -> string
+
+    val wrong_arity : func:string -> arity:int option -> args:int -> string
+  end
+
   (** Parser error messages *)
   module Parser : sig
     val incomplete_attr_definition : string

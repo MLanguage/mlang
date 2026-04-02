@@ -19,8 +19,6 @@ open Types
 
 exception Stop_instruction of Com.stop_kind
 
-let exit_on_rte = ref true
-
 let repl_debug = ref false
 
 module type S = sig
@@ -31,8 +29,6 @@ module type S = sig
   type value = N.t Types.value
 
   type ctx = (N.t, Tracer.ctx) Context.t
-
-  exception RuntimeError of Types.run_error * ctx
 
   val empty_ctx :
     ?dbg_info:Dbg_info.t ->
@@ -58,6 +54,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
   module N = N
   module Tracer = Tracer
   module Fun = Functions.Make (N)
+  module Err = Error.Make (N)
 
   type custom_float = N.t
 
@@ -69,19 +66,8 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
 
   module C = Context.Make (N) (Tracer)
 
-  exception RuntimeError of Types.run_error * ctx
-
   let empty_ctx ?dbg_info ?inputs ?events (p : Mir.program) : ctx =
     C.empty_ctx ?dbg_info ?inputs ?events p
-
-  let raise_runtime_as_structured (e : run_error) =
-    match e with
-    | NanOrInf (v, e) ->
-        Errors.raise_spanned_error
-          (Format.asprintf "Expression evaluated to %s: %a" v
-             Format_mir.format_expression (Pos.unmark e))
-          (Pos.get e)
-    | StructuredError (msg, kont) -> raise @@ Errors.StructuredError (msg, kont)
 
   let is_zero (l : value) : bool =
     match l with Number z -> N.is_zero z | _ -> false
@@ -155,20 +141,17 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
         Number (real_of_bool (bool_of_real i1 || bool_of_real i2))
 
   (** Fails if the value is a nan or infinite. *)
-  let fail_if_nan_or_inf ctx e = function
-    | Number n when N.is_nan_or_inf n ->
-        let e = NanOrInf (Format.asprintf "%a" N.format_t n, e) in
-        if !exit_on_rte then raise_runtime_as_structured e
-        else raise (RuntimeError (e, ctx))
+  let fail_if_nan_or_inf e = function
+    | Number n when N.is_nan_or_inf n -> Err.invalid_expression_value e n
     | _ -> ()
 
   let rec evaluate_switch_expr (ctx : ctx) s_e =
     match s_e with
     | Com.SEValue e -> (
         match evaluate_expr ctx e with
-        | Undefined -> `Undefined
-        | Number n -> `Value n)
-    | SESameVariable v -> `Var v
+        | Undefined -> (`Undefined, Pos.get e)
+        | Number n -> (`Value n, Pos.get e))
+    | SESameVariable v -> (`Var v, Pos.get v)
 
   (* print aux *)
 
@@ -260,13 +243,14 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
     | Func fn, args ->
         let fd = StrMap.find fn ctx.ctx_prog.program_functions in
         evaluate_function ctx fd args
-    | ( ( ArrFunc | InfFunc | PresentFunc | Supzero | AbsFunc | MinFunc
-        | MaxFunc | Multimax | NbEvents ),
+    | ( (( ArrFunc | InfFunc | PresentFunc | Supzero | AbsFunc | MinFunc
+         | MaxFunc | Multimax | NbEvents ) as func),
         _ ) ->
-        Errors.raise_error "arity error"
-    | (SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber | ComplNumber), _
-      ->
-        Errors.raise_error "not implemented"
+        Err.wrong_arity ~func ~args:(List.length args) ~pos:(Pos.get f)
+    | ( ((SumFunc | GtzFunc | GtezFunc | NullFunc | VerifNumber | ComplNumber)
+         as func),
+        _ ) ->
+        Err.unimplemented ~func ~pos:(Pos.get f)
 
   and evaluate_test_in_set ctx positive e0 values =
     let value0 = evaluate_expr ctx e0 in
@@ -356,41 +340,33 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
   and evaluate_expr (ctx : ctx) (e : Mir.expression Pos.marked) : value =
     (* Format.eprintf {|"%a"@.|} (Com.format_expression Com.Var.pp) (Pos.unmark exp); *)
     let out =
-      try
-        match Pos.unmark e with
-        | Com.TestInSet (positive, e0, values) ->
-            evaluate_test_in_set ctx positive e0 values
-        | Comparison (op, e1, e2) -> evaluate_comparison ctx op e1 e2
-        | Binop (op, e1, e2) -> evaluate_binop ctx op e1 e2
-        | Unop (op, e1) -> evaluate_unop ctx op e1
-        | Conditional (e1, e2, e3_opt) -> evaluate_conditional ctx e1 e2 e3_opt
-        | Literal l -> evaluate_literal ctx l
-        | Var access -> get_access_value ctx access
-        | FuncCall (f, args) -> evaluate_fun_call ctx f args
-        | Attribut (m_acc, a) -> evaluate_attribut ctx m_acc a
-        | Size m_acc -> evaluate_size ctx m_acc
-        | Type (m_acc, m_typ) -> evaluate_type ctx m_acc m_typ
-        | SameVariable (m_acc0, m_acc1) ->
-            evaluate_same_variable ctx m_acc0 m_acc1
-        | InDomain (m_acc, cvm) -> evaluate_in_domain ctx m_acc cvm
-        | NbAnomalies ->
-            Number (N.of_float @@ float_of_int @@ Anomaly.nb_anomalies ctx)
-        | NbDiscordances ->
-            Number (N.of_float @@ float_of_int @@ Anomaly.nb_discordances ctx)
-        | NbInformatives ->
-            Number (N.of_float @@ float_of_int @@ Anomaly.nb_informatives ctx)
-        | NbBloquantes ->
-            Number (N.of_float @@ float_of_int @@ Anomaly.nb_bloquantes ctx)
-        | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
-      with
-      | RuntimeError (e, ctx) ->
-          if !exit_on_rte then raise_runtime_as_structured e
-          else raise (RuntimeError (e, ctx))
-      | Errors.StructuredError (msg, kont) as exn ->
-          if !exit_on_rte then raise exn
-          else raise (RuntimeError (StructuredError (msg, kont), ctx))
+      match Pos.unmark e with
+      | Com.TestInSet (positive, e0, values) ->
+          evaluate_test_in_set ctx positive e0 values
+      | Comparison (op, e1, e2) -> evaluate_comparison ctx op e1 e2
+      | Binop (op, e1, e2) -> evaluate_binop ctx op e1 e2
+      | Unop (op, e1) -> evaluate_unop ctx op e1
+      | Conditional (e1, e2, e3_opt) -> evaluate_conditional ctx e1 e2 e3_opt
+      | Literal l -> evaluate_literal ctx l
+      | Var access -> get_access_value ctx access
+      | FuncCall (f, args) -> evaluate_fun_call ctx f args
+      | Attribut (m_acc, a) -> evaluate_attribut ctx m_acc a
+      | Size m_acc -> evaluate_size ctx m_acc
+      | Type (m_acc, m_typ) -> evaluate_type ctx m_acc m_typ
+      | SameVariable (m_acc0, m_acc1) ->
+          evaluate_same_variable ctx m_acc0 m_acc1
+      | InDomain (m_acc, cvm) -> evaluate_in_domain ctx m_acc cvm
+      | NbAnomalies ->
+          Number (N.of_float @@ float_of_int @@ Anomaly.nb_anomalies ctx)
+      | NbDiscordances ->
+          Number (N.of_float @@ float_of_int @@ Anomaly.nb_discordances ctx)
+      | NbInformatives ->
+          Number (N.of_float @@ float_of_int @@ Anomaly.nb_informatives ctx)
+      | NbBloquantes ->
+          Number (N.of_float @@ float_of_int @@ Anomaly.nb_bloquantes ctx)
+      | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
     in
-    fail_if_nan_or_inf ctx e out;
+    fail_if_nan_or_inf e out;
     out
 
   (* stmt evaluation *)
@@ -423,7 +399,7 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
   and evaluate_switch canBlock ctx c l =
     let exception INTERNAL_STOP_SWITCH in
     let then_ () = raise INTERNAL_STOP_SWITCH in
-    let v = evaluate_switch_expr ctx c in
+    let v, pos = evaluate_switch_expr ctx c in
     let default = ref None in
     try
       List.iter
@@ -440,12 +416,13 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
               | CValue (Float f), `Value v ->
                   if N.of_float f = v then
                     evaluate_stmts ~then_ canBlock ctx stmts
-              | CValue _, `Var _ -> failwith "Cannot match value with variable"
+              | CValue _, `Var _ ->
+                  Err.invalid_matching_in_switch ~case ~matched:v ~pos
               | CVar m_acc, `Var v ->
                   if same_variable ctx m_acc v then
                     evaluate_stmts ~then_ canBlock ctx stmts
               | CVar _, (`Value _ | `Undefined) ->
-                  failwith "Cannot match variable with value")
+                  Err.invalid_matching_in_switch ~case ~matched:v ~pos)
             cases)
         l
     with INTERNAL_STOP_SWITCH -> ()
@@ -841,9 +818,6 @@ module Make (N : Number.S) (Tracer : Tracers.S) :
       evaluate_target false ctx main_target [] vsd;
       evaluate_stmt false ctx (Pos.without Com.ExportErrors)
     with
-    | RuntimeError (e, ctx) ->
-        if !exit_on_rte then raise_runtime_as_structured e
-        else raise (RuntimeError (e, ctx))
     | Stop_instruction SKApplication ->
         (* The only stop never caught by anything else *) ()
     | Stop_instruction SKTarget -> (* May not be caught by anything else *) ()

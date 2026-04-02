@@ -1753,8 +1753,7 @@ let rec check_instructions (env : var_env)
               let pp_v fmt (m : Com.m_var_name) =
                 Format.fprintf fmt "%s" (Com.get_var_name @@ Pos.unmark m)
               in
-              let pp_e = Com.format_expression pp_v in
-              Format.asprintf "%a" (Com.format_case pp_v pp_e) case
+              Format.asprintf "%a" (Com.format_case pp_v) case
             in
             let _cases, env, rev_l' =
               List.fold_left

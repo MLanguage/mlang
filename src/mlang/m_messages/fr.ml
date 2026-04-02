@@ -60,6 +60,35 @@ module Fr : LANG = struct
     let unknown_backend = "Pas de dorsal spécifié (--backend)"
   end
 
+  module Interpreter = struct
+    let invalid_expression_value ~expr ~value =
+      Format.sprintf "L'expression %S a été évaluée à %S: invalide." expr value
+
+    let str_matched = function
+      | `Undefined -> "'indéfini'"
+      | `Value v -> Format.sprintf "la valeur %s" v
+      | `Var v -> Format.sprintf "la variable %s" v
+
+    let invalid_matching_in_switch ~case ~matched =
+      Format.sprintf "Impossible d'associer le cas %s à %s." case
+        (str_matched matched)
+
+    let unimplemented ~func = Format.sprintf "Fonction %S non implémentée." func
+
+    let wrong_arity ~func ~arity ~args =
+      match arity with
+      | None ->
+          Format.sprintf
+            "Erreur d'arité: la fonction %S est ne peut recevoir\n\
+            \                         %i arguments."
+            func args
+      | Some arity ->
+          Format.sprintf
+            "Erreur d'arité: la fonction %S est d'arité %i, mais\n\
+            \                         %i arguments lui sont donnés."
+            func arity args
+  end
+
   module Parser = struct
     let incomplete_attr_definition = "Définition incomplète d'un attribut."
 

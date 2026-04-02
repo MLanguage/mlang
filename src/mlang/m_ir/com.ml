@@ -1197,6 +1197,24 @@ let get_var_name v = match v with Normal s -> s | Generic s -> s.base
 
 let get_normal_var = function Normal name -> name | Generic _ -> assert false
 
+let function_arity = function
+  | SumFunc -> None
+  | AbsFunc -> Some 1
+  | MinFunc -> Some 2
+  | MaxFunc -> Some 2
+  | GtzFunc -> Some 1
+  | GtezFunc -> Some 1
+  | NullFunc -> Some 1
+  | ArrFunc -> Some 1
+  | InfFunc -> Some 1
+  | PresentFunc -> Some 1
+  | Multimax -> Some 2
+  | Supzero -> Some 1
+  | VerifNumber -> Some 0
+  | ComplNumber -> Some 0
+  | NbEvents -> Some 0
+  | Func _ -> None
+
 let format_value_typ fmt t =
   Pp.string fmt
     (match t with
@@ -1283,32 +1301,6 @@ let format_varid form_var fmt (m_sp_opt, v) =
   in
   Pp.fpr fmt "%s%a" sp_str form_var v
 
-let format_access form_var form_expr fmt = function
-  | VarAccess v_id -> format_varid form_var fmt v_id
-  | TabAccess (v_id, m_i) ->
-      Pp.fpr fmt "%a[%a]" (format_varid form_var) v_id form_expr
-        (Pos.unmark m_i)
-  | FieldAccess (m_sp_opt, e, f, _) ->
-      let sp_str =
-        match m_sp_opt with
-        | None -> ""
-        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
-      in
-      Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str form_expr (Pos.unmark e)
-        (Pos.unmark f)
-
-let format_case form_var form_expr fmt = function
-  | CDefault -> Format.pp_print_string fmt "default"
-  | CValue v -> format_literal fmt v
-  | CVar acc -> format_access form_var form_expr fmt (Pos.unmark acc)
-
-let format_set_value form_var form_expr fmt sv =
-  match sv with
-  | FloatValue i -> Pp.fpr fmt "%f" (Pos.unmark i)
-  | VarValue m_acc -> format_access form_var form_expr fmt (Pos.unmark m_acc)
-  | IntervalValue (i1, i2) ->
-      Pp.fpr fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
-
 let format_func fmt f =
   Format.pp_print_string fmt
     (match f with
@@ -1335,7 +1327,7 @@ let rec format_expression form_var fmt =
   | TestInSet (belong, e, values) ->
       Format.fprintf fmt "(%a %sdans %a)" form_expr (Pos.unmark e)
         (if belong then "" else "non ")
-        (Pp.list_comma (format_set_value form_var form_expr))
+        (Pp.list_comma (format_set_value form_var))
         values
   | Comparison (op, e1, e2) ->
       Format.fprintf fmt "(%a %a %a)" form_expr (Pos.unmark e1) format_comp_op
@@ -1360,7 +1352,7 @@ let rec format_expression form_var fmt =
         (format_loop_variables form_var)
         (Pos.unmark lvs) form_expr (Pos.unmark e)
   | Literal { lit; _ } -> format_literal fmt lit
-  | Var acc -> format_access form_var form_expr fmt acc
+  | Var acc -> format_access form_var fmt acc
   | Loop (lvs, e) ->
       Format.fprintf fmt "pour %a%a"
         (format_loop_variables form_var)
@@ -1368,40 +1360,58 @@ let rec format_expression form_var fmt =
   | NbCategory cs ->
       Format.fprintf fmt "nb_categorie(%a)" (CatVar.Map.pp_keys ()) cs
   | Attribut (m_acc, a) ->
-      Format.fprintf fmt "attribut(%a, %s)"
-        (format_access form_var form_expr)
+      Format.fprintf fmt "attribut(%a, %s)" (format_access form_var)
         (Pos.unmark m_acc) (Pos.unmark a)
   | Size m_acc ->
-      Format.fprintf fmt "taille(%a)"
-        (format_access form_var form_expr)
+      Format.fprintf fmt "taille(%a)" (format_access form_var)
         (Pos.unmark m_acc)
   | Type (m_acc, m_typ) ->
-      Format.fprintf fmt "type(%a, %a)"
-        (format_access form_var form_expr)
+      Format.fprintf fmt "type(%a, %a)" (format_access form_var)
         (Pos.unmark m_acc) format_value_typ (Pos.unmark m_typ)
   | SameVariable (m_acc0, m_acc1) ->
-      Format.fprintf fmt "est_variable(%a, %a)"
-        (format_access form_var form_expr)
-        (Pos.unmark m_acc0)
-        (format_access form_var form_expr)
-        (Pos.unmark m_acc1)
+      Format.fprintf fmt "est_variable(%a, %a)" (format_access form_var)
+        (Pos.unmark m_acc0) (format_access form_var) (Pos.unmark m_acc1)
   | InDomain (m_acc, cvm) ->
-      Format.fprintf fmt "dans_domaine(%a, %a)"
-        (format_access form_var form_expr)
+      Format.fprintf fmt "dans_domaine(%a, %a)" (format_access form_var)
         (Pos.unmark m_acc) (CatVar.Map.pp_keys ()) cvm
   | NbAnomalies -> Format.fprintf fmt "nb_anomalies()"
   | NbDiscordances -> Format.fprintf fmt "nb_discordances()"
   | NbInformatives -> Format.fprintf fmt "nb_informatives()"
   | NbBloquantes -> Format.fprintf fmt "nb_bloquantes()"
 
-let format_print_arg form_var fmt =
-  let form_expr = format_expression form_var in
-  function
+and format_access form_var fmt = function
+  | VarAccess v_id -> format_varid form_var fmt v_id
+  | TabAccess (v_id, m_i) ->
+      Pp.fpr fmt "%a[%a]" (format_varid form_var) v_id
+        (format_expression form_var)
+        (Pos.unmark m_i)
+  | FieldAccess (m_sp_opt, e, f, _) ->
+      let sp_str =
+        match m_sp_opt with
+        | None -> ""
+        | Some (m_sp, _) -> get_var_name (Pos.unmark m_sp) ^ "."
+      in
+      Pp.fpr fmt "%schamp_evenement(%a, %s)" sp_str
+        (format_expression form_var)
+        (Pos.unmark e) (Pos.unmark f)
+
+and format_case form_var fmt = function
+  | CDefault -> Format.pp_print_string fmt "default"
+  | CValue v -> format_literal fmt v
+  | CVar acc -> format_access form_var fmt (Pos.unmark acc)
+
+and format_set_value form_var fmt sv =
+  match sv with
+  | FloatValue i -> Pp.fpr fmt "%f" (Pos.unmark i)
+  | VarValue m_acc -> format_access form_var fmt (Pos.unmark m_acc)
+  | IntervalValue (i1, i2) ->
+      Pp.fpr fmt "%d..%d" (Pos.unmark i1) (Pos.unmark i2)
+
+let format_print_arg form_var fmt = function
   | PrintString s -> Format.fprintf fmt "\"%s\"" s
   | PrintAccess (info, m_a) ->
       let infoStr = match info with Name -> "nom" | Alias -> "alias" in
-      Format.fprintf fmt "%s(%a)" infoStr
-        (format_access form_var form_expr)
+      Format.fprintf fmt "%s(%a)" infoStr (format_access form_var)
         (Pos.unmark m_a)
   | PrintIndent e ->
       Format.fprintf fmt "indenter(%a)"
@@ -1421,9 +1431,7 @@ let format_print_arg form_var fmt =
 
 let format_formula_decl form_var fmt = function
   | VarDecl (m_access, e) ->
-      format_access form_var
-        (format_expression form_var)
-        fmt (Pos.unmark m_access);
+      format_access form_var fmt (Pos.unmark m_access);
       Format.fprintf fmt " = %a" (format_expression form_var) (Pos.unmark e)
   | EventFieldRef (idx, f, _, v) ->
       Format.fprintf fmt "champ_evenement(%a,%s) reference %a"
@@ -1442,7 +1450,7 @@ let format_formula form_var fmt f =
 
 let rec format_instruction form_var form_err =
   let form_expr = format_expression form_var in
-  let form_access = format_access form_var form_expr in
+  let form_access = format_access form_var in
   let form_instrs = format_instructions form_var form_err in
   fun fmt instr ->
     match instr with
@@ -1464,9 +1472,7 @@ let rec format_instruction form_var form_err =
         Format.fprintf fmt " : (@,";
         List.iter
           (fun (cl, l) ->
-            List.iter
-              (Format.fprintf fmt "%a :@," (format_case form_var form_expr))
-              cl;
+            List.iter (Format.fprintf fmt "%a :@," (format_case form_var)) cl;
             Format.fprintf fmt "@[<h 2>  %a@]" form_instrs l)
           l;
         Format.fprintf fmt "@]@,"
@@ -1532,7 +1538,7 @@ let rec format_instruction form_var form_err =
           | [] -> ()
           | args ->
               let pp_m_access fmt m_a =
-                format_access form_var form_expr fmt (Pos.unmark m_a)
+                format_access form_var fmt (Pos.unmark m_a)
               in
               Pp.list_comma pp_m_access fmt args
         in

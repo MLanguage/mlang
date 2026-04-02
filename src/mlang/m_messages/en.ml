@@ -67,6 +67,33 @@ module En : LANG = struct
     let unexpected_syntax_error = "Unexpected syntax error."
   end
 
+  module Interpreter = struct
+    let invalid_expression_value ~expr ~value =
+      Format.sprintf "Expression %S evaluated to %S: invalid." expr value
+
+    let str_matched = function
+      | `Undefined -> "'undefined'"
+      | `Value v -> Format.sprintf "the value %s" v
+      | `Var v -> Format.sprintf "the variable %s" v
+
+    let invalid_matching_in_switch ~case ~matched =
+      Format.sprintf "Impossible to match the case %s to %s." case
+        (str_matched matched)
+
+    let unimplemented ~func = Format.sprintf "Unimplemented function %S" func
+
+    let wrong_arity ~func ~arity ~args =
+      match arity with
+      | None ->
+          Format.sprintf "Arity error: function %S cannot have %i arguments."
+            func args
+      | Some arity ->
+          Format.sprintf
+            "Arity error: function %S has arity %i, but\n\
+            \                         was given %i arguments."
+            func arity args
+  end
+
   module Validator = struct
     module Warning = struct
       let autocycle ~rule_id ~var_name =

@@ -3,4 +3,4 @@
  (name m_interpreter)
  (flags
   (:standard -open Utils))
- (libraries utils m_ir num gmp re ocamlgraph mlang.ir))
+ (libraries utils num gmp re ocamlgraph mlang.ir mlang.messages))

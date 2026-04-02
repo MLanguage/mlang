@@ -340,7 +340,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
     |> List.sort String.compare |> Array.of_list
   in
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  M_interpreter.Eval.exit_on_rte := false;
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
   Config.warning_flag := false;
@@ -372,19 +371,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
         write_name name;
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures)
-    | Interp.RuntimeError (run_error, _) -> (
-        match run_error with
-        | M_interpreter.Types.StructuredError (msg, kont) ->
-            Ppf.error_print "Error in test %s: %a" name
-              Ppf.format_structured_message msg;
-            write_name name;
-            (match kont with None -> () | Some kont -> kont ());
-            (successes, failures)
-        | NanOrInf (msg, Pos.Mark (_, pos)) ->
-            Ppf.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
-              msg Pos.format pos;
-            write_name name;
-            (successes, failures))
     | e ->
         Ppf.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e
@@ -412,7 +398,6 @@ let check_all_tests (p : Mir.program) (test_dir : string)
 let check_one_test (p : Mir.program) (name : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
   let ign_vars = ignored_vars_set p ignored_vars_list in
-  M_interpreter.Eval.exit_on_rte := false;
   (* sort by increasing size, hoping that small files = simple tests *)
   let dbg_warning = !Config.warning_flag in
   let dbg_time = !Config.display_time in
@@ -439,17 +424,6 @@ let check_one_test (p : Mir.program) (name : string)
           Ppf.format_structured_message msg;
         (match kont with None -> () | Some kont -> kont ());
         Some 0
-    | Interp.RuntimeError (run_error, _) -> (
-        match run_error with
-        | M_interpreter.Types.StructuredError (msg, kont) ->
-            Ppf.error_print "Error in test %s: %a" name
-              Ppf.format_structured_message msg;
-            (match kont with None -> () | Some kont -> kont ());
-            Some 0
-        | NanOrInf (msg, Pos.Mark (_, pos)) ->
-            Ppf.error_print "Runtime error in test %s: NanOrInf (%s, %a)" name
-              msg Pos.format pos;
-            Some 0)
     | e ->
         Ppf.error_print "Uncatched exception: %s" (Printexc.to_string e);
         raise e

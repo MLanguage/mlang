@@ -25,10 +25,6 @@ open M_ir
 (** The BIR interpreter can be instrumented to record which program locations
     have been executed. *)
 
-val exit_on_rte : bool ref
-(** If set to true, the interpreter exits the whole process in case of runtime
-    error *)
-
 val repl_debug : bool ref
 (** If set to true, prints the REPL debugger in case of runtime error *)
 
@@ -46,8 +42,6 @@ module type S = sig
   type value = N.t Types.value
 
   type ctx = (N.t, Tracer.ctx) Context.t
-
-  exception RuntimeError of Types.run_error * ctx
 
   val empty_ctx :
     ?dbg_info:Dbg_info.t ->

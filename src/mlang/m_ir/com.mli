@@ -413,7 +413,11 @@ type 'v access =
 
 and 'v m_access = 'v access Pos.marked
 
-and 'v case = CDefault | CValue of literal | CVar of 'v m_access
+and 'v case =
+  | CDefault
+  | CValue of literal
+  | CVar of 'v m_access  (** Switch cases *)
+(* TODO: add location *)
 
 (** Values that can be substituted for loop parameters *)
 and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
@@ -674,18 +678,16 @@ val get_var_name : var_name -> string
 
 val get_normal_var : var_name -> string
 
+val function_arity : func -> int option
+(** Returns the arity of a function, or None if there is no limit. *)
+
 (** {2 Pretty printing functions} *)
 
 val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
 
-val format_case :
-  (Pp.t -> 'v -> unit) ->
-  (Pp.t -> 'v expression -> unit) ->
-  Pp.t ->
-  'v case ->
-  unit
+val format_case : (Pp.t -> 'v -> unit) -> Pp.t -> 'v case -> unit
 
 val format_atom : (Pp.t -> 'v -> unit) -> Pp.t -> 'v atom -> unit
 
@@ -698,12 +700,9 @@ val format_binop : Pp.t -> binop -> unit
 
 val format_comp_op : Pp.t -> comp_op -> unit
 
-val format_set_value :
-  (Pp.t -> 'v -> unit) ->
-  (Pp.t -> 'v expression -> unit) ->
-  Pp.t ->
-  'v set_value ->
-  unit
+val format_access : (Pp.t -> 'v -> unit) -> Pp.t -> 'v access -> unit
+
+val format_set_value : (Pp.t -> 'v -> unit) -> Pp.t -> 'v set_value -> unit
 
 val format_func : Pp.t -> func -> unit
 
