@@ -344,6 +344,14 @@ let result_print ppf =
   let module L = (val logger_select ()) in
   L.result_print ppf
 
+let error_str : string -> unit = error_print "%s"
+
+let warning_str : string -> unit = warning_print "%s"
+
+let debug_str : string -> unit = debug_print "%s"
+
+let result_str : string -> unit = result_print "%s"
+
 let create_progress_bar ppf =
   let module L = (val logger_select ()) in
   L.create_progress_bar ppf

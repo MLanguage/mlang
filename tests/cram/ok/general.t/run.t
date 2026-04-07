@@ -14,10 +14,10 @@ Graph Deps
   
   [WARNING] Auto-cycle dans la règle 1337 avec la variable "X"
   [WARNING] Auto-cycle dans la règle 1337 avec la variable "X"
-  [ERROR] KO | X attendue: 3 - evaluee: 58
+  [ERROR] KO | X attendue : 3 - evaluée : 58
   [RESULT] graph_deps.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
 
   $ cat output.json
   {"kind": "matrix", "graph":{
@@ -179,8 +179,8 @@ Graph Deps
 Calcul
   $ mlang calcul.m --mpp_function target -A app --run_test calcul.irj --no_nondet_display --trace --trace_output_file output.json
   [RESULT] calcul.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
   $ cat output.json
   {"kind": "matrix", "graph":{
    "6": {"outcoming": [4,5]
@@ -228,8 +228,8 @@ Erreur
   $ mlang erreur.m --mpp_function target -A app --run_test erreur.irj --no_nondet_display --trace --trace_output_file output.json
   whatever
   [RESULT] erreur.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
   $ cat output.json
   {"kind": "matrix", "graph":{
    },
@@ -393,8 +393,8 @@ M_EXT
   "V_ANCSDED": "V_POUET"
   }}
   [RESULT] m_ext.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
 
 Wrong
   $ mlang wrong.m --mpp_function target -A app --run_test wrong.irj --no_nondet_display --trace
@@ -420,8 +420,8 @@ Wrong
   "V_ANCSDED": "V_POUET"
   }}
   [RESULT] wrong.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
 
 Tab
   $ mlang tab.m --mpp_function target -A app --run_test tab.irj --no_nondet_display --trace --trace_output_file output.json
@@ -455,8 +455,8 @@ Tab
      | ^
   
   [RESULT] tab.irj
-  [RESULT] No failure!
-  [RESULT] Test passed!
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
   $ cat output.json
   {"kind": "matrix", "graph":{
    "1": {"outcoming": []

@@ -97,7 +97,7 @@ let run_single_test m_program test =
   M_interpreter.Eval.repl_debug := true;
   Test_interpreter.check_one_test m_program test !Config.value_sort
     !Config.round_ops;
-  Ppf.result_print "Test passed!"
+  Ppf.result_str M_messages.Driver.test_passed
 
 let run_multiple_tests m_program tests =
   let filter_function =

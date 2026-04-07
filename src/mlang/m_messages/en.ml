@@ -47,6 +47,8 @@ module En : LANG = struct
 
     let term_eval_error = "Term evaluation error"
 
+    let test_passed = "Test passed!"
+
     let uncaught_exception = "Uncaught exception"
 
     let unknown_backend = "No backend specified (--backend)"
@@ -92,6 +94,52 @@ module En : LANG = struct
             "Arity error: function %S has arity %i, but\n\
             \                         was given %i arguments."
             func arity args
+  end
+
+  module Test_interpreter = struct
+    let all_good = "No failure!"
+
+    let all_not_good =
+      let pp_file_errs fmt name nbErr =
+        Format.fprintf fmt "\t%d error%s in file %s" nbErr
+          (if nbErr > 1 then "s" else "")
+          name
+      in
+      let pp_file_errs_map fmt m = StrMap.iter (pp_file_errs fmt) m in
+      fun map : string -> Format.asprintf "Failures: %a" pp_file_errs_map map
+
+    let error_in_test ~test = Format.sprintf "Error in test %s" test
+
+    let invalid_test_file = "Invalid test file"
+
+    let invalid_remainder_direction ~dir =
+      Format.sprintf "Invalid remainder direction %S: should be R, C, M or P"
+        dir
+
+    let ko_difference ~name ~expected ~evaluated =
+      Format.sprintf "KO | %s expected : %s - evaluated : %s" name expected
+        evaluated
+
+    let ko_missing_error ~name = Format.sprintf "KO | missing error: %s" name
+
+    let ko_unexpected_error ~name =
+      Format.sprintf "KO | unexpected error: %s" name
+
+    let ok_ignored ~name = Format.sprintf "OK | %s ignored" name
+
+    let ok_non_returned ~name =
+      Format.sprintf "OK | %s ignored because non-returned" name
+
+    let test_results ~num =
+      Format.sprintf "Test results: %d success%s" num
+        (if num > 1 then "es" else "")
+
+    let unexpected_failure = "Unexpected failure"
+
+    let unknown_variable ~name = Format.sprintf "Unknown variable %S" name
+
+    let variable_absent_from_tgv ~name =
+      Format.sprintf "Unknown variable from TGV: %s" name
   end
 
   module Validator = struct

@@ -9,6 +9,7 @@
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
 open M_interpreter
+module Msg = M_messages.Test_interpreter
 
 let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
   try StrMap.find (Pos.unmark name) p.program_vars
@@ -16,8 +17,8 @@ let find_var_of_name (p : Mir.program) (name : string Pos.marked) : Com.Var.t =
     let name = Mir.find_var_name_by_alias p name in
     try StrMap.find name p.program_vars
     with Not_found ->
-      Ppf.error_print "Variable inconnue: %s" name;
-      Errors.raise_error "Fichier de test incorrect")
+      Ppf.error_str @@ Msg.unknown_variable ~name;
+      Errors.raise_error Msg.invalid_test_file)
 
 type instance = {
   label : string;
@@ -59,19 +60,17 @@ let to_MIR_function_and_inputs (program : Mir.program) (t : Irj_ast.irj_file) :
           match StrMap.find_opt vn program.program_vars with
           | Some var -> Com.RefVar var
           | None ->
-              Ppf.error_print "Variable inconnue: %s" vn;
-              let msg = "Fichier de test incorrect" in
-              Errors.raise_error msg)
+              Ppf.error_str @@ Msg.unknown_variable ~name:vn;
+              Errors.raise_error Msg.invalid_test_file)
     in
     let fromDirection = function
       | "R" -> Com.Numeric (Com.Float 0.0)
       | "M" -> Com.Numeric (Com.Float 1.0)
       | "P" -> Com.Numeric (Com.Float 2.0)
       | "C" -> Com.Numeric (Com.Float 3.0)
-      | s ->
-          Ppf.error_print "Sens du rappel: %s, devrait être parmi R, C, M et P"
-            s;
-          Errors.raise_error "Fichier de test incorrect"
+      | dir ->
+          Ppf.error_str @@ Msg.invalid_remainder_direction ~dir;
+          Errors.raise_error Msg.invalid_test_file
     in
     let toNum p = Com.Numeric (Com.Float (float p)) in
     let optToNum = function
@@ -132,7 +131,7 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
   let test_error_margin = 0.01 in
   let fold vname expected acc =
     if StrSet.mem vname ign_vars then (
-      Ppf.warning_print "OK | %s ignoree" vname;
+      Ppf.warning_print "%s" @@ Msg.ok_ignored ~name:vname;
       acc)
     else
       match StrMap.find_opt vname program.program_vars with
@@ -160,17 +159,22 @@ let check_vars (program : Mir.program) exp vars ign_vars : interp_error list =
               match err with
               | None -> acc
               | Some err ->
-                  Ppf.error_print "KO | %s attendue: %a - evaluee: %a" vname
-                    Com.format_literal err.expected Com.format_literal err.value;
+                  let expected =
+                    Format.asprintf "%a" Com.format_literal err.expected
+                  and evaluated =
+                    Format.asprintf "%a" Com.format_literal err.value
+                  in
+                  Ppf.error_str
+                  @@ Msg.ko_difference ~name:vname ~expected ~evaluated;
                   err :: acc)
             else (
-              Ppf.warning_print "OK | %s ignoree car non-restituee" vname;
+              Ppf.warning_str @@ Msg.ok_non_returned ~name:vname;
               acc)
           else (
-            Ppf.warning_print "Variable inconnue dans le TGV: %s" vname;
+            Ppf.warning_str @@ Msg.variable_absent_from_tgv ~name:vname;
             acc)
       | None ->
-          Ppf.warning_print "Variable inconnue: %s" vname;
+          Ppf.warning_str @@ Msg.unknown_variable ~name:vname;
           acc
   in
   StrMap.fold fold exp []
@@ -212,8 +216,12 @@ let check_test (program : Mir.program) (test_input : Irj_file.input)
     in
     let missAnos = StrSet.diff exp rais in
     let unexAnos = StrSet.diff rais exp in
-    StrSet.iter (Ppf.error_print "KO | erreur manquante: %s") missAnos;
-    StrSet.iter (Ppf.error_print "KO | erreur inattendue: %s") unexAnos;
+    StrSet.iter
+      (fun name -> Ppf.error_str @@ Msg.ko_missing_error ~name)
+      missAnos;
+    StrSet.iter
+      (fun name -> Ppf.error_str @@ Msg.ko_unexpected_error ~name)
+      unexAnos;
     StrSet.cardinal missAnos + StrSet.cardinal unexAnos
   in
   let dbg_warning = !Config.warning_flag in
@@ -357,17 +365,17 @@ let check_all_tests (p : Mir.program) (test_dir : string)
       let file = Irj_file.Filename (test_dir ^ name) in
       ignore @@ check_test p file value_sort round_ops ign_vars;
       Config.debug_flag := true;
-      Ppf.result_print "%s" name;
+      Ppf.result_str name;
       write_name name;
       (name :: successes, failures)
     with
     | InterpError nbErr ->
-        Ppf.error_print "%s" name;
+        Ppf.error_str name;
         write_name name;
         (successes, StrMap.add name nbErr failures)
     | Errors.StructuredError (msg, kont) ->
-        Ppf.error_print "Error in test %s: %a" name
-          Ppf.format_structured_message msg;
+        Ppf.error_str @@ Msg.error_in_test ~test:name;
+        Ppf.error_print "%a" Ppf.format_structured_message msg;
         write_name name;
         (match kont with None -> () | Some kont -> kont ());
         (successes, failures)
@@ -387,13 +395,9 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Sys.remove progress_filename;
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
-  Ppf.result_print "Test results: %d successes" (List.length s);
-  if StrMap.cardinal f = 0 then Ppf.result_print "No failures!"
-  else (
-    Ppf.warning_print "Failures:";
-    StrMap.iter
-      (fun name nbErr -> Ppf.error_print "\t%d errors in files %s" nbErr name)
-      f)
+  Ppf.result_str @@ Msg.test_results ~num:(List.length s);
+  if StrMap.cardinal f = 0 then Ppf.result_str Msg.all_good
+  else Ppf.result_str @@ Msg.all_not_good f
 
 let check_one_test (p : Mir.program) (name : string)
     (value_sort : Config.value_sort) (round_ops : Config.round_ops) =
@@ -420,8 +424,8 @@ let check_one_test (p : Mir.program) (name : string)
     with
     | InterpError nbErr -> Some nbErr
     | Errors.StructuredError (msg, kont) ->
-        Ppf.error_print "Error in test %s: %a" name
-          Ppf.format_structured_message msg;
+        Ppf.error_str @@ Msg.error_in_test ~test:name;
+        Ppf.error_print "%a" Ppf.format_structured_message msg;
         (match kont with None -> () | Some kont -> kont ());
         Some 0
     | e ->
@@ -432,6 +436,7 @@ let check_one_test (p : Mir.program) (name : string)
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
   match is_ok with
-  | None -> Ppf.result_print "No failure!"
-  | Some 0 -> Ppf.error_print "Unexpected failure"
-  | Some nbErr -> Ppf.error_print "Failure: %d errors in file %s" nbErr name
+  | None -> Ppf.result_str Msg.all_good
+  | Some 0 -> Ppf.error_str Msg.unexpected_failure
+  | Some nbErr ->
+      Ppf.error_str @@ Msg.all_not_good @@ StrMap.singleton name nbErr

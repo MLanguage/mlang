@@ -55,6 +55,8 @@ module Fr : LANG = struct
       "Echec lors de l'évaluation d'un terme lors de la lecture des arguments \
        de la ligne de commande"
 
+    let test_passed = "Test exécuté!"
+
     let uncaught_exception = "Exception non rattrapée"
 
     let unknown_backend = "Pas de dorsal spécifié (--backend)"
@@ -103,6 +105,49 @@ module Fr : LANG = struct
     let unexpected_symbol = "Symbole innattendu. Avez-vous oublié un ';'?"
 
     let unexpected_syntax_error = "Erreur de syntaxe innattendue."
+  end
+
+  module Test_interpreter = struct
+    let all_good = "Aucun echec!"
+
+    let all_not_good =
+      let pp_file_errs fmt name nbErr =
+        Format.fprintf fmt "\t%d erreur%s dans le fichier %s" nbErr
+          (if nbErr > 1 then "s" else "")
+          name
+      in
+      let pp_file_errs_map fmt m = StrMap.iter (pp_file_errs fmt) m in
+      fun map : string -> Format.asprintf "Erreurs: %a" pp_file_errs_map map
+
+    let error_in_test ~test = Format.sprintf "Erreur dans le test %s" test
+
+    let invalid_remainder_direction ~dir =
+      Format.sprintf "Sens du rappel: %S devrait être parmi R, C, M or P" dir
+
+    let invalid_test_file = "Fichier de test incorrect"
+
+    let ko_difference ~name ~expected ~evaluated =
+      Format.sprintf "KO | %s attendue : %s - evaluée : %s" name expected
+        evaluated
+
+    let ko_missing_error ~name = Format.sprintf "KO | erreur manquante: %s" name
+
+    let ko_unexpected_error ~name =
+      Format.sprintf "KO | erreur innattendue: %s" name
+
+    let ok_ignored ~name = Format.sprintf "OK | %s ignorée" name
+
+    let ok_non_returned ~name =
+      Format.sprintf "OK | %s ignorée car non-restituée" name
+
+    let test_results ~num = Format.sprintf "Résultats des tests: %d succès" num
+
+    let unknown_variable ~name = Format.sprintf "Variable %S inconnue" name
+
+    let unexpected_failure = "Erreur innattendue"
+
+    let variable_absent_from_tgv ~name =
+      Format.sprintf "Variable inconnue dans le TGV: %s" name
   end
 
   module Validator = struct

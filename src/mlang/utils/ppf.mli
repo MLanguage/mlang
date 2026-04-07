@@ -55,6 +55,14 @@ val warning_print : ('a, Format.formatter, unit, unit) format4 -> 'a
 
 val result_print : ('a, Format.formatter, unit, unit) format4 -> 'a
 
+val debug_str : string -> unit
+
+val error_str : string -> unit
+
+val warning_str : string -> unit
+
+val result_str : string -> unit
+
 val create_progress_bar : string -> (string -> unit) * (string -> unit)
 
 val format_structured_message : Format.formatter -> structured_msg -> unit

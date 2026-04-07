@@ -45,6 +45,8 @@ module type LANG = sig
 
     val term_eval_error : string
 
+    val test_passed : string
+
     val uncaught_exception : string
 
     val unknown_backend : string
@@ -76,6 +78,37 @@ module type LANG = sig
     val unexpected_symbol : string
 
     val unexpected_syntax_error : string
+  end
+
+  module Test_interpreter : sig
+    val all_good : string
+
+    val all_not_good : int StrMap.t -> string
+
+    val error_in_test : test:string -> string
+
+    val invalid_remainder_direction : dir:string -> string
+
+    val invalid_test_file : string
+
+    val ko_difference :
+      name:string -> expected:string -> evaluated:string -> string
+
+    val ko_missing_error : name:string -> string
+
+    val ko_unexpected_error : name:string -> string
+
+    val ok_ignored : name:string -> string
+
+    val ok_non_returned : name:string -> string
+
+    val test_results : num:int -> string
+
+    val unexpected_failure : string
+
+    val unknown_variable : name:string -> string
+
+    val variable_absent_from_tgv : name:string -> string
   end
 
   (** Validator messages. *)
