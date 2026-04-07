@@ -48,7 +48,6 @@ let info (pctx : t) info (vsd : Com.variable_space) v =
   if not vsd.vs_by_default then (
     raw pctx (Pos.unmark vsd.vs_name);
     raw pctx ".");
-  (* let _, v, _ = Context.get_var pctx.ctx None var in *)
   match info with
   | Com.Name -> raw pctx (Com.Var.name_str v)
   | Com.Alias -> raw pctx (Com.Var.alias_str v)
@@ -58,28 +57,5 @@ let string (pctx : t) s =
   flush pctx
 
 let access (pctx : t) i (vsd, var, _) =
-  (* match get_access_var pctx.ctx acc with *)
-  (* | Some (vsd, var, _) -> *)
   info pctx i vsd var;
   flush pctx
-(* | None -> () *)
-
-(* and pr_expr (pctx : pctx) mi ma e = *)
-(*   pr_value pctx mi ma (evaluate_expr pctx.ctx e); *)
-(*   pr_flush pctx *)
-
-(* module Make (N : Mir_number.NumberInterface) = struct *)
-
-(*   let format_value_prec (mi : int) (ma : int) (fmt : Format.formatter) *)
-(*         (x : N.t value) = *)
-(*     match x with *)
-(*     | Undefined -> Com.format_literal fmt Com.Undefined *)
-(*     | Number x -> N.format_prec_t mi ma fmt x *)
-
-(*   let value (pctx : pctx) mi ma value = *)
-(*     raw pctx (Pp.spr "%a" (format_value_prec mi ma) value) *)
-
-(*   let expr ~eval (pctx : pctx) mi ma e = *)
-(*     value pctx mi ma (eval pctx.ctx e); *)
-(*     flush pctx *)
-(* end *)
