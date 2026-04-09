@@ -1,5 +1,12 @@
 module VID = Dgfip_varid
 
+let fresh_c_local =
+  let c = ref 0 in
+  fun name ->
+    let s = name ^ string_of_int !c in
+    incr c;
+    s
+
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
   try
@@ -533,3 +540,132 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (fun ((_kd, vn, expr) : dflag * string * t) ->
       format_assign dgfip_flags vn fmt expr)
     set_vars
+
+module Func = struct
+  let supzero se =
+    let set_vars = se.set_vars in
+    let cond = dand se.def_test (comp ">=" se.value_comp (lit 0.0)) in
+    let def_test = ite cond dfalse se.def_test in
+    let value_comp = ite cond (lit 0.0) se.value_comp in
+    build_transitive_composition { set_vars; def_test; value_comp }
+
+  let present se =
+    let set_vars = se.set_vars in
+    let def_test = dtrue in
+    let value_comp = se.def_test in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let null se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dand def_test (comp "==" se.value_comp (lit 0.0)) in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let arr se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "my_arr" [ se.value_comp ] in
+    (* Here we boldly assume that rounding value of `undef` will give zero,
+       given the invariant. Pretty sure that not true, in case of doubt, turn
+       `safe_def` to false *)
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let inf se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "my_floor" [ se.value_comp ] in
+    (* same as above *)
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let abs se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "fabs" [ se.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let max se1 se2 =
+    let set_vars = se1.set_vars @ se2.set_vars in
+    let def_test = dor se1.def_test se2.def_test in
+    let value_comp = dfun "max" [ se1.value_comp; se2.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let min se1 se2 =
+    let set_vars = se1.set_vars @ se2.set_vars in
+    let def_test = dor se1.def_test se2.def_test in
+    let value_comp = dfun "min" [ se1.value_comp; se2.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let multimax e (m_sp_opt, v) =
+    let ptr = VID.gen_info_ptr v in
+    let d_irdata = ddirect (dinstr "irdata") in
+    let res = fresh_c_local "res" in
+    let res_def = Pp.spr "%s_def" res in
+    let res_val = Pp.spr "%s_val" res in
+    let res_def_ptr = Pp.spr "&%s" res_def in
+    let res_val_ptr = Pp.spr "&%s" res_val in
+    let d_fun =
+      dfun "multimax_varinfo"
+        [
+          d_irdata;
+          ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
+          ddirect @@ dinstr ptr;
+          e.def_test;
+          e.value_comp;
+          ddirect @@ dinstr res_def_ptr;
+          ddirect @@ dinstr res_val_ptr;
+        ]
+    in
+    let set_vars =
+      e.set_vars
+      @ [ (Def, res_def, d_fun); (Val, res_val, ddirect @@ dinstr res_val) ]
+    in
+    let def_test = dinstr res_def in
+    let value_comp = dinstr res_val in
+    build_transitive_composition { set_vars; def_test; value_comp }
+
+  let nb_events () =
+    let def_test = dinstr "1.0" in
+    (* dtrue? *)
+    let value_comp = dinstr "nb_evenements(irdata)" in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let call fn args =
+    let res = fresh_c_local "result" in
+    let res_def = Pp.spr "%s_def" res in
+    let res_val = Pp.spr "%s_val" res in
+    let res_def_ptr = Pp.spr "&%s" res_def in
+    let res_val_ptr = Pp.spr "&%s" res_val in
+    let set_vars, arg_exprs =
+      let rec aux (set_vars, arg_exprs) = function
+        | [] -> (List.rev set_vars, List.rev arg_exprs)
+        | e :: la ->
+            let set_vars = List.rev e.set_vars @ set_vars in
+            let arg_exprs = e.value_comp :: e.def_test :: arg_exprs in
+            aux (set_vars, arg_exprs) la
+      in
+      aux ([], []) args
+    in
+    let d_fun =
+      dfun fn
+        ([
+           ddirect (dinstr "irdata");
+           ddirect (dinstr res_def_ptr);
+           ddirect (dinstr res_val_ptr);
+         ]
+        @ arg_exprs)
+    in
+    let set_vars =
+      set_vars
+      @ [ (Def, res_def, d_fun); (Val, res_val, ddirect (dinstr res_val)) ]
+    in
+    let def_test = dinstr res_def in
+    let value_comp = dinstr res_val in
+    build_transitive_composition { set_vars; def_test; value_comp }
+end
