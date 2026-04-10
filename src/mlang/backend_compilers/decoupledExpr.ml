@@ -48,6 +48,7 @@ and local_vars = (local_var * stack_assignment) list
 and expr =
   | Dtrue
   | Dfalse
+  | Dirdata
   | Dlit of float
   | Dvar of expr_var
   | Dand of expr * expr
@@ -108,7 +109,7 @@ let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
-  | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
+  | Dtrue | Dfalse | Dlit _ | Dvar (M _) | Dirdata -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
@@ -123,7 +124,8 @@ let rec expr_position (expr : expr) (st : local_stacks) =
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
   | Ddirect _ -> Not_to_stack
-  | _ -> Must_be_pushed
+  | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _ ->
+      Must_be_pushed
 
 (* allocate to local variable if necessary *)
 let store_local (stacks : local_stacks) (ctx : local_vars) (v : local_var)
@@ -195,6 +197,8 @@ let let_local (v : local_var) (bound : constr) (body : constr)
 let dtrue _stacks _lv : t = (Dtrue, Def, [])
 
 let dfalse _stacks _lv : t = (Dfalse, Def, [])
+
+let irdata _ _ = (Dirdata, Val, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
@@ -453,6 +457,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   match de with
   | Dtrue -> Format.fprintf fmt "1"
   | Dfalse -> Format.fprintf fmt "0"
+  | Dirdata -> Format.fprintf fmt "irdata"
   | Dlit f -> (
       match Float.modf f with
       | 0., _ ->
@@ -604,7 +609,6 @@ module Func = struct
 
   let multimax e (m_sp_opt, v) =
     let ptr = VID.gen_info_ptr v in
-    let d_irdata = ddirect (dinstr "irdata") in
     let res = fresh_c_local "res" in
     let res_def = Pp.spr "%s_def" res in
     let res_val = Pp.spr "%s_val" res in
@@ -613,7 +617,7 @@ module Func = struct
     let d_fun =
       dfun "multimax_varinfo"
         [
-          d_irdata;
+          irdata;
           ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
           ddirect @@ dinstr ptr;
           e.def_test;
@@ -654,11 +658,7 @@ module Func = struct
     in
     let d_fun =
       dfun fn
-        ([
-           ddirect (dinstr "irdata");
-           ddirect (dinstr res_def_ptr);
-           ddirect (dinstr res_val_ptr);
-         ]
+        ([ irdata; ddirect (dinstr res_def_ptr); ddirect (dinstr res_val_ptr) ]
         @ arg_exprs)
     in
     let set_vars =

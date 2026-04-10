@@ -213,7 +213,6 @@ let nb_bloquantes () =
   D.build_transitive_composition { set_vars = []; def_test; value_comp }
 
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
-  let d_irdata = D.ddirect @@ D.dinstr "irdata" in
   let set_vars, idx_def, idx_val =
     let e_idx = generate_c_expr p m_idx in
     (e_idx.set_vars, e_idx.def_test, e_idx.value_comp)
@@ -224,7 +223,7 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   let d_fun =
     D.dfun "lis_tabaccess"
       [
-        d_irdata;
+        D.irdata;
         D.ddirect @@ D.dinstr @@ VID.gen_var_space_id m_sp_opt v;
         D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
         idx_def;
@@ -244,7 +243,6 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   D.build_transitive_composition { set_vars; def_test; value_comp }
 
 and code_access (p : Mir.program) m_acc =
-  let d_irdata = D.ddirect (D.dinstr "irdata") in
   match m_acc with
   | Com.VarAccess (_, v) -> ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
   | Com.TabAccess ((_, v), m_i) ->
@@ -252,7 +250,7 @@ and code_access (p : Mir.program) m_acc =
       let d_fun =
         D.dfun "lis_tabaccess_varinfo"
           [
-            d_irdata;
+            D.irdata;
             D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
             ei.def_test;
             ei.value_comp;
@@ -262,7 +260,7 @@ and code_access (p : Mir.program) m_acc =
   | Com.FieldAccess (_, ie, f, _) ->
       let e = generate_c_expr p ie in
       let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-      let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
+      let d_fun = D.dfun fn [ D.irdata; e.def_test; e.value_comp ] in
       (e.set_vars, D.ddirect d_fun)
 
 and access p acc =
@@ -286,7 +284,7 @@ and access p acc =
       let d_fun =
         D.dfun fn
           ([
-             D.ddirect @@ D.dinstr "irdata";
+             D.irdata;
              D.ddirect @@ D.dinstr @@ VID.gen_var_space_id_opt m_sp_opt;
              D.ddirect @@ D.dinstr res_def_ptr;
              D.ddirect @@ D.dinstr res_val_ptr;
@@ -347,7 +345,7 @@ and generate_test_in_set p positive e0 values =
               let d_fun =
                 D.dfun fn
                   ([
-                     D.ddirect @@ D.dinstr "irdata";
+                     D.irdata;
                      D.ddirect @@ D.dinstr var_space_id;
                      D.ddirect @@ D.dinstr res_def_ptr;
                      D.ddirect @@ D.dinstr res_val_ptr;
@@ -432,11 +430,10 @@ and attribute p acc attr =
       in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | FieldAccess (_, ie, f, _) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
       let set_vars, evt_d_fun =
         let e = generate_c_expr p ie in
         let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
       in
       let def_test =
         D.dfun (Pp.spr "attribut_%s_def" attr) [ D.ddirect evt_d_fun ]
@@ -461,11 +458,10 @@ and size p acc =
       (* dlit ? *)
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | FieldAccess (_, ie, f, _) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
       let set_vars, evt_d_fun =
         let e = generate_c_expr p ie in
         let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
       in
       let res = D.fresh_c_local "res" in
       let res_def = Pp.spr "%s_def" res in
@@ -492,7 +488,6 @@ and size p acc =
       D.build_transitive_composition { set_vars; def_test; value_comp }
 
 and is_type p acc typ =
-  let d_irdata = D.ddirect (D.dinstr "irdata") in
   let set_vars0, evt_d_fun0 =
     match acc with
     | Com.VarAccess (_, v) -> ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
@@ -501,7 +496,7 @@ and is_type p acc typ =
         let d_fun =
           D.dfun "lis_tabaccess_varinfo"
             [
-              d_irdata;
+              D.irdata;
               D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
               ei.def_test;
               ei.value_comp;
@@ -511,7 +506,7 @@ and is_type p acc typ =
     | Com.FieldAccess (_, ie, f, _) ->
         let e = generate_c_expr p ie in
         let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
+        let d_fun = D.dfun fn [ D.irdata; e.def_test; e.value_comp ] in
         (e.set_vars, D.ddirect d_fun)
   in
   let c_type =
@@ -604,7 +599,6 @@ and in_domain (p : Mir.program) acc cvm =
       let value_comp = D.dinstr res_val in
       D.build_transitive_composition { set_vars; def_test; value_comp }
   | TabAccess ((_, v), m_i) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
       let res = D.fresh_c_local "res" in
       let res_def = Pp.spr "%s_def" res in
       let res_val = Pp.spr "%s_val" res in
@@ -615,7 +609,7 @@ and in_domain (p : Mir.program) acc cvm =
         let d_fun =
           D.dfun "dans_domaine_tabaccess"
             [
-              d_irdata;
+              D.irdata;
               D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
               ei.def_test;
               ei.value_comp;
@@ -637,11 +631,10 @@ and in_domain (p : Mir.program) acc cvm =
       let value_comp = D.dinstr res_val in
       D.build_transitive_composition { set_vars; def_test; value_comp }
   | FieldAccess (_, ie, f, _) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
       let set_vars, evt_d_fun =
         let e = generate_c_expr p ie in
         let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
+        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
       in
       let res = D.fresh_c_local "res" in
       let res_def = Pp.spr "%s_def" res in

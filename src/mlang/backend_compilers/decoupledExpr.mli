@@ -62,6 +62,9 @@ val dfalse : constr
 val lit : float -> constr
 (** Float literal *)
 
+val irdata : constr
+(** The variable "irdata", which should be an argument of every rule. *)
+
 val m_var : Com.var_space -> Com.Var.t -> dflag -> constr
 (** Value from TGV. [m_var v off df] represents an access to the TGV variable
     [v] with [df] to read defineness or valuation. [off] is the access type for
