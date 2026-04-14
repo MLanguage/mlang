@@ -635,9 +635,8 @@ module Func = struct
     build_transitive_composition { set_vars; def_test; value_comp }
 
   let nb_events () =
-    let def_test = dinstr "1.0" in
-    (* dtrue? *)
-    let value_comp = dinstr "nb_evenements(irdata)" in
+    let def_test = dtrue in
+    let value_comp = dfun "nb_evenements" [ irdata ] in
     build_transitive_composition { set_vars = []; def_test; value_comp }
 
   let call fn args =

@@ -190,26 +190,23 @@ let conditional cond thenval elseval =
   D.build_transitive_composition { set_vars; def_test; value_comp }
 
 let nb_anomalies () =
-  let def_test = D.dinstr "1.0" in
-  (* dtrue? *)
-  let value_comp = D.dinstr "nb_anomalies(irdata)" in
+  let def_test = D.dtrue in
+  let value_comp = D.dfun "nb_anomalies" [ D.irdata ] in
   D.build_transitive_composition { set_vars = []; def_test; value_comp }
 
 let nb_discordances () =
-  let def_test = D.dinstr "1.0" in
-  (* dtrue? *)
-  let value_comp = D.dinstr "nb_discordances(irdata)" in
+  let def_test = D.dtrue in
+  let value_comp = D.dfun "nb_discordances" [ D.irdata ] in
   D.build_transitive_composition { set_vars = []; def_test; value_comp }
 
 let nb_informatives () =
-  let def_test = D.dinstr "1.0" in
-  (* dtrue? *)
-  let value_comp = D.dinstr "nb_informatives(irdata)" in
+  let def_test = D.dtrue in
+  let value_comp = D.dfun "nb_informatives" [ D.irdata ] in
   D.build_transitive_composition { set_vars = []; def_test; value_comp }
 
 let nb_bloquantes () =
-  let def_test = D.dinstr "1.0" in
-  let value_comp = D.dinstr "nb_bloquantes(irdata)" in
+  let def_test = D.dtrue in
+  let value_comp = D.dfun "nb_bloquantes" [ D.irdata ] in
   D.build_transitive_composition { set_vars = []; def_test; value_comp }
 
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
@@ -447,15 +444,12 @@ and size p acc =
   match acc with
   | Com.VarAccess (_, v) ->
       let ptr = VID.gen_info_ptr v in
-      let def_test = D.dinstr "1.0" in
-      (* dtrue ? *)
+      let def_test = D.dtrue in
       let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | TabAccess _ ->
-      let def_test = D.dinstr "1.0" in
-      (* dtrue ? *)
-      let value_comp = D.dinstr "1.0" in
-      (* dlit ? *)
+      let def_test = D.dtrue in
+      let value_comp = D.lit 1. in
       D.build_transitive_composition { set_vars = []; def_test; value_comp }
   | FieldAccess (_, ie, f, _) ->
       let set_vars, evt_d_fun =

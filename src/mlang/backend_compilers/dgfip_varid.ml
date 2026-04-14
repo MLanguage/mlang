@@ -16,6 +16,8 @@
 
 (* TGV variables accessors *)
 
+type varinfo = Com.Var.t
+
 let gen_tab = function
   | Com.CatVar.LocInput -> "saisie"
   | Com.CatVar.LocComputed -> "calculee"
