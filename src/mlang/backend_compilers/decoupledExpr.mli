@@ -146,6 +146,17 @@ val build_transitive_composition :
     computation will evaluate to zero if [def_test] do, allowing the guard to be
     optimized away. *)
 
+val dfun_with_ptr :
+  string ->
+  (ptrdef:constr -> ptrval:constr -> constr list) ->
+  expression_composition
+(** [dfun_with_ptr fn args]
+
+    Some functions use pointers to save the definition status & the value of a
+    calculation. This function builds the expression composition defining these
+    pointers and their position as arguments ([args] serves as a specification
+    of how to build the list of arguments). *)
+
 type t
 (** Decoupled expression type. Closed representation of a computation. *)
 

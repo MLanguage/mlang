@@ -405,6 +405,27 @@ let build_transitive_composition ?(safe_def = false)
   let value_comp = if safe_def then value_comp else it0 def_test value_comp in
   { set_vars; def_test; value_comp }
 
+let dfun_with_ptr (f : string)
+    (args : ptrdef:constr -> ptrval:constr -> constr list) :
+    expression_composition =
+  let res = fresh_c_local "res" in
+  let res_def = Pp.spr "%s_def" res in
+  let res_val = Pp.spr "%s_val" res in
+  let res_def_ptr = Pp.spr "&%s" res_def in
+  let res_val_ptr = Pp.spr "&%s" res_val in
+  let d_fun =
+    dfun f
+      (args
+         ~ptrdef:(ddirect @@ dinstr res_def_ptr)
+         ~ptrval:(ddirect @@ dinstr res_val_ptr))
+  in
+  let set_vars =
+    [ (Def, res_def, d_fun); (Val, res_val, ddirect (dinstr res_val)) ]
+  in
+  let def_test = dinstr res_def in
+  let value_comp = dinstr res_val in
+  build_transitive_composition { set_vars; def_test; value_comp }
+
 type local_decls = int * int (* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
@@ -609,30 +630,19 @@ module Func = struct
 
   let multimax e (m_sp_opt, v) =
     let ptr = VID.gen_info_ptr v in
-    let res = fresh_c_local "res" in
-    let res_def = Pp.spr "%s_def" res in
-    let res_val = Pp.spr "%s_val" res in
-    let res_def_ptr = Pp.spr "&%s" res_def in
-    let res_val_ptr = Pp.spr "&%s" res_val in
     let d_fun =
-      dfun "multimax_varinfo"
-        [
-          irdata;
-          ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
-          ddirect @@ dinstr ptr;
-          e.def_test;
-          e.value_comp;
-          ddirect @@ dinstr res_def_ptr;
-          ddirect @@ dinstr res_val_ptr;
-        ]
+      dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
+          [
+            irdata;
+            ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
+            ddirect @@ dinstr ptr;
+            e.def_test;
+            e.value_comp;
+            ptrdef;
+            ptrval;
+          ])
     in
-    let set_vars =
-      e.set_vars
-      @ [ (Def, res_def, d_fun); (Val, res_val, ddirect @@ dinstr res_val) ]
-    in
-    let def_test = dinstr res_def in
-    let value_comp = dinstr res_val in
-    build_transitive_composition { set_vars; def_test; value_comp }
+    { d_fun with set_vars = e.set_vars @ d_fun.set_vars }
 
   let nb_events () =
     let def_test = dtrue in
@@ -640,11 +650,6 @@ module Func = struct
     build_transitive_composition { set_vars = []; def_test; value_comp }
 
   let call fn args =
-    let res = fresh_c_local "result" in
-    let res_def = Pp.spr "%s_def" res in
-    let res_val = Pp.spr "%s_val" res in
-    let res_def_ptr = Pp.spr "&%s" res_def in
-    let res_val_ptr = Pp.spr "&%s" res_val in
     let set_vars, arg_exprs =
       let rec aux (set_vars, arg_exprs) = function
         | [] -> (List.rev set_vars, List.rev arg_exprs)
@@ -656,15 +661,8 @@ module Func = struct
       aux ([], []) args
     in
     let d_fun =
-      dfun fn
-        ([ irdata; ddirect (dinstr res_def_ptr); ddirect (dinstr res_val_ptr) ]
-        @ arg_exprs)
+      dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+          irdata :: ptrdef :: ptrval :: arg_exprs)
     in
-    let set_vars =
-      set_vars
-      @ [ (Def, res_def, d_fun); (Val, res_val, ddirect (dinstr res_val)) ]
-    in
-    let def_test = dinstr res_def in
-    let value_comp = dinstr res_val in
-    build_transitive_composition { set_vars; def_test; value_comp }
+    { d_fun with set_vars = set_vars @ d_fun.set_vars }
 end
