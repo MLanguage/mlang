@@ -146,6 +146,13 @@ val build_transitive_composition :
     computation will evaluate to zero if [def_test] do, allowing the guard to be
     optimized away. *)
 
+val eundefined : unit -> expression_composition
+(** The representation of undefined *)
+
+val elit : float -> expression_composition
+(** Literals have a simple enough representation they can be written as an
+    expression composition without relying on constructions. *)
+
 val dfun_with_ptr :
   string ->
   (ptrdef:constr -> ptrval:constr -> constr list) ->

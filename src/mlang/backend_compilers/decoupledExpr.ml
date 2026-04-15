@@ -48,7 +48,6 @@ and local_vars = (local_var * stack_assignment) list
 and expr =
   | Dtrue
   | Dfalse
-  | Dirdata
   | Dlit of float
   | Dvar of expr_var
   | Dand of expr * expr
@@ -109,7 +108,7 @@ let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
-  | Dtrue | Dfalse | Dlit _ | Dvar (M _) | Dirdata -> Not_to_stack
+  | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
@@ -197,8 +196,6 @@ let let_local (v : local_var) (bound : constr) (body : constr)
 let dtrue _stacks _lv : t = (Dtrue, Def, [])
 
 let dfalse _stacks _lv : t = (Dfalse, Def, [])
-
-let irdata _ _ = (Dirdata, Val, [])
 
 let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
 
@@ -361,6 +358,8 @@ let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let expr, flags, ctx = c stacks ctx in
   (Ddirect expr, flags, ctx)
 
+let irdata = ddirect @@ dinstr "irdata"
+
 let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
@@ -426,6 +425,10 @@ let dfun_with_ptr (f : string)
   let value_comp = dinstr res_val in
   build_transitive_composition { set_vars; def_test; value_comp }
 
+let eundefined () = { set_vars = []; def_test = dfalse; value_comp = lit 0. }
+
+let elit f = { set_vars = []; def_test = dtrue; value_comp = lit f }
+
 type local_decls = int * int (* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
@@ -478,7 +481,6 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
   match de with
   | Dtrue -> Format.fprintf fmt "1"
   | Dfalse -> Format.fprintf fmt "0"
-  | Dirdata -> Format.fprintf fmt "irdata"
   | Dlit f -> (
       match Float.modf f with
       | 0., _ ->
@@ -633,7 +635,7 @@ module Func = struct
     let d_fun =
       dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
           [
-            irdata;
+            ddirect @@ dinstr "irdata";
             ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
             ddirect @@ dinstr ptr;
             e.def_test;

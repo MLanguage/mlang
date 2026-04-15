@@ -292,59 +292,19 @@ and generate_test_in_set p positive e0 values =
       (fun or_chain set_value ->
         let equal_test =
           match set_value with
-          | Com.VarValue (Pos.Mark (VarAccess (m_sp_opt, v), _)) ->
-              let s_v =
-                let def_test = D.m_var m_sp_opt v Def in
-                let value_comp = D.m_var m_sp_opt v Val in
-                D.{ set_vars = []; def_test; value_comp }
-              in
-              comparison (Pos.without Com.Eq) sle0 s_v
-          | Com.VarValue (Pos.Mark (TabAccess ((m_sp_opt, v), m_i), _)) ->
-              let s_v = lis_tabaccess p m_sp_opt v m_i in
-              comparison (Pos.without Com.Eq) sle0 s_v
-          | Com.VarValue (Pos.Mark (FieldAccess (m_sp_opt, me, f, _), _)) ->
-              let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
-              let set_vars, arg_exprs =
-                let e = generate_c_expr p me in
-                (e.set_vars, [ e.def_test; e.value_comp ])
-              in
-              let d_fun =
-                D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
-                    [
-                      D.irdata;
-                      D.ddirect @@ D.dinstr @@ VID.gen_var_space_id_opt m_sp_opt;
-                      ptrdef;
-                      ptrval;
-                    ]
-                    @ arg_exprs)
-              in
-              let s_f = { d_fun with set_vars = set_vars @ d_fun.set_vars } in
-              comparison (Pos.without Com.Eq) sle0 s_f
+          | Com.VarValue acc ->
+              comparison (Pos.without Com.Eq) sle0 (access p (Pos.unmark acc))
           | Com.FloatValue i ->
-              let s_i =
-                {
-                  D.set_vars = [];
-                  D.def_test = D.dtrue;
-                  D.value_comp = D.lit (Pos.unmark i);
-                }
-              in
-              comparison (Pos.without Com.Eq) sle0 s_i
+              comparison (Pos.without Com.Eq) sle0 (D.elit (Pos.unmark i))
           | Com.IntervalValue (bn, en) ->
-              let s_bn =
-                let bn' = float_of_int (Pos.unmark bn) in
-                D.{ set_vars = []; def_test = dtrue; value_comp = lit bn' }
-              in
-              let s_en =
-                let en' = float_of_int (Pos.unmark en) in
-                D.{ set_vars = []; def_test = dtrue; value_comp = lit en' }
-              in
+              let s_bn = bn |> Pos.unmark |> float_of_int |> D.elit
+              and s_en = en |> Pos.unmark |> float_of_int |> D.elit in
               binop (Pos.without Com.And)
                 (comparison (Pos.without Com.Gte) sle0 s_bn)
                 (comparison (Pos.without Com.Lte) sle0 s_en)
         in
         binop (Pos.without Com.Or) or_chain equal_test)
-      D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
-      values
+      (D.eundefined ()) values
   in
   let se = if positive then or_chain else unop Com.Not or_chain in
   {
