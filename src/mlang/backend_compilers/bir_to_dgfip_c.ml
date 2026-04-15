@@ -332,50 +332,15 @@ and attribute p acc attr =
       D.build_transitive_composition { set_vars; def_test; value_comp }
 
 and size p acc =
-  match acc with
-  | Com.VarAccess (_, v) ->
-      let ptr = VID.gen_info_ptr v in
-      let def_test = D.dtrue in
-      let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | TabAccess _ ->
-      let def_test = D.dtrue in
-      let value_comp = D.lit 1. in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | FieldAccess (_, ie, f, _) ->
-      let set_vars, evt_d_fun =
-        let e = generate_c_expr p ie in
-        let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
-      in
-      let d_fun =
-        D.dfun_with_ptr "size_varinfo" (fun ~ptrdef ~ptrval ->
-            [ D.ddirect evt_d_fun; ptrdef; ptrval ])
-      in
-      { d_fun with set_vars = set_vars @ d_fun.set_vars }
+  let set_vars, varinfo = code_access p acc in
+  let d_fun =
+    D.dfun_with_ptr "size_varinfo" (fun ~ptrdef ~ptrval ->
+        [ varinfo; ptrdef; ptrval ])
+  in
+  { d_fun with set_vars = set_vars @ d_fun.set_vars }
 
 and is_type p acc typ =
-  let set_vars0, evt_d_fun0 =
-    match acc with
-    | Com.VarAccess (_, v) -> ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
-    | Com.TabAccess ((_, v), m_i) ->
-        let ei = generate_c_expr p m_i in
-        let d_fun =
-          D.dfun "lis_tabaccess_varinfo"
-            [
-              D.irdata;
-              D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-              ei.def_test;
-              ei.value_comp;
-            ]
-        in
-        (ei.set_vars, D.ddirect @@ d_fun)
-    | Com.FieldAccess (_, ie, f, _) ->
-        let e = generate_c_expr p ie in
-        let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        let d_fun = D.dfun fn [ D.irdata; e.def_test; e.value_comp ] in
-        (e.set_vars, D.ddirect d_fun)
-  in
+  let set_vars0, evt_d_fun0 = code_access p acc in
   let c_type =
     match typ with
     | Com.Boolean -> "TYPE_BOOLEEN"
@@ -404,47 +369,12 @@ and in_domain (p : Mir.program) acc cvm =
   assert (Com.CatVar.Map.cardinal cvm = 1);
   let cv = fst @@ Com.CatVar.Map.min_binding cvm in
   let id_cv = (Com.CatVar.Map.find cv p.program_var_categories).id_int in
-  match acc with
-  | Com.VarAccess (_, v) ->
-      let ptr = VID.gen_info_ptr v in
-      D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
-          [
-            D.ddirect @@ D.dinstr ptr;
-            D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-            ptrdef;
-            ptrval;
-          ])
-  | TabAccess ((_, v), m_i) ->
-      let ei = generate_c_expr p m_i in
-      let d_fun =
-        D.dfun_with_ptr "dans_domaine_tabaccess" (fun ~ptrdef ~ptrval ->
-            [
-              D.irdata;
-              D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-              ei.def_test;
-              ei.value_comp;
-              D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-              ptrdef;
-              ptrval;
-            ])
-      in
-      { d_fun with set_vars = ei.set_vars @ d_fun.set_vars }
-  | FieldAccess (_, ie, f, _) ->
-      let set_vars, evt_d_fun =
-        let e = generate_c_expr p ie in
-        let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
-      in
-      let d_fun =
-        D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
-            [
-              D.ddirect evt_d_fun;
-              D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-              ptrdef;
-              ptrval;
-            ])
-      in
-      { d_fun with set_vars = set_vars @ d_fun.set_vars }
+  let set_vars, varinfo = code_access p acc in
+  let d_fun =
+    D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
+        [ varinfo; D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv; ptrdef; ptrval ])
+  in
+  { d_fun with set_vars = set_vars @ d_fun.set_vars }
 
 and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
     D.expression_composition =
