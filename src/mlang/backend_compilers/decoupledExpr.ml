@@ -31,7 +31,7 @@ type local_var =
 (* declared local variable, either M local or locally bound in the constructors
    below *)
 
-type dflag = Def | Val (* distinguish C types int and double *)
+type dflag = Def | Val | VarInfo (* distinguish C types int and double *)
 
 type stack_slot = { kind : dflag; depth : int }
 
@@ -40,6 +40,7 @@ type stack_assignment = { slot : stack_slot; subexpr : expr }
 and local_stacks = {
   def_top : int;
   val_top : int;
+  var_top : int;
   var_substs : (int * (expr * dflag)) list;
 }
 
@@ -50,6 +51,7 @@ and expr =
   | Dfalse
   | Dlit of float
   | Dvar of expr_var
+  | Dvarinfo of varinfo_access
   | Dand of expr * expr
   | Dor of expr * expr
   | Dunop of string * expr
@@ -58,6 +60,11 @@ and expr =
   | Dite of expr * expr * expr
   | Dinstr of string
   | Ddirect of expr
+
+and varinfo_access =
+  | VIvar of Com.Var.t
+  | VItab of Com.Var.t * expr * expr (* variable, var_def, var_val *)
+  | VIfield of expr * expr * string (* var_def, var_val, field *)
 
 and expr_var = Local of stack_slot | M of Com.var_space * Com.Var.t * dflag
 
@@ -82,6 +89,10 @@ let cast (kind : dflag) (expr : expr) =
   | Dlit 0., Def -> Dfalse
   | Dlit _, Def -> Dtrue
   | _, Def -> Dbinop ("!=", expr, Dlit 0.)
+  | Dvarinfo _, VarInfo -> expr
+  | Dlit 0., VarInfo -> expr (* NULL pointer *)
+  | Dvarinfo _, _ -> failwith "Invalid cast"
+  | _, VarInfo -> expr
   | _, Val -> expr
 
 (** local stacks operations *)
@@ -90,6 +101,7 @@ let bump_stack (kind : dflag) (st : local_stacks) =
   match kind with
   | Def -> { st with def_top = st.def_top + 1 }
   | Val -> { st with val_top = st.val_top + 1 }
+  | VarInfo -> { st with var_top = st.var_top + 1 }
 
 let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
     (expr : expr) =
@@ -98,13 +110,16 @@ let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
   | Refered v -> { st with var_substs = (v, (expr, kind)) :: st.var_substs }
 
 let stack_top (kind : dflag) (st : local_stacks) =
-  match kind with Def -> st.def_top | Val -> st.val_top
+  match kind with
+  | Def -> st.def_top
+  | Val -> st.val_top
+  | VarInfo -> st.var_top
 
 let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
+  depth < stack_top kind st
 
 let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
+  depth = stack_top kind st
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
@@ -123,7 +138,8 @@ let rec expr_position (expr : expr) (st : local_stacks) =
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
   | Ddirect _ -> Not_to_stack
-  | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _ ->
+  | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _
+  | Dvarinfo _ ->
       Must_be_pushed
 
 (* allocate to local variable if necessary *)
@@ -344,12 +360,24 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
   let (_, lv), args =
     List.fold_left_map
       (fun (stacks, lv) e ->
-        let stacks, lv', e = push_with_kind stacks ctx Val e in
+        let stacks, lv', e, _ = push stacks ctx e in
         ((stacks, lv' @ lv), e))
       (stacks, []) args
   in
   (* TODO : distinguish kinds *)
   (Dfun (f, args), Val, lv)
+
+let dvarinfo v _ _ = (Dvarinfo (VIvar v), VarInfo, [])
+
+let dvarinfo_tab ~tab ~def ~value stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VItab (tab, def, value)), VarInfo, lv @ lv')
+
+let dvarinfo_field ~def ~value ~field stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VIfield (def, value, field)), VarInfo, lv @ lv')
 
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
@@ -367,7 +395,7 @@ let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
   let _, lve, e, ekind = push stacks' ctx e in
   let ite_kind =
     if tkind = ekind then tkind
-    else (* this will happen. Staying on the safe side *) Val
+    else (* this will happen. Staying on the safe side *) Def
   in
   match (c, t, e) with
   | Dtrue, _, _ -> (t, tkind, lvt)
@@ -383,12 +411,12 @@ let it0 (c : constr) (t : constr) (stacks : local_stacks) (ctx : local_vars) : t
      avoid casting later *)
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
   let _, lvt, t, tkind = push stacks' ctx t in
-  let e, ekind =
-    match tkind with Def -> (Dfalse, Def) | Val -> (Dlit 0., Val)
+  let e =
+    match tkind with Def -> Dfalse | Val -> Dlit 0. | VarInfo -> Dlit 0.
   in
   match (c, t) with
   | Dtrue, _ -> (t, tkind, lvt)
-  | Dfalse, _ -> (e, ekind, [])
+  | Dfalse, _ -> (e, tkind, [])
   | _, (Dlit 1. | Dtrue) -> (c, Def, lvc)
   | _, (Dlit 0. | Dfalse) -> (t, tkind, [])
   | _ -> (Dite (c, t, e), tkind, lvt @ lvc)
@@ -429,13 +457,23 @@ let eundefined () = { set_vars = []; def_test = dfalse; value_comp = lit 0. }
 
 let elit f = { set_vars = []; def_test = dtrue; value_comp = lit f }
 
-type local_decls = int * int (* in practice, stacks sizes *)
+type local_decls = {
+  def_stk_size : int;
+  val_stk_size : int;
+  var_stk_size : int;
+}
+(* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
    further construction. *)
 let build_expression (expr_comp : expression_composition) :
     local_decls * (dflag * string * t) list * t * t =
-  let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
+  let empty_stacks =
+    { def_top = 0; val_top = 0; var_top = 0; var_substs = [] }
+  in
+  let empty_local_decls =
+    { def_stk_size = -1; val_stk_size = -1; var_stk_size = -1 }
+  in
   let empty_locals = [] in
   let set_tests =
     List.map
@@ -454,17 +492,20 @@ let build_expression (expr_comp : expression_composition) :
   in
   let stacks_size =
     List.fold_left
-      (fun (def_s, val_s) (_, { slot; _ }) ->
+      (fun ld (_, { slot; _ }) ->
         match slot.kind with
-        | Def -> (max slot.depth def_s, val_s)
-        | Val -> (def_s, max slot.depth val_s))
-      (-1, -1)
+        | Def -> { ld with def_stk_size = max slot.depth ld.def_stk_size }
+        | Val -> { ld with val_stk_size = max slot.depth ld.val_stk_size }
+        | VarInfo -> { ld with var_stk_size = max slot.depth ld.var_stk_size })
+      empty_local_decls
       (set_locals @ def_locals @ value_locals)
   in
   (stacks_size, set_tests, def_test, value_comp)
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
-  let kind = match kind with Def -> "int" | Val -> "real" in
+  let kind =
+    match kind with Def -> "int" | Val -> "real" | VarInfo -> "varinfo"
+  in
   Format.fprintf fmt "%s%d" kind depth
 
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
@@ -527,21 +568,33 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
+  | Dvarinfo v -> format_varinfo dgfip_flags fmt v
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
 
-let rec format_local_declarations fmt
-    ((def_stk_size, val_stk_size) : local_decls) =
-  if def_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" def_stk_size;
-    format_local_declarations fmt (def_stk_size - 1, val_stk_size))
-  else if val_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" val_stk_size;
-    format_local_declarations fmt (def_stk_size, val_stk_size - 1))
-  else ()
+and format_varinfo dgfip_flags fmt : varinfo_access -> unit = function
+  | VIvar v -> Format.fprintf fmt "%s" (VID.gen_info_ptr v)
+  | VItab (v, def, value) ->
+      Format.fprintf fmt "@[lis_tabaccess_varinfo(irdata, %d, %a, %a)@]"
+        (Com.Var.loc_tab_idx v) (format_dexpr dgfip_flags) def
+        (format_dexpr dgfip_flags) value
+  | VIfield (def, value, field) ->
+      Format.fprintf fmt "@[event_field_%s_var(irdata, %a, %a)@]" field
+        (format_dexpr dgfip_flags) def (format_dexpr dgfip_flags) value
+
+let format_local_declarations fmt (ld : local_decls) =
+  for i = 0 to ld.def_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" i
+  done;
+  for i = 0 to ld.val_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" i
+  done;
+  for i = 0 to ld.var_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>T_varinfo* varinfo%d;@]" i
+  done
 
 let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
     (lv : local_vars) =
@@ -562,7 +615,12 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
   List.iter
     (fun ((kd, vn, _expr) : dflag * string * t) ->
-      Pp.fpr fmt "@;%s %s;" (match kd with Def -> "char" | Val -> "double") vn)
+      Pp.fpr fmt "@;%s %s;"
+        (match kd with
+        | Def -> "char"
+        | Val -> "double"
+        | VarInfo -> "T_varinfo*")
+        vn)
     set_vars;
   List.iter
     (fun ((_kd, vn, expr) : dflag * string * t) ->
@@ -649,6 +707,26 @@ module Func = struct
   let nb_events () =
     let def_test = dtrue in
     let value_comp = dfun "nb_evenements" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_anomalies () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_anomalies" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_discordances () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_discordances" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_informatives () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_informatives" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_bloquantes () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_bloquantes" [ irdata ] in
     build_transitive_composition { set_vars = []; def_test; value_comp }
 
   let call fn args =

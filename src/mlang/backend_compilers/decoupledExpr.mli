@@ -6,7 +6,7 @@ val fresh_c_local : string -> string
 val generate_variable :
   ?def_flag:bool -> ?trace_flag:bool -> Com.var_space -> Com.Var.t -> string
 
-type dflag = Def | Val
+type dflag = Def | Val | VarInfo
 
 (** {1 Low-level M computation} *)
 
@@ -113,6 +113,12 @@ val comp : string -> constr -> constr -> constr
 val dfun : string -> constr list -> constr
 (** Function call *)
 
+val dvarinfo : Com.Var.t -> constr
+
+val dvarinfo_tab : tab:Com.Var.t -> def:constr -> value:constr -> constr
+
+val dvarinfo_field : def:constr -> value:constr -> field:string -> constr
+
 val dinstr : string -> constr
 (** Direct instruction *)
 
@@ -209,6 +215,14 @@ module Func : sig
     expression_composition -> Com.Var.t Com.var_id -> expression_composition
 
   val nb_events : unit -> expression_composition
+
+  val nb_anomalies : unit -> expression_composition
+
+  val nb_discordances : unit -> expression_composition
+
+  val nb_informatives : unit -> expression_composition
+
+  val nb_bloquantes : unit -> expression_composition
 
   val call : string -> expression_composition list -> expression_composition
 end

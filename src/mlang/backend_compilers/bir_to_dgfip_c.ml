@@ -189,26 +189,6 @@ let conditional cond thenval elseval =
   in
   D.build_transitive_composition { set_vars; def_test; value_comp }
 
-let nb_anomalies () =
-  let def_test = D.dtrue in
-  let value_comp = D.dfun "nb_anomalies" [ D.irdata ] in
-  D.build_transitive_composition { set_vars = []; def_test; value_comp }
-
-let nb_discordances () =
-  let def_test = D.dtrue in
-  let value_comp = D.dfun "nb_discordances" [ D.irdata ] in
-  D.build_transitive_composition { set_vars = []; def_test; value_comp }
-
-let nb_informatives () =
-  let def_test = D.dtrue in
-  let value_comp = D.dfun "nb_informatives" [ D.irdata ] in
-  D.build_transitive_composition { set_vars = []; def_test; value_comp }
-
-let nb_bloquantes () =
-  let def_test = D.dtrue in
-  let value_comp = D.dfun "nb_bloquantes" [ D.irdata ] in
-  D.build_transitive_composition { set_vars = []; def_test; value_comp }
-
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   let set_vars, idx_def, idx_val =
     let e_idx = generate_c_expr p m_idx in
@@ -230,24 +210,15 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
 
 and code_access (p : Mir.program) m_acc =
   match m_acc with
-  | Com.VarAccess (_, v) -> ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
+  | Com.VarAccess (_, v) -> ([], D.dvarinfo v)
   | Com.TabAccess ((_, v), m_i) ->
       let ei = generate_c_expr p m_i in
-      let d_fun =
-        D.dfun "lis_tabaccess_varinfo"
-          [
-            D.irdata;
-            D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-            ei.def_test;
-            ei.value_comp;
-          ]
-      in
-      (ei.set_vars, D.ddirect @@ d_fun)
+      (ei.set_vars, D.dvarinfo_tab ~tab:v ~def:ei.def_test ~value:ei.value_comp)
   | Com.FieldAccess (_, ie, f, _) ->
       let e = generate_c_expr p ie in
-      let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-      let d_fun = D.dfun fn [ D.irdata; e.def_test; e.value_comp ] in
-      (e.set_vars, D.ddirect d_fun)
+      ( e.set_vars,
+        D.dvarinfo_field ~def:e.def_test ~value:e.value_comp
+          ~field:(Pos.unmark f) )
 
 and access p acc =
   match acc with
@@ -512,10 +483,10 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
   | SameVariable (m_acc0, m_acc1) ->
       same_variable p (Pos.unmark m_acc0) (Pos.unmark m_acc1)
   | InDomain (m_acc, cvm) -> in_domain p (Pos.unmark m_acc) cvm
-  | NbAnomalies -> nb_anomalies ()
-  | NbDiscordances -> nb_discordances ()
-  | NbInformatives -> nb_informatives ()
-  | NbBloquantes -> nb_bloquantes ()
+  | NbAnomalies -> D.Func.nb_anomalies ()
+  | NbDiscordances -> D.Func.nb_discordances ()
+  | NbInformatives -> D.Func.nb_informatives ()
+  | NbBloquantes -> D.Func.nb_bloquantes ()
   | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
 let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
