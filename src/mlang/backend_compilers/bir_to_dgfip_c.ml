@@ -199,7 +199,7 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
         [
           D.irdata;
           D.ddirect @@ D.dinstr @@ VID.gen_var_space_id m_sp_opt v;
-          D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
+          D.lit (float_of_int (Com.Var.loc_tab_idx v));
           idx_def;
           idx_val;
           ptrdef;
@@ -307,29 +307,10 @@ and funcall p f args =
   | _ -> assert false (* should not happen *)
 
 and attribute p acc attr =
-  match acc with
-  | Com.VarAccess (_, v) | TabAccess ((_, v), _) ->
-      let ptr = VID.gen_info_ptr v in
-      let def_test =
-        D.dinstr (Pp.spr "attribut_%s_def((T_varinfo *)%s)" attr ptr)
-      in
-      let value_comp =
-        D.dinstr (Pp.spr "attribut_%s((T_varinfo *)%s)" attr ptr)
-      in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | FieldAccess (_, ie, f, _) ->
-      let set_vars, evt_d_fun =
-        let e = generate_c_expr p ie in
-        let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-        (e.set_vars, D.dfun evt_fn [ D.irdata; e.def_test; e.value_comp ])
-      in
-      let def_test =
-        D.dfun (Pp.spr "attribut_%s_def" attr) [ D.ddirect evt_d_fun ]
-      in
-      let value_comp =
-        D.dfun (Pp.spr "attribut_%s" attr) [ D.ddirect evt_d_fun ]
-      in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
+  let set_vars, varinfo = code_access p acc in
+  let def_test = D.dfun (Pp.spr "attribut_%s_def" attr) [ varinfo ]
+  and value_comp = D.dfun (Pp.spr "attribut_%s" attr) [ varinfo ] in
+  D.build_transitive_composition { set_vars; def_test; value_comp }
 
 and size p acc =
   let set_vars, varinfo = code_access p acc in
@@ -372,7 +353,7 @@ and in_domain (p : Mir.program) acc cvm =
   let set_vars, varinfo = code_access p acc in
   let d_fun =
     D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
-        [ varinfo; D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv; ptrdef; ptrval ])
+        [ varinfo; D.lit (float_of_int id_cv); ptrdef; ptrval ])
   in
   { d_fun with set_vars = set_vars @ d_fun.set_vars }
 
