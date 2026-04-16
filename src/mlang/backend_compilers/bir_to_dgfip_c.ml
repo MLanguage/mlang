@@ -198,7 +198,7 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
     D.dfun_with_ptr "lis_tabaccess" (fun ~ptrdef ~ptrval ->
         [
           D.irdata;
-          D.ddirect @@ D.dinstr @@ VID.gen_var_space_id m_sp_opt v;
+          D.dvarspace_of (m_sp_opt, v);
           D.lit (float_of_int (Com.Var.loc_tab_idx v));
           idx_def;
           idx_val;
@@ -235,12 +235,7 @@ and access p acc =
       in
       let d_fun =
         D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
-            [
-              D.irdata;
-              D.ddirect @@ D.dinstr @@ VID.gen_var_space_id_opt m_sp_opt;
-              ptrdef;
-              ptrval;
-            ]
+            [ D.irdata; D.dvarspace_current m_sp_opt; ptrdef; ptrval ]
             @ arg_exprs)
       in
       { d_fun with set_vars = set_vars @ d_fun.set_vars }

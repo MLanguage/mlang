@@ -52,6 +52,9 @@ and expr =
   | Dlit of float
   | Dvar of expr_var
   | Dvarinfo of varinfo_access
+  | Dvarspace of Com.var_space * Com.Var.t option
+    (* If var is a ref, using it
+                                                     to get the var space *)
   | Dand of expr * expr
   | Dor of expr * expr
   | Dunop of string * expr
@@ -139,7 +142,7 @@ let rec expr_position (expr : expr) (st : local_stacks) =
     end
   | Ddirect _ -> Not_to_stack
   | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _
-  | Dvarinfo _ ->
+  | Dvarinfo _ | Dvarspace _ ->
       Must_be_pushed
 
 (* allocate to local variable if necessary *)
@@ -379,6 +382,12 @@ let dvarinfo_field ~def ~value ~field stacks ctx =
   let _stacks, lv', value = push_with_kind stacks ctx Val value in
   (Dvarinfo (VIfield (def, value, field)), VarInfo, lv @ lv')
 
+let dvarspace_current m_sp_opt _ _ =
+  (Dvarspace (m_sp_opt, None), Def (* Not a float *), [])
+
+let dvarspace_of (m_sp_opt, v) _ _ =
+  (Dvarspace (m_sp_opt, Some v), Def (* Not a float *), [])
+
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
@@ -569,6 +578,11 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            format_dexpr)
         des
   | Dvarinfo v -> format_varinfo dgfip_flags fmt v
+  | Dvarspace (m_sp_opt, v_opt) ->
+      Format.fprintf fmt "@[%s@]"
+        (match v_opt with
+        | Some v -> VID.gen_var_space_id m_sp_opt v
+        | None -> VID.gen_var_space_id_opt m_sp_opt)
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->

@@ -119,6 +119,10 @@ val dvarinfo_tab : tab:Com.Var.t -> def:constr -> value:constr -> constr
 
 val dvarinfo_field : def:constr -> value:constr -> field:string -> constr
 
+val dvarspace_current : Com.var_space -> constr
+
+val dvarspace_of : Com.var_space * Com.Var.t -> constr
+
 val dinstr : string -> constr
 (** Direct instruction *)
 
