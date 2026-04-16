@@ -114,16 +114,26 @@ val dfun : string -> constr list -> constr
 (** Function call *)
 
 val dvarinfo : Com.Var.t -> constr
+(** Varinfos are values containing the identity of a variable. *)
 
 val dvarinfo_tab : tab:Com.Var.t -> def:constr -> value:constr -> constr
+(** [dvarinfo_tab ~tab ~def ~value]
+
+    The varinfo of a cell in the table [tab], where the cell's index is
+    defined by [def] for its definition and [value] for its actual
+    value. *)
 
 val dvarinfo_field : def:constr -> value:constr -> field:string -> constr
+(** The varinfo of the field [field]. *)
 
 val dvarspace_current : Com.var_space -> constr
+(** A variable space *)
 
 val dvarspace_of : Com.var_space * Com.Var.t -> constr
+(** The variable space of a variable. *)
 
 val dtyp : Com.value_typ -> constr
+(** A type *)
 
 val ite : constr -> constr -> constr -> constr
 (** Functionnal if-the-else construction. [ite cond_expr then_expr else_expr] is
