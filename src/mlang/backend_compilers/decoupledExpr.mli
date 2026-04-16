@@ -123,6 +123,8 @@ val dvarspace_current : Com.var_space -> constr
 
 val dvarspace_of : Com.var_space * Com.Var.t -> constr
 
+val dtyp : Com.value_typ -> constr
+
 val dinstr : string -> constr
 (** Direct instruction *)
 

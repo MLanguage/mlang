@@ -317,18 +317,9 @@ and size p acc =
 
 and is_type p acc typ =
   let set_vars0, evt_d_fun0 = code_access p acc in
-  let c_type =
-    match typ with
-    | Com.Boolean -> "TYPE_BOOLEEN"
-    | DateYear -> "TYPE_DATE_AAAA"
-    | DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
-    | DateMonth -> "TYPE_DATE_MM"
-    | Integer -> "TYPE_ENTIER"
-    | Real -> "TYPE_REEL"
-  in
   let d_fun =
     D.dfun_with_ptr "est_type" (fun ~ptrdef ~ptrval ->
-        [ evt_d_fun0; D.ddirect @@ D.dinstr c_type; ptrdef; ptrval ])
+        [ evt_d_fun0; D.dtyp typ; ptrdef; ptrval ])
   in
   { d_fun with set_vars = set_vars0 @ d_fun.set_vars }
 

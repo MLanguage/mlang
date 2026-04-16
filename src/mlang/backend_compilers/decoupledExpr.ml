@@ -53,14 +53,14 @@ and expr =
   | Dvar of expr_var
   | Dvarinfo of varinfo_access
   | Dvarspace of Com.var_space * Com.Var.t option
-    (* If var is a ref, using it
-                                                     to get the var space *)
+    (* If var is a ref, using it to get the var space *)
   | Dand of expr * expr
   | Dor of expr * expr
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
   | Dite of expr * expr * expr
+  | Dtyp of Com.value_typ
   | Dinstr of string
   | Ddirect of expr
 
@@ -126,7 +126,7 @@ let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
-  | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
+  | Dtrue | Dfalse | Dlit _ | Dvar (M _) | Dtyp _ -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
@@ -388,6 +388,8 @@ let dvarspace_current m_sp_opt _ _ =
 let dvarspace_of (m_sp_opt, v) _ _ =
   (Dvarspace (m_sp_opt, Some v), Def (* Not a float *), [])
 
+let dtyp t _ _ = (Dtyp t, Def, [])
+
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
 
@@ -583,6 +585,7 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
         (match v_opt with
         | Some v -> VID.gen_var_space_id m_sp_opt v
         | None -> VID.gen_var_space_id_opt m_sp_opt)
+  | Dtyp t -> Format.fprintf fmt "@[%s@]" @@ VID.gen_typ t
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->

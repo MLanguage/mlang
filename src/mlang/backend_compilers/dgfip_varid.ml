@@ -169,3 +169,11 @@ let gen_var_space_id (m_sp_opt : Com.var_space) (v : Com.Var.t) =
       match m_sp_opt with
       | None -> Pp.spr "(irdata->refs[irdata->refs_org + %d].var_space)" i
       | Some (_, i_sp) -> Pp.spr "%d" i_sp)
+
+let gen_typ = function
+  | Com.Boolean -> "TYPE_BOOLEEN"
+  | DateYear -> "TYPE_DATE_AAAA"
+  | DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
+  | DateMonth -> "TYPE_DATE_MM"
+  | Integer -> "TYPE_ENTIER"
+  | Real -> "TYPE_REEL"
