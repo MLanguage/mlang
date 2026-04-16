@@ -125,12 +125,6 @@ val dvarspace_of : Com.var_space * Com.Var.t -> constr
 
 val dtyp : Com.value_typ -> constr
 
-val dinstr : string -> constr
-(** Direct instruction *)
-
-val ddirect : constr -> constr
-(** Direct instruction, not pushed *)
-
 val ite : constr -> constr -> constr -> constr
 (** Functionnal if-the-else construction. [ite cond_expr then_expr else_expr] is
     akin to [if cond_expr then then_expr else else_expr] *)
