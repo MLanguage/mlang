@@ -31,7 +31,7 @@ type local_var =
 (* declared local variable, either M local or locally bound in the constructors
    below *)
 
-type dflag = Def | Val | VarInfo (* distinguish C types int and double *)
+type dflag = Def | Val | VarInfo | VarSpace
 
 type stack_slot = { kind : dflag; depth : int }
 
@@ -41,6 +41,7 @@ and local_stacks = {
   def_top : int;
   val_top : int;
   var_top : int;
+  spa_top : int;
   var_substs : (int * (expr * dflag)) list;
 }
 
@@ -93,9 +94,11 @@ let cast (kind : dflag) (expr : expr) =
   | Dlit _, Def -> Dtrue
   | _, Def -> Dbinop ("!=", expr, Dlit 0.)
   | Dvarinfo _, VarInfo -> expr
-  | Dlit 0., VarInfo -> expr (* NULL pointer *)
-  | Dvarinfo _, _ -> failwith "Invalid cast"
-  | _, VarInfo -> expr
+  | Dvarspace _, VarSpace -> expr
+  | Dvarinfo _, _ -> failwith "Invalid cast of varinfo"
+  | _, VarInfo -> failwith "Invalid cast to varinfo"
+  | Dvarspace _, _ -> failwith "Invalid cast of varspace"
+  | _, VarSpace -> failwith "Invalid cast to varspace"
   | _, Val -> expr
 
 (** local stacks operations *)
@@ -105,6 +108,7 @@ let bump_stack (kind : dflag) (st : local_stacks) =
   | Def -> { st with def_top = st.def_top + 1 }
   | Val -> { st with val_top = st.val_top + 1 }
   | VarInfo -> { st with var_top = st.var_top + 1 }
+  | VarSpace -> { st with var_top = st.var_top + 1 }
 
 let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
     (expr : expr) =
@@ -117,6 +121,7 @@ let stack_top (kind : dflag) (st : local_stacks) =
   | Def -> st.def_top
   | Val -> st.val_top
   | VarInfo -> st.var_top
+  | VarSpace -> st.spa_top
 
 let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
   depth < stack_top kind st
@@ -382,11 +387,9 @@ let dvarinfo_field ~def ~value ~field stacks ctx =
   let _stacks, lv', value = push_with_kind stacks ctx Val value in
   (Dvarinfo (VIfield (def, value, field)), VarInfo, lv @ lv')
 
-let dvarspace_current m_sp_opt _ _ =
-  (Dvarspace (m_sp_opt, None), Def (* Not a float *), [])
+let dvarspace_current m_sp_opt _ _ = (Dvarspace (m_sp_opt, None), VarSpace, [])
 
-let dvarspace_of (m_sp_opt, v) _ _ =
-  (Dvarspace (m_sp_opt, Some v), Def (* Not a float *), [])
+let dvarspace_of (m_sp_opt, v) _ _ = (Dvarspace (m_sp_opt, Some v), VarSpace, [])
 
 let dtyp t _ _ = (Dtyp t, Def, [])
 
@@ -423,7 +426,11 @@ let it0 (c : constr) (t : constr) (stacks : local_stacks) (ctx : local_vars) : t
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
   let _, lvt, t, tkind = push stacks' ctx t in
   let e =
-    match tkind with Def -> Dfalse | Val -> Dlit 0. | VarInfo -> Dlit 0.
+    match tkind with
+    | Def -> Dfalse
+    | Val -> Dlit 0.
+    | VarInfo -> failwith "Cannot make an IT with a VarInfo"
+    | VarSpace -> failwith "Cannot make an IT with a VarSpace"
   in
   match (c, t) with
   | Dtrue, _ -> (t, tkind, lvt)
@@ -472,6 +479,7 @@ type local_decls = {
   def_stk_size : int;
   val_stk_size : int;
   var_stk_size : int;
+  var_spa_size : int;
 }
 (* in practice, stacks sizes *)
 
@@ -480,10 +488,15 @@ type local_decls = {
 let build_expression (expr_comp : expression_composition) :
     local_decls * (dflag * string * t) list * t * t =
   let empty_stacks =
-    { def_top = 0; val_top = 0; var_top = 0; var_substs = [] }
+    { def_top = 0; val_top = 0; var_top = 0; spa_top = 0; var_substs = [] }
   in
   let empty_local_decls =
-    { def_stk_size = -1; val_stk_size = -1; var_stk_size = -1 }
+    {
+      def_stk_size = -1;
+      val_stk_size = -1;
+      var_stk_size = -1;
+      var_spa_size = -1;
+    }
   in
   let empty_locals = [] in
   let set_tests =
@@ -507,7 +520,8 @@ let build_expression (expr_comp : expression_composition) :
         match slot.kind with
         | Def -> { ld with def_stk_size = max slot.depth ld.def_stk_size }
         | Val -> { ld with val_stk_size = max slot.depth ld.val_stk_size }
-        | VarInfo -> { ld with var_stk_size = max slot.depth ld.var_stk_size })
+        | VarInfo -> { ld with var_stk_size = max slot.depth ld.var_stk_size }
+        | VarSpace -> { ld with var_spa_size = max slot.depth ld.var_spa_size })
       empty_local_decls
       (set_locals @ def_locals @ value_locals)
   in
@@ -515,7 +529,11 @@ let build_expression (expr_comp : expression_composition) :
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
   let kind =
-    match kind with Def -> "int" | Val -> "real" | VarInfo -> "varinfo"
+    match kind with
+    | Def -> "int"
+    | Val -> "real"
+    | VarInfo -> "varinfo"
+    | VarSpace -> "space"
   in
   Format.fprintf fmt "%s%d" kind depth
 
@@ -611,6 +629,9 @@ let format_local_declarations fmt (ld : local_decls) =
   done;
   for i = 0 to ld.var_stk_size do
     Format.fprintf fmt "@;@[<hov 2>T_varinfo* varinfo%d;@]" i
+  done;
+  for i = 0 to ld.var_spa_size do
+    Format.fprintf fmt "@;@[<hov 2>int space%d;@]" i
   done
 
 let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
@@ -636,7 +657,8 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
         (match kd with
         | Def -> "char"
         | Val -> "double"
-        | VarInfo -> "T_varinfo*")
+        | VarInfo -> "T_varinfo*"
+        | VarSpace -> "int")
         vn)
     set_vars;
   List.iter
@@ -763,3 +785,28 @@ module Func = struct
     in
     { d_fun with set_vars = set_vars @ d_fun.set_vars }
 end
+
+let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
+    =
+  let pr form = Format.fprintf oc form in
+  if is_always_true def then
+    pr "@;@[<v 2>{%a%a%a%a@]@;}" format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def
+      (format_assign dgfip_flags res_val)
+      value
+  else
+    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
+      format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def res_def
+      (format_assign dgfip_flags res_val)
+      value res_val
+
+let write_c_expr dgfip_flags oc res_def res_val expr =
+  expr |> build_expression
+  |> write_decoupled_expr dgfip_flags oc res_def res_val

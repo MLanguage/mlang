@@ -6,7 +6,7 @@ val fresh_c_local : string -> string
 val generate_variable :
   ?def_flag:bool -> ?trace_flag:bool -> Com.var_space -> Com.Var.t -> string
 
-type dflag = Def | Val | VarInfo
+type dflag = Def | Val | VarInfo | VarSpace
 
 (** {1 Low-level M computation} *)
 
@@ -119,9 +119,8 @@ val dvarinfo : Com.Var.t -> constr
 val dvarinfo_tab : tab:Com.Var.t -> def:constr -> value:constr -> constr
 (** [dvarinfo_tab ~tab ~def ~value]
 
-    The varinfo of a cell in the table [tab], where the cell's index is
-    defined by [def] for its definition and [value] for its actual
-    value. *)
+    The varinfo of a cell in the table [tab], where the cell's index is defined
+    by [def] for its definition and [value] for its actual value. *)
 
 val dvarinfo_field : def:constr -> value:constr -> field:string -> constr
 (** The varinfo of the field [field]. *)
@@ -180,27 +179,19 @@ val dfun_with_ptr :
     pointers and their position as arguments ([args] serves as a specification
     of how to build the list of arguments). *)
 
-type t
-(** Decoupled expression type. Closed representation of a computation. *)
-
-val is_always_true : t -> bool
-(** Tells if the expression [t] reprensents a value statically different to zero
-*)
-
 type local_decls
 (** Representation of local variables existing in an expression *)
 
-val build_expression :
-  expression_composition -> local_decls * (dflag * string * t) list * t * t
+val write_c_expr :
+  Dgfip_options.flags ->
+  Format.formatter ->
+  string ->
+  string ->
+  expression_composition ->
+  unit
 (** Crush {!constr} values into closed expressions {!t} *)
 
 val format_local_declarations : Format.formatter -> local_decls -> unit
-
-val format_assign :
-  Dgfip_options.flags -> string -> Format.formatter -> t -> unit
-
-val format_set_vars :
-  Dgfip_options.flags -> Format.formatter -> (dflag * string * t) list -> unit
 
 module Func : sig
   val supzero : expression_composition -> expression_composition

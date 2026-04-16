@@ -386,30 +386,8 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
   | NbBloquantes -> D.Func.nb_bloquantes ()
   | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
-let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
-    =
-  let pr form = Format.fprintf oc form in
-  if D.is_always_true def then
-    pr "@;@[<v 2>{%a%a%a%a@]@;}" D.format_local_declarations locals
-      (D.format_set_vars dgfip_flags)
-      set
-      (D.format_assign dgfip_flags res_def)
-      def
-      (D.format_assign dgfip_flags res_val)
-      value
-  else
-    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
-      D.format_local_declarations locals
-      (D.format_set_vars dgfip_flags)
-      set
-      (D.format_assign dgfip_flags res_def)
-      def res_def
-      (D.format_assign dgfip_flags res_val)
-      value res_val
-
 let generate_expr_with_res_in p dgfip_flags oc res_def res_val expr =
-  generate_c_expr p expr |> D.build_expression
-  |> write_decoupled_expr dgfip_flags oc res_def res_val
+  generate_c_expr p expr |> D.write_c_expr dgfip_flags oc res_def res_val
 
 let generate_m_assign (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) (oc : Format.formatter)
