@@ -492,16 +492,19 @@ typedef struct S_ref_var T_ref_var;
   Pp.fpr fmt
     {|
 struct S_irdata {
+  /* Les pointeurs suivants sont mis à jour à chaque changement du champ var_space */   
   char *def_saisie;
   double *saisie;
   char *def_calculee;
   double *calculee;
   char *def_base;
   double *base;
+  T_var_space var_space_courant;
 |};
   IntMap.iter
     (fun _ (vsd : Com.variable_space) ->
       let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "/* Espace de nom %s  */" sp;
       Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
       Pp.fpr fmt "  double *saisie_%s;@\n" sp;
       Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
@@ -737,12 +740,13 @@ extern int nb_informatives(T_irdata *irdata);
 extern int nb_discordances(T_irdata *irdata);
 extern int nb_anomalies(T_irdata *irdata);
 extern int nb_bloquantes(T_irdata *irdata);
-extern void nettoie_erreur (T_irdata *irdata);
-extern void finalise_erreur (T_irdata *irdata);
-extern void nettoie_erreurs_finalisees (T_irdata *irdata);
-extern void exporte_erreur (T_irdata *irdata);
+extern void nettoie_erreur _PROTS((T_irdata *irdata ));
+extern void finalise_erreur _PROTS((T_irdata *irdata ));
+extern void nettoie_erreurs_finalisees _PROTS((T_irdata *irdata ));
+extern void exporte_erreur _PROTS((T_irdata *irdata ));
 
 extern T_irdata *cree_irdata(void);
+extern void change_var_space_courant(T_irdata *irdata, int var_space);
 extern void init_saisie_spc(T_irdata *irdata, int sp);
 extern void init_calculee_spc(T_irdata *irdata, int sp);
 extern void init_base_spc(T_irdata *irdata, int sp);
@@ -1448,6 +1452,18 @@ void detruis_irdata(T_irdata *irdata) {
   free(irdata);
 }
 
+void change_var_space_courant (T_irdata *irdata, int var_space){
+  T_var_space var_space_courant = irdata->var_spaces[var_space];
+  irdata->var_space = var_space;
+  irdata->var_space_courant = var_space_courant;
+  irdata->def_saisie = var_space_courant.def_saisie;
+  irdata->saisie = var_space_courant.saisie;
+  irdata->def_calculee = var_space_courant.def_calculee;
+  irdata->calculee = var_space_courant.calculee;
+  irdata->def_base = var_space_courant.def_base;
+  irdata->base = var_space_courant.base;
+}
+     
 T_irdata *cree_irdata(void) {
   T_irdata *irdata = NULL;
   
@@ -1505,7 +1521,7 @@ T_irdata *cree_irdata(void) {
         id sp;
       Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
     cprog.program_var_spaces_idx;
-  Pp.fpr fmt "  irdata->var_space = ESPACE_PAR_DEFAUT;\n";
+  Pp.fpr fmt "   change_var_space_courant(irdata, ESPACE_PAR_DEFAUT);\n";
   Pp.fpr fmt "%s"
     {|  irdata->tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
