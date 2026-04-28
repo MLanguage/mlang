@@ -108,7 +108,7 @@ let bump_stack (kind : dflag) (st : local_stacks) =
   | Def -> { st with def_top = st.def_top + 1 }
   | Val -> { st with val_top = st.val_top + 1 }
   | VarInfo -> { st with var_top = st.var_top + 1 }
-  | VarSpace -> { st with var_top = st.var_top + 1 }
+  | VarSpace -> { st with spa_top = st.spa_top + 1 }
 
 let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
     (expr : expr) =
@@ -409,7 +409,7 @@ let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
   let _, lve, e, ekind = push stacks' ctx e in
   let ite_kind =
     if tkind = ekind then tkind
-    else (* this will happen. Staying on the safe side *) Def
+    else (* this will happen. Staying on the safe side *) Val
   in
   match (c, t, e) with
   | Dtrue, _, _ -> (t, tkind, lvt)
