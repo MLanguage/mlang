@@ -758,6 +758,7 @@ type ('v, 'e) target = {
   target_sz_tmps : int;
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
+  target_stoppable : bool;
 }
 
 let target_is_function t = t.target_result <> None
