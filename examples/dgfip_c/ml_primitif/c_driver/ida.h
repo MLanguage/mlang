@@ -3,6 +3,7 @@
 
 #include <liste.h>
 #include <commun.h>
+#include <stdint.h>
 
 extern void infoActVide(void);
 extern void infoActAide(void);
@@ -18,6 +19,7 @@ extern void infoNbKo(int ko, int tot);
 extern void infoNbKc(int kc, int tot);
 extern void infoNonRec(char *dir);
 extern void infoLien(char *nom);
+extern void infoTemps(uint64_t temps_us);
 
 extern int discoOptsRecDup(int b);
 extern int discoOptsStrictDup(int b);

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -19,9 +20,11 @@ T_tas tasGbl = NULL;
 
 void itereFichiers(
   L_char lf, int rec,
-  int (*traiteFich)(char *, T_options), T_options opts,
+  T_traitement (*traiteFich)(char *, T_options), T_options opts,
   int *nbOk, int *nbKo, int *nbKc
 ) {
+  T_traitement resultat;
+  uint64_t temps_ms_total;
   *nbOk = 0;
   *nbKo = 0;
   *nbKc = 0;
@@ -66,8 +69,10 @@ void itereFichiers(
     estr = estReg(fich);
     if (! discoStat(fich, estr) && estr) {
       infoReg(nomFich);
+      resultat = traiteFich(fich, opts);
+      temps_ms_total += resultat.temps_ms;
 /* traitement */
-      switch (traiteFich(fich, opts)) {
+      switch (resultat.ok) {
         case 1:
           (*nbOk)++;
           infoOk(nomFich);
@@ -91,6 +96,7 @@ void itereFichiers(
     memLibere(fich);
     LIBERE_CONS(lfSav);
   }
+  infoTemps(temps_ms_total);
 }
 
 int main(int argc, char **argv) {

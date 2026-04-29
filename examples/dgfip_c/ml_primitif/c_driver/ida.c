@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include <commun.h>
 #include <ida.h>
@@ -75,6 +76,17 @@ void infoNonRec(char *dir) {
 
 void infoLien(char *nom) {
   fprintf(stdout, "IACT013 | le lien \"%s\" est ignoré\n", nom);
+}
+
+void infoTemps(uint64_t temps_ms) {
+  uint64_t min = temps_ms/60000;
+  uint64_t sec = (temps_ms - min * 60000)/1000;
+  uint64_t mse = temps_ms - min*60000 - sec*1000;
+  fprintf(stdout, "IACT014 | Temps calcul effectif total: %lums (", temps_ms);
+  if (min > 0) fprintf(stdout, "%lumn", min);
+  if (sec > 0) fprintf(stdout, "%lus" , sec);
+  if (mse > 0) fprintf(stdout, "%lums", mse);
+  fprintf(stdout, ")\n");
 }
 
 /* discos */
