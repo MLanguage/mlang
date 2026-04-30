@@ -55,8 +55,8 @@ and expr =
   | Dvarinfo of varinfo_access
   | Dvarspace of Com.var_space * Com.Var.t option
     (* If var is a ref, using it to get the var space *)
-  | Dand of expr * expr
-  | Dor of expr * expr
+  | Dand of expr list
+  | Dor of expr list
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
@@ -83,6 +83,110 @@ type expression_composition = {
 }
 
 type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
+
+let dflag_id = function Def -> 0 | Val -> 1 | VarInfo -> 2 | VarSpace -> 3
+
+module Optim = struct
+  let rec compare_expr e e' =
+    match (e, e') with
+    | Dtrue, Dtrue | Dfalse, Dfalse -> 0
+    | Dlit f, Dlit f' -> Float.compare f f'
+    | Dvar e, Dvar e' -> compare_expr_var e e'
+    | Dvarinfo v, Dvarinfo v' -> compare_varinfo_access v v'
+    | Dvarspace (vs, v), Dvarspace (vs', v') ->
+        let vsc = Com.compare_var_space vs vs' in
+        if vsc <> 0 then vsc else Option.compare Com.Var.compare v v'
+    | Dand e, Dand e' | Dor e, Dor e' -> List.compare compare_expr e e'
+    | Dunop (s, e), Dunop (s', e') ->
+        let str = String.compare s s' in
+        if str <> 0 then str else compare_expr e e'
+    | Dbinop (s, e1, e2), Dbinop (s', e1', e2') ->
+        let str = String.compare s s' in
+        if str <> 0 then str
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | Dfun (s, l), Dfun (s', l') ->
+        let str = String.compare s s' in
+        if str <> 0 then str else List.compare compare_expr l l'
+    | Dite (c, t, e), Dite (c', t', e') ->
+        let cc = compare_expr c c' in
+        if cc <> 0 then cc
+        else
+          let tc = compare_expr t t' in
+          if tc <> 0 then tc else compare_expr e e'
+    | Dtyp t, Dtyp t' -> Com.compare_value_typ t t'
+    | Dinstr s, Dinstr s' -> String.compare s s'
+    | Ddirect e, Ddirect e' -> compare_expr e e'
+    | Dtrue, _ -> 1
+    | _, Dtrue -> -1
+    | Dfalse, _ -> 1
+    | _, Dfalse -> -1
+    | Dlit _, _ -> 1
+    | _, Dlit _ -> -1
+    | Dvar _, _ -> 1
+    | _, Dvar _ -> -1
+    | Dvarinfo _, _ -> 1
+    | _, Dvarinfo _ -> -1
+    | Dvarspace _, _ -> 1
+    | _, Dvarspace _ -> -1
+    | Dand _, _ -> 1
+    | _, Dand _ -> -1
+    | Dor _, _ -> 1
+    | _, Dor _ -> -1
+    | Dunop _, _ -> 1
+    | _, Dunop _ -> -1
+    | Dbinop _, _ -> 1
+    | _, Dbinop _ -> -1
+    | Dfun _, _ -> 1
+    | _, Dfun _ -> -1
+    | Dite _, _ -> 1
+    | _, Dite _ -> -1
+    | Dtyp _, _ -> 1
+    | _, Dtyp _ -> -1
+    | Dinstr _, _ -> 1
+    | _, Dinstr _ -> -1
+
+  and compare_expr_var e e' =
+    match (e, e') with
+    | Local { kind = k; depth = d }, Local { kind = k'; depth = d' } ->
+        let kc = Int.compare (dflag_id k) (dflag_id k') in
+        if kc <> 0 then kc else Int.compare d d'
+    | M (vs, v, d), M (vs', v', d') ->
+        let vsc = Com.compare_var_space vs vs' in
+        if vsc <> 0 then vsc
+        else
+          let vc = Com.Var.compare v v' in
+          if vc <> 0 then vc else Int.compare (dflag_id d) (dflag_id d')
+    | Local _, _ -> 1
+    | _, Local _ -> -1
+
+  and compare_varinfo_access v v' =
+    match (v, v') with
+    | VIvar v, VIvar v' -> Com.Var.compare v v'
+    | VItab (v, e1, e2), VItab (v', e1', e2') ->
+        let vc = Com.Var.compare v v' in
+        if vc <> 0 then vc
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | VIfield (e1, e2, s), VIfield (e1', e2', s') ->
+        let sc = String.compare s s' in
+        if sc <> 0 then sc
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | VIvar _, _ -> 1
+    | _, VIvar _ -> -1
+    | VItab _, _ -> 1
+    | _, VItab _ -> -1
+
+  let unique_expr_list = List.sort_uniq compare_expr
+
+  let dor l = Dor (unique_expr_list l)
+
+  let dand l = Dand (unique_expr_list l)
+end
 
 let is_always_true ((expr, _kind, _lv) : t) = expr = Dtrue
 
@@ -254,7 +358,10 @@ let dand (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   | _, Dtrue -> (e1, Def, lv1)
   | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
+  | Dand l1, Dand l2 -> (Optim.dand (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dand l -> (Optim.dand (e1 :: l), Def, lv2 @ lv1)
+  | Dand l, _ -> (Optim.dand (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Optim.dand [ e1; e2 ], Def, lv2 @ lv1)
 
 let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
     t =
@@ -265,7 +372,10 @@ let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
   | Dfalse, _ -> (e2, Def, lv2)
   | _, Dfalse -> (e1, Def, lv1)
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
+  | Dor l1, Dor l2 -> (Optim.dor (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dor l -> (Optim.dor (e1 :: l), Def, lv2 @ lv1)
+  | Dor l, _ -> (Optim.dor (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Optim.dor [ e1; e2 ], Def, lv2 @ lv1)
 
 let dnot (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Def e in
@@ -560,12 +670,18 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
   | Dvar evar -> format_expr_var dgfip_flags fmt evar
-  | Dand (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1 format_dexpr
-        de2
-  | Dor (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
-        de2
+  | Dand l ->
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " && ")
+           format_dexpr)
+        l
+  | Dor l ->
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " || ")
+           format_dexpr)
+        l
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
   | Dbinop (op, de1, de2) -> begin
       match op with

@@ -683,6 +683,10 @@ val get_normal_var : var_name -> string
 val function_arity : func -> int option
 (** Returns the arity of a function, or None if there is no limit. *)
 
+val compare_value_typ : value_typ -> value_typ -> int
+
+val compare_var_space : var_space -> var_space -> int
+
 (** {2 Pretty printing functions} *)
 
 val format_value_typ : Pp.t -> value_typ -> unit

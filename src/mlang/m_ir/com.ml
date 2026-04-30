@@ -1216,6 +1216,28 @@ let function_arity = function
   | NbEvents -> Some 0
   | Func _ -> None
 
+let value_typ_id = function
+  | Boolean -> 0
+  | DateYear -> 1
+  | DateDayMonthYear -> 2
+  | DateMonth -> 3
+  | Integer -> 4
+  | Real -> 5
+
+let compare_value_typ (t : value_typ) (t' : value_typ) =
+  Int.compare (value_typ_id t) (value_typ_id t')
+
+let compare_var_space (vs : var_space) (vs' : var_space) =
+  Option.compare
+    (fun (n, id) (n', id') ->
+      let str =
+        String.compare
+          (get_var_name @@ Pos.unmark n)
+          (get_var_name @@ Pos.unmark n')
+      in
+      if str = 0 then Int.compare id id' else str)
+    vs vs'
+
 let format_value_typ fmt t =
   Pp.string fmt
     (match t with
