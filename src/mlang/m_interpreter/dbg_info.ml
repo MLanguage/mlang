@@ -58,15 +58,18 @@ module Info = struct
     value : Com.literal;
     descr : string option;
     is_input : bool;
+    decl_origin : Origin.t;
   }
 
-  let make tick name pos rule value descr is_input =
-    { tick; name; pos; rule; value; descr; is_input }
+  let make tick name pos rule value descr is_input decl =
+    let decl_origin = Origin.make_from_pos decl Declared in
+    { tick; name; pos; rule; value; descr; is_input; decl_origin }
 
   let make_from_var tick var rule value descr is_input =
     let name = Com.Var.name_str var in
     let pos = Com.Var.name var |> Pos.get in
-    make tick name pos rule value descr is_input
+    let decl_pos = Pos.get var.name in
+    make tick name pos rule value descr is_input decl_pos
 
   (* We've removed idx_opt, it may be needed for tables. *)
 
@@ -86,9 +89,11 @@ module Info = struct
       origin : Origin.t;
       is_input : bool;
       descr : string option;
+      decl_origin : Origin.t;
     }
 
-    let make name origin is_input descr = { name; origin; is_input; descr }
+    let make name ~origin is_input descr ~decl_origin =
+      { name; origin; is_input; descr; decl_origin }
   end
 end
 
@@ -152,11 +157,12 @@ let make_empty ~aliases =
     aliases;
   }
 
-let register dbg_info Info.{ tick; name; pos; rule; value; descr; is_input } =
+let register dbg_info
+    Info.{ tick; name; pos; rule; value; descr; is_input; decl_origin } =
   let origin = Origin.make_from_pos pos rule in
   let runtime = Info.Runtime.make origin value (Some name) in
   let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-  let static = Info.Static.make name origin is_input descr in
+  let static = Info.Static.make name ~origin is_input descr ~decl_origin in
   let statics = IntMap.add runtime.hash static dbg_info.statics in
   let ledger = TickMap.add name tick dbg_info.ledger in
   let dbg_info = { dbg_info with runtimes; statics; ledger } in
@@ -192,15 +198,17 @@ let to_json (fmt : Format.formatter) info : unit =
   let open Const in
   let delim = ref "" in
   json_of_graph_matrix fmt info;
-  let print_static_info hash { name; origin; is_input; descr } =
+  let print_static_info hash { name; origin; is_input; descr; decl_origin } =
     let origin = Origin.to_json origin in
     let descr =
       match descr with
       | None -> ""
       | Some descr -> asprintf {|"descr": %S,|} descr
     in
-    fprintf fmt {|%s@."%d": {"name": %S, "is_input": %b, %s %s}|} !delim hash
-      name is_input descr origin;
+    fprintf fmt {|%s@."%d": {"name": %S, "is_input": %b, "decl": %s, %s %s}|}
+      !delim hash name is_input
+      (Origin.to_json decl_origin)
+      descr origin;
     delim := ","
   in
   Ppf.debug_print "writing info...@.";

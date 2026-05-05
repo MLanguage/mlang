@@ -78,6 +78,7 @@ module Info : sig
     value : Com.literal;
     descr : string option;
     is_input : bool;
+    decl_origin : Origin.t;
   }
   (** Tracing assignment info as the interperter outputs them. [tick] is
       supposed to be different for different assignments *)
@@ -90,6 +91,7 @@ module Info : sig
     Com.literal ->
     string option ->
     bool ->
+    Pos.t ->
     t
   (** [make tick name position rule value descr is_input] creates a new [t]
       based on argument info. *)
@@ -119,12 +121,19 @@ module Info : sig
       origin : Origin.t;
       is_input : bool;
       descr : string option;
+      decl_origin : Origin.t;
     }
     (** Static information about variables eg. stuff that doesn't depend on
         execution. *)
 
-    val make : string -> Origin.t -> bool -> string option -> t
-    (** [make name origin is_input description] *)
+    val make :
+      string ->
+      origin:Origin.t ->
+      bool ->
+      string option ->
+      decl_origin:Origin.t ->
+      t
+    (** [make name ~origin is_input description ~decl_origin] *)
   end
 end
 

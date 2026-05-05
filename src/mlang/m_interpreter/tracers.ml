@@ -94,6 +94,7 @@ module Tracer : S = struct
               let tick = Tick.tick () in
               let info =
                 Info.make tick name const.pos Const const.Com.value None false
+                  const.pos
               in
               let const = Const.make_from_pos name const.Com.value const.pos in
               let consts = Tick.Map.add tick const dbg_info.consts in
@@ -144,6 +145,7 @@ module Tracer : S = struct
           Format.asprintf "%s[%s]" name idx_str
       | Com.FieldAccess (_, _, _, _) -> name
     in
+    let decl_pos = Pos.get v.name in
     let name = access_name @@ Com.Var.name_str v in
     let is_input =
       match Com.Var.cat_var_loc v with
@@ -155,7 +157,7 @@ module Tracer : S = struct
     let descr =
       match Com.Var.descr_str v with exception _ -> None | descr -> Some descr
     in
-    let info = Info.make tick name pos rule_id value descr is_input in
+    let info = Info.make tick name pos rule_id value descr is_input decl_pos in
     let dbg_info = Dbg_info.register dbg_info info in
     let vert = Dbg_info.Graph.V.create tick in
     let graph = dbg_info.graph in
