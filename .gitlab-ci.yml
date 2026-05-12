@@ -1,5 +1,47 @@
 stages:
   - build
+  - deploy
+
+make-doc:
+  stage: deploy
+
+  needs: ["build"]
+
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:latest
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+  artifacts:
+    paths:
+      - examples/doc
+
+  script:
+    - make doc-deps
+    - make doc
+
+build-static:
+  stage: build
+
+  image: ocaml/opam:alpine-ocaml-4.14 
+  variables:
+    USER: root
+
+  artifacts:
+    paths:
+      - mlang-static.exe
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+  script:
+    - sudo apk add --no-cache m4 perl python3 clang git build-base lzip gmp-dev gmp-static mpfr-dev libev-dev openssl-dev openssl-libs-static
+    # Bypass Git's dubious ownership security check for the CI workspace, or else opam will fail
+    - git config --global --add safe.directory '*'
+    - opam update
+    - opam install . --deps-only -y
+    - opam exec -- env BUILD_STATIC=true dune build --profile=release src/main_static.exe
+    - cp _build/default/src/main_static.exe mlang-static.exe
 
 build:
   stage: build
@@ -21,15 +63,8 @@ build:
 
   artifacts:
     paths:
-      - documentation
-      - bin
+      - src
     when: on_success
-
-#  cache:
-#    key: $OCAML_COMPILER
-#    paths:
-#      - _opam
-#      - _build
 
   script:
     # Initialisation
@@ -41,18 +76,4 @@ build:
     - opam exec -- dune build @fmt
     # Compilation
     - make build
-    # Tests
-    - OPTIMIZE=0 make ci_tests
-    # Compilation du binaire statique
-    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
-      || make build-static
-    # Génération de la documentation
-    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
-      || (make doc-deps && make doc)
-    # Edition des chemins d'artefact
-    ## Artefact documentation
-    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
-      || (mkdir documentation && cp -r _build/default/full-doc/html/* documentation)
-    ## Artefact binaire statique
-    - ([ "$CI_COMMIT_BRANCH" != "dev" ] && [ "$CI_COMMIT_BRANCH" != "master" ])
-      || (mkdir bin && cp _build/default/src/main.exe bin/mlang)
+    - make ci_tests

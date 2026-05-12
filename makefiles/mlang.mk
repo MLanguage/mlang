@@ -159,14 +159,14 @@ sphinx-doc: FORCE build dev-doc
 latex-doc: sphinx-doc
 	.venv/bin/sphinx-build -M latexpdf $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
 
-dev-doc: FORCE build
+dev-doc:
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
 	opam exec -- dune build @doc
 endif
 
-doc: FORCE build dev-doc sphinx-doc
+doc: dev-doc sphinx-doc
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else

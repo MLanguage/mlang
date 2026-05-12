@@ -1,4 +1,4 @@
-(lang dune 2.7)
+(lang dune 3.15)
 
 (name mlang)
 

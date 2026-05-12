@@ -42,4 +42,4 @@ clean: FORCE remise_a_zero_versionnage
 	rm -f $(MLANG_HASH)
 	dune clean
 
-ci_tests: FORCE build test_cram tests test_irj test_dgfip_c_backend
+ci_tests: test_cram tests test_irj test_dgfip_c_backend

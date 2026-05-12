@@ -39,10 +39,9 @@
 (executable
  (name main_static)
  (package mlang)
- (modules main_static)
  (public_name mlang-static)
  (enabled_if
-  (= %{profile} static-release))
+  (= %{env:BUILD_STATIC=false} true))
  (flags
   (-ccopt -static)
   (:standard
