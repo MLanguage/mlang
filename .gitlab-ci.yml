@@ -7,7 +7,7 @@ make-doc:
 
   needs: ["build"]
 
-  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:latest
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev"'
@@ -17,6 +17,7 @@ make-doc:
       - examples/doc
 
   script:
+    - git config --global --add safe.directory '*'
     - make doc-deps
     - make doc
 
@@ -59,7 +60,7 @@ build:
     - exists:
         - dune-project
 
-  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:latest
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
 
   artifacts:
     paths:
