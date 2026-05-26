@@ -1,0 +1,57 @@
+stages:
+  - build
+  - deploy
+
+build-static:
+  stage: build
+
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.13
+  variables:
+    USER: root
+
+  artifacts:
+    paths:
+      - mlang-static.exe
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "ci-master"'
+
+  script:
+    - sudo apk add --no-cache m4 perl python3 clang git build-base lzip gmp-dev gmp-static mpfr-dev libev-dev openssl-dev openssl-libs-static
+    # Bypass Git's dubious ownership security check for the CI workspace, or else opam will fail
+    - git config --global --add safe.directory '*'
+    - opam update
+    - opam install . --deps-only -y
+    - opam exec -- dune build --profile=static-release src/main_static.exe
+    - cp _build/default/src/main_static.exe mlang-static.exe
+
+build:
+  stage: build
+
+  variables:
+    OCAML_COMPILER: "4.14.2"
+#    ARTIFACTS: "artifacts/$OCAML_COMPILER"
+
+    FF_USE_FASTZIP: "true"
+    # A workaround against a bug in gitlab-runner's default
+    # unzipping implementation, which partially breaks caching for the dune _build cache.
+    # See https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27496 for more details.
+
+  rules:
+    - exists:
+        - dune-project
+
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.13
+
+  script:
+    # Initialisation
+    - opam install . --deps-only -y
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+    - git submodule init ir-calcul
+    - git submodule update ir-calcul
+    # Installation des dépendances opam
+    # Verification de l'indentation
+    - opam exec -- dune build @fmt
+    # Compilation
+    - make build
+    - make ci_tests

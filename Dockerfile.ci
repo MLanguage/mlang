@@ -1,0 +1,24 @@
+FROM ocaml/opam:alpine-ocaml-4.13
+
+USER root
+RUN apk add --no-cache \
+    m4 \
+    perl \
+    python3 \
+    clang \
+    git \
+    build-base \
+    lzip \
+    gmp-dev \
+    mpfr-dev
+
+USER opam
+
+WORKDIR /mlang
+
+COPY --chown=opam:opam *.opam ./
+COPY --chown=opam:opam dune-project ./
+
+RUN opam update && \
+    opam install . --deps-only -y && \
+    opam clean -a -c --logs
