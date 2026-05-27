@@ -169,8 +169,8 @@ let sort_vars_by_name is_ebcdic vars =
     if is_ebcdic then Strings.compare_ebcdic else Strings.compare_default
   in
   List.fast_sort
-    (fun (_, _, _, _, name1, _, _, _, _, _) (_, _, _, _, name2, _, _, _, _, _)
-       -> compare_name name1 name2)
+    (fun (_, _, _, _, name1, _, _, _, _, _) (_, _, _, _, name2, _, _, _, _, _) ->
+      compare_name name1 name2)
     vars
 
 (* Retrieve all the variables, sorted by alias, and compute their IDs *)
@@ -399,9 +399,10 @@ let gen_var fmt req_type opt ~idx ~name ~tvar ~is_output ~typ_opt ~attributes
     Format.fprintf fmt ", %d" (get_attr "primrest" attributes);
   if opt.with_libelle then Format.fprintf fmt ", \"%s\"" desc
   else Format.fprintf fmt " /*\"%s\"*/" desc;
-  begin match ((req_type : gen_type), tvar) with
-  | Input _, Income -> Format.fprintf fmt ", \"%s\"" name
-  | _ -> ()
+  begin
+    match ((req_type : gen_type), tvar) with
+    | Input _, Income -> Format.fprintf fmt ", \"%s\"" name
+    | _ -> ()
   end;
   Format.fprintf fmt " },\n"
 
@@ -434,13 +435,14 @@ let gen_table fmt is_ebcdic vars req_type opt =
   in
   let table_name = req_type_name req_type in
   let table_NAME = String.uppercase_ascii table_name in
-  begin match req_type with
-  | Debug _i ->
-      Format.fprintf fmt "T_desc_debug desc_%s[NB_%s + 1] = {\n" table_name
-        table_NAME
-  | _ ->
-      Format.fprintf fmt "T_desc_%s desc_%s[NB_%s + 1] = {\n" table_name
-        table_name table_NAME
+  begin
+    match req_type with
+    | Debug _i ->
+        Format.fprintf fmt "T_desc_debug desc_%s[NB_%s + 1] = {\n" table_name
+          table_NAME
+    | _ ->
+        Format.fprintf fmt "T_desc_%s desc_%s[NB_%s + 1] = {\n" table_name
+          table_name table_NAME
   end;
 
   let empty = ref true in
@@ -839,18 +841,18 @@ let gen_compir_h fmt flags vars vars_debug =
     nb_restituee;
 
   (if flags.Dgfip_options.flg_debug then
-     if flags.nb_debug_c <= 0 then
-       let nb = match nb_debug with [ nb ] -> nb | _ -> assert false in
-       Format.fprintf fmt "#define NB_DEBUG %d\n" nb
-     else
-       let i =
-         List.fold_left
-           (fun i nb ->
-             Format.fprintf fmt "#define NB_DEBUG%02d %d\n" i nb;
-             i + 1)
-           1 nb_debug
-       in
-       assert (i = flags.nb_debug_c + 1));
+   if flags.nb_debug_c <= 0 then
+     let nb = match nb_debug with [ nb ] -> nb | _ -> assert false in
+     Format.fprintf fmt "#define NB_DEBUG %d\n" nb
+   else
+     let i =
+       List.fold_left
+         (fun i nb ->
+           Format.fprintf fmt "#define NB_DEBUG%02d %d\n" i nb;
+           i + 1)
+         1 nb_debug
+     in
+     assert (i = flags.nb_debug_c + 1));
 
   Format.fprintf fmt
     {|
