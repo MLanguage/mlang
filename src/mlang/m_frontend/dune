@@ -53,15 +53,8 @@
  (action
   (with-stdout-to
    %{target}
-   (run
-    menhir
-    %{parser}
-    --base
-    %{parser}
-    --merge-errors
-    %{new}
-    --merge-errors
-    %{updated}))))
+   (run menhir %{parser} --base %{parser} --merge-errors %{new}
+     --merge-errors %{updated}))))
 
 ; Tests the syntax.messages file when the parser changes.
 ; To update the file, use dune runtest --auto-update
