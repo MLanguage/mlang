@@ -56,7 +56,7 @@ endif
 # Mlang configuration
 ##################################################
 
-MLANG_BIN=dune exec $(ROOT_DIR)/_build/default/src/main.exe --
+MLANG_BIN=dune exec mlang --
 
 PRECISION?=double
 MLANG_DEFAULT_OPTS=\
