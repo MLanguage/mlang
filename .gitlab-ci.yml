@@ -41,7 +41,7 @@ build-static:
     - git config --global --add safe.directory '*'
     - opam update
     - opam install . --deps-only -y
-    - opam exec -- env BUILD_STATIC=true dune build --profile=release src/main_static.exe
+    - opam exec -- dune build --profile=static-release src/main_static.exe
     - cp _build/default/src/main_static.exe mlang-static.exe
 
 build:
