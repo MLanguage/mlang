@@ -637,8 +637,8 @@ let safe_prefix (p : Mast.program) : string =
         if i >= String.length name then make_prefix []
         else (
           (if Strings.starts_with ~prefix:(Buffer.contents buf) name then
-             let c = match name.[i] with 'a' -> 'b' | _ -> 'a' in
-             Buffer.add_char buf c);
+           let c = match name.[i] with 'a' -> 'b' | _ -> 'a' in
+           Buffer.add_char buf c);
           make_prefix tl)
     | [] -> Buffer.contents buf
   in
@@ -2433,8 +2433,8 @@ let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
     in
     let bad_out_vars = StrMap.remove vr out_vars in
     (if StrMap.card bad_in_vars > 0 then
-       let vn, vpos = StrMap.min_binding bad_in_vars in
-       Err.forbidden_in_var_in_function vn tname vpos);
+     let vn, vpos = StrMap.min_binding bad_in_vars in
+     Err.forbidden_in_var_in_function vn tname vpos);
     if StrMap.card bad_out_vars > 0 then
       let vn, vpos = StrMap.min_binding bad_out_vars in
       Err.forbidden_out_var_in_function vn tname vpos);
@@ -3261,8 +3261,7 @@ end
 let complete_verif_calls (prog : program) : program =
   let prog_targets, prog_call_map, _ =
     StrMap.fold
-      (fun tname (_, vdom_id, expr) (prog_targets, prog_call_map, verif_calls)
-         ->
+      (fun tname (_, vdom_id, expr) (prog_targets, prog_call_map, verif_calls) ->
         let verif_set =
           IntMap.fold
             (fun _verif_id verif verif_set ->
