@@ -24,7 +24,7 @@ void itereFichiers(
   int *nbOk, int *nbKo, int *nbKc
 ) {
   T_traitement resultat;
-  uint64_t temps_ms_total;
+  uint64_t temps_ms_total = 0;
   *nbOk = 0;
   *nbKo = 0;
   *nbKc = 0;
