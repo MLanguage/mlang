@@ -49,9 +49,10 @@ build-static:
   artifacts:
     paths:
       - mlang-static.exe
+    expire_in: 1 day
 
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_MESSAGE =~ /\[build-static\]/'
 
   script:
     - sudo apk add --no-cache m4 perl python3 clang git build-base lzip gmp-dev gmp-static mpfr-dev libev-dev openssl-dev openssl-libs-static
