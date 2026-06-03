@@ -8,6 +8,7 @@
 
 GCC=gcc
 MUSL_HOME?=/usr/local/musl
+OPTIM_FLAG?=
 
 ##################################################
 # Tax computation configuration
@@ -16,7 +17,7 @@ MUSL_HOME?=/usr/local/musl
 MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
-REPO=ir
+REPO?=ir
 # Add a TESTS_DIR for 2024 when available
 ifeq ($(REPO),svn)
   SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
@@ -29,7 +30,7 @@ ifeq ($(REPO),svn)
     $(SOURCE_EXT_DIR)/correctif.m \
     $(SOURCE_EXT_DIR)/main.m
   TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-else ifeq ($(filter $(YEAR), 2022 2023 2024), $(YEAR))
+else ifeq ($(filter $(YEAR), 2022 2023 2024 2025), $(YEAR))
   SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
   SOURCE_EXT_FILES?=\
     $(SOURCE_EXT_DIR)/cibles.m \
@@ -79,12 +80,10 @@ endif
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
 COMMON_CFLAGS?=-std=c89 -pedantic
-ifeq ($(CC), clang)
-  COMPILER_SPECIFIC_CFLAGS=-O2
-#  COMPILER_SPECIFIC_CFLAGS=
-else ifeq ($(CC), gcc)
-  COMPILER_SPECIFIC_CFLAGS=-O1
+ifdef OPTIM_FLAG
+  COMPILER_SPECIFIC_CFLAGS=-O$(OPTIM_FLAG)
 endif
+
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator

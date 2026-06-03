@@ -114,7 +114,7 @@ cal: $(DRIVER_TARGETS)
 	do \
 	  $(MAKE_DGFIP_CALC) $$I || exit; \
 	done
-	cd calc && $(CC) -lm *.o -o ../cal
+	cd calc && $(CC) *.o -o ../cal -lm
 	@echo "Compilation terminée"
 endif
 
