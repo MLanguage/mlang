@@ -1,3 +1,9 @@
+type optim =
+  | All_optims
+  | Local_vars_for_arrays
+  | No_check_unstoppable_rules
+  | No_redundant_boolean_formulae
+
 type value_sort =
   | RegularFloat
   | MPFR of int (* bitsize of the floats *)
@@ -112,6 +118,18 @@ let trace_output = ref Stdout
 
 let message_format = ref ANSI
 
+let optims = ref [ All_optims ]
+
+let optim_activated o =
+  List.exists (function All_optims -> true | o' -> o = o') !optims
+
+let optim_local_var_for_arrays () = optim_activated Local_vars_for_arrays
+
+let optim_no_check_unstoppable () = optim_activated No_check_unstoppable_rules
+
+let optim_no_redundant_boolean_formulae () =
+  optim_activated No_redundant_boolean_formulae
+
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (no_print_cycles_ : bool) (output_file_ : string option)
@@ -121,7 +139,8 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (dgfip_test_filter_ : bool) (mpp_function_ : string)
     (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode)
     (no_nondet_display_ : bool) (plain_output_ : bool) (trace_ : bool)
-    (trace_output_ : trace_output) (message_format_ : message_format) =
+    (trace_output_ : trace_output) (message_format_ : message_format)
+    (optims_ : optim list) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -146,7 +165,8 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   trace_output := trace_output_;
   Option.iter (( := ) output_file) output_file_;
   Option.iter (( := ) comparison_error_margin) comparison_error_margin_;
-  message_format := message_format_
+  message_format := message_format_;
+  optims := optims_
 
 let process_dgfip_options (backend : backend) ~(application_names : string list)
     (dgfip_options : string list option) =
@@ -184,8 +204,9 @@ let set_opts ~(files : string list) ~(application_names : string list)
     ~(comparison_error_margin : float option) ~(income_year : int)
     ~(m_clean_calls : bool) ~(dgfip_options : string list option)
     ~(no_nondet_display : bool) ~(plain_output : bool) ~(trace : bool)
-    ~(trace_output_file : string option) ~(message_format : message_format) :
-    [ `Run | `Displayed_dgfip_help | `Error of Err.t ] =
+    ~(trace_output_file : string option) ~(message_format : message_format)
+    ~(optims : optim list) : [ `Run | `Displayed_dgfip_help | `Error of Err.t ]
+    =
   let exception DGFIP_HELP in
   try
     (* Reading backend first because we need it for parsing dgfip_flags *)
@@ -265,7 +286,8 @@ let set_opts ~(files : string list) ~(application_names : string list)
       var_info_debug display_time print_cycles output optimize_unsafe_float
       m_clean_calls comparison_error_margin income_year value_sort round_ops
       backend dgfip_test_filter mpp_function dgfip_flags execution_mode
-      no_nondet_display plain_output trace trace_output_file message_format;
+      no_nondet_display plain_output trace trace_output_file message_format
+      optims;
     `Run
   with
   | DGFIP_HELP -> `Displayed_dgfip_help

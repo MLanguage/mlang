@@ -218,6 +218,30 @@ let message_format =
     & info [ "message_format" ] ~docv:""
         ~doc:"Selects the message format: human/GNU")
 
+let optim_flags =
+  [
+    ("lvfa", Config.Local_vars_for_arrays);
+    ("ncur", No_check_unstoppable_rules);
+    ("nrbf", No_redundant_boolean_formulae);
+    ("*", All_optims);
+  ]
+
+let optims =
+  Arg.(
+    value
+    & opt (list @@ enum optim_flags) [ All_optims ]
+    & info [ "optim"; "O" ] ~docv:"OPTIM"
+        ~doc:
+          "Several optimizations modify the generated C program to make it \
+           more than a simple translation. Here are the different available\n\
+          \         optimsizations: - 'lvfa': each rule defines local \
+           variables for the irdata accesses of the TGV; - 'ncur': when a rule \
+           is not stopped (because it does not have a stop instruction), does \
+           not add the subsequent check;\n\
+          \         - 'nrbf': removes redundant boolean formulae from OR and \
+           AND operators (when checking for variable definitions);\n\
+          \         - '*': all of the above (default).")
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
@@ -225,7 +249,7 @@ let mlang_t f =
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
     $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output $ trace
-    $ trace_output_file $ message_format)
+    $ trace_output_file $ message_format $ optims)
 
 let info =
   let doc =

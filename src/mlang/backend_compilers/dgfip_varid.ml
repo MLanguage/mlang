@@ -29,7 +29,10 @@ let gen_tgv_def (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   | Some (m_sp, _) ->
       let sp = Com.get_normal_var @@ Pos.unmark m_sp in
       Pp.spr "(irdata->def_%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
-  | None -> Pp.spr "(def_%s[%d/*%s*/])" tab l.loc_idx vn
+  | None ->
+      if Utils.Config.optim_local_var_for_arrays () then
+        Pp.spr "(def_%s[%d/*%s*/])" tab l.loc_idx vn
+      else Pp.spr "(irdata->def_%s[%d/*%s*/])" tab l.loc_idx vn
 
 let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   let tab = gen_tab l.loc_cat in
@@ -37,7 +40,10 @@ let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   | Some (m_sp, _) ->
       let sp = Com.get_normal_var @@ Pos.unmark m_sp in
       Pp.spr "(irdata->%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
-  | None -> Pp.spr "(%s[%d/*%s*/])" tab l.loc_idx vn
+  | None ->
+      if Utils.Config.optim_local_var_for_arrays () then
+        Pp.spr "(%s[%d/*%s*/])" tab l.loc_idx vn
+      else Pp.spr "(irdata->%s[%d/*%s*/])" tab l.loc_idx vn
 
 let gen_tgv_def_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   Pp.spr "&%s" (gen_tgv_def m_sp_opt l vn)
