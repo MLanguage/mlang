@@ -198,7 +198,7 @@ let make_dbg_info inst aliases =
     in
     let runtime = Info.Runtime.make origin lit (Some name) in
     let runtimes = Tick.Map.add tick runtime dbg_info.runtimes in
-    let static = Info.Static.make name origin true descr in
+    let static = Info.Static.make name ~origin true descr ~decl_origin:origin in
     let statics = IntMap.add runtime.hash static dbg_info.statics in
     let ledger = StrMap.add name tick dbg_info.ledger in
     { dbg_info with runtimes; statics; ledger }
