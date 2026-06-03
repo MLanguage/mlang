@@ -1,6 +1,6 @@
 # Important note
 
-The MLang compiler is now hosted on the [Adullact forge](https://gitlab.adullact.net/dgfip/impots-nationaux-revenu-patrimoine-particuliers/Mlang).
+The MLang compiler is hosted on the [Adullact forge](https://gitlab.adullact.net/dgfip/impots-nationaux-revenu-patrimoine-particuliers/Mlang).
 
 # The Mlang compiler
 
@@ -8,7 +8,7 @@ The MLang compiler is now hosted on the [Adullact forge](https://gitlab.adullact
 [![Documentation deployed](https://img.shields.io/badge/Developper%20documentation-deployed-GREEN.svg)](https://mlanguage.github.io/mlang/mlang/index.html)
 
 The M language has been invented by the French Direction Générale des Finances
-Publiques (DGFiP), equivalent to the IRS, to transcribe the tax code into machine-readable
+Publiques (DGFiP) to transcribe the tax code into machine-readable
 instructions. It is a small Domain Specific Language based on variable
 declarations and arithmetic operations. This work is based on a retro-engineering
 of the syntax and the semantics of M, from the codebase previously released by the DGFiP on
@@ -128,7 +128,7 @@ are represented with the [Q number format](https://en.wikipedia.org/wiki/Q_(numb
 and `<n>` is the number of fractional bits. The integer bits are unbounded.
 
 The DGFiP does not publish its internal test base. However, randomized test
-cases have been created for the 2018, 2019 and 2020 income versions of the software, in the
+cases have been created for the 2018 to 2024 income versions of the software, in the
 folder `tests`. The fact that Mlang passes these tests only means that
 it faithfully reproduces the computation done by the DGFiP using unpublished
 software. Notably, it does not mean that the M sources (published by the
@@ -211,9 +211,8 @@ to enable or disable parts of the computation.
 
 The DGFiP has not published the source code of this iterative computation. However,
 the authors of Mlang have come up with a new DSL called M++, used for describing
-the logic of this iterative computation. Currently, the authors have transcribed
-the unpublished source code into the `mpp_specs/*2018_6_7*.mpp` file, which has
-been tested for the computation of taxes for the 2018 up to the 2025 income.
+the logic of this iterative computation. This M extension is used in `m_ext/2018..2024`
+and has been tested successfully on the primitive and corrective taxation.
 
 ## Contributions
 
@@ -242,4 +241,4 @@ more details.
 
 ## License
 
-The compiler is released under the CeCILL license (version 3).
+The compiler is released under the CeCILL license (version 2.1).
