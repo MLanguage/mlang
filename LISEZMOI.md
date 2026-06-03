@@ -1,6 +1,6 @@
 # Note importante
 
-Le compilateur MLang est désormais hébergé sur la forge Adullact.
+Le compilateur MLang est désormais hébergé sur la [forge Adullact](https://gitlab.adullact.net/dgfip/impots-nationaux-revenu-patrimoine-particuliers/Mlang).
 
 # Le compilateur Mlang
 
