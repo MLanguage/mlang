@@ -1,6 +1,24 @@
 stages:
   - build
   - deploy
+  - release
+
+create-tag:
+  stage: release
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
+  rules: 
+    - if: '$CI_COMMIT_BRANCH == "master"'
+
+  script:
+    - git config --global --add safe.directory '*'
+    - git fetch --prune --prune-tags origin
+    - git fetch --tags
+    - echo "Latest tag:"
+    - git tag --sort=-creatordate | sed -n '1p'
+    - LATEST_TAG=$(git tag --sort=-creatordate | sed -n '1p')
+    - NEXT_TAG=$((LATEST_TAG + 1))
+    - echo "Creating tag $NEXT_TAG"
+    - curl --request POST --header "PRIVATE-TOKEN:$GITLAB_CI_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags?tag_name=$NEXT_TAG&ref=$CI_COMMIT_SHA" --fail
 
 make-doc:
   stage: deploy
