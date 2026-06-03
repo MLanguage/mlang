@@ -4,20 +4,20 @@ Le compilateur MLang est désormais hébergé sur la forge Adullact.
 
 # Le compilateur Mlang
 
-![CI Tests](https://github.com/MLanguage/mlang/actions/workflows/check_correctness.yml/badge.svg)
-[![Documentation deployed](https://img.shields.io/badge/Developper%20documentation-deployed-GREEN.svg)](https://mlanguage.github.io/mlang/mlang/index.html)
+![Tests CI](https://github.com/MLanguage/mlang/actions/workflows/check_correctness.yml/badge.svg)
+[![Documentation deployée](https://img.shields.io/badge/Developper%20documentation-deployed-GREEN.svg)](https://mlanguage.github.io/mlang/mlang/index.html)
 
 Le langage M a été inventé par la Direction Générale des Finances Publiques (DGFiP) française pour transcrire le code des impôts en instructions lisibles par une machine. Il s'agit d'un petit langage dédié (DSL - Domain Specific Language) basé sur des déclarations de variables et des opérations arithmétiques. Ce travail est basé sur une rétro-ingénierie de la syntaxe et de la sémantique de M, à partir de la base de code précédemment publiée par la DGFiP sur la forge Framagit et désormais régulièrement publiée sur la forge Adullact.
-[Framagit forge](https://framagit.org) and now regularly published on
-[Adullact forge](https://gitlab.adullact.net/dgfip/ir-calcul).
+[Forge Framagit](https://framagit.org) and now regularly published on
+[Forge Adullact](https://gitlab.adullact.net/dgfip/ir-calcul).
 
 ## Avertissement
 
-Il n'existe actuellement aucune garantie juridique d'aucune sorte quant à l'exactitude du code produit par le compilateur Mlang, ou des résultats produits par l'interprète de Mlang. Cependant, les auteurs ont travaillé en étroite collaboration avec la DGFiP pour valider Mlang, et le système passe tous les tests privés de la DGFiP en date de septembre 2026 pour la version des fichiers sources responsables du calcul de l'impôt des années 2018 à 2024.
+Il n'existe actuellement aucune garantie juridique d'aucune sorte quant à l'exactitude du code produit par le compilateur Mlang, ou des résultats produits par l'interprète de Mlang. Cependant, les auteurs ont travaillé en étroite collaboration avec la DGFiP pour valider Mlang, et le système passe tous les tests privés de la DGFiP en date de septembre 2025 pour la version des fichiers sources responsables du calcul de l'impôt des années 2018 à 2024.
 
 ## Installation
 
-Mlang est implémenté en OCaml. Pour gérer les dépendances, installez opam et basculez vers une version d'OCaml au moins égale à 4.14.2. Afin de supporter les calculs en virgule flottante multi-précision, vous devrez également installer la bibliothèque MPFR.
+Mlang est implémenté en OCaml. Pour gérer les dépendances, [installez opam](https://opam.ocaml.org/doc/Install.html) et basculez vers une version d'OCaml au moins égale à 4.14.2. Afin de supporter les calculs en virgule flottante multi-précision, vous devrez également installer la bibliothèque MPFR.
 
 Pour les distributions basées sur Debian, exécutez simplement :
     
@@ -27,7 +27,7 @@ Pour les distributions basées sur Red Hat, exécutez d'abord :
 
 	sudo yum install gmp-devel mpfr-devel git
 
-Opam n'est packagé que pour Fedora. Pour les autres distributions utilisant RPM, veuillez vous référer à la  [documentation officielle](https://opam.ocaml.org/doc/Install.html). Notez que pour utiliser la version binaire d'Opam et installer les dépendances de Mlang, vous aurez besoin d'un compilateur C et des logiciels suivants comme dépendances Opam : `patch`,`unzip`, `bubblewrap` et `bzip2`.
+Opam n'est packagé que pour Fedora. Pour les autres distributions utilisant RPM, veuillez vous référer à la [documentation officielle](https://opam.ocaml.org/doc/Install.html). Notez que pour utiliser la version binaire d'Opam et installer les dépendances de Mlang, vous aurez besoin d'un compilateur C et des logiciels suivants comme dépendances Opam : `patch`,`unzip`, `bubblewrap` et `bzip2`.
 
 Si vous souhaitez générer des tests à l'aide du fuzzer, vous devrez installer AFL :
 	
@@ -63,7 +63,7 @@ Les résultats de Mlang sont testés sur GCC et Clang, ce dernier étant préfé
 
 Mlang a également besoin d'un fichier M pour savoir comment exécuter le mécanisme de "liquidations multiples" qui est nécessaire pour calculer correctement l'impôt sur le revenu. Par exemple, le fichier `ir_calcul/2022/cible.m` correspond au code non publié de la DGFiP pour la version des sources M 2022 publiées dans ir-calcul.
 
-Certains drapeaux (flags) du Makefile peuvent être configurés de manière permanente en modifiant le fichier makefiles/variables.mk.
+Certains drapeaux (flags) du Makefile peuvent être configurés de manière permanente en modifiant le fichier `makefiles/variables.mk`.
 
 Si vous souhaitez générer les fichiers sources du backend ML, lancez la commande :
 
@@ -87,13 +87,13 @@ avec l'année 2022 par défaut.
 
 ## Tests
 
-Mlang est testé en utilisant le format de fichier de test IRJ utilisé par la DGFiP pour tester ses outils internes. Les options `--run_test` et `--run_all_tests` facilitent le processus de test de l'interprète (avec ou sans optimisations) et rapportent les erreurs de test dans un format pratique.
+Mlang est testé en utilisant le format de fichier de test `IRJ` utilisé par la DGFiP pour tester ses outils internes. Les options `--run_test` et `--run_all_tests` facilitent le processus de test de l'interprète (avec ou sans optimisations) et rapportent les erreurs de test dans un format pratique.
 
-Les backends de Mlang sont également testés en utilisant le même format IRJ.
+Les backends de Mlang sont également testés en utilisant le même format `IRJ`.
 
 Lors de l'exécution de `--run_all_tests`, vous pouvez activer l'instrumentation de la couverture de code avec l'option `--code_coverage`. Une autre option intéressante est `--precision`, qui vous permet de choisir comment les nombres sont représentés pour le calcul de l'impôt. La valeur par défaut est `--precision double`, qui utilise la représentation en virgule flottante 64 bits IEEE754 et les opérations associées. C'est ce que la DGFiP utilise. L'option `--precision mpfr` vous permet d'utiliser des nombres en virgule flottante de 1024 bits pour une précision virtuellement infinie. Enfin, `--precision fixed<n>` utilise l'arithmétique en virgule fixe avec les grands entiers fournis par GMP. Les nombres en virgule fixe sont représentés avec le format de nombre Q et `<n>` est le nombre de bits fractionnaires. Les bits entiers sont illimités.
 
-La DGFiP ne publie pas sa base de tests interne. Cependant, des cas de test aléatoires ont été créés pour les versions 2018 à 2024 du logiciel de l'impôt sur le revenu, dans le dossier tests. Le fait que Mlang passe ces tests signifie seulement qu'il reproduit fidèlement le calcul effectué par la DGFiP à l'aide de logiciels non publiés. Notamment, cela ne signifie pas que les sources M (publiées par la DGFiP) et les sources M++ (recréées à partir de sources non publiées) sont fidèles à la manière dont la loi dispose que les impôts doivent être calculés.
+La DGFiP ne publie pas sa base de tests interne. Cependant, des cas de test aléatoires ont été créés pour les versions 2018 à 2024 du logiciel de l'impôt sur le revenu, dans le dossier `tests`. Le fait que Mlang passe ces tests signifie seulement qu'il reproduit fidèlement le calcul effectué par la DGFiP à l'aide de logiciels non publiés. Notamment, cela ne signifie pas que les sources M (publiées par la DGFiP) et les sources M++ (recréées à partir de sources non publiées) sont fidèles à la manière dont la loi dispose que les impôts doivent être calculés.
 
 Pour vérifier que Mlang passe tous les tests aléatoires, invoquez simplement :
 
@@ -170,7 +170,7 @@ raphael POINT monat AT lip6 POINT fr
 
 Veuillez noter que le droit d'auteur de ce code appartient à la DGFiP et à l'Inria, ainsi que toutes les contributions à ce code.
 
-N'oubliez pas d'utiliser make format avant de soumettre vos modifications (commit) afin de garantir un style uniforme.
+N'oubliez pas d'utiliser `make format` avant de soumettre vos modifications (commit) afin de garantir un style uniforme (sans quoi, le CI bloquera votre pull request).
 
 ## Sémantique formelle
 

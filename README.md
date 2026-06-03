@@ -20,7 +20,7 @@ of the syntax and the semantics of M, from the codebase previously released by t
 There is currently no legal guarantee of any kind about the correctness of the code
 produced by the Mlang compiler, or by the results produced by the interpreter of
 Mlang. However, authors have been working closely with the DGFiP to validate Mlang, and
-the system passes all the private DGFiP tests as of Sept. 2026 for the version
+the system passes all the private DGFiP tests as of Sept. 2025 for the version
 of the source files responsible for computing the tax the 2018 to 2024.
 
 ## Installation
