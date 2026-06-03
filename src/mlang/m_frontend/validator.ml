@@ -36,6 +36,7 @@ type rule = {
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
+  rule_stoppable : bool;
 }
 
 type verif = {
@@ -1270,7 +1271,7 @@ let cats_variable_from_decl_list (l : Mast.var_category_id list)
 (*  changer "= Rule" en "<> Target" !!! *)
 let rec check_instructions (env : var_env)
     (instrs : Mast.instruction Pos.marked list) :
-    program * (int Pos.marked, Mast.error_name) Com.m_instruction list =
+    program * (int Pos.marked, Mast.error_name) Com.m_instruction list * bool =
   let map_var env m_v =
     let name = Com.get_normal_var (Pos.unmark m_v) in
     let id = StrMap.find name env.vars in
@@ -1354,10 +1355,11 @@ let rec check_instructions (env : var_env)
   let rec aux
       ((env, res) :
         var_env * (int Pos.marked, Mast.error_name) Com.m_instruction list)
-      (m_instr_list : Mast.instruction Pos.marked list) :
-      var_env * (int Pos.marked, Mast.error_name) Com.m_instruction list =
+      (stoppable : bool) (m_instr_list : Mast.instruction Pos.marked list) :
+      var_env * (int Pos.marked, Mast.error_name) Com.m_instruction list * bool
+      =
     match m_instr_list with
-    | [] -> (env, List.rev res)
+    | [] -> (env, List.rev res, stoppable)
     | m_instr :: il -> (
         let instr, instr_pos = Pos.to_couple m_instr in
         match instr with
@@ -1368,7 +1370,7 @@ let rec check_instructions (env : var_env)
                 let e' = map_expr env e in
                 let f' = Com.SingleFormula (VarDecl (m_a', e')) in
                 let instr' = Com.Affectation (Pos.mark f' fpos) in
-                aux (env, Pos.mark instr' instr_pos :: res) il
+                aux (env, Pos.mark instr' instr_pos :: res) stoppable il
             | Com.SingleFormula (EventFieldRef (m_i, f, iFmt, m_v)) ->
                 if env.proc_type = Rule then
                   error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1388,33 +1390,37 @@ let rec check_instructions (env : var_env)
                   Com.SingleFormula (EventFieldRef (m_i', f, iFmt, m_v'))
                 in
                 let instr' = Com.Affectation (Pos.mark f' fpos) in
-                aux (env, Pos.mark instr' instr_pos :: res) il
+                aux (env, Pos.mark instr' instr_pos :: res) stoppable il
             | Com.MultipleFormulaes _ -> assert false)
         | Com.IfThenElse (expr, i_then, i_else) ->
             let expr' = map_expr env expr in
-            let prog, res_then = check_instructions env i_then in
+            let prog, res_then, stop_then = check_instructions env i_then in
             let env = { env with prog } in
-            let prog, res_else = check_instructions env i_else in
+            let prog, res_else, stop_else = check_instructions env i_else in
             let env = { env with prog } in
             let res_instr = Com.IfThenElse (expr', res_then, res_else) in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux
+              (env, Pos.mark res_instr instr_pos :: res)
+              (stop_then || stop_else) il
         | Com.WhenDoElse (wdl, ed) ->
-            let rec wde (env, res) = function
+            let rec wde stoppable (env, res) = function
               | (expr, dl, pos) :: l ->
                   let expr' = map_expr env expr in
-                  let prog, res_do = check_instructions env dl in
+                  let prog, res_do, subinstr_stop = check_instructions env dl in
                   let env = { env with prog } in
                   let res = (expr', res_do, pos) :: res in
-                  wde (env, res) l
+                  wde (stoppable || subinstr_stop) (env, res) l
               | [] ->
-                  let prog, res_ed = check_instructions env (Pos.unmark ed) in
+                  let prog, res_ed, subinstr_stop =
+                    check_instructions env (Pos.unmark ed)
+                  in
                   let env = { env with prog } in
                   let ed' = Pos.same res_ed ed in
                   let res = Com.WhenDoElse (List.rev res, ed') in
-                  (env, res)
+                  (env, res, subinstr_stop || stoppable)
             in
-            let env, wde_res = wde (env, []) wdl in
-            aux (env, Pos.mark wde_res instr_pos :: res) il
+            let env, wde_res, stoppable = wde stoppable (env, []) wdl in
+            aux (env, Pos.mark wde_res instr_pos :: res) stoppable il
         | Com.ComputeDomain (rdom, m_sp_opt) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1438,7 +1444,7 @@ let rec check_instructions (env : var_env)
             let res_instr =
               Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
             in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux (env, Pos.mark res_instr instr_pos :: res) stoppable il
         | Com.ComputeChaining (chain, m_sp_opt) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1453,7 +1459,7 @@ let rec check_instructions (env : var_env)
             let res_instr =
               Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
             in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux (env, Pos.mark res_instr instr_pos :: res) stoppable il
         | Com.ComputeVerifs (vdom, expr, m_sp_opt) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1478,14 +1484,16 @@ let rec check_instructions (env : var_env)
             let res_instr =
               Com.ComputeTarget (Pos.without tname, [], m_sp_opt)
             in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux (env, Pos.mark res_instr instr_pos :: res) stoppable il
         | Com.VerifBlock instrs ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
-            let prog, res_instrs = check_instructions env instrs in
+            let prog, res_instrs, stop = check_instructions env instrs in
             let env = { env with prog } in
             let res_instr = Com.VerifBlock res_instrs in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux
+              (env, Pos.mark res_instr instr_pos :: res)
+              (stop || stoppable) il
         | Com.ComputeTarget (Pos.Mark (tn, tpos), targs, m_sp_opt) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1510,7 +1518,7 @@ let rec check_instructions (env : var_env)
             let instr' =
               Com.ComputeTarget (Pos.mark tn tpos, targs', m_sp_opt)
             in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) stoppable il
         | Com.Print (std, args) ->
             let args' =
               List.map
@@ -1562,7 +1570,7 @@ let rec check_instructions (env : var_env)
                 args
             in
             let instr' = Com.Print (std, args') in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) stoppable il
         | Com.Iterate (var, al, var_params, instrs) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1603,10 +1611,10 @@ let rec check_instructions (env : var_env)
               let new_scope = Com.get_var_name @@ Pos.unmark var in
               { env' with scopes = new_scope :: env'.scopes }
             in
-            let prog, instrs' = check_instructions env'' instrs in
+            let prog, instrs', stop = check_instructions env'' instrs in
             let env = { env with prog } in
             let instr' = Com.Iterate (var', al', var_params', instrs') in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) (stoppable || stop) il
         | Com.Iterate_values (var, var_intervals, instrs) ->
             let m_name = check_it_var env var in
             let env' =
@@ -1627,10 +1635,10 @@ let rec check_instructions (env : var_env)
               let new_scope = Com.get_var_name @@ Pos.unmark var in
               { env' with scopes = new_scope :: env'.scopes }
             in
-            let prog, instrs' = check_instructions env'' instrs in
+            let prog, instrs', stop = check_instructions env'' instrs in
             let env = { env with prog } in
             let instr' = Com.Iterate_values (var', var_intervals', instrs') in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) (stoppable || stop) il
         | Com.Restore (al, var_params, evts, evtfs, instrs) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1688,12 +1696,12 @@ let rec check_instructions (env : var_env)
               let env, evtfs' = List.fold_left fold (env, []) evtfs in
               (env, List.rev evtfs')
             in
-            let prog, instrs' = check_instructions env instrs in
+            let prog, instrs', stop = check_instructions env instrs in
             let env = { env with prog } in
             let instr' =
               Com.Restore (al', var_params', evts', evtfs', instrs')
             in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) (stoppable || stop) il
         | Com.ArrangeEvents (sort, filter, add, instrs) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1730,10 +1738,10 @@ let rec check_instructions (env : var_env)
               | None -> (env, None)
             in
             let add' = Option.map (map_expr env) add in
-            let prog, instrs' = check_instructions env instrs in
+            let prog, instrs', stop = check_instructions env instrs in
             let env = { env with prog } in
             let instr' = Com.ArrangeEvents (sort', filter', add', instrs') in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) (stoppable || stop) il
         | Com.Switch (e, l) ->
             let e' = map_switch_expr env e in
             let kind_is_same_var =
@@ -1755,9 +1763,9 @@ let rec check_instructions (env : var_env)
               in
               Format.asprintf "%a" (Com.format_case pp_v) case
             in
-            let _cases, env, rev_l' =
+            let _cases, env, rev_l', stop =
               List.fold_left
-                (fun (cases, env, rev_l') (cl, l) ->
+                (fun (cases, env, rev_l', stop) (cl, l) ->
                   (* Check if variable checks are made in name switches only *)
                   let () =
                     if kind_is_same_var then
@@ -1782,15 +1790,17 @@ let rec check_instructions (env : var_env)
                         @@ ERR.non_exclusive_cases ~case:(print_case c)
                     | exception Not_found -> ()
                   in
-                  let prog, l'elt = check_instructions env l in
+                  let prog, l'elt, stop' = check_instructions env l in
                   let env = { env with prog } in
                   let cl' = List.map (check_case env) cl in
-                  (cl @ cases, env, (cl', l'elt) :: rev_l'))
-                ([], env, []) l
+                  (cl @ cases, env, (cl', l'elt) :: rev_l', stop || stop'))
+                ([], env, [], stoppable) l
             in
             let l' = List.rev rev_l' in
             let res_instr = Com.Switch (e', l') in
-            aux (env, Pos.mark res_instr instr_pos :: res) il
+            aux
+              (env, Pos.mark res_instr instr_pos :: res)
+              (stoppable || stop) il
         | Com.RaiseError (m_err, m_var_opt) ->
             if env.proc_type = Rule then
               error ~pos:instr_pos @@ ERR.instruction_forbidden_in_rules;
@@ -1809,23 +1819,25 @@ let rec check_instructions (env : var_env)
                 | None -> error ~pos:var_pos ERR.unknown_variable)
             | None -> ());
             let instr' = Com.RaiseError (m_err, m_var_opt) in
-            aux (env, Pos.mark instr' instr_pos :: res) il
+            aux (env, Pos.mark instr' instr_pos :: res) stoppable il
         | Com.CleanErrors ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
-            aux (env, Pos.mark Com.CleanErrors instr_pos :: res) il
+            aux (env, Pos.mark Com.CleanErrors instr_pos :: res) stoppable il
         | Com.CleanFinalizedErrors ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
-            aux (env, Pos.mark Com.CleanFinalizedErrors instr_pos :: res) il
+            aux
+              (env, Pos.mark Com.CleanFinalizedErrors instr_pos :: res)
+              stoppable il
         | Com.ExportErrors ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
-            aux (env, Pos.mark Com.ExportErrors instr_pos :: res) il
+            aux (env, Pos.mark Com.ExportErrors instr_pos :: res) stoppable il
         | Com.FinalizeErrors ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
-            aux (env, Pos.mark Com.FinalizeErrors instr_pos :: res) il
+            aux (env, Pos.mark Com.FinalizeErrors instr_pos :: res) stoppable il
         | Com.Stop scope ->
             if env.proc_type = Rule then
               error ~pos:instr_pos ERR.instruction_forbidden_in_rules;
@@ -1850,10 +1862,10 @@ let rec check_instructions (env : var_env)
                     @@ ERR.stop_with_invalid_scope ~scope:s
                          ~current_scopes:env.scopes
                 | _ -> ()));
-            aux (env, Pos.mark (Com.Stop scope) instr_pos :: res) il)
+            aux (env, Pos.mark (Com.Stop scope) instr_pos :: res) true il)
   in
-  let env, res = aux (env, []) instrs in
-  (env.prog, res)
+  let env, res, stop = aux (env, []) false instrs in
+  (env.prog, res, stop)
 
 let inout_expression (env : var_env) (m_expr : int Pos.marked Com.m_expression)
     : Pos.t StrMap.t =
@@ -2177,7 +2189,7 @@ let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
             error ~pos:tpos @@ ERR.function_result_missing ~fn:tname;
           (None, env)
   in
-  let prog', instrs' = check_instructions env instrs in
+  let prog', instrs', stoppable = check_instructions env instrs in
   let env' = { env with prog = prog' } in
   if env.proc_type = Func then (
     let tmps = StrMap.map Pos.get tmp_vars' in
@@ -2196,7 +2208,7 @@ let check_code (env : var_env) (m_tname : string Pos.marked) tmp_vars args
     if StrMap.card bad_out_vars > 0 then
       let vn, vpos = StrMap.min_binding bad_out_vars in
       error ~pos:vpos @@ ERR.forbidden_out_var_in_function ~vn ~fn:tname);
-  (env', args', result', tmp_vars', instrs')
+  (env', args', result', tmp_vars', instrs', stoppable)
 
 let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     program =
@@ -2214,7 +2226,12 @@ let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
     t.target_apps
   in
   let env = new_var_env ~vars:prog.prog_varalias prog proc_type in
-  let env, target_args, target_result, target_tmp_vars, target_prog =
+  let ( env,
+        target_args,
+        target_result,
+        target_tmp_vars,
+        target_prog,
+        target_stoppable ) =
     check_code env target_name t.target_tmp_vars t.target_args t.target_result
       t.target_prog
   in
@@ -2232,6 +2249,7 @@ let check_target (proc_type : proc_type) (t : Mast.target) (prog : program) :
         target_sz_tmps = 0;
         target_nb_refs = 0;
         target_prog;
+        target_stoppable;
       }
   in
   if proc_type = Func then
@@ -2277,7 +2295,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     StrMap.fold fold r.rule_chainings (StrMap.empty, prog.prog_chainings)
   in
   let env = new_var_env ~vars:prog.prog_varalias prog Rule in
-  let env, _, _, rule_tmp_vars, rule_instrs =
+  let env, _, _, rule_tmp_vars, rule_instrs, rule_stoppable =
     check_code env (Pos.without "") r.rule_tmp_vars [] None r.rule_formulaes
   in
   let prog = env.prog in
@@ -2298,6 +2316,7 @@ let check_rule (r : Mast.rule) (prog : program) : program =
       rule_in_vars;
       rule_out_vars;
       rule_seq;
+      rule_stoppable;
     }
   in
   (match IntMap.find_opt id prog.prog_rules with
@@ -2330,6 +2349,7 @@ let convert_rules (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_stoppable = rule.rule_stoppable;
             }
         in
         StrMap.add tname target prog_targets)
@@ -2524,6 +2544,8 @@ let complete_rule_domains (prog : program) : program =
                 target_nb_tmps = 0;
                 target_sz_tmps = 0;
                 target_nb_refs = 0;
+                target_stoppable = true;
+                (* S: on doit pouvoir raffiner *)
               }
           in
           let prog_targets = StrMap.add tname target prog_targets in
@@ -2644,6 +2666,8 @@ let complete_chainings (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_stoppable = true;
+              (* S: On doit pouvoir raffiner *)
             }
         in
         let prog_targets = StrMap.add tname target prog_targets in
@@ -2783,6 +2807,7 @@ let convert_verifs (prog : program) : program =
               target_nb_tmps = 0;
               target_sz_tmps = 0;
               target_nb_refs = 0;
+              target_stoppable = false;
             }
         in
         StrMap.add tname target prog_targets)
@@ -3054,6 +3079,8 @@ let complete_verif_calls (prog : program) : program =
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
                   target_nb_refs = 0;
+                  target_stoppable = false;
+                  (* S: Les vérifications ne peuvent pas être stoppées *)
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in
@@ -3095,6 +3122,8 @@ let complete_verif_calls (prog : program) : program =
                   target_nb_tmps = 0;
                   target_sz_tmps = 0;
                   target_nb_refs = 0;
+                  target_stoppable = false;
+                  (* S: Les verifications ne peuvent pas être stoppées *)
                 }
             in
             let prog_targets = StrMap.add tname target prog_targets in

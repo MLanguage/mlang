@@ -1055,6 +1055,7 @@ let get_targets (p : Validator.program) (dict : Com.Var.t IntMap.t)
       let target_prog, dict =
         translate_prog p dict ref_depth itval_depth t.target_prog
       in
+      let target_stoppable = t.target_stoppable in
       let target =
         Com.
           {
@@ -1068,6 +1069,7 @@ let get_targets (p : Validator.program) (dict : Com.Var.t IntMap.t)
             target_nb_tmps;
             target_sz_tmps;
             target_nb_refs;
+            target_stoppable;
           }
       in
       (StrMap.add (Pos.unmark target_name) target targets, dict))

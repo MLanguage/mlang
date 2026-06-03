@@ -824,10 +824,12 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       (match m_sp_opt with
       | None -> ()
       | Some _ -> pr "@;change_var_space_courant(irdata, var_space_sav);");
-      pr "@;if (irdata->abandon) {@;@[<v 2>";
-      sanitize ~up_to:`Bottom env;
-      pr "@;goto %s;" env.quit_label;
-      pr "@]@;}@;";
+      if target.target_stoppable then begin
+        pr "@;if (irdata->abandon) {@;@[<v 2>";
+        sanitize ~up_to:`Bottom env;
+        pr "@;goto %s;" env.quit_label;
+        pr "@]@;}@;"
+      end;
       pr "@]@;}@;"
   | Iterate (var, al, var_params, stmts) ->
       let it_name = D.fresh_c_local "iterate" in

@@ -631,6 +631,8 @@ type ('v, 'e) target = {
   target_sz_tmps : int;
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
+  target_stoppable : bool;
+      (** [true] <=> the target can be stopped by a 'stop' instruction *)
 }
 (** A target is a list of instructions. They are very similar to rules, except
     targets are entrypoints of the M program. *)

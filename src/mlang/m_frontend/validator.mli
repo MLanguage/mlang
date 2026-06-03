@@ -47,6 +47,8 @@ type rule = {
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
+  rule_stoppable : bool;
+      (** [rule_stoppable] is [true] <=> the rule has a 'stop' instruction *)
 }
 
 type verif = {
