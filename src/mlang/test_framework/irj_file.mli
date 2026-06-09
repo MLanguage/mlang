@@ -14,6 +14,9 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
-val parse_file : string -> Irj_ast.irj_file
-(** [parse_file file] loads the content of a given IRJ [file] in a simple
-    datastructure. *)
+type input = Filename of string | Contents of string
+
+val parse_input : input -> Irj_ast.irj_file
+(** [parse_input input] loads the content of a given IRJ [input].
+
+    The [input] can be either a filename, or the contents as a string. *)

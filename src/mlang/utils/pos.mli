@@ -56,16 +56,13 @@ val format : Format.formatter -> t -> unit
     position to the formatter [ppf]. Example: `in file foo.ml, from 10:5 to
     12:20`. *)
 
-val retrieve_loc_text : t -> string
-(** [retrieve_loc_text pos] reads the source file associated with [pos] and
-    returns a formatted string of the code at that location, with the exact
-    columns highlighted. This is used to display code snippets in error
-    messages. *)
-
 (** {2 Marked Value Manipulators} *)
 
 val none : t
 (** [none t] creates the null position. *)
+
+val is_none : t -> bool
+(** Returns [true] if the argument is equal to [none]. *)
 
 val without : 'a -> 'a marked
 (** [without x] marks the value [x] with the [none] position. *)
@@ -114,9 +111,3 @@ val get_end_column : t -> int
 
 val get_file : t -> string
 (** [get_file pos] returns the filename associated with the position. *)
-
-(** {2 Helpers} *)
-
-val indent_number : string -> int
-(** [indent_number s] returns the number of leading space characters in the
-    string [s]. *)

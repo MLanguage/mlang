@@ -22,6 +22,10 @@
     NB: the output of {!Validator.proceed} is temporary and will be modified in
     {!Mast_to_mir.translate}. *)
 
+type rule_or_verif = Rule | Verif
+
+type rdom_or_chain = RuleDomain of Com.DomainId.t | Chaining of string
+
 type syms = Com.DomainId.t Pos.marked Com.DomainIdMap.t
 
 type 'a doms = 'a Com.domain Com.DomainIdMap.t
@@ -43,6 +47,8 @@ type rule = {
   rule_in_vars : StrSet.t;
   rule_out_vars : Pos.t StrMap.t;
   rule_seq : int;
+  rule_stoppable : bool;
+      (** [rule_stoppable] is [true] <=> the rule has a 'stop' instruction *)
 }
 
 type verif = {
@@ -99,6 +105,8 @@ type program = {
   prog_main_target : string;
   prog_call_map : (Pos.t CallMap.t * Pos.t) CallMap.t;
 }
+
+type proc_type = Target of call_compute * Pos.t | Rule | Verif | Func | Filter
 
 val mast_to_catvars :
   Pos.t Com.CatVar.Map.t ->

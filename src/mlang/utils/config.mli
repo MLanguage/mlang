@@ -1,3 +1,9 @@
+type optim =
+  | All_optims
+  | Local_vars_for_arrays
+  | No_check_unstoppable_rules
+  | No_redundant_boolean_formulae
+
 (** According on the [value_sort], a specific interpreter will be called with
     the right kind of floating-point value *)
 type value_sort =
@@ -27,6 +33,35 @@ type execution_mode =
   | Extraction
 
 type files = NonEmpty of string list
+
+type filesystem =
+  | Local
+  | Contents of string StrMap.t
+      (** This is used to know where to search for m file contents *)
+
+type trace_output = Stdout | Stderr | Filename of string
+
+type message_format = ANSI | GNU
+
+module Err : sig
+  type config_err =
+    | Option_mpp_function_required
+    | Invalid_precision_option of string
+    | Invalid_long_size of string
+    | Invalid_message_format of string
+    | Invalid_roundops_option of string
+    | Unspecified_roundops
+    | No_m_files
+    | Cannot_display_time_and_force_nondeterministic_display
+
+  type dgfip_err =
+    | DGFiP_backend_without_DGFiP_options
+    | Invalid_term_in_dgfip_options
+    | Failed_parsing_of_dgfip_options
+    | Uncaught_exception_while_reading_dgfip_options
+
+  type t = Config of config_err | Dgfip of dgfip_err
+end
 
 val get_files : files -> string list
 
@@ -88,6 +123,25 @@ val execution_mode : execution_mode ref
 
 val no_nondet_display : bool ref
 
+val filesystem : filesystem ref
+
+val plain_output : bool ref
+
+val trace : bool ref
+(** Controls wheter the interpreter is tracing execution *)
+
+val trace_output : trace_output ref
+(** Controls the tracer output. It can either be output in stdout, stderr, or in
+    a file. *)
+
+val message_format : message_format ref
+
+val optim_local_var_for_arrays : unit -> bool
+
+val optim_no_check_unstoppable : unit -> bool
+
+val optim_no_redundant_boolean_formulae : unit -> bool
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -110,4 +164,9 @@ val set_opts :
   m_clean_calls:bool ->
   dgfip_options:string list option ->
   no_nondet_display:bool ->
-  [ `Displayed_dgfip_help | `Error of string | `Run ]
+  plain_output:bool ->
+  trace:bool ->
+  trace_output_file:string option ->
+  message_format:message_format ->
+  optims:optim list ->
+  [ `Displayed_dgfip_help | `Error of Err.t | `Run ]

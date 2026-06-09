@@ -1,0 +1,114 @@
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+
+#include <utils.h>
+#include <mem.h>
+#include <liste.h>
+#include <chaine.h>
+#include <fichiers.h>
+#include <irj.h>
+#include <options.h>
+#include <ida.h>
+#include <aide.h>
+#include <format.h>
+#include <traitement.h>
+
+T_tas tasGbl = NULL;
+
+void itereFichiers(
+  L_char lf, int rec,
+  T_traitement (*traiteFich)(char *, T_options), T_options opts,
+  int *nbOk, int *nbKo, int *nbKc
+) {
+  T_traitement resultat;
+  uint64_t temps_ms_total = 0;
+  *nbOk = 0;
+  *nbKo = 0;
+  *nbKc = 0;
+  if (lf == NULL || opts == NULL) return;
+  while (lf != NIL(char)) {
+    L_char lfSav = NULL;
+    char *fich = NULL;
+    char *nomFich = NULL;
+    int estl = 0, estd = 0, estr = 0;
+
+    fich = TETE(char, lf);
+    nomFich = strApresDernier('/', fich);
+    infoReg(nomFich);
+    resultat = traiteFich(fich, opts);
+    temps_ms_total += resultat.temps_ms;
+    /* traitement */
+    switch (resultat.ok) {
+    case 1:
+      (*nbOk)++;
+      infoOk(nomFich);
+      break;
+    case 0:
+      (*nbKo)++;
+      infoKo(nomFich);
+      break;
+    case -1:
+      (*nbKc)++;
+      infoKc(nomFich);
+    }
+    /* fin traitement */
+    lf = QUEUE(char, lf);
+    memLibere(fich);
+    LIBERE_CONS(lfSav);
+    continue;
+    discoFichier(nomFich, -1);
+    lf = QUEUE(char, lf);      
+    memLibere(fich);
+    LIBERE_CONS(lfSav);
+  }
+  #ifdef MLANG_INFO_TEMPS
+  infoTemps(temps_ms_total);
+  #endif /* MLANG_INFO_TEMPS */
+}
+
+int main(int argc, char **argv) {
+  T_options opts = NULL;
+  int res = 0;
+
+  tasGbl = memCreeTas();
+  opts = analyseLdc(tasGbl, argc, argv);
+  switch (opts->action) {
+    case ACT_TRT: {
+      int nbOk = 0, nbKo = 0, nbKc = 0;
+
+      itereFichiers(
+        opts->args.trt.fichiers, opts->args.trt.recursif,
+        traitement, opts,
+        &nbOk, &nbKo, &nbKc
+      );
+      infoNbOk(nbOk, nbOk + nbKo);
+      infoNbKo(nbKo, nbOk + nbKo);
+      infoNbKc(nbKc, nbOk + nbKo + nbKc);
+      res = (nbKo == 0);
+      break;
+    }
+    case ACT_FMT: {
+      int nbOk = 0, nbKo = 0, nbKc = 0;
+
+      itereFichiers(
+        opts->args.fmt.fichiers, opts->args.fmt.recursif,
+        verifieFormat, opts,
+        &nbOk, &nbKo, &nbKc
+      );
+      infoNbOk(nbOk, nbOk + nbKc);
+      infoNbKc(nbKc, nbOk + nbKc);
+      res = (nbKc == 0);
+      break;
+    }
+    case ACT_AID:
+      aide(stdout, opts);
+      res = ! opts->args.aid.err;
+      break;
+  }
+  memLibereTout();
+  return (res ? EXIT_SUCCESS : EXIT_FAILURE);
+}
+

@@ -6,7 +6,7 @@ intermediate representations going from the source code to the target backend.
 {1 Frontend}
 
 First, the source code is parsed according to the Menhir grammar specified in {!module: Mlang.M_frontend.Mparser}.
-The grammar is not exactly LR(1) so we rely on {!module: Mlang.M_frontend.Parse_utils} to backtrack, especially on symbol parsing. The target intermediate representation is {!module: Mlang.M_frontend.Mast}, which is very close to the concrete syntax and can be printed using {!module: Mlang.M_frontend.Format_mast}.
+The grammar is not exactly LR(1) so we rely on {!module: Mlang.M_frontend.Parse_utils} to backtrack, especially on symbol parsing. {!module: Mlang.M_frontend.Syntax_messages} treats the error messages in the different failing cases. The target intermediate representation is {!module: Mlang.M_frontend.Mast}, which is very close to the concrete syntax and can be printed using {!module: Mlang.M_frontend.Format_mast}.
 The frontend also handles ast expansion with {!module: Mlang.M_frontend.Expander} and validation with {!module: Mlang.M_frontend.Validator}.
 
 {!modules:
@@ -15,6 +15,7 @@ The frontend also handles ast expansion with {!module: Mlang.M_frontend.Expander
   Mlang.M_frontend.Mlexer
   Mlang.M_frontend.Mparser
   Mlang.M_frontend.Parse_utils
+  Mlang.M_frontend.Syntax_messages
   Mlang.M_frontend.Validator }
 
 {1 Intermediate Representation}
@@ -28,9 +29,24 @@ and basically all programs typecheck ; however {!module: Mlang.M_frontend.Valida
   Mlang.M_ir.Com
   Mlang.M_ir.Format_mir
   Mlang.M_ir.Mir
-  Mlang.M_ir.Mir_interpreter
   Mlang.M_ir.Mir_number
   Mlang.M_ir.Mir_roundops }
+
+{1 Interpreter}
+
+The intepreter is the reference for the M semantics. The C code Mlang generates must
+follow it.
+The main interpreter module is {!module: Mlang.Mir_interpreter.Eval} which defines two
+functions: {!Mlang.Mir_interpreter.Eval.evaluate_program} and {!Mlang.Mir_interpreter.Eval.evaluate_expr}. It also defines several modules that evaluates programs and expression
+with different float precisions.
+
+{!modules:
+  Mlang.Mir_interpreter.Anomaly
+  Mlang.Mir_interpreter.Context
+  Mlang.Mir_interpreter.Eval
+  Mlang.Mir_interpreter.Functions
+  Mlang.Mir_interpreter.Print
+  Mlang.Mir_interpreter.Types }
 
 {1 Testing}
 

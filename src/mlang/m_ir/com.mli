@@ -117,7 +117,7 @@ module Var : sig
 
   (** Data on a TGV variable. *)
   type tgv = {
-    table : t Array.t option;
+    table : id Array.t option;
         (** The array of cells if the variable is a table. *)
     alias : string Pos.marked option;  (** Input variable have an alias *)
     descr : string Pos.marked;
@@ -127,13 +127,16 @@ module Var : sig
     cat : CatVar.t;  (** Category *)
     is_given_back : bool;  (** Is the variable 'restituee'? *)
     typ : value_typ option;  (** Optional variable type *)
+    table_cell : (id * int) option;
+        (** Says if the variable is a table cell, ie TAB0 from the table TAB.
+            Payload is the name of the table variable *)
   }
   (** Exhaustive data on a TGV variable. *)
 
   (** Where can the variable be found? *)
   and scope =
     | Tgv of tgv  (** This variable belongs to the TGV. *)
-    | Temp of t Array.t option
+    | Temp of id Array.t option
         (** This variable is temporary, maybe an array. *)
     | Ref  (** This references another variable. *)
 
@@ -156,14 +159,22 @@ module Var : sig
   val name_str : t -> string
   (** Same as [name] without the mark. *)
 
-  val get_table : t -> t Array.t option
+  val get_table : t -> id Array.t option
   (** Returns the table represented by the variable, if relevant. Returns [None]
       on references. *)
+
+  val get_table_cell : t -> (id * int) option
+  (** [get_table_cell var] returns from which array this variable is a cell of.
+  *)
+
+  val set_table_cell : t -> id:id -> idx:int -> t
+  (** [set_table_cell var id idx] sets the variable as a cell of id at index
+      idx. *)
 
   val is_table : t -> bool
   (** Returns true if the variable represents a table. *)
 
-  val set_table : t -> t Array.t option -> t
+  val set_table : t -> id Array.t option -> t
   (** Sets a table to the given variable. *)
 
   val cat_var_loc : t -> CatVar.loc
@@ -231,17 +242,18 @@ module Var : sig
 
   val new_tgv :
     name:string Pos.marked ->
-    table:t Array.t option ->
+    table:id Array.t option ->
     is_given_back:bool ->
     alias:string Pos.marked option ->
     descr:string Pos.marked ->
     attrs:int Pos.marked StrMap.t ->
     cat:CatVar.t ->
     typ:value_typ option ->
+    table_cell:(id * int) option ->
     t
   (** Creates a new tgv variable with a unique id. *)
 
-  val new_temp : name:string Pos.marked -> table:t Array.t option -> t
+  val new_temp : name:string Pos.marked -> table:id Array.t option -> t
   (** Creates a new temporary variable with a unique id. *)
 
   val new_ref : name:string Pos.marked -> t
@@ -325,8 +337,12 @@ type verif_domain = verif_domain_data domain
 (** A literal can either be a float value or undefined. *)
 type literal = Float of float | Undefined
 
-(** A case for switches (aiguillages). *)
-type case = Default | Value of literal
+type origin = string Pos.marked option
+
+type literal_with_orig = { lit : literal; origin : origin }
+(** As constants are replaced by their literal value at some point in the code
+    expansion, this allows to track whether the literal was written as-if, or if
+    it originated from a constant. *)
 
 (** Unary operators *)
 type unop = Not | Minus
@@ -386,18 +402,25 @@ type var_space = (m_var_name * int) option
 (** The prefix of a variable that defines its space. No space is equivalent to
     the default space. *)
 
+type 'v var_id = var_space * 'v
+
 (** A generic representation of an access to a variable, read or write. *)
 type 'v access =
-  | VarAccess of var_space * 'v  (** Simple variable occurence *)
-  | TabAccess of var_space * 'v * 'v m_expression
-      (** Access to a cell of a table *)
+  | VarAccess of 'v var_id  (** Simple variable occurence *)
+  | TabAccess of 'v var_id * 'v m_expression  (** Access to a cell of a table *)
   | FieldAccess of var_space * 'v m_expression * string Pos.marked * int
       (** Call to 'champ_evenement' *)
 
 and 'v m_access = 'v access Pos.marked
 
+and 'v case =
+  | CDefault
+  | CValue of literal
+  | CVar of 'v m_access  (** Switch cases *)
+(* TODO: add location *)
+
 (** Values that can be substituted for loop parameters *)
-and 'v atom = AtomVar of 'v | AtomLiteral of literal
+and 'v atom = AtomVar of 'v | AtomLiteral of literal_with_orig
 
 and 'v set_value_loop =
   | Single of 'v atom Pos.marked
@@ -432,7 +455,7 @@ and 'v expression =
   | FuncCall of func Pos.marked * 'v m_expression list
   | FuncCallLoop of
       func Pos.marked * 'v loop_variables Pos.marked * 'v m_expression
-  | Literal of literal
+  | Literal of literal_with_orig
   | Var of 'v access
   | Loop of 'v loop_variables Pos.marked * 'v m_expression
       (** The loop is prefixed with the loop variables declarations *)
@@ -448,6 +471,28 @@ and 'v expression =
   | NbBloquantes
 
 and 'v m_expression = 'v expression Pos.marked
+
+type const = { id : string; value : literal; pos : Pos.t }
+
+type 'v dep =
+  | Tab of 'v * 'v m_expression
+  | V of 'v
+  | LiteralDep of literal
+  | Const of const
+      (** A type describing the different types of dependencies. Tab for arrays,
+          V for variables, LiteralDep for literals and Const for constants. *)
+
+val get_used_variables : 'v expression -> 'v dep list
+(** [get_used_variables expr] returs the list of dependencies contained in the
+    expression. *)
+
+val mk_atomlit : ?from_const:string Pos.marked -> literal -> 'v atom
+(** [mk_atomtit ?constname lit] makes a Literal atom with the name of the const
+    as origin if provided. *)
+
+val mk_lit : ?from_const:string Pos.marked -> literal -> 'v expression
+(** [mk_atomtit ?constname lit] makes a Literal expression with the name of the
+    const as origin if provided. *)
 
 (** Handling of errors. *)
 module Error : sig
@@ -524,6 +569,10 @@ type stop_kind =
 
 (** {2 Instructions} *)
 
+type 'v switch_expression =
+  | SEValue of 'v m_expression
+  | SESameVariable of 'v m_access
+
 type ('v, 'e) instruction =
   | Affectation of 'v formula Pos.marked
   | IfThenElse of
@@ -560,7 +609,8 @@ type ('v, 'e) instruction =
       * ('v * 'v m_expression) option
       * 'v m_expression option
       * ('v, 'e) m_instruction list
-  | Switch of ('v m_expression * (case list * ('v, 'e) m_instruction list) list)
+  | Switch of
+      ('v switch_expression * ('v case list * ('v, 'e) m_instruction list) list)
   | RaiseError of 'e Pos.marked * string Pos.marked option
   | CleanErrors
   | CleanFinalizedErrors
@@ -581,6 +631,8 @@ type ('v, 'e) target = {
   target_sz_tmps : int;
   target_nb_refs : int;
   target_prog : ('v, 'e) m_instruction list;
+  target_stoppable : bool;
+      (** [true] <=> the target can be stopped by a 'stop' instruction *)
 }
 (** A target is a list of instructions. They are very similar to rules, except
     targets are entrypoints of the M program. *)
@@ -628,13 +680,20 @@ val get_var_name : var_name -> string
 
 val get_normal_var : var_name -> string
 
+val function_arity : func -> int option
+(** Returns the arity of a function, or None if there is no limit. *)
+
+val compare_value_typ : value_typ -> value_typ -> int
+
+val compare_var_space : var_space -> var_space -> int
+
 (** {2 Pretty printing functions} *)
 
 val format_value_typ : Pp.t -> value_typ -> unit
 
 val format_literal : Pp.t -> literal -> unit
 
-val format_case : Pp.t -> case -> unit
+val format_case : (Pp.t -> 'v -> unit) -> Pp.t -> 'v case -> unit
 
 val format_atom : (Pp.t -> 'v -> unit) -> Pp.t -> 'v atom -> unit
 
@@ -647,12 +706,9 @@ val format_binop : Pp.t -> binop -> unit
 
 val format_comp_op : Pp.t -> comp_op -> unit
 
-val format_set_value :
-  (Pp.t -> 'v -> unit) ->
-  (Pp.t -> 'v expression -> unit) ->
-  Pp.t ->
-  'v set_value ->
-  unit
+val format_access : (Pp.t -> 'v -> unit) -> Pp.t -> 'v access -> unit
+
+val format_set_value : (Pp.t -> 'v -> unit) -> Pp.t -> 'v set_value -> unit
 
 val format_func : Pp.t -> func -> unit
 

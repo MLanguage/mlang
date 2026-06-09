@@ -8,6 +8,7 @@
 
 GCC=gcc
 MUSL_HOME?=/usr/local/musl
+OPTIM_FLAG?=
 
 ##################################################
 # Tax computation configuration
@@ -16,40 +17,41 @@ MUSL_HOME?=/usr/local/musl
 MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
+REPO?=ir
 # Add a TESTS_DIR for 2024 when available
-ifeq ($(filter $(YEAR), 2024 2025), $(YEAR))
-	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
-	SOURCE_EXT_FILES?=\
-		$(SOURCE_EXT_DIR)/cibles.m \
-		$(SOURCE_EXT_DIR)/codes_1731.m \
-		$(SOURCE_EXT_DIR)/commence_par_5.m \
-		$(SOURCE_EXT_DIR)/commence_par_7.m \
-		$(SOURCE_EXT_DIR)/commence_par_H.m \
-		$(SOURCE_EXT_DIR)/correctif.m \
-		$(SOURCE_EXT_DIR)/main.m
-	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-else ifeq ($(filter $(YEAR), 2022 2023), $(YEAR))
-	SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
-	SOURCE_EXT_FILES?=\
-		$(SOURCE_EXT_DIR)/cibles.m \
-		$(SOURCE_EXT_DIR)/codes_1731.m \
-		$(SOURCE_EXT_DIR)/commence_par_5.m \
-		$(SOURCE_EXT_DIR)/commence_par_7.m \
-		$(SOURCE_EXT_DIR)/commence_par_H.m \
-		$(SOURCE_EXT_DIR)/correctif.m \
-		$(SOURCE_EXT_DIR)/main.m
-	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+ifeq ($(REPO),svn)
+  SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
+  SOURCE_EXT_FILES?=\
+    $(SOURCE_EXT_DIR)/cibles.m \
+    $(SOURCE_EXT_DIR)/codes_1731.m \
+    $(SOURCE_EXT_DIR)/commence_par_5.m \
+    $(SOURCE_EXT_DIR)/commence_par_7.m \
+    $(SOURCE_EXT_DIR)/commence_par_H.m \
+    $(SOURCE_EXT_DIR)/correctif.m \
+    $(SOURCE_EXT_DIR)/main.m
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 2022 2023 2024 2025), $(YEAR))
+  SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+  SOURCE_EXT_FILES?=\
+    $(SOURCE_EXT_DIR)/cibles.m \
+    $(SOURCE_EXT_DIR)/codes_1731.m \
+    $(SOURCE_EXT_DIR)/commence_par_5.m \
+    $(SOURCE_EXT_DIR)/commence_par_7.m \
+    $(SOURCE_EXT_DIR)/commence_par_H.m \
+    $(SOURCE_EXT_DIR)/correctif.m \
+    $(SOURCE_EXT_DIR)/main.m
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
 else ifeq ($(filter $(YEAR), 2018 2019 2020 2021), $(YEAR))
-	SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+  SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+  SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
 else ifeq ($(filter $(YEAR), 0), $(YEAR))
-	SOURCE_FILES?=#$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
-	SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
-	TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
+  SOURCE_FILES?=#$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+  SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
-	$(warning WARNING: there is no default configuration for year: $(YEAR))
-	$(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+  $(warning WARNING: there is no default configuration for year: $(YEAR))
+  $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
 endif
 
 ##################################################
@@ -78,12 +80,10 @@ endif
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
 COMMON_CFLAGS?=-std=c89 -pedantic
-ifeq ($(CC), clang)
-  COMPILER_SPECIFIC_CFLAGS=-O2
-#  COMPILER_SPECIFIC_CFLAGS=
-else ifeq ($(CC), gcc)
-  COMPILER_SPECIFIC_CFLAGS=-O1
+ifdef OPTIM_FLAG
+  COMPILER_SPECIFIC_CFLAGS=-O$(OPTIM_FLAG)
 endif
+
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
@@ -132,3 +132,6 @@ MAKE_DGFIP_CALC=$(MAKE) --no-print-directory -f $(ROOT_DIR)/Makefile -C $(ROOT_D
 
 IRJ_BIN=irj_checker
 IRJ_TESTS_DIRS?=tests/2019 tests/2020 tests/2022 tests/2023
+
+INTERP_PROGRESS=examples/dgfip_c/ml_primitif/.interpreter_progress
+MLANG_HASH=examples/dgfip_c/ml_primitif/.mlang.hash

@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <assert.h>
+#include <time.h>
 
 #include <utils.h>
 #include <mem.h>
@@ -267,7 +269,7 @@ void initDefs(T_irdata *tgv, L_S_varVal defs) {
   }
 }
 
-int traitement(char *chemin, T_options opts) {
+T_traitement traitement(char *chemin, T_options opts) {
   T_tas tasTrt = NULL;
   T_fich fich = NULL;
   T_irj irj = NULL;
@@ -284,6 +286,9 @@ int traitement(char *chemin, T_options opts) {
   int anneeCalc = 0;
   int anneeRevenu = 0;
   int ok = 1;
+  uint64_t temps_ms = 0;
+  clock_t start, end;
+  T_traitement result;
 
   tasTrt = memCreeTas();
   estCorr = FAUX;
@@ -418,15 +423,23 @@ int traitement(char *chemin, T_options opts) {
   ecrisVar(tgv, "ANCSDED", 1, opts->args.trt.annee);
   ecrisVar(tgv, "V_MILLESIME", 1, anneeCalc);
   switch (opts->args.trt.mode) {
+    /* do stuff */
+
     case Primitif:
       initDefs(tgv, opts->args.trt.defs);
+      start = clock();
       enchainement_primitif_interpreteur(tgv);
+      end = clock ();
+      temps_ms = (end -  start) * 1000 / CLOCKS_PER_SEC; 
       ok = controleResultat(tasTrt, opts, tgv, resPrim, ctlPrim);
       break;
     case Correctif:
       ecrisVar(tgv, "MODE_CORR", 1, 1.0);
       initDefs(tgv, opts->args.trt.defs);
+      start = clock();
       enchainement_primitif_interpreteur(tgv);
+      end = clock ();
+      temps_ms = (end -  start) * 1000 / CLOCKS_PER_SEC; 
       ok = controleResultat(tasTrt, opts, tgv, resRap, ctlRap);
       break;
   }
@@ -436,5 +449,7 @@ fin:
   memLibere(nom);
   fermeFich(fich);
   memLibereTas(tasTrt);
-  return ok;
+  result.ok = ok;
+  result.temps_ms = temps_ms;
+  return result;
 }

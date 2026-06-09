@@ -1,5 +1,12 @@
 module VID = Dgfip_varid
 
+let fresh_c_local =
+  let c = ref 0 in
+  fun name ->
+    let s = name ^ string_of_int !c in
+    incr c;
+    s
+
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
   try
@@ -24,7 +31,7 @@ type local_var =
 (* declared local variable, either M local or locally bound in the constructors
    below *)
 
-type dflag = Def | Val (* distinguish C types int and double *)
+type dflag = Def | Val | VarInfo | VarSpace
 
 type stack_slot = { kind : dflag; depth : int }
 
@@ -33,6 +40,8 @@ type stack_assignment = { slot : stack_slot; subexpr : expr }
 and local_stacks = {
   def_top : int;
   val_top : int;
+  var_top : int;
+  spa_top : int;
   var_substs : (int * (expr * dflag)) list;
 }
 
@@ -43,14 +52,23 @@ and expr =
   | Dfalse
   | Dlit of float
   | Dvar of expr_var
-  | Dand of expr * expr
-  | Dor of expr * expr
+  | Dvarinfo of varinfo_access
+  | Dvarspace of Com.var_space * Com.Var.t option
+    (* If var is a ref, using it to get the var space *)
+  | Dand of expr list
+  | Dor of expr list
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
   | Dite of expr * expr * expr
+  | Dtyp of Com.value_typ
   | Dinstr of string
   | Ddirect of expr
+
+and varinfo_access =
+  | VIvar of Com.Var.t
+  | VItab of Com.Var.t * expr * expr (* variable, var_def, var_val *)
+  | VIfield of expr * expr * string (* var_def, var_val, field *)
 
 and expr_var = Local of stack_slot | M of Com.var_space * Com.Var.t * dflag
 
@@ -66,6 +84,116 @@ type expression_composition = {
 
 type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
 
+let dflag_id = function Def -> 0 | Val -> 1 | VarInfo -> 2 | VarSpace -> 3
+
+module Optim = struct
+  let rec compare_expr e e' =
+    match (e, e') with
+    | Dtrue, Dtrue | Dfalse, Dfalse -> 0
+    | Dlit f, Dlit f' -> Float.compare f f'
+    | Dvar e, Dvar e' -> compare_expr_var e e'
+    | Dvarinfo v, Dvarinfo v' -> compare_varinfo_access v v'
+    | Dvarspace (vs, v), Dvarspace (vs', v') ->
+        let vsc = Com.compare_var_space vs vs' in
+        if vsc <> 0 then vsc else Option.compare Com.Var.compare v v'
+    | Dand e, Dand e' | Dor e, Dor e' -> List.compare compare_expr e e'
+    | Dunop (s, e), Dunop (s', e') ->
+        let str = String.compare s s' in
+        if str <> 0 then str else compare_expr e e'
+    | Dbinop (s, e1, e2), Dbinop (s', e1', e2') ->
+        let str = String.compare s s' in
+        if str <> 0 then str
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | Dfun (s, l), Dfun (s', l') ->
+        let str = String.compare s s' in
+        if str <> 0 then str else List.compare compare_expr l l'
+    | Dite (c, t, e), Dite (c', t', e') ->
+        let cc = compare_expr c c' in
+        if cc <> 0 then cc
+        else
+          let tc = compare_expr t t' in
+          if tc <> 0 then tc else compare_expr e e'
+    | Dtyp t, Dtyp t' -> Com.compare_value_typ t t'
+    | Dinstr s, Dinstr s' -> String.compare s s'
+    | Ddirect e, Ddirect e' -> compare_expr e e'
+    | Dtrue, _ -> 1
+    | _, Dtrue -> -1
+    | Dfalse, _ -> 1
+    | _, Dfalse -> -1
+    | Dlit _, _ -> 1
+    | _, Dlit _ -> -1
+    | Dvar _, _ -> 1
+    | _, Dvar _ -> -1
+    | Dvarinfo _, _ -> 1
+    | _, Dvarinfo _ -> -1
+    | Dvarspace _, _ -> 1
+    | _, Dvarspace _ -> -1
+    | Dand _, _ -> 1
+    | _, Dand _ -> -1
+    | Dor _, _ -> 1
+    | _, Dor _ -> -1
+    | Dunop _, _ -> 1
+    | _, Dunop _ -> -1
+    | Dbinop _, _ -> 1
+    | _, Dbinop _ -> -1
+    | Dfun _, _ -> 1
+    | _, Dfun _ -> -1
+    | Dite _, _ -> 1
+    | _, Dite _ -> -1
+    | Dtyp _, _ -> 1
+    | _, Dtyp _ -> -1
+    | Dinstr _, _ -> 1
+    | _, Dinstr _ -> -1
+
+  and compare_expr_var e e' =
+    match (e, e') with
+    | Local { kind = k; depth = d }, Local { kind = k'; depth = d' } ->
+        let kc = Int.compare (dflag_id k) (dflag_id k') in
+        if kc <> 0 then kc else Int.compare d d'
+    | M (vs, v, d), M (vs', v', d') ->
+        let vsc = Com.compare_var_space vs vs' in
+        if vsc <> 0 then vsc
+        else
+          let vc = Com.Var.compare v v' in
+          if vc <> 0 then vc else Int.compare (dflag_id d) (dflag_id d')
+    | Local _, _ -> 1
+    | _, Local _ -> -1
+
+  and compare_varinfo_access v v' =
+    match (v, v') with
+    | VIvar v, VIvar v' -> Com.Var.compare v v'
+    | VItab (v, e1, e2), VItab (v', e1', e2') ->
+        let vc = Com.Var.compare v v' in
+        if vc <> 0 then vc
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | VIfield (e1, e2, s), VIfield (e1', e2', s') ->
+        let sc = String.compare s s' in
+        if sc <> 0 then sc
+        else
+          let e1c = compare_expr e1 e1' in
+          if e1c <> 0 then e1c else compare_expr e2 e2'
+    | VIvar _, _ -> 1
+    | _, VIvar _ -> -1
+    | VItab _, _ -> 1
+    | _, VItab _ -> -1
+
+  let unique_expr_list = List.sort_uniq compare_expr
+
+  let dor l =
+    if Utils.Config.optim_no_redundant_boolean_formulae () then
+      Dor (unique_expr_list l)
+    else Dor l
+
+  let dand l =
+    if Utils.Config.optim_no_redundant_boolean_formulae () then
+      Dand (unique_expr_list l)
+    else Dand l
+end
+
 let is_always_true ((expr, _kind, _lv) : t) = expr = Dtrue
 
 let cast (kind : dflag) (expr : expr) =
@@ -75,6 +203,12 @@ let cast (kind : dflag) (expr : expr) =
   | Dlit 0., Def -> Dfalse
   | Dlit _, Def -> Dtrue
   | _, Def -> Dbinop ("!=", expr, Dlit 0.)
+  | Dvarinfo _, VarInfo -> expr
+  | Dvarspace _, VarSpace -> expr
+  | Dvarinfo _, _ -> failwith "Invalid cast of varinfo"
+  | _, VarInfo -> failwith "Invalid cast to varinfo"
+  | Dvarspace _, _ -> failwith "Invalid cast of varspace"
+  | _, VarSpace -> failwith "Invalid cast to varspace"
   | _, Val -> expr
 
 (** local stacks operations *)
@@ -83,6 +217,8 @@ let bump_stack (kind : dflag) (st : local_stacks) =
   match kind with
   | Def -> { st with def_top = st.def_top + 1 }
   | Val -> { st with val_top = st.val_top + 1 }
+  | VarInfo -> { st with var_top = st.var_top + 1 }
+  | VarSpace -> { st with spa_top = st.spa_top + 1 }
 
 let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
     (expr : expr) =
@@ -91,17 +227,21 @@ let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
   | Refered v -> { st with var_substs = (v, (expr, kind)) :: st.var_substs }
 
 let stack_top (kind : dflag) (st : local_stacks) =
-  match kind with Def -> st.def_top | Val -> st.val_top
+  match kind with
+  | Def -> st.def_top
+  | Val -> st.val_top
+  | VarInfo -> st.var_top
+  | VarSpace -> st.spa_top
 
 let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
+  depth < stack_top kind st
 
 let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
+  depth = stack_top kind st
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
-  | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
+  | Dtrue | Dfalse | Dlit _ | Dvar (M _) | Dtyp _ -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
@@ -116,7 +256,9 @@ let rec expr_position (expr : expr) (st : local_stacks) =
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
   | Ddirect _ -> Not_to_stack
-  | _ -> Must_be_pushed
+  | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _
+  | Dvarinfo _ | Dvarspace _ ->
+      Must_be_pushed
 
 (* allocate to local variable if necessary *)
 let store_local (stacks : local_stacks) (ctx : local_vars) (v : local_var)
@@ -222,7 +364,10 @@ let dand (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   | _, Dtrue -> (e1, Def, lv1)
   | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
+  | Dand l1, Dand l2 -> (Optim.dand (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dand l -> (Optim.dand (e1 :: l), Def, lv2 @ lv1)
+  | Dand l, _ -> (Optim.dand (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Optim.dand [ e1; e2 ], Def, lv2 @ lv1)
 
 let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
     t =
@@ -233,7 +378,10 @@ let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
   | Dfalse, _ -> (e2, Def, lv2)
   | _, Dfalse -> (e1, Def, lv1)
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
+  | Dor l1, Dor l2 -> (Optim.dor (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dor l -> (Optim.dor (e1 :: l), Def, lv2 @ lv1)
+  | Dor l, _ -> (Optim.dor (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Optim.dor [ e1; e2 ], Def, lv2 @ lv1)
 
 let dnot (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let _, lv, e = push_with_kind stacks ctx Def e in
@@ -313,11 +461,7 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
   let comp (o : Com.comp_op) =
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
-        if
-          Mir_interpreter.FloatDefInterp.compare_numbers o
-            (Mir_number.RegularFloatNumber.of_float f1)
-            (Mir_number.RegularFloatNumber.of_float f2)
-        then Dtrue
+        if M_ir.Mir_number.RegularFloatNumber.compare o f1 f2 then Dtrue
         else Dfalse
     | Dvar v1, Dvar v2 ->
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
@@ -340,12 +484,30 @@ let dfun (f : string) (args : constr list) (stacks : local_stacks)
   let (_, lv), args =
     List.fold_left_map
       (fun (stacks, lv) e ->
-        let stacks, lv', e = push_with_kind stacks ctx Val e in
+        let stacks, lv', e, _ = push stacks ctx e in
         ((stacks, lv' @ lv), e))
       (stacks, []) args
   in
   (* TODO : distinguish kinds *)
   (Dfun (f, args), Val, lv)
+
+let dvarinfo v _ _ = (Dvarinfo (VIvar v), VarInfo, [])
+
+let dvarinfo_tab ~tab ~def ~value stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VItab (tab, def, value)), VarInfo, lv @ lv')
+
+let dvarinfo_field ~def ~value ~field stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VIfield (def, value, field)), VarInfo, lv @ lv')
+
+let dvarspace_current m_sp_opt _ _ = (Dvarspace (m_sp_opt, None), VarSpace, [])
+
+let dvarspace_of (m_sp_opt, v) _ _ = (Dvarspace (m_sp_opt, Some v), VarSpace, [])
+
+let dtyp t _ _ = (Dtyp t, Def, [])
 
 let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
   (Dinstr i, Val, [])
@@ -353,6 +515,8 @@ let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
 let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   let expr, flags, ctx = c stacks ctx in
   (Ddirect expr, flags, ctx)
+
+let irdata = ddirect @@ dinstr "irdata"
 
 let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
     (ctx : local_vars) : t =
@@ -377,12 +541,16 @@ let it0 (c : constr) (t : constr) (stacks : local_stacks) (ctx : local_vars) : t
      avoid casting later *)
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
   let _, lvt, t, tkind = push stacks' ctx t in
-  let e, ekind =
-    match tkind with Def -> (Dfalse, Def) | Val -> (Dlit 0., Val)
+  let e =
+    match tkind with
+    | Def -> Dfalse
+    | Val -> Dlit 0.
+    | VarInfo -> failwith "Cannot make an IT with a VarInfo"
+    | VarSpace -> failwith "Cannot make an IT with a VarSpace"
   in
   match (c, t) with
   | Dtrue, _ -> (t, tkind, lvt)
-  | Dfalse, _ -> (e, ekind, [])
+  | Dfalse, _ -> (e, tkind, [])
   | _, (Dlit 1. | Dtrue) -> (c, Def, lvc)
   | _, (Dlit 0. | Dfalse) -> (t, tkind, [])
   | _ -> (Dite (c, t, e), tkind, lvt @ lvc)
@@ -398,13 +566,54 @@ let build_transitive_composition ?(safe_def = false)
   let value_comp = if safe_def then value_comp else it0 def_test value_comp in
   { set_vars; def_test; value_comp }
 
-type local_decls = int * int (* in practice, stacks sizes *)
+let dfun_with_ptr (f : string)
+    (args : ptrdef:constr -> ptrval:constr -> constr list) :
+    expression_composition =
+  let res = fresh_c_local "res" in
+  let res_def = Pp.spr "%s_def" res in
+  let res_val = Pp.spr "%s_val" res in
+  let res_def_ptr = Pp.spr "&%s" res_def in
+  let res_val_ptr = Pp.spr "&%s" res_val in
+  let d_fun =
+    dfun f
+      (args
+         ~ptrdef:(ddirect @@ dinstr res_def_ptr)
+         ~ptrval:(ddirect @@ dinstr res_val_ptr))
+  in
+  let set_vars =
+    [ (Def, res_def, d_fun); (Val, res_val, ddirect (dinstr res_val)) ]
+  in
+  let def_test = dinstr res_def in
+  let value_comp = dinstr res_val in
+  build_transitive_composition { set_vars; def_test; value_comp }
+
+let eundefined () = { set_vars = []; def_test = dfalse; value_comp = lit 0. }
+
+let elit f = { set_vars = []; def_test = dtrue; value_comp = lit f }
+
+type local_decls = {
+  def_stk_size : int;
+  val_stk_size : int;
+  var_stk_size : int;
+  var_spa_size : int;
+}
+(* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
    further construction. *)
 let build_expression (expr_comp : expression_composition) :
     local_decls * (dflag * string * t) list * t * t =
-  let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
+  let empty_stacks =
+    { def_top = 0; val_top = 0; var_top = 0; spa_top = 0; var_substs = [] }
+  in
+  let empty_local_decls =
+    {
+      def_stk_size = -1;
+      val_stk_size = -1;
+      var_stk_size = -1;
+      var_spa_size = -1;
+    }
+  in
   let empty_locals = [] in
   let set_tests =
     List.map
@@ -423,17 +632,25 @@ let build_expression (expr_comp : expression_composition) :
   in
   let stacks_size =
     List.fold_left
-      (fun (def_s, val_s) (_, { slot; _ }) ->
+      (fun ld (_, { slot; _ }) ->
         match slot.kind with
-        | Def -> (max slot.depth def_s, val_s)
-        | Val -> (def_s, max slot.depth val_s))
-      (-1, -1)
+        | Def -> { ld with def_stk_size = max slot.depth ld.def_stk_size }
+        | Val -> { ld with val_stk_size = max slot.depth ld.val_stk_size }
+        | VarInfo -> { ld with var_stk_size = max slot.depth ld.var_stk_size }
+        | VarSpace -> { ld with var_spa_size = max slot.depth ld.var_spa_size })
+      empty_local_decls
       (set_locals @ def_locals @ value_locals)
   in
   (stacks_size, set_tests, def_test, value_comp)
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
-  let kind = match kind with Def -> "int" | Val -> "real" in
+  let kind =
+    match kind with
+    | Def -> "int"
+    | Val -> "real"
+    | VarInfo -> "varinfo"
+    | VarSpace -> "space"
+  in
   Format.fprintf fmt "%s%d" kind depth
 
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
@@ -459,12 +676,18 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
   | Dvar evar -> format_expr_var dgfip_flags fmt evar
-  | Dand (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1 format_dexpr
-        de2
-  | Dor (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
-        de2
+  | Dand l ->
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " && ")
+           format_dexpr)
+        l
+  | Dor l ->
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " || ")
+           format_dexpr)
+        l
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
   | Dbinop (op, de1, de2) -> begin
       match op with
@@ -496,21 +719,42 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
+  | Dvarinfo v -> format_varinfo dgfip_flags fmt v
+  | Dvarspace (m_sp_opt, v_opt) ->
+      Format.fprintf fmt "@[%s@]"
+        (match v_opt with
+        | Some v -> VID.gen_var_space_id m_sp_opt v
+        | None -> VID.gen_var_space_id_opt m_sp_opt)
+  | Dtyp t -> Format.fprintf fmt "@[%s@]" @@ VID.gen_typ t
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
 
-let rec format_local_declarations fmt
-    ((def_stk_size, val_stk_size) : local_decls) =
-  if def_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" def_stk_size;
-    format_local_declarations fmt (def_stk_size - 1, val_stk_size))
-  else if val_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" val_stk_size;
-    format_local_declarations fmt (def_stk_size, val_stk_size - 1))
-  else ()
+and format_varinfo dgfip_flags fmt : varinfo_access -> unit = function
+  | VIvar v -> Format.fprintf fmt "%s" (VID.gen_info_ptr v)
+  | VItab (v, def, value) ->
+      Format.fprintf fmt "@[lis_tabaccess_varinfo(irdata, %d, %a, %a)@]"
+        (Com.Var.loc_tab_idx v) (format_dexpr dgfip_flags) def
+        (format_dexpr dgfip_flags) value
+  | VIfield (def, value, field) ->
+      Format.fprintf fmt "@[event_field_%s_var(irdata, %a, %a)@]" field
+        (format_dexpr dgfip_flags) def (format_dexpr dgfip_flags) value
+
+let format_local_declarations fmt (ld : local_decls) =
+  for i = 0 to ld.def_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" i
+  done;
+  for i = 0 to ld.val_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" i
+  done;
+  for i = 0 to ld.var_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>T_varinfo* varinfo%d;@]" i
+  done;
+  for i = 0 to ld.var_spa_size do
+    Format.fprintf fmt "@;@[<hov 2>int space%d;@]" i
+  done
 
 let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
     (lv : local_vars) =
@@ -531,9 +775,160 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
   List.iter
     (fun ((kd, vn, _expr) : dflag * string * t) ->
-      Pp.fpr fmt "@;%s %s;" (match kd with Def -> "char" | Val -> "double") vn)
+      Pp.fpr fmt "@;%s %s;"
+        (match kd with
+        | Def -> "char"
+        | Val -> "double"
+        | VarInfo -> "T_varinfo*"
+        | VarSpace -> "int")
+        vn)
     set_vars;
   List.iter
     (fun ((_kd, vn, expr) : dflag * string * t) ->
       format_assign dgfip_flags vn fmt expr)
     set_vars
+
+module Func = struct
+  let supzero se =
+    let set_vars = se.set_vars in
+    let cond = dand se.def_test (comp ">=" se.value_comp (lit 0.0)) in
+    let def_test = ite cond dfalse se.def_test in
+    let value_comp = ite cond (lit 0.0) se.value_comp in
+    build_transitive_composition { set_vars; def_test; value_comp }
+
+  let present se =
+    let set_vars = se.set_vars in
+    let def_test = dtrue in
+    let value_comp = se.def_test in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let null se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dand def_test (comp "==" se.value_comp (lit 0.0)) in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let arr se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "my_arr" [ se.value_comp ] in
+    (* Here we boldly assume that rounding value of `undef` will give zero,
+       given the invariant. Pretty sure that not true, in case of doubt, turn
+       `safe_def` to false *)
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let inf se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "my_floor" [ se.value_comp ] in
+    (* same as above *)
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let abs se =
+    let set_vars = se.set_vars in
+    let def_test = se.def_test in
+    let value_comp = dfun "fabs" [ se.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let max se1 se2 =
+    let set_vars = se1.set_vars @ se2.set_vars in
+    let def_test = dor se1.def_test se2.def_test in
+    let value_comp = dfun "max" [ se1.value_comp; se2.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let min se1 se2 =
+    let set_vars = se1.set_vars @ se2.set_vars in
+    let def_test = dor se1.def_test se2.def_test in
+    let value_comp = dfun "min" [ se1.value_comp; se2.value_comp ] in
+    build_transitive_composition ~safe_def:true
+      { set_vars; def_test; value_comp }
+
+  let multimax e (m_sp_opt, v) =
+    let ptr = VID.gen_info_ptr v in
+    let d_fun =
+      dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
+          [
+            ddirect @@ dinstr "irdata";
+            ddirect @@ dinstr @@ VID.gen_var_space_id m_sp_opt v;
+            ddirect @@ dinstr ptr;
+            e.def_test;
+            e.value_comp;
+            ptrdef;
+            ptrval;
+          ])
+    in
+    { d_fun with set_vars = e.set_vars @ d_fun.set_vars }
+
+  let nb_events () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_evenements" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_anomalies () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_anomalies" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_discordances () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_discordances" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_informatives () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_informatives" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let nb_bloquantes () =
+    let def_test = dtrue in
+    let value_comp = dfun "nb_bloquantes" [ irdata ] in
+    build_transitive_composition { set_vars = []; def_test; value_comp }
+
+  let call fn args =
+    let set_vars, arg_exprs =
+      let rec aux (set_vars, arg_exprs) = function
+        | [] -> (List.rev set_vars, List.rev arg_exprs)
+        | e :: la ->
+            let set_vars = List.rev e.set_vars @ set_vars in
+            let arg_exprs = e.value_comp :: e.def_test :: arg_exprs in
+            aux (set_vars, arg_exprs) la
+      in
+      aux ([], []) args
+    in
+    let d_fun =
+      dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+          irdata :: ptrdef :: ptrval :: arg_exprs)
+    in
+    { d_fun with set_vars = set_vars @ d_fun.set_vars }
+end
+
+let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
+    =
+  let pr form = Format.fprintf oc form in
+  if is_always_true def then
+    pr "@;@[<v 2>{%a%a%a%a@]@;}" format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def
+      (format_assign dgfip_flags res_val)
+      value
+  else
+    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
+      format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def res_def
+      (format_assign dgfip_flags res_val)
+      value res_val
+
+let write_c_expr dgfip_flags oc res_def res_val expr =
+  expr |> build_expression
+  |> write_decoupled_expr dgfip_flags oc res_def res_val

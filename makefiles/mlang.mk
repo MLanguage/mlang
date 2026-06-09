@@ -19,7 +19,7 @@ init-without-switch: FORCE
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	opam install . --deps-only
+	opam install . --deps-only --yes
 	git submodule init ir-calcul
 	git submodule update ir-calcul
 endif
@@ -46,16 +46,28 @@ format: FORCE
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	dune build @fmt --auto-promote | true
+	opam exec -- dune build @fmt --auto-promote | true
 endif
 
+.ONESHELL:
 dune: FORCE
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	echo $(shell pwd)
+	echo $$(pwd)
+	OLDHASH=$$(cat $(MLANG_HASH))
 	sed -i 's/(version %%VERSION%%)/(version ${shell git describe --always --dirty --tag})/' dune-project
-	LINKING_MODE=$(LINKING_MODE) dune build $(DUNE_OPTIONS)
+	LINKING_MODE='$(LINKING_MODE)' opam exec -- dune build $(DUNE_OPTIONS)
+	sha1sum _build/default/src/main.exe | awk '{print $$1}' > $(MLANG_HASH)
+	HASH=$$(cat $(MLANG_HASH))
+	echo "OLDHASH: '$$OLDHASH'"
+	echo "HASH: '$$HASH'"
+	if [ "$$HASH" = "$$OLDHASH" ]; then \
+		echo "binary is the same"; \
+	else \
+		echo "binary is new"; \
+		rm -f $(INTERP_PROGRESS)
+	fi
 	$(call make_in_raw,,remise_a_zero_versionnage)
 endif
 
@@ -85,34 +97,34 @@ test: FORCE build-dev
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	OCAMLRUNPARAM=b $(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	OCAMLRUNPARAM=b opam exec -- $(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 # use: TESTS_DIR=bla make test
-tests: FORCE build
+tests: FORCE build-release
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	$(MLANG_TEST) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR)/ $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	opam exec -- $(MLANG_TEST) $(MLANGOPTS) --run_all_tests=$(TESTS_DIR)/ $(TEST_FILTER_FLAG) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 test_one: FORCE build-dev
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	OCAMLRUNPARAM=b $(MLANG_TEST) --run_test=$(TESTS_DIR)/$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	OCAMLRUNPARAM=b opam exec -- $(MLANG_TEST) --run_test=$(TESTS_DIR)/$(TEST_ONE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 test_file: FORCE build-dev
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	OCAMLRUNPARAM=b $(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
+	OCAMLRUNPARAM=b opam exec -- $(MLANG_TEST) --run_test=$(TEST_FILE) $(SOURCE_FILES) $(SOURCE_EXT_FILES)
 endif
 
 test_irj: FORCE build-dev
 	@for dir in $(IRJ_TESTS_DIRS); do \
-		OCAMLRUNPARAM=b dune exec -- irj_checker $$dir -mhuman; \
+		OCAMLRUNPARAM=b opam exec -- dune exec -- irj_checker $$dir -mhuman; \
 		if [ $$? -ne 0 ]; \
 		then \
 			echo "Failed test $$dir"; \
@@ -121,7 +133,7 @@ test_irj: FORCE build-dev
 	done;
 
 test_cram:
-	dune build @runtest
+	opam exec -- dune build @runtest
 
 ##################################################
 # Doc
@@ -143,16 +155,18 @@ sphinx-doc: FORCE build dev-doc
 	mkdir -p $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
 	cp -r $(shell pwd)/_build/default/_doc/_html/* $(TARGET_DIR_SPHINX_DOC_SRC)/_static/dev
 	.venv/bin/sphinx-build -M html $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
+
+latex-doc: sphinx-doc
 	.venv/bin/sphinx-build -M latexpdf $(TARGET_DIR_SPHINX_DOC_SRC) $(TARGET_DIR_DOC_BUILD)
 
-dev-doc: FORCE build
+dev-doc:
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
-	dune build @doc
+	opam exec -- dune build @doc
 endif
 
-doc: FORCE build dev-doc sphinx-doc
+doc: dev-doc sphinx-doc
 ifeq ($(call is_in,),)
 	$(call make_in,,$@)
 else
