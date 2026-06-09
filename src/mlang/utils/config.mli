@@ -1,3 +1,9 @@
+type optim =
+  | All_optims
+  | Local_vars_for_arrays
+  | No_check_unstoppable_rules
+  | No_redundant_boolean_formulae
+
 (** According on the [value_sort], a specific interpreter will be called with
     the right kind of floating-point value *)
 type value_sort =
@@ -130,6 +136,12 @@ val trace_output : trace_output ref
 
 val message_format : message_format ref
 
+val optim_local_var_for_arrays : unit -> bool
+
+val optim_no_check_unstoppable : unit -> bool
+
+val optim_no_redundant_boolean_formulae : unit -> bool
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -156,4 +168,5 @@ val set_opts :
   trace:bool ->
   trace_output_file:string option ->
   message_format:message_format ->
+  optims:optim list ->
   [ `Displayed_dgfip_help | `Error of Err.t | `Run ]

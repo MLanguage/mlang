@@ -183,9 +183,15 @@ module Optim = struct
 
   let unique_expr_list = List.sort_uniq compare_expr
 
-  let dor l = Dor (unique_expr_list l)
+  let dor l =
+    if Utils.Config.optim_no_redundant_boolean_formulae () then
+      Dor (unique_expr_list l)
+    else Dor l
 
-  let dand l = Dand (unique_expr_list l)
+  let dand l =
+    if Utils.Config.optim_no_redundant_boolean_formulae () then
+      Dand (unique_expr_list l)
+    else Dand l
 end
 
 let is_always_true ((expr, _kind, _lv) : t) = expr = Dtrue
