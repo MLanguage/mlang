@@ -14,24 +14,14 @@ type dflag = Def | Val | VarInfo | VarSpace
     expressions so they can be expressed independantly and more thoroughtly
     optimized. Definition of such expression follows as such:
 
-    - Express the computation of definess and valuation independantly through
-      the use of constructors in {!section:constr}
-    - Sub-expressions can be used to build up the M expression tree (see
-      {!expression_composition})
-    - A fully defined expression can be processed into a optimized value that
+    - express the computation of definess and valuation independantly through
+      the use of constructors in {!section:constr};
+    - sub-expressions can be used to build up the M expression tree (see
+      {!expression_composition});
+    - the dependency between local variables used throughout the computation by
+      delaying their construction within ({!builder});
+    - a fully defined expression can be processed into a optimized value that
       can be printed ({!build_expression}) *)
-
-(** {2 Local variables} *)
-
-type local_var
-(** Variable local to the computed expression *)
-
-val locals_from_m : unit -> local_var * local_var
-(** Return a couple of local variable from a MIR one, for defineness and
-    valuation in this order. *)
-
-val new_local : unit -> local_var
-(** Create a fresh local variable *)
 
 (** {2:constr Expression constructors} *)
 
@@ -50,93 +40,9 @@ val new_local : unit -> local_var
 
     where [x] and [y] are previously defined {!local_var}s *)
 
-type constr
-(** Constructed decoupled expression *)
+module DE : Def_expr.S with type expr = Constr.t
 
-val dtrue : constr
-(** True value *)
-
-val dfalse : constr
-(** False value *)
-
-val lit : float -> constr
-(** Float literal *)
-
-val irdata : constr
-(** The variable "irdata", which should be an argument of every rule. *)
-
-val m_var : Com.var_space -> Com.Var.t -> dflag -> constr
-(** Value from TGV. [m_var v off df] represents an access to the TGV variable
-    [v] with [df] to read defineness or valuation. [off] is the access type for
-    M array, and should be [None] most of the time. For array access, see
-    {!access}. *)
-
-val let_local : local_var -> constr -> constr -> constr
-(** Local let-binding. [let_local v defining_expr body_expr] is akin to OCaml
-    [let v = defining_expr in body_expr] *)
-
-val local_var : local_var -> constr
-(** Access local variable value *)
-
-val dand : constr -> constr -> constr
-(** Boolean and *)
-
-val dor : constr -> constr -> constr
-(** Boolean or *)
-
-val dnot : constr -> constr
-(** Boolean not *)
-
-val minus : constr -> constr
-(** Negate value *)
-
-val plus : constr -> constr -> constr
-(** Float addition *)
-
-val sub : constr -> constr -> constr
-(** Float substraction *)
-
-val mult : constr -> constr -> constr
-(** Float multiplication *)
-
-val div : constr -> constr -> constr
-(** Float division. Care to guard for division by zero as it is not intrisectly
-    guarranteed *)
-
-val modulo : constr -> constr -> constr
-(** Float modulo. Care to guard for modulo by zero as it is not intrisectly
-    guarranteed *)
-
-val comp : string -> constr -> constr -> constr
-(** Comparison operation. The operator is given as C-style string literal *)
-
-val dfun : string -> constr list -> constr
-(** Function call *)
-
-val dvarinfo : Com.Var.t -> constr
-(** Varinfos are values containing the identity of a variable. *)
-
-val dvarinfo_tab : tab:Com.Var.t -> def:constr -> value:constr -> constr
-(** [dvarinfo_tab ~tab ~def ~value]
-
-    The varinfo of a cell in the table [tab], where the cell's index is defined
-    by [def] for its definition and [value] for its actual value. *)
-
-val dvarinfo_field : def:constr -> value:constr -> field:string -> constr
-(** The varinfo of the field [field]. *)
-
-val dvarspace_current : Com.var_space -> constr
-(** A variable space *)
-
-val dvarspace_of : Com.var_space * Com.Var.t -> constr
-(** The variable space of a variable. *)
-
-val dtyp : Com.value_typ -> constr
-(** A type *)
-
-val ite : constr -> constr -> constr -> constr
-(** Functionnal if-the-else construction. [ite cond_expr then_expr else_expr] is
-    akin to [if cond_expr then then_expr else else_expr] *)
+val def_expr_to_constr : DE.t -> Constr.t
 
 (** {2 Decoupled expressions} *)
 
@@ -145,9 +51,9 @@ val ite : constr -> constr -> constr -> constr
 *)
 
 type expression_composition = {
-  set_vars : (dflag * string * constr) list;
-  def_test : constr;
-  value_comp : constr;
+  set_vars : (dflag * string * Constr.t) list;
+  def_test : DE.t;
+  value_comp : Constr.t;
 }
 (** Representation of an M computation in construction. [def_test] for the
     defineness flag, and [value_comp] for the actual valuation. *)
@@ -168,9 +74,29 @@ val elit : float -> expression_composition
 (** Literals have a simple enough representation they can be written as an
     expression composition without relying on constructions. *)
 
+val comparison :
+  Com.comp_op Pos.marked ->
+  expression_composition ->
+  expression_composition ->
+  expression_composition
+
+val binop :
+  Com.binop Pos.marked ->
+  expression_composition ->
+  expression_composition ->
+  expression_composition
+
+val unop : Com.unop -> expression_composition -> expression_composition
+
+val conditional :
+  expression_composition ->
+  expression_composition ->
+  expression_composition ->
+  expression_composition
+
 val dfun_with_ptr :
   string ->
-  (ptrdef:constr -> ptrval:constr -> constr list) ->
+  (ptrdef:Constr.t -> ptrval:Constr.t -> Constr.t list) ->
   expression_composition
 (** [dfun_with_ptr fn args]
 
