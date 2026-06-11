@@ -677,15 +677,17 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
           Format.fprintf fmt "%#.19g" f)
   | Dvar evar -> format_expr_var dgfip_flags fmt evar
   | Dand l ->
+      let sep = if Config.optim_simple_binary_op () then " & " else " && " in
       Format.fprintf fmt "@[<hov 2>(%a)@]"
         (Format.pp_print_list
-           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " && ")
+           ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt sep)
            format_dexpr)
         l
   | Dor l ->
+      let sep = if Config.optim_simple_binary_op () then " | " else " || " in
       Format.fprintf fmt "@[<hov 2>(%a)@]"
         (Format.pp_print_list
-           ~pp_sep:(fun fmt _ -> Format.fprintf fmt " || ")
+           ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt sep)
            format_dexpr)
         l
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de

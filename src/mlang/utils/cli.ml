@@ -223,6 +223,7 @@ let optim_flags =
     ("lvfa", Config.Local_vars_for_arrays);
     ("ncur", No_check_unstoppable_rules);
     ("nrbf", No_redundant_boolean_formulae);
+    ("sbo", Simple_binary_op);
     ("*", All_optims);
   ]
 
@@ -233,14 +234,16 @@ let optims =
     & info [ "optim"; "O" ] ~docv:"OPTIM"
         ~doc:
           "Several optimizations modify the generated C program to make it \
-           more than a simple translation. Here are the different available\n\
-          \         optimsizations: - 'lvfa': each rule defines local \
-           variables for the irdata accesses of the TGV; - 'ncur': when a rule \
-           is not stopped (because it does not have a stop instruction), does \
-           not add the subsequent check;\n\
-          \         - 'nrbf': removes redundant boolean formulae from OR and \
-           AND operators (when checking for variable definitions);\n\
-          \         - '*': all of the above (default).")
+           more than a simple translation. Here are the different available \
+           optimsizations: \n\
+           - 'lvfa': each rule defines local variables for the irdata accesses \
+           of the TGV;\n\
+           - 'ncur': when a rule is not stopped (because it does not have a \
+           stop instruction), does not add the subsequent check;\n\
+           - 'nrbf': removes redundant boolean formulae from OR and AND \
+           operators (when checking for variable definitions);\n\
+           - 'sbo': replaces binary operators '&&' and '||' by '&' and '|'\n\
+           - '*': all of the above (default).")
 
 let mlang_t f =
   Term.(
