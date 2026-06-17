@@ -19,6 +19,7 @@ type optim =
   | No_check_unstoppable_rules
   | No_redundant_boolean_formulae
   | Simple_binary_op
+  | Shorten_def
 
 type value_sort =
   | RegularFloat
@@ -147,6 +148,8 @@ let optim_no_redundant_boolean_formulae () =
   optim_activated No_redundant_boolean_formulae
 
 let optim_simple_binary_op () = optim_activated Simple_binary_op
+
+let optim_shorten_def () = optim_activated Shorten_def
 
 let test_var_defs = ref StrMap.empty
 

@@ -197,3 +197,56 @@ end) : S with type expr = OrderedExprs.t = struct
   let get_assoc t =
     ExprMap.fold (fun k b acc -> AtomMap.add b k acc) t.map AtomMap.empty
 end
+
+module Shorten_def = struct
+  (* From a def_expr list, returns:
+     - the list of def_expr with no atom ('var' and  'not vars');
+     - the map of atoms with their prefix ([true] for 'var', [false] for 'not var'). *)
+  let split_forms (l : def_expr list) : def_expr list * bool AtomMap.t =
+    List.fold_left
+      (fun (l', map) -> function
+        | DEatom v -> (l', AtomMap.add v true map)
+        | DEnot (DEatom v) -> (l', AtomMap.add v false map)
+        | f -> (f :: l', map))
+      ([], AtomMap.empty) l
+
+  let apply_known_on_atoms ~negate ~known f =
+    let rec loop f =
+      match f with
+      | DEatom v -> begin
+          match AtomMap.find v known <> negate with
+          | true -> true_
+          | false -> false_
+          | exception Not_found -> f
+        end
+      | DEnot f -> not_ @@ loop f
+      | DEor l -> ors (List.map loop l)
+      | DEand l -> ands (List.map loop l)
+    in
+    loop f
+
+  let knowns_to_form m =
+    AtomMap.fold
+      (fun i b acc -> if b then DEatom i :: acc else not_ (DEatom i) :: acc)
+      m []
+
+  let apply f =
+    let rec loop f =
+      match f with
+      | DEatom _ -> f
+      | DEnot f -> not_ (loop f)
+      | DEor l ->
+          let l, known = split_forms l in
+          let l = List.map (apply_known_on_atoms ~negate:true ~known) l in
+          let l = List.map loop l in
+          let l = knowns_to_form known @ l in
+          ors l
+      | DEand l ->
+          let l, known = split_forms l in
+          let l = List.map (apply_known_on_atoms ~negate:false ~known) l in
+          let l = List.map loop l in
+          let l = knowns_to_form known @ l in
+          ands l
+    in
+    loop f
+end

@@ -6,4 +6,4 @@ Z : calculee restituee primrest = 0 : "";
 
 cible soustraction:
 application : app;
-Z = X - Y;
+Z = X * (X - Y + X);

@@ -72,3 +72,13 @@ module Make (OrderedExprs : sig
 
   val compare : t -> t -> int
 end) : S with type expr = OrderedExprs.t
+
+(** A module containing several optimisations on def expressions. *)
+module Shorten_def : sig
+  val apply : def_expr -> def_expr
+  (** Applies simple boolean simplifications. For any atom [v] and formulas [f]
+      and [g] :
+      - if [f] = [v] /\ [g], replaces occurences of [v] by [true] in [g];
+      - if [f] = [v] \/ [g], replaces occurences of [v] by [false] in [g]. This
+        simplification is done recursively on formulas. *)
+end

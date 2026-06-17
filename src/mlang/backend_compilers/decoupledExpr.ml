@@ -495,7 +495,12 @@ let def_expr_to_constr e =
     | DEnot e -> Not (loop e)
     | DEatom v -> Def_expr.AtomMap.find v map
   in
-  loop (DE.get_expr e)
+  let def_expr = DE.get_expr e in
+  let def_expr =
+    if Config.optim_shorten_def () then Def_expr.Shorten_def.apply def_expr
+    else def_expr
+  in
+  loop def_expr
 
 let build_transitive_composition ?(safe_def = false)
     ({ set_vars; def_test; value_comp } : expression_composition) :
