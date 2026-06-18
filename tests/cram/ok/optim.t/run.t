@@ -105,7 +105,7 @@ Mlang avec toutes les optimisations
     irdata->nb_refs_target = 0;
     
     {
-      (def_calculee[0/*Z*/]) = ((def_saisie[0/*X*/]) || (def_saisie[1/*Y*/]));
+      (def_calculee[0/*Z*/]) = ((def_saisie[0/*X*/]) | (def_saisie[1/*Y*/]));
       if ((def_calculee[0/*Z*/])) {
         (calculee[0/*Z*/]) = (((saisie[0/*X*/])) - ((saisie[1/*Y*/])));
       } else (calculee[0/*Z*/]) = 0.0;

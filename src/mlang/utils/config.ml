@@ -3,6 +3,7 @@ type optim =
   | Local_vars_for_arrays
   | No_check_unstoppable_rules
   | No_redundant_boolean_formulae
+  | Simple_binary_op
 
 type value_sort =
   | RegularFloat
@@ -129,6 +130,8 @@ let optim_no_check_unstoppable () = optim_activated No_check_unstoppable_rules
 
 let optim_no_redundant_boolean_formulae () =
   optim_activated No_redundant_boolean_formulae
+
+let optim_simple_binary_op () = optim_activated Simple_binary_op
 
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)

@@ -3,6 +3,7 @@ type optim =
   | Local_vars_for_arrays
   | No_check_unstoppable_rules
   | No_redundant_boolean_formulae
+  | Simple_binary_op
 
 (** According on the [value_sort], a specific interpreter will be called with
     the right kind of floating-point value *)
@@ -141,6 +142,8 @@ val optim_local_var_for_arrays : unit -> bool
 val optim_no_check_unstoppable : unit -> bool
 
 val optim_no_redundant_boolean_formulae : unit -> bool
+
+val optim_simple_binary_op : unit -> bool
 
 val set_opts :
   files:string list ->
