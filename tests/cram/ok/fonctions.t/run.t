@@ -1943,10 +1943,8 @@
       int print160;
       print_string(stdout, &(irdata->ctx_pr_out), "nb_evenements() = ");
       {
-        register double real0;
         print160_def = 1;
-        real0 = nb_evenements(irdata);
-        print160_val = real0;
+        print160_val = nb_evenements(irdata);
       }
       if (print160_def) {
         print_double(stdout, &(irdata->ctx_pr_out), print160_val, 0, 20);
