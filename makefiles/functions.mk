@@ -2,6 +2,12 @@
 #        Fonctions utiles        #
 ##################################
 
+# saut de ligne, à utiliser avec ${\n}
+define \n
+
+
+endef
+
 define to_bool
 $(if $(1),1,)
 endef
