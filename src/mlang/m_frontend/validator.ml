@@ -2307,6 +2307,38 @@ let check_rule (r : Mast.rule) (prog : program) : program =
     let in_vars, out_vars, _ = inout_instrs env tmps rule_instrs in
     (StrMap.keySet in_vars, out_vars)
   in
+  let rule_instrs =
+    (* on affecte à undef les variables VARTMP en entrée de la règle *)
+    let open Com in
+    let litt l = Pos.without (Literal { lit = l; origin = None }) in
+    let accVar vid = Pos.without (VarAccess (None, Pos.without vid)) in
+    let accTab vid idx =
+      Pos.without
+        (TabAccess ((None, Pos.without vid), litt (Float (float idx))))
+    in
+    let affUndefAcc acc =
+      Pos.without
+        (Affectation
+           (Pos.without (SingleFormula (VarDecl (acc, litt Undefined)))))
+    in
+    let affUndefAppend name rule_instrs =
+      let vid = StrMap.find name prog.prog_vars in
+      let var = IntMap.find vid prog.prog_dict in
+      if Var.is_table var then
+        let rec append rule_instrs idx =
+          if idx >= Var.size var then rule_instrs
+          else
+            let rule_instrs = affUndefAcc (accTab vid idx) :: rule_instrs in
+            append rule_instrs (idx + 1)
+        in
+        append rule_instrs 0
+      else affUndefAcc (accVar vid) :: rule_instrs
+    in
+    StrSet.fold
+      (fun name rule_instrs ->
+        if is_vartmp name then affUndefAppend name rule_instrs else rule_instrs)
+      rule_in_vars rule_instrs
+  in
   let rule_seq, prog = get_seq prog in
   let rule =
     {

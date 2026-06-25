@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <assert.h>
+#include <time.h>
 
 #include <utils.h>
 #include <mem.h>
@@ -264,17 +265,39 @@ void initDefs(T_irdata *tgv, L_S_varVal defs) {
   for (l = defs; l != NIL(S_varVal); l = QUEUE(S_varVal, l)) {
     T_varVal vv = TETE(S_varVal, l);
     
-    ecris_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, 1, vv->val);
+    if (isnan(vv->val)) {
+      ecris_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, 0, 0.0);
+    } else if (fabs(isinf(vv->val)) != 1) {
+      ecris_varinfo(tgv, ESPACE_PAR_DEFAUT, vv->varinfo, 1, vv->val);
+    }
   }
 }
 
-int traitementAux(T_tas tasTrt, char *chemin, T_options opts, T_irdata *tgv) {
+int estDansDefs(L_S_varVal defs, char *nom) {
+  L_S_varVal l = NULL;
+
+  if (nom == NULL) {
+    return 0;
+  }
+  for (l = defs; l != NIL(S_varVal); l = QUEUE(S_varVal, l)) {
+    T_varVal vv = TETE(S_varVal, l);
+    
+    if (strcmp(vv->varinfo->name, nom) == 0 || strcmp(vv->varinfo->alias, nom) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+T_traitement traitement(char *chemin, T_options opts) {
+  T_tas tasTrt = NULL;
   T_fich fich = NULL;
   T_irj irj = NULL;
   int code = IRJ_CODE_VIDE;
   L_char lnom = NULL;
   char *nom = NULL;
   int estCorr = 0;
+  T_irdata *tgv = NULL;
   L_S_varVal resPrim = NULL;
   L_char ctlPrim = NULL;
   L_S_rap rappels = NULL;
@@ -283,7 +306,11 @@ int traitementAux(T_tas tasTrt, char *chemin, T_options opts, T_irdata *tgv) {
   int anneeCalc = 0;
   int anneeRevenu = 0;
   int ok = 1;
+  uint64_t temps_ms = 0;
+  clock_t start, end;
+  T_traitement result;
 
+  tasTrt = memCreeTas();
   estCorr = FAUX;
   resPrim = NIL(S_varVal);
   ctlPrim = NIL(char);
@@ -299,6 +326,7 @@ int traitementAux(T_tas tasTrt, char *chemin, T_options opts, T_irdata *tgv) {
   irj = creeIrj(tasTrt, opts->args.trt.strict);
   code = codeIrj(irj);
   lnom = NIL(char);
+  tgv = cree_irdata();
   while (code != IRJ_FIN && code != IRJ_INVALIDE) {
     lisIrj(fich, irj);
     code = codeIrj(irj);
@@ -412,39 +440,38 @@ int traitementAux(T_tas tasTrt, char *chemin, T_options opts, T_irdata *tgv) {
     ok = -1;
     goto fin;
   }
-  ecrisVar(tgv, "ANCSDED", 1, opts->args.trt.annee);
-  ecrisVar(tgv, "V_MILLESIME", 1, anneeCalc);
+  if (! estDansDefs(opts->args.trt.defs, "V_ANCSDED")) {
+    ecrisVar(tgv, "V_ANCSDED", 1, opts->args.trt.annee);
+  }
+  if (! estDansDefs(opts->args.trt.defs, "V_MILLESIME")) {
+    ecrisVar(tgv, "V_MILLESIME", 1, anneeCalc);
+  }
   switch (opts->args.trt.mode) {
-    /* do stuff */
-
     case Primitif:
       initDefs(tgv, opts->args.trt.defs);
+      start = clock();
       enchainement_primitif_interpreteur(tgv);
+      end = clock ();
+      temps_ms = (end -  start) * 1000 / CLOCKS_PER_SEC; 
       ok = controleResultat(tasTrt, opts, tgv, resPrim, ctlPrim);
       break;
     case Correctif:
       ecrisVar(tgv, "MODE_CORR", 1, 1.0);
       initDefs(tgv, opts->args.trt.defs);
+      start = clock();
       enchainement_primitif_interpreteur(tgv);
+      end = clock ();
+      temps_ms = (end -  start) * 1000 / CLOCKS_PER_SEC; 
       ok = controleResultat(tasTrt, opts, tgv, resRap, ctlRap);
       break;
   }
 
 fin:
+  detruis_irdata(tgv);
   memLibere(nom);
   fermeFich(fich);
-  return ok;
-}
-
-int traitement(char *chemin, T_options opts) {
-  T_tas tasTrt = NULL;
-  T_irdata *tgv = NULL;
-  int ok = 0;
-
-  tasTrt = memCreeTas();
-  tgv = cree_irdata();
-  ok = traitementAux(tasTrt, chemin, opts, tgv);
-  detruis_irdata(tgv);  
   memLibereTas(tasTrt);
-  return ok;
+  result.ok = ok;
+  result.temps_ms = temps_ms;
+  return result;
 }

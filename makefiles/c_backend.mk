@@ -138,7 +138,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal -mode primitif -recursif ${TEST_FILES}
+	./cal -mode primitif -recursif ${ANNEE_EXEC} ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
@@ -174,6 +174,11 @@ clean_backend_c: FORCE
 	rm -f calc/*.inc
 	rm -f calc/version.*
 	rm -f calc/*.ml
+	if [ -d calc/m ] ; \
+	then \
+	  rm -f calc/m/* ; \
+	  rmdir calc/m ; \
+	fi
 	if [ -d calc/zos ] ; \
 	then \
 	  rm -f calc/zos/* ; \
