@@ -8,6 +8,7 @@
 
 GCC=gcc
 MUSL_HOME?=/usr/local/musl
+OPTIM_FLAG?=2
 
 ##################################################
 # Tax computation configuration
@@ -78,12 +79,13 @@ endif
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
 COMMON_CFLAGS?=-std=c89 -pedantic
-ifeq ($(CC), clang)
-  COMPILER_SPECIFIC_CFLAGS=-O2
-#  COMPILER_SPECIFIC_CFLAGS=
-else ifeq ($(CC), gcc)
-  COMPILER_SPECIFIC_CFLAGS=-O2
+
+ifdef OPTIM_FLAG
+  ifneq ($(OPTIM_FLAG), none)
+    COMPILER_SPECIFIC_CFLAGS=-O$(OPTIM_FLAG)
+  endif
 endif
+
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 
 # Directory of the driver sources for tax calculator
