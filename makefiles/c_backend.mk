@@ -148,7 +148,6 @@ test_dgfip_c_backend: FORCE
 	$(call make_in,$(DGFIP_DIR),$@)
 endif
 
-
 ##################################################
 # Cleaners
 ##################################################
@@ -180,6 +179,12 @@ clean_backend_c: FORCE
 	  rm -f calc/zos/* ; \
 	  rmdir calc/zos ; \
 	fi
+	if [ -d calc/m ] ; \
+	then \
+	  rm -f calc/m/* ; \
+	  rmdir calc/m ; \
+	fi
+
 else
 clean_backend_c: FORCE
 	$(call make_in,$(DGFIP_DIR),$@)

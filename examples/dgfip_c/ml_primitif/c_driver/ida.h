@@ -20,6 +20,7 @@ extern void infoNbKc(int kc, int tot);
 extern void infoNonRec(char *dir);
 extern void infoLien(char *nom);
 extern void infoTemps(uint64_t temps_us);
+extern void infoActCpl(void);
 
 extern int discoOptsRecDup(int b);
 extern int discoOptsStrictDup(int b);
@@ -45,6 +46,8 @@ extern void anoOptsAnneeArg(char *arg);
 extern void anoOptsAnneeDup(int annee0, int annee1);
 extern void anoOptsDefValArg(char *arg);
 extern void anoOptsDefVarArg(char *arg);
+extern void anoOptsDstAbs(void);
+extern void anoOptsDstRep(char *dst);
 extern void anoLigneInvalide(int ligne, int err);
 extern void anoCodeVide(int ligne);
 extern void anoVarAbs(char *var);
@@ -53,5 +56,6 @@ extern void anoErrEnTrop(char *err);
 extern void anoErrNonRecue(char *err);
 extern void anoValeurFausse(char *nom, double val, double valRes);
 extern void anoTesteeNonRestituee(char *var);
+extern void anoLimNbFich(char *fich);
 
 #endif /* __IDA_H__ */

@@ -85,20 +85,23 @@ fin:
 
 #define TRT_ERR(ano) \
   ano; \
-  LIBERE_LISTE(char, opts->args.trt.defs); \
-  LIBERE_LISTE(char, opts->args.trt.fichiers); \
+  if (opts->args.trt.defs != NULL) { \
+    LIBERE_LISTE(char, opts->args.trt.defs); \
+  } \
+  if (opts->args.trt.fichiers != NULL) { \
+    LIBERE_LISTE(char, opts->args.trt.fichiers); \
+  } \
   opts->action = ACT_AID; \
   opts->args.aid.cat = NULL; \
   opts->args.aid.err = VRAI; \
   return opts;
 
-T_options analyseLdcTraitement(T_tas tas, T_options opts, int argc, char **argv, int i) {
+T_options analyseLdcTrt(T_tas tas, T_options opts, int argc, char **argv, int i) {
   int nbMode = 0;
   int nbAnnee = 0;
   int nbRec = 0;
   int nbStrict = 0;
 
-  infoActTrt();
   opts->action = ACT_TRT;
   opts->args.trt.mode = Primitif;
   opts->args.trt.annee = ANNEE_REVENU + 1;
@@ -106,6 +109,7 @@ T_options analyseLdcTraitement(T_tas tas, T_options opts, int argc, char **argv,
   opts->args.trt.strict = FAUX;
   opts->args.trt.defs = NIL(S_varVal);
   opts->args.trt.fichiers = NIL(char);
+  opts->args.trt.dest = NULL;
   while (i < argc) {
     if (strcmp(argv[i], "-mode") == 0 || strcmp(argv[i], "-m") == 0) {
       T_mode mode = Primitif;
@@ -205,6 +209,31 @@ fin:
   return opts;
 }
 
+T_options analyseLdcTraitement(T_tas tas, T_options opts, int argc, char **argv, int i) {
+  infoActTrt();
+  return analyseLdcTrt(tas, opts, argc, argv, i);
+}
+
+T_options analyseLdcCompletion(T_tas tas, T_options opts, int argc, char **argv, int i) {
+  char *dest = "";
+  int estr = 0;
+
+  infoActCpl();
+  i++;
+  if (argc <= i || strcmp(argv[i], "") == 0 || argv[i][0] == '-') {
+    TRT_ERR(anoOptsDstAbs())
+  }
+  dest = strCopie(tas, argv[i]);
+  analyseLdcTrt(tas, opts, argc, argv, i);
+  opts->action = ACT_CPL;
+  opts->args.trt.dest = dest;
+  estr = estRep(opts->args.trt.dest);
+  if (estr == -1 || ! estr) {
+    TRT_ERR(anoOptsDstRep(opts->args.trt.dest))
+  }
+  return opts;
+}
+
 T_options analyseLdc(T_tas tas, int argc, char **argv) {
   T_options opts = NULL;
   int i = 0;
@@ -234,6 +263,11 @@ T_options analyseLdc(T_tas tas, int argc, char **argv) {
   /* format */
   if (strcmp(argv[i], "-format") == 0 || strcmp(argv[i], "-f") == 0) {
     return analyseLdcFormat(tas, opts, argc, argv, i);
+  }
+
+  /* completion */
+  if (strcmp(argv[i], "-completion") == 0 || strcmp(argv[i], "-c") == 0) {
+    return analyseLdcCompletion(tas, opts, argc, argv, i);
   }
 
   /* traitement */

@@ -18,7 +18,7 @@ int estRep(char *chemin) {
   if (lstat(chemin, &st) == -1) {
     return -1;
   }
-  return S_ISDIR(st.st_mode) & ! S_ISLNK(st.st_mode);
+  return S_ISDIR(st.st_mode) && ! S_ISLNK(st.st_mode);
 }
 
 int estReg(char *chemin) {
@@ -31,7 +31,7 @@ int estReg(char *chemin) {
   if (lstat(chemin, &st) == -1) {
     return -1;
   }
-  return S_ISREG(st.st_mode) & ! S_ISLNK(st.st_mode);
+  return S_ISREG(st.st_mode) && ! S_ISLNK(st.st_mode);
 }
 
 int estLien(char *chemin) {

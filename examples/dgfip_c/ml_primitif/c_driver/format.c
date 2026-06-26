@@ -10,7 +10,7 @@
 
 #include <mlang.h>
 
-T_traitement verifieFormat(char *chemin, T_options opts) {
+int verifieFormat(char *chemin, T_options opts) {
   T_tas tasFmt = NULL;
   T_fich fich = NULL;
   T_irj irj = NULL;
@@ -18,7 +18,7 @@ T_traitement verifieFormat(char *chemin, T_options opts) {
   L_char lnom = NULL;
   char *nom = NULL;
   int ok = 1;
-  T_traitement result;
+  int result;
 
   tasFmt = memCreeTas();
   fich = ouvreFich(tasFmt, chemin);
@@ -112,7 +112,5 @@ fin:
   memLibere(nom);
   fermeFich(fich);
   memLibereTas(tasFmt);
-  result.ok = ok;
-  result.temps_ms = 0;
-  return result;
+  return ok;
 }

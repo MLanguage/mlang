@@ -41,6 +41,7 @@ void nettoieIrj(T_irj irj) {
 
 void detruisIrj(T_irj irj) {
   if (irj == NULL) return;
+  nettoieIrj(irj);
   memLibere(irj->buf);
   memLibere(irj);
 }
