@@ -1,0 +1,184 @@
+type atom = int
+
+type replacement = { canon : atom; to_replace : atom }
+
+type def_expr =
+  | DEand of def_expr list
+  | DEor of def_expr list
+  | DEnot of def_expr
+  | DEatom of atom
+
+let fresh_atom =
+  let i = ref 0 in
+  fun () ->
+    let res = !i in
+    incr i;
+    res
+
+let true_ = DEand []
+
+let false_ = DEor []
+
+let rec not_ = function
+  | DEnot e -> e
+  | DEand l -> DEor (List.map not_ l)
+  | DEor l -> DEand (List.map not_ l)
+  | f -> DEnot f
+
+let or_ e1 e2 =
+  match (e1, e2) with
+  | DEand [], _ | _, DEand [] -> DEand []
+  | DEor [], e | e, DEor [] -> e
+  | DEatom v1, DEatom v2 when v1 = v2 -> e1
+  | e, DEnot ne when compare e ne = 0 -> DEand []
+  | DEnot ne, e when compare e ne = 0 -> DEand []
+  | DEor l1, DEor l2 -> DEor (l1 @ l2)
+  | _, DEor l -> DEor (e1 :: l)
+  | DEor l, _ -> DEor (l @ [ e2 ])
+  | _, _ -> DEor [ e1; e2 ]
+
+let and_ e1 e2 =
+  match (e1, e2) with
+  | DEor [], _ | _, DEor [] -> DEor []
+  | DEand [], e | e, DEand [] -> e
+  | e, DEnot ne when compare e ne = 0 -> DEor []
+  | DEnot ne, e when compare e ne = 0 -> DEor []
+  | DEatom v1, DEatom v2 when v1 = v2 -> e1
+  | DEand l1, DEand l2 -> DEand (l1 @ l2)
+  | _, DEand l -> DEand (e1 :: l)
+  | DEand l, _ -> DEand (l @ [ e2 ])
+  | _, _ -> DEand [ e1; e2 ]
+
+let ands l =
+  match l with [] -> DEand [] | hd :: tl -> List.fold_left and_ hd tl
+
+let ors l = match l with [] -> DEor [] | hd :: tl -> List.fold_left or_ hd tl
+
+let compare_atom = Int.compare
+
+module AtomMap = Map.Make (Int)
+
+module type S = sig
+  type expr
+
+  type t
+
+  val defalse : t
+
+  val detrue : t
+
+  val deand : t list -> t
+
+  val deor : t list -> t
+
+  val denot : t -> t
+
+  val devar : expr -> t
+
+  val deite : t -> t -> t -> t
+
+  val get_expr : t -> def_expr
+
+  val get_assoc : t -> expr AtomMap.t
+end
+
+module Make (OrderedExprs : sig
+  type t
+
+  val compare : t -> t -> int
+end) : S with type expr = OrderedExprs.t = struct
+  type expr = OrderedExprs.t
+
+  module ExprMap = Map.Make (OrderedExprs)
+
+  type t = { expr : def_expr; map : atom ExprMap.t }
+  (** An definition expression that can be translated back into its original
+      expression type through the map. *)
+
+  let defalse = { expr = DEor []; map = ExprMap.empty }
+
+  let detrue = { expr = DEand []; map = ExprMap.empty }
+
+  let rec compare e e' =
+    match (e, e') with
+    | DEand l, DEand l' | DEor l, DEor l' -> List.compare compare l l'
+    | DEnot e, DEnot e' -> compare e e'
+    | DEatom s, DEatom s' -> compare_atom s s'
+    | DEand _, _ -> 1
+    | _, DEand _ -> -1
+    | DEor _, _ -> 1
+    | _, DEor _ -> -1
+    | DEnot _, _ -> 1
+    | _, DEnot _ -> -1
+
+  let uniq_list l =
+    List.sort_uniq (fun { expr; _ } { expr = e'; _ } -> compare expr e') l
+
+  (** When two expressions are created independently, their atom identifier may
+      be different. This function detects when an expression has two different
+      atoms and aggregates replacements to perform on the final expression. *)
+  let merge_maps ~replacements m m' =
+    let replacements = ref replacements in
+    let map =
+      ExprMap.merge
+        (fun _e v v' ->
+          match (v, v') with
+          | Some e, None | None, Some e -> Some e
+          | None, None -> None
+          | Some v, Some v' ->
+              if compare_atom v v' <> 0 then
+                replacements := { canon = v; to_replace = v' } :: !replacements;
+              Some v)
+        m m'
+    in
+    (map, !replacements)
+
+  (** Applies a replacement on a formula. *)
+  let apply_replacement_on_expr f { canon; to_replace } =
+    let rec loop = function
+      | DEatom v when v = to_replace -> DEatom canon
+      | DEatom _ as v -> v
+      | DEnot e -> DEnot (loop e)
+      | DEor l -> DEor (List.map loop l)
+      | DEand l -> DEand (List.map loop l)
+    in
+    loop f
+
+  (** Returns the map associated to a list of expression that will be used in a
+      same formula, as well as the list of expressions updated to be consistent
+      with the said map. *)
+  let merge_exprs l =
+    let l' = uniq_list l in
+    let map, replacements =
+      List.fold_left
+        (fun (acc, replacements) { map; _ } -> merge_maps ~replacements map acc)
+        (ExprMap.empty, []) l'
+    in
+    let exprs =
+      List.map
+        (fun l -> List.fold_left apply_replacement_on_expr l.expr replacements)
+        l'
+    in
+    (map, exprs)
+
+  let deand (l : t list) : t =
+    let map, exprs = merge_exprs l in
+    { map; expr = ands exprs }
+
+  let deor l =
+    let map, exprs = merge_exprs l in
+    { map; expr = ors exprs }
+
+  let denot e = { e with expr = not_ e.expr }
+
+  let devar v =
+    let s = fresh_atom () in
+    { expr = DEatom s; map = ExprMap.singleton v s }
+
+  let deite c t e = deor [ deand [ c; t ]; deand [ denot c; e ] ]
+
+  let get_expr e = e.expr
+
+  let get_assoc t =
+    ExprMap.fold (fun k b acc -> AtomMap.add b k acc) t.map AtomMap.empty
+end

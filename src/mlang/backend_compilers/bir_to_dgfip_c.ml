@@ -14,6 +14,7 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see <https://www.gnu.org/licenses/>. *)
 
+module C = Constr
 module D = DecoupledExpr
 module VID = Dgfip_varid
 
@@ -127,68 +128,6 @@ let str_escape str =
   in
   aux 0
 
-(* Building basic expressions *)
-
-let comparison op se1 se2 =
-  let safe_def = false in
-  let set_vars = se1.D.set_vars @ se2.D.set_vars in
-  let def_test = D.dand se1.D.def_test se2.D.def_test in
-  let value_comp =
-    let op =
-      let open Com in
-      match Pos.unmark op with
-      | Gt -> ">"
-      | Gte -> ">="
-      | Lt -> "<"
-      | Lte -> "<="
-      | Eq -> "=="
-      | Neq -> "!="
-    in
-    D.comp op se1.value_comp se2.value_comp
-  in
-  D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
-
-let binop op se1 se2 =
-  let set_vars = se1.D.set_vars @ se2.D.set_vars in
-  let def_test =
-    match Pos.unmark op with
-    | Com.And | Com.Mul | Com.Div | Com.Mod -> D.dand se1.def_test se2.def_test
-    | Com.Or | Com.Add | Com.Sub -> D.dor se1.def_test se2.def_test
-  in
-  let op e1 e2 =
-    match Pos.unmark op with
-    | Com.And -> D.dand e1 e2
-    | Com.Or -> D.dor e1 e2
-    | Com.Add -> D.plus e1 e2
-    | Com.Sub -> D.sub e1 e2
-    | Com.Mul -> D.mult e1 e2
-    | Com.Div -> D.ite e2 (D.div e1 e2) (D.lit 0.)
-    | Com.Mod -> D.ite e2 (D.modulo e1 e2) (D.lit 0.)
-  in
-  let value_comp = op se1.value_comp se2.value_comp in
-  D.build_transitive_composition ~safe_def:true
-    { set_vars; def_test; value_comp }
-
-let unop op se =
-  let set_vars = se.D.set_vars in
-  let def_test = se.def_test in
-  let op, safe_def =
-    match op with Com.Not -> (D.dnot, false) | Com.Minus -> (D.minus, true)
-  in
-  let value_comp = op se.value_comp in
-  D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
-
-let conditional cond thenval elseval =
-  let set_vars = cond.D.set_vars @ thenval.D.set_vars @ elseval.D.set_vars in
-  let def_test =
-    D.dand cond.def_test
-      (D.ite cond.value_comp thenval.def_test elseval.def_test)
-  in
-  let value_comp =
-    D.ite cond.value_comp thenval.value_comp elseval.value_comp
-  in
-  D.build_transitive_composition { set_vars; def_test; value_comp }
-
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   let set_vars, idx_def, idx_val =
     let e_idx = generate_c_expr p m_idx in
@@ -197,10 +136,10 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
   let d_fun =
     D.dfun_with_ptr "lis_tabaccess" (fun ~ptrdef ~ptrval ->
         [
-          D.irdata;
-          D.dvarspace_of (m_sp_opt, v);
-          D.lit (float_of_int (Com.Var.loc_tab_idx v));
-          idx_def;
+          C.irdata;
+          C.(Varspace_of (m_sp_opt, v));
+          C.Lit (float_of_int (Com.Var.loc_tab_idx v));
+          D.def_expr_to_constr idx_def;
           idx_val;
           ptrdef;
           ptrval;
@@ -210,48 +149,52 @@ let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
 
 and code_access (p : Mir.program) m_acc =
   match m_acc with
-  | Com.VarAccess (_, v) -> ([], D.dvarinfo v)
+  | Com.VarAccess (_, v) -> ([], C.Varinfo v)
   | Com.TabAccess ((_, v), m_i) ->
       let ei = generate_c_expr p m_i in
-      (ei.set_vars, D.dvarinfo_tab ~tab:v ~def:ei.def_test ~value:ei.value_comp)
+      ( ei.set_vars,
+        C.Varinfo_tab (v, D.def_expr_to_constr ei.def_test, ei.value_comp) )
   | Com.FieldAccess (_, ie, f, _) ->
       let e = generate_c_expr p ie in
       ( e.set_vars,
-        D.dvarinfo_field ~def:e.def_test ~value:e.value_comp
-          ~field:(Pos.unmark f) )
+        C.Varinfo_field
+          (D.def_expr_to_constr e.def_test, e.value_comp, Pos.unmark f) )
 
 and access p acc =
   match acc with
   | Com.VarAccess (m_sp_opt, var) ->
-      let def_test = D.m_var m_sp_opt var Def in
-      let value_comp = D.m_var m_sp_opt var Val in
+      let def_test = D.DE.devar @@ C.M (m_sp_opt, var, Def) in
+      let value_comp = C.M (m_sp_opt, var, Val) in
       D.{ set_vars = []; def_test; value_comp }
   | TabAccess ((m_sp_opt, v), m_idx) -> lis_tabaccess p m_sp_opt v m_idx
   | FieldAccess (m_sp_opt, me, f, _) ->
       let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
       let set_vars, arg_exprs =
         let e = generate_c_expr p me in
-        (e.set_vars, [ e.def_test; e.value_comp ])
+        (e.set_vars, [ D.def_expr_to_constr e.def_test; e.value_comp ])
       in
       let d_fun =
         D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
-            [ D.irdata; D.dvarspace_current m_sp_opt; ptrdef; ptrval ]
+            [ C.irdata; C.Varspace_current m_sp_opt; ptrdef; ptrval ]
             @ arg_exprs)
       in
       { d_fun with set_vars = set_vars @ d_fun.set_vars }
 
 and generate_test_in_set p positive e0 values =
   let se0 = generate_c_expr p e0 in
-  let ldef, lval = D.locals_from_m () in
+  let ldef, lval = C.locals_from_m () in
   let sle0 =
     {
       D.set_vars = [];
-      D.def_test = D.local_var ldef;
-      D.value_comp = D.local_var lval;
+      D.def_test = D.DE.devar @@ C.Local ldef;
+      D.value_comp = C.Local lval;
     }
   in
   let declare_local constr =
-    D.let_local ldef se0.def_test (D.let_local lval se0.value_comp constr)
+    C.Let_local
+      ( ldef,
+        D.def_expr_to_constr se0.def_test,
+        C.Let_local (lval, se0.value_comp, constr) )
   in
   let or_chain =
     List.fold_left
@@ -259,23 +202,23 @@ and generate_test_in_set p positive e0 values =
         let equal_test =
           match set_value with
           | Com.VarValue acc ->
-              comparison (Pos.without Com.Eq) sle0 (access p (Pos.unmark acc))
+              D.comparison (Pos.without Com.Eq) sle0 (access p (Pos.unmark acc))
           | Com.FloatValue i ->
-              comparison (Pos.without Com.Eq) sle0 (D.elit (Pos.unmark i))
+              D.comparison (Pos.without Com.Eq) sle0 (D.elit (Pos.unmark i))
           | Com.IntervalValue (bn, en) ->
               let s_bn = bn |> Pos.unmark |> float_of_int |> D.elit
               and s_en = en |> Pos.unmark |> float_of_int |> D.elit in
-              binop (Pos.without Com.And)
-                (comparison (Pos.without Com.Gte) sle0 s_bn)
-                (comparison (Pos.without Com.Lte) sle0 s_en)
+              D.binop (Pos.without Com.And)
+                (D.comparison (Pos.without Com.Gte) sle0 s_bn)
+                (D.comparison (Pos.without Com.Lte) sle0 s_en)
         in
-        binop (Pos.without Com.Or) or_chain equal_test)
+        D.binop (Pos.without Com.Or) or_chain equal_test)
       (D.eundefined ()) values
   in
-  let se = if positive then or_chain else unop Com.Not or_chain in
+  let se = if positive then or_chain else D.unop Com.Not or_chain in
   {
     D.set_vars = se0.set_vars @ se.set_vars;
-    D.def_test = declare_local se.def_test;
+    D.def_test = D.DE.devar (declare_local (D.def_expr_to_constr se.def_test));
     D.value_comp = declare_local se.value_comp;
   }
 
@@ -303,8 +246,8 @@ and funcall p f args =
 
 and attribute p acc attr =
   let set_vars, varinfo = code_access p acc in
-  let def_test = D.dfun (Pp.spr "attribut_%s_def" attr) [ varinfo ]
-  and value_comp = D.dfun (Pp.spr "attribut_%s" attr) [ varinfo ] in
+  let def_test = D.DE.devar @@ C.Fun (Pp.spr "attribut_%s_def" attr, [ varinfo ])
+  and value_comp = C.Fun (Pp.spr "attribut_%s" attr, [ varinfo ]) in
   D.build_transitive_composition { set_vars; def_test; value_comp }
 
 and size p acc =
@@ -319,7 +262,7 @@ and is_type p acc typ =
   let set_vars0, evt_d_fun0 = code_access p acc in
   let d_fun =
     D.dfun_with_ptr "est_type" (fun ~ptrdef ~ptrval ->
-        [ evt_d_fun0; D.dtyp typ; ptrdef; ptrval ])
+        [ evt_d_fun0; C.Typ typ; ptrdef; ptrval ])
   in
   { d_fun with set_vars = set_vars0 @ d_fun.set_vars }
 
@@ -339,7 +282,7 @@ and in_domain (p : Mir.program) acc cvm =
   let set_vars, varinfo = code_access p acc in
   let d_fun =
     D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
-        [ varinfo; D.lit (float_of_int id_cv); ptrdef; ptrval ])
+        [ varinfo; C.Lit (float_of_int id_cv); ptrdef; ptrval ])
   in
   { d_fun with set_vars = set_vars @ d_fun.set_vars }
 
@@ -351,12 +294,12 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
   | Comparison (op, e1, e2) ->
       let se1 = generate_c_expr p e1 in
       let se2 = generate_c_expr p e2 in
-      comparison op se1 se2
+      D.comparison op se1 se2
   | Binop (op, e1, e2) ->
       let se1 = generate_c_expr p e1 in
       let se2 = generate_c_expr p e2 in
-      binop op se1 se2
-  | Unop (op, e) -> unop op @@ generate_c_expr p e
+      D.binop op se1 se2
+  | Unop (op, e) -> D.unop op @@ generate_c_expr p e
   | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr p c in
       let thenval = generate_c_expr p t in
@@ -364,15 +307,15 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
         match f_opt with
         | None ->
             (* todo: check if necessary *)
-            D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
+            D.{ set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
         | Some f -> generate_c_expr p f
       in
-      conditional cond thenval elseval
+      D.conditional cond thenval elseval
   | FuncCall (f, args) -> funcall p (Pos.unmark f) args
   | Literal { lit = Float f; _ } ->
-      { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
+      { set_vars = []; def_test = D.DE.detrue; value_comp = C.Lit f }
   | Literal { lit = Undefined; _ } ->
-      { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
+      { set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
   | Var acc -> access p acc
   | Attribut (m_acc, a) -> attribute p (Pos.unmark m_acc) (Pos.unmark a)
   | Size m_acc -> size p @@ Pos.unmark m_acc
