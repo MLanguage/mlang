@@ -1,4 +1,17 @@
-(** Abstraction of value manipulation during the interpretation. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2026 DGFiP - INRIA                                      *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** This module type merges the {!module M_ir.Mir_number} and
     {!module M_ir.Mir_roundops} interface to provide a unique module for
