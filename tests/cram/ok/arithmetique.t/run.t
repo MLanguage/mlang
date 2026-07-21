@@ -18,7 +18,8 @@ Sinon, l'addition se calcule bien
   [RESULT] Test exécuté!
   $ mlang simple.m --mpp_function addition -A app --without_dfgip_m --run_test add_x_y_2.irj --no_nondet_display
   [ERROR] KO | Z attendue : -2 - evaluée : 25995
-  [ERROR] Erreurs: 	1 erreur dans le fichier add_x_y_2.irj
+  [ERROR] Erreurs:
+  add_x_y_2.irj: 1 erreur
   [RESULT] Test exécuté!
 
 Soustraction
@@ -49,5 +50,6 @@ Division
 La division par zero ne renvoie pas indefini, mais bien la valeur zero.
   $ mlang simple.m --mpp_function division -A app --without_dfgip_m --run_test div_x_0.irj --no_nondet_display
   [ERROR] KO | Z attendue : indefini - evaluée : 0
-  [ERROR] Erreurs: 	1 erreur dans le fichier div_x_0.irj
+  [ERROR] Erreurs:
+  div_x_0.irj: 1 erreur
   [RESULT] Test exécuté!

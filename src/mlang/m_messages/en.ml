@@ -120,7 +120,7 @@ module En : LANG = struct
           (if nbErr > 1 then "s" else "")
       in
       let pp_file_errs_map fmt m = StrMap.iter (pp_file_errs fmt) m in
-      fun map : string -> Format.asprintf "Failures: %a" pp_file_errs_map map
+      fun map : string -> Format.asprintf "Failures:%a" pp_file_errs_map map
 
     let error_in_test ~test = Format.sprintf "Error in test %s" test
 
