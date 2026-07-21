@@ -115,7 +115,7 @@ module type LANG = sig
 
     val ok_non_returned : name:string -> string
 
-    val test_results : num:int -> string
+    val test_results : num:int -> tot:int -> string
 
     val unexpected_failure : string
 

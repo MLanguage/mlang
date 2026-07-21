@@ -116,9 +116,8 @@ module En : LANG = struct
 
     let all_not_good =
       let pp_file_errs fmt name nbErr =
-        Format.fprintf fmt "\t%d error%s in file %s" nbErr
+        Format.fprintf fmt "@\n%s: %d error%s" name nbErr
           (if nbErr > 1 then "s" else "")
-          name
       in
       let pp_file_errs_map fmt m = StrMap.iter (pp_file_errs fmt) m in
       fun map : string -> Format.asprintf "Failures: %a" pp_file_errs_map map
@@ -145,9 +144,9 @@ module En : LANG = struct
     let ok_non_returned ~name =
       Format.sprintf "OK | %s ignored because non-returned" name
 
-    let test_results ~num =
-      Format.sprintf "Test results: %d success%s" num
-        (if num > 1 then "es" else "")
+    let test_results ~num ~tot=
+      Format.sprintf "Test results: %d success%s out of %d" num
+        (if num > 1 then "es" else "") tot
 
     let unexpected_failure = "Unexpected failure"
 
