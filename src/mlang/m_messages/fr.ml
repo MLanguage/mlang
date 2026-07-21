@@ -154,7 +154,8 @@ module Fr : LANG = struct
     let ok_non_returned ~name =
       Format.sprintf "OK | %s ignorée car non-restituée" name
 
-    let test_results ~num ~tot = Format.sprintf "Résultats des tests: %d succès sur %d" num tot
+    let test_results ~num ~tot =
+      Format.sprintf "Résultats des tests: %d succès sur %d" num tot
 
     let unknown_variable ~name = Format.sprintf "Variable %S inconnue" name
 

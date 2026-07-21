@@ -144,9 +144,10 @@ module En : LANG = struct
     let ok_non_returned ~name =
       Format.sprintf "OK | %s ignored because non-returned" name
 
-    let test_results ~num ~tot=
+    let test_results ~num ~tot =
       Format.sprintf "Test results: %d success%s out of %d" num
-        (if num > 1 then "es" else "") tot
+        (if num > 1 then "es" else "")
+        tot
 
     let unexpected_failure = "Unexpected failure"
 

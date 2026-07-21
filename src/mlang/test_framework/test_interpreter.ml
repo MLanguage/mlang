@@ -400,7 +400,8 @@ let check_all_tests (p : Mir.program) (test_dir : string)
   Sys.remove progress_filename;
   Config.warning_flag := dbg_warning;
   Config.display_time := dbg_time;
-  Ppf.result_str @@ Msg.test_results ~num:(List.length s) ~tot:(Array.length arr);
+  Ppf.result_str
+  @@ Msg.test_results ~num:(List.length s) ~tot:(Array.length arr);
   if StrMap.cardinal f = 0 then Ppf.result_str Msg.all_good
   else Ppf.result_str @@ Msg.all_not_good f
 
