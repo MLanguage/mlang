@@ -811,7 +811,7 @@ module Func = struct
   let supzero se =
     let set_vars = se.set_vars in
     let def_test : DE.t =
-      DE.(deand [ se.def_test; devar (Comp (">=", se.value_comp, Lit 0.0)) ])
+      DE.(deand [ se.def_test; devar (Comp (">", se.value_comp, Lit 0.0)) ])
     in
     let cond = def_expr_to_constr def_test in
     let value_comp = Constr.Ite (cond, se.value_comp, Lit 0.0) in
