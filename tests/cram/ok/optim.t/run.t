@@ -29,7 +29,16 @@ Mlang avec l'optimisation remplaçant les accès mémoire au TGV via irdata par 
     return irdata->discords;
   }
   
-  $ gcc output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc -c output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc *.o -Ioutput -o ./cal -lm
+  $ ./cal -mode primitif test.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test.irj"
+  IACT006 | "test.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
 Mlang avec l'optimisation vérifiant si une règle peut être arrêtée ou non
   $ mlang simple.m --mpp_function soustraction --income-year=2020 --dgfip_options="-m2020,-X" --backend dgfip_c --output output/enchain.c -A app -Oncur > /dev/null
   $ cat output/m_simple.c
@@ -57,7 +66,16 @@ Mlang avec l'optimisation vérifiant si une règle peut être arrêtée ou non
     return irdata->discords;
   }
   
-  $ gcc output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc -c output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc *.o -Ioutput -o ./cal -lm
+  $ ./cal -mode primitif test.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test.irj"
+  IACT006 | "test.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
 Mlang avec l'optimisation supprimant les variables boolénnes redondantes dans les formules
   $ mlang simple.m --mpp_function soustraction --income-year=2020 --dgfip_options="-m2020,-X" --backend dgfip_c --output output/enchain.c -A app -Onrbf > /dev/null
   $ cat output/m_simple.c
@@ -85,7 +103,16 @@ Mlang avec l'optimisation supprimant les variables boolénnes redondantes dans l
     return irdata->discords;
   }
   
-  $ gcc output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc -c output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc *.o -Ioutput -o ./cal -lm
+  $ ./cal -mode primitif test.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test.irj"
+  IACT006 | "test.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
 Mlang avec toutes les optimisations
   $ mlang simple.m --mpp_function soustraction --income-year=2020 --dgfip_options="-m2020,-X" --backend dgfip_c --output output/enchain.c -A app -O* > /dev/null
   $ cat output/m_simple.c
@@ -117,4 +144,13 @@ Mlang avec toutes les optimisations
     return irdata->discords;
   }
   
-  $ gcc output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc -c output/*.c -Ioutput -lm -DTARGET=soustraction
+  $ gcc *.o -Ioutput -o ./cal -lm
+  $ ./cal -mode primitif test.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test.irj"
+  IACT006 | "test.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
