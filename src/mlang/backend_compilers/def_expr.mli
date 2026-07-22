@@ -79,6 +79,7 @@ module Shorten_def : sig
   (** Applies simple boolean simplifications. For any atom [v] and formulas [f]
       and [g] :
       - if [f] = [v] /\ [g], replaces occurences of [v] by [true] in [g];
-      - if [f] = [v] \/ [g], replaces occurences of [v] by [false] in [g]. This
-        simplification is done recursively on formulas. *)
+      - if [f] = [v] \/ [g], replaces occurences of [v] by [false] in [g].
+
+      This simplification is done recursively on formulas. *)
 end

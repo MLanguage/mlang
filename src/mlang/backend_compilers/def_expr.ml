@@ -210,6 +210,9 @@ module Shorten_def = struct
         | f -> (f :: l', map))
       ([], AtomMap.empty) l
 
+  (* From an (atom => bool) map, replaces atoms in a formula
+     if they belong to the map by their truth value. If negate is
+     set to true, reverses their truth value. *)
   let apply_known_on_atoms ~negate ~known f =
     let rec loop f =
       match f with
@@ -225,23 +228,38 @@ module Shorten_def = struct
     in
     loop f
 
+  (* Reverses the behavior of the split_forms returned map. *)
   let knowns_to_form m =
     AtomMap.fold
       (fun i b acc -> if b then DEatom i :: acc else not_ (DEatom i) :: acc)
       m []
 
+  (* Applies simple boolean simplifications. For any atom [v] and formulas [f]
+     and [g] :
+     - if [f] = [v] /\ [g], replaces occurences of [v] by [true] in [g];
+     - if [f] = [v] \/ [g], replaces occurences of [v] by [false] in [g].
+     
+     This simplification is done recursively on formulas. *)
   let apply f =
     let rec loop f =
       match f with
       | DEatom _ -> f
       | DEnot f -> not_ (loop f)
       | DEor l ->
+          (* Separates non-atoms (l) from atoms (known) *)
           let l, known = split_forms l in
+          (* Apply known atoms on non-atoms formula. We negate the atoms:
+             for a formula [f = atom \/ f'], we can assume occurences of [atom]
+             in [f'] are false (for if they were true, [f] would be true
+             anyway). *)
           let l = List.map (apply_known_on_atoms ~negate:true ~known) l in
+          (* Recursively applying the whole simplification on non-atoms *)
           let l = List.map loop l in
+          (* Re-building the formula list *)
           let l = knowns_to_form known @ l in
           ors l
       | DEand l ->
+          (* Same procedure than DEor, except we do not negate the atoms. *)
           let l, known = split_forms l in
           let l = List.map (apply_known_on_atoms ~negate:false ~known) l in
           let l = List.map loop l in
