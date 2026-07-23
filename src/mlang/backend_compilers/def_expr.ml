@@ -202,13 +202,13 @@ module Shorten_def = struct
   (* From a def_expr list, returns:
      - the list of def_expr with no atom ('var' and  'not vars');
      - the map of atoms with their prefix ([true] for 'var', [false] for 'not var'). *)
-  let split_forms (l : def_expr list) : def_expr list * bool AtomMap.t =
+  let split_forms (l : def_expr list) : def_expr list * (atom * bool) list =
     List.fold_left
       (fun (l', map) -> function
-        | DEatom v -> (l', AtomMap.add v true map)
-        | DEnot (DEatom v) -> (l', AtomMap.add v false map)
+        | DEatom v -> (l', (v, true) :: map)
+        | DEnot (DEatom v) -> (l', (v, false) :: map)
         | f -> (f :: l', map))
-      ([], AtomMap.empty) l
+      ([], []) l
 
   (* From an (atom => bool) map, replaces atoms in a formula
      if they belong to the map by their truth value. If negate is
@@ -217,7 +217,7 @@ module Shorten_def = struct
     let rec loop f =
       match f with
       | DEatom v -> begin
-          match AtomMap.find v known <> negate with
+          match List.assoc v known <> negate with
           | true -> true_
           | false -> false_
           | exception Not_found -> f
@@ -230,9 +230,9 @@ module Shorten_def = struct
 
   (* Reverses the behavior of the split_forms returned map. *)
   let knowns_to_form m =
-    AtomMap.fold
-      (fun i b acc -> if b then DEatom i :: acc else not_ (DEatom i) :: acc)
-      m []
+    List.fold_left
+      (fun acc (i, b) -> if b then DEatom i :: acc else not_ (DEatom i) :: acc)
+      [] m
 
   (* Applies simple boolean simplifications. For any atom [v] and formulas [f]
      and [g] :
