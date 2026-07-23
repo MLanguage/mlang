@@ -244,6 +244,34 @@ let optims =
            - 'sbo': replaces binary operators '&&' and '||' by '&' and '|'\n\
            - '*': all of the above (default).")
 
+let test_var_defs =
+  let open Arg in
+  let litteral =
+    let parser s =
+      let litteral_of_string = function
+        | "defaut" -> None
+        | "indefini" -> Some None
+        | sf -> Some (Some (float_of_string sf))
+      in
+      let err s =
+        Pp.spr
+          "@[invalid litteral \'%s\', expected \'defaut\', \'indefini\' or a \
+           float@]"
+          s
+      in
+      try Ok (litteral_of_string s) with Failure _ -> Error (err s)
+    in
+    let pp fmt = function
+      | None -> Format.pp_print_string fmt "default"
+      | Some None -> Format.pp_print_string fmt "indefini"
+      | Some (Some f) -> Format.pp_print_float fmt f
+    in
+    conv' ~docv:"LITTERAL" (parser, pp)
+  in
+  value
+  & opt_all (pair ~sep:'=' string litteral) []
+  & info [ "def"; "D" ] ~doc:"Initialise variables with values"
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
@@ -251,7 +279,7 @@ let mlang_t f =
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
     $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output $ trace
-    $ trace_output_file $ message_format $ optims)
+    $ trace_output_file $ message_format $ optims $ test_var_defs)
 
 let info =
   let doc =

@@ -9,6 +9,14 @@
 #include <ida.h>
 #include <options.h>
 
+#define TEST_ARG(arg,arg_long,arg_court) \
+  ( \
+    strcmp(arg, "-" arg_long) == 0 \
+    || strcmp(arg, "-" arg_court) == 0 \
+    || strcmp(arg, "--" arg_long) == 0 \
+    || strcmp(arg, "--" arg_court) == 0 \
+  )
+
 T_options analyseLdcSans(T_options opts) {
   infoActVide();
   opts->action = ACT_AID;
@@ -52,11 +60,11 @@ T_options analyseLdcFormat(T_tas tas, T_options opts, int argc, char **argv, int
   opts->args.fmt.fichiers = NIL(char);
   i++;
   while (i < argc) {
-    if (strcmp(argv[i], "-recursif") == 0 || strcmp(argv[i], "-r") == 0) {
+    if (TEST_ARG(argv[i], "recursif", "r")) {
       nbRec++;
       opts->args.fmt.recursif = VRAI;
       i++;
-    } else if (strcmp(argv[i], "-strict") == 0 || strcmp(argv[i], "-s") == 0) {
+    } else if (TEST_ARG(argv[i], "strict", "s")) {
       nbStrict++;
       opts->args.fmt.strict = VRAI;
       i++;
@@ -111,7 +119,7 @@ T_options analyseLdcTrt(T_tas tas, T_options opts, int argc, char **argv, int i)
   opts->args.trt.fichiers = NIL(char);
   opts->args.trt.dest = NULL;
   while (i < argc) {
-    if (strcmp(argv[i], "-mode") == 0 || strcmp(argv[i], "-m") == 0) {
+    if (TEST_ARG(argv[i], "mode", "m")) {
       T_mode mode = Primitif;
 
       i++;
@@ -133,7 +141,7 @@ T_options analyseLdcTrt(T_tas tas, T_options opts, int argc, char **argv, int i)
       } else {
         opts->args.trt.mode = mode;
       }
-    } else if (strcmp(argv[i], "-annee") == 0 || strcmp(argv[i], "-a") == 0) {
+    } else if (TEST_ARG(argv[i], "annee", "a")) {
       int annee = 0;
 
       i++;
@@ -150,26 +158,39 @@ T_options analyseLdcTrt(T_tas tas, T_options opts, int argc, char **argv, int i)
         opts->args.trt.annee = annee;
       }
       i++;
-    } else if (strcmp(argv[i], "-recursif") == 0 || strcmp(argv[i], "-r") == 0) {
+    } else if (TEST_ARG(argv[i], "recursif", "r")) {
       nbRec++;
       opts->args.trt.recursif = VRAI;
       i++;
-    } else if (strcmp(argv[i], "-strict") == 0 || strcmp(argv[i], "-s") == 0) {
+    } else if (TEST_ARG(argv[i], "strict", "s")) {
       nbStrict++;
       opts->args.trt.strict = VRAI;
       i++;
-    } else if (strcmp(argv[i], "-def") == 0 || strcmp(argv[i], "-d") == 0) {
+    } else if (TEST_ARG(argv[i], "def", "D")) {
       char *nom = NULL;
+      int j = 0;
+      char *valStr = NULL;
       double val = 0.0;
       T_varVal vv = NULL;
 
       i++;
-      nom = argv[i];
+      nom = strCopie(tas, argv[i]);
       i++;
-      if (strVersNum(argv[i], &val) != 1) {
-        TRT_ERR(anoOptsDefValArg(argv[i]))
+      for (j = 0; nom[j] != '\0' && nom[j] != '='; j++);
+      if (nom[j] == '=') {
+        nom[j] = '\0';
+        valStr = &(nom[j + 1]);
+      } else {
+        valStr = argv[i];
+        i++;
       }
-      i++;
+      if (strcmp(valStr, "defaut") == 0) {
+        val = INF;
+      } else if (strcmp(valStr, "indefini") == 0) {
+        val = NAN;
+      } else if (strVersNum(valStr, &val) != 1) {
+        TRT_ERR(anoOptsDefValArg(valStr))
+      }
       vv = creeVarVal(tas, nom, val);
       if (vv == NULL) {
         if (opts->args.trt.strict) {
@@ -256,12 +277,12 @@ T_options analyseLdc(T_tas tas, int argc, char **argv) {
   }
 
   /* aide */
-  if (strcmp(argv[i], "-aide") == 0 || strcmp(argv[i], "-?") == 0) {
+  if (TEST_ARG(argv[i], "aide", "?")) {
     return analyseLdcAide(opts, argc, argv, i);
   }
 
   /* format */
-  if (strcmp(argv[i], "-format") == 0 || strcmp(argv[i], "-f") == 0) {
+  if (TEST_ARG(argv[i], "format", "f")) {
     return analyseLdcFormat(tas, opts, argc, argv, i);
   }
 
@@ -273,3 +294,4 @@ T_options analyseLdc(T_tas tas, int argc, char **argv) {
   /* traitement */
   return analyseLdcTraitement(tas, opts, argc, argv, i);
 }
+

@@ -202,3 +202,6 @@ char *strApresDernier(char c, char *s) {
 
 }
 
+char nanTab[8] = {0, 0, 0, 0, 0, 0, -8, 127};
+char infTab[8] = {0, 0, 0, 0, 0, 0, -16, 127};
+

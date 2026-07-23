@@ -44,6 +44,7 @@ val mlang_t :
   string option ->
   Config.message_format ->
   Config.optim list ->
+  (string * float option option) list ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)

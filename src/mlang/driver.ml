@@ -155,7 +155,8 @@ let set_opts (files : string list) (application_names : string list)
     (m_clean_calls : bool) (dgfip_options : string list option)
     (no_nondet_display : bool) (plain_output : bool) (trace : bool)
     (trace_output_file : string option) (message_format : Config.message_format)
-    (optims : Config.optim list) =
+    (optims : Config.optim list)
+    (var_defs : (string * float option option) list) =
   begin match (trace, trace_output_file) with
   | false, Some _ ->
       Ppf.warning_print
@@ -167,7 +168,7 @@ let set_opts (files : string list) (application_names : string list)
     ~dgfip_test_filter ~run_test ~mpp_function ~optimize_unsafe_float ~precision
     ~roundops ~comparison_error_margin ~income_year ~m_clean_calls
     ~dgfip_options ~no_nondet_display ~plain_output ~trace ~trace_output_file
-    ~message_format ~optims
+    ~message_format ~optims ~var_defs
 
 let run () =
   let eval_cli =

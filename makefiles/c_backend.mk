@@ -138,7 +138,7 @@ endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)
 backend_tests: compile_dgfip_c_backend
-	./cal -mode primitif -recursif ${ANNEE_EXEC} ${TEST_FILES}
+	./cal -mode primitif -recursif ${TEST_VAR_DEFS} ${TEST_FILES}
 endif
 
 ifeq ($(call is_in,$(DGFIP_DIR)),1)

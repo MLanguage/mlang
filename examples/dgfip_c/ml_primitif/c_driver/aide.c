@@ -25,7 +25,10 @@ void aide_trt(FILE *sortie, T_options opts) {
   fprintf(sortie, "  %s\n", opts->exe);
   fprintf(sortie, "    -mode [primitif|correctif] (-m [p|c])\n");
   fprintf(sortie, "    -annee [année] (-a [année])\n");
-  fprintf(sortie, "    -def [variable] [valeur] (-d [variable] [valeur])\n");
+  fprintf(sortie, "    -def [variable] [valeur] (-D [variable] [valeur])\n");
+  fprintf(sortie, "      notation alternative:\n");
+  fprintf(sortie, "        --def [variable]=[valeur]\n");
+  fprintf(sortie, "        -D [variable]=[valeur])\n");
   fprintf(sortie, "    -recursif (-r)\n");
   fprintf(sortie, "    -strict (-s)\n");
   fprintf(sortie, "    [fichiers IRJ] ([fichiers IRJ ne commençant pas par '-'])\n");
