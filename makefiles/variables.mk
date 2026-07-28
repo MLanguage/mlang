@@ -8,7 +8,7 @@
 
 GCC=gcc
 MUSL_HOME?=/usr/local/musl
-OPTIM_FLAG?=2
+OPTIM_FLAG?=
 
 ##################################################
 # Tax computation configuration
@@ -17,40 +17,48 @@ OPTIM_FLAG?=2
 MPP_FUNCTION_BACKEND?=enchainement_primitif
 MPP_FUNCTION?=enchainement_primitif_interpreteur
 SOURCE_EXT_DIR=$(ROOT_DIR)/m_ext/$(YEAR)
-
 REPO?=ir
-
-ifeq ($(filter $(YEAR), 0), $(YEAR))
-  SOURCE_DIR?=
-  SOURCE_FILES?=
-  SOURCE_EXT_FILES?=$(call source_dir_ext,$(SOURCE_EXT_DIR))
+# Add a TESTS_DIR for 2025 when available
+ifeq ($(REPO),svn)
+  SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m/)
+  SOURCE_EXT_FILES?=\
+    $(SOURCE_EXT_DIR)/cibles.m \
+    $(SOURCE_EXT_DIR)/codes_1731.m \
+    $(SOURCE_EXT_DIR)/commence_par_5.m \
+    $(SOURCE_EXT_DIR)/commence_par_7.m \
+    $(SOURCE_EXT_DIR)/commence_par_H.m \
+    $(SOURCE_EXT_DIR)/correctif.m \
+    $(SOURCE_EXT_DIR)/main.m
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 2022 2023 2024), $(YEAR))
+  SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+  SOURCE_EXT_FILES?=\
+    $(SOURCE_EXT_DIR)/cibles.m \
+    $(SOURCE_EXT_DIR)/codes_1731.m \
+    $(SOURCE_EXT_DIR)/commence_par_5.m \
+    $(SOURCE_EXT_DIR)/commence_par_7.m \
+    $(SOURCE_EXT_DIR)/commence_par_H.m \
+    $(SOURCE_EXT_DIR)/correctif.m \
+    $(SOURCE_EXT_DIR)/main.m
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 2018 2019 2020 2021), $(YEAR))
+  SOURCE_FILES?=$(call source_dir,$(ROOT_DIR)/ir-calcul/sources$(YEAR)*/)
+  SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
+  TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
+else ifeq ($(filter $(YEAR), 0), $(YEAR))
+  SOURCE_FILES?=#$(call source_dir,$(ROOT_DIR)/m_ext/$(YEAR)/src/)
+  SOURCE_EXT_FILES?=$(call source_dir_ext,$(ROOT_DIR)/m_ext/$(YEAR)/)
   TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)
 else
-  ifeq ($(REPO),svn)
-    SOURCE_DIR?=$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m
-  else ifeq ($(filter $(YEAR), 2025), $(YEAR))
-    SOURCE_DIR?=$(ROOT_DIR)/ir-calcul/M_SVN/$(YEAR)/code_m
-  else
-    SOURCE_DIR?=$(ROOT_DIR)/ir-calcul/sources$(YEAR)*
-  endif
-  ifeq ($(filter $(YEAR), 2022 2023 2024 2025), $(YEAR))
-    SOURCE_FILES?=$(call source_dir_sans_cibles_m,$(SOURCE_DIR))
-    SOURCE_EXT_FILES?=\
-      $(SOURCE_EXT_DIR)/cibles.m \
-      $(SOURCE_EXT_DIR)/codes_1731.m \
-      $(SOURCE_EXT_DIR)/commence_par_5.m \
-      $(SOURCE_EXT_DIR)/commence_par_7.m \
-      $(SOURCE_EXT_DIR)/commence_par_H.m \
-      $(SOURCE_EXT_DIR)/correctif.m \
-      $(SOURCE_EXT_DIR)/main.m
-    TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-  else ifeq ($(filter $(YEAR), 2018 2019 2020 2021), $(YEAR))
-    SOURCE_FILES?=$(call source_dir,$(SOURCE_DIR))
-    SOURCE_EXT_FILES?=$(call source_dir_ext,$(SOURCE_EXT_DIR))
-    TESTS_DIR?=$(ROOT_DIR)/tests/$(YEAR)/fuzzing
-  else 
-    $(warning ATTENTION: il n'y a pas de configuration par défaut pour le millésime $(YEAR))
-  endif
+  $(warning WARNING: there is no default configuration for year: $(YEAR))
+  $(warning WARNING: example specification files and fuzzer tests are not included for year: $(YEAR))
+endif
+
+# Positionne l'année pour les tests fuzzés
+ifeq ($(filter $(YEAR), 2024), $(YEAR))
+  TEST_VAR_DEFS=-D ANCSDED=2026 -D V_MILLESIME=defaut
+else
+  TEST_VAR_DEFS=
 endif
 
 ##################################################
@@ -79,11 +87,8 @@ endif
 # Options pour le compilateur C
 # Attention, très long à compiler avec GCC en O2/O3
 COMMON_CFLAGS?=-std=c89 -pedantic
-
 ifdef OPTIM_FLAG
-  ifneq ($(OPTIM_FLAG), none)
-    COMPILER_SPECIFIC_CFLAGS=-O$(OPTIM_FLAG)
-  endif
+  COMPILER_SPECIFIC_CFLAGS=-O$(OPTIM_FLAG)
 endif
 
 BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
@@ -91,8 +96,8 @@ BACKEND_CFLAGS?=$(COMMON_CFLAGS) $(COMPILER_SPECIFIC_CFLAGS)
 # Directory of the driver sources for tax calculator
 DRIVER_DIR?=c_driver
 # Driver sources for tax calculator
-DRIVER_H_FILES?=aide.h chaine.h commun.h fichiers.h format.h ida.h irj.h liste.h mem.h options.h traitement.h completion.h utils.h
-DRIVER_C_FILES?=aide.c chaine.c commun.c fichiers.c format.c ida.c irdata.c irj.c liste.c main.c mem.c options.c traitement.c completion.c utils.c
+DRIVER_H_FILES?=aide.h chaine.h commun.h fichiers.h format.h ida.h irj.h liste.h mem.h options.h traitement.h utils.h
+DRIVER_C_FILES?=aide.c chaine.c commun.c fichiers.c format.c ida.c irdata.c irj.c liste.c main.c mem.c options.c traitement.c utils.c
 DRIVER_FILES?=$(DRIVER_H_FILES) $(DRIVER_C_FILES)
 
 # Flag to disable binary dump comparison
@@ -124,7 +129,7 @@ MLANG_INTERPRETER_OPTS=\
   --comparison_error_margin=$(COMPARISON_ERROR_MARGIN) \
   --mpp_function=$(MPP_FUNCTION)
 
-MLANG_TEST=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_INTERPRETER_OPTS) $(CODE_COVERAGE_FLAG)
+MLANG_TEST=$(MLANG_BIN) $(MLANG_DEFAULT_OPTS) $(MLANG_INTERPRETER_OPTS) $(CODE_COVERAGE_FLAG) $(TEST_VAR_DEFS)
 
 DGFIP_DIR?=examples/dgfip_c/ml_primitif
 

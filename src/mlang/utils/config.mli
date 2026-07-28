@@ -160,6 +160,8 @@ val optim_no_redundant_boolean_formulae : unit -> bool
 
 val optim_simple_binary_op : unit -> bool
 
+val test_var_defs : float option option StrMap.t ref
+
 val set_opts :
   files:string list ->
   application_names:string list ->
@@ -187,4 +189,5 @@ val set_opts :
   trace_output_file:string option ->
   message_format:message_format ->
   optims:optim list ->
+  var_defs:(string * float option option) list ->
   [ `Displayed_dgfip_help | `Error of Err.t | `Run ]

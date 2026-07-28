@@ -6,6 +6,12 @@
 #define VRAI 1
 #define FAUX 0
 
+extern char nanTab[8];
+extern char infTab[8];
+
+#define NAN (*(double *)nanTab)
+#define INF (*(double *)infTab)
+
 typedef unsigned short ushort;
 typedef unsigned int uint;
 typedef unsigned long ulong;

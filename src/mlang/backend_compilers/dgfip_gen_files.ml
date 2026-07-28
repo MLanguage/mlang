@@ -668,6 +668,16 @@ let gen_lib fmt (cprog : Mir.program) flags =
 |}
     taille_saisie taille_calculee taille_base taille_totale nb_ench;
 
+  Pp.fpr fmt
+    {|/* pour rétrocompatibilité avec le code C historique */
+#define NB_SAISIE %d
+#define NB_CALCULEE %d
+#define NB_BASE %d
+#define NB_TOTALE %d
+
+|}
+    taille_saisie taille_calculee taille_base taille_totale;
+
   Pp.fpr fmt "#define TAILLE_TMP_VARS %d\n" cprog.program_stats.sz_all_tmps;
   Pp.fpr fmt "#define TAILLE_REFS %d\n" cprog.program_stats.nb_all_refs;
   Pp.fpr fmt "#define TAILLE_TAB_VARINFO %d\n"

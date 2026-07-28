@@ -5,7 +5,6 @@
 #include <liste.h>
 #include <commun.h>
 
-/* Options communes au traitement et à la complétion */
 typedef struct S_options_trt {
   T_mode mode;
   int annee;
@@ -13,8 +12,6 @@ typedef struct S_options_trt {
   int strict;
   L_S_varVal defs;
   L_char fichiers;
-  /* Uniquement pour la complétion */
-  char *dest;
 } S_options_trt;
 
 typedef struct S_options_fmt {
@@ -30,8 +27,7 @@ typedef struct S_options_aid {
 
 #define ACT_TRT 0
 #define ACT_FMT 1
-#define ACT_CPL 2
-#define ACT_AID 3
+#define ACT_AID 2
 
 typedef struct S_options {
   int action;

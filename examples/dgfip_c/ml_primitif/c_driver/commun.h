@@ -17,6 +17,12 @@ struct S_varVal {
   double val;
 };
 
+typedef struct S_traitement {
+  int ok;
+  float temps_ms;
+} T_traitement;
+
+
 TYPEDEF_LISTE(S_varVal)
 
 extern T_varVal creeVarVal(T_tas tas, char *nom, double val);

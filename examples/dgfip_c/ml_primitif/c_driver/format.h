@@ -3,6 +3,6 @@
 
 #include <options.h>
 
-extern int verifieFormat(char *chemin, T_options opts);
+extern T_traitement verifieFormat(char *chemin, T_options opts);
 
 #endif /* __FORMAT_H__ */
