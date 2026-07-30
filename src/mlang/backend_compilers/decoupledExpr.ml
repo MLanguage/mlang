@@ -1076,10 +1076,10 @@ let rec write_decoupled_expr dgfip_flags oc =
         pr "@;double %s;" v;
         write_decoupled_expr dgfip_flags oc d v c;
         pr "@;if(%s == 0) {%s = 0; %s = 0.0;}" d res_def res_val;
-        pr "@;else if (%s) {@;@[<v 2>" v;
-        write_decoupled_expr dgfip_flags oc res_def res_val t;
-        pr "@;}@] else {@;@[<v 2>";
+        pr "@;else if (EQ_E(%s,0.0)) {@;@[<v 2>" v;
         write_decoupled_expr dgfip_flags oc res_def res_val e;
+        pr "@;}@] else {@;@[<v 2>";
+        write_decoupled_expr dgfip_flags oc res_def res_val t;
         pr "@;}@]";
         pr "@;}@]"
     | `Let (vardef, varval, body, followup) ->
