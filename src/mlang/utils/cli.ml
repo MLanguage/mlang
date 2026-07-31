@@ -223,6 +223,7 @@ let optim_flags =
     ("ncur", No_check_unstoppable_rules);
     ("nrbf", No_redundant_boolean_formulae);
     ("sbo", Simple_binary_op);
+    ("sd", Shorten_def);
     ("*", All_optims);
   ]
 
@@ -242,6 +243,7 @@ let optims =
            - 'nrbf': removes redundant boolean formulae from OR and AND \
            operators (when checking for variable definitions);\n\
            - 'sbo': replaces binary operators '&&' and '||' by '&' and '|'\n\
+           - 'sd': shortens definition with basic boolean algebra\n\
            - '*': all of the above (default).")
 
 let test_var_defs =

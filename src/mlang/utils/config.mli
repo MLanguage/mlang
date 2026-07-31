@@ -19,6 +19,7 @@ type optim =
   | No_check_unstoppable_rules
   | No_redundant_boolean_formulae
   | Simple_binary_op
+  | Shorten_def
 
 (** According on the [value_sort], a specific interpreter will be called with
     the right kind of floating-point value *)
@@ -159,6 +160,8 @@ val optim_no_check_unstoppable : unit -> bool
 val optim_no_redundant_boolean_formulae : unit -> bool
 
 val optim_simple_binary_op : unit -> bool
+
+val optim_shorten_def : unit -> bool
 
 val test_var_defs : float option option StrMap.t ref
 
