@@ -899,36 +899,35 @@ let gen_decl_targets fmt (cprog : Mir.program) =
 
 let gen_mlang_h fmt cprog flags stats_varinfos =
   let pr form = Pp.fpr fmt form in
-  pr "/****** LICENCE CECIL *****/\n\n";
-  pr "#ifndef _MLANG_H_\n";
-  pr "#define _MLANG_H_\n";
-  pr "\n";
-  pr "#include <stdlib.h>\n";
-  pr "#include <stdio.h>\n";
-  pr "#include <math.h>\n";
-  pr "#include <string.h>\n";
-  pr "#include <limits.h>\n";
-  pr "#include <setjmp.h>\n";
-  pr "\n";
-  pr "#include \"conf.h\"\n";
-  pr "\n";
-  pr "#define _PROTS(X) X\n";
-  pr "\n";
-  pr "#define ANNEE_REVENU %04d\n" flags.Dgfip_options.annee_revenu;
-  pr "\n";
+  pr "/****** LICENCE CECIL *****/\n@.";
+  pr "#ifndef _MLANG_H_@.";
+  pr "#define _MLANG_H_@.@.";
+  pr "#include <stdlib.h>@.";
+  pr "#include <stdio.h>@.";
+  pr "#include <math.h>@.";
+  pr "#include <string.h>@.";
+  pr "#include <limits.h>@.";
+  pr "#include <setjmp.h>@.";
+  pr "@.";
+  pr "#include \"conf.h\"@.";
+  pr "@.";
+  pr "#define _PROTS(X) X@.";
+  pr "@.";
+  pr "#define ANNEE_REVENU %04d@." flags.Dgfip_options.annee_revenu;
+  pr "@.";
   gen_decl_varinfos fmt cprog stats_varinfos;
-  pr "\n";
+  pr "@.";
   gen_const fmt cprog;
-  pr "\n";
+  pr "@.";
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
-  pr "\n";
+  pr "@.";
   gen_lib fmt cprog flags;
-  pr "\n";
+  pr "@.";
   gen_decl_functions fmt cprog;
-  pr "\n";
+  pr "@.";
   gen_decl_targets fmt cprog;
-  pr "#endif /* _MLANG_H_ */\n\n"
+  pr "@.#endif /* _MLANG_H_ */@."
 
 let gen_mlang_c fmt (cprog : Mir.program) flags =
   Pp.fpr fmt "%s"

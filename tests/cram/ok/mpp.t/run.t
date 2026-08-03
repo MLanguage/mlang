@@ -450,3 +450,75 @@
   IACT009 | 1/1 fichier correct
   IACT010 | 0/1 fichiers incorrects
   IACT011 | 0/1 fichiers invalides
+
+  $ rm output/m_aiguillage.c
+  $ mlang conditions.m --mpp_function cond -A app --income-year=2020 --dgfip_options="-m2020,-X" --run_test test.irj --no_nondet_display
+  [RESULT] test.irj
+  [RESULT] Aucun echec!
+  [RESULT] Test exécuté!
+  $ mlang conditions.m --mpp_function cond -A app --income-year=2020 --dgfip_options="-m2020,-X" --backend dgfip_c --output output/conditions.c
+  [RESULT] Parsing: completed!
+  $ cat output/m_conditions.c
+  #include "mlang.h" 
+  
+  struct S_discord * cond(T_irdata* irdata) {
+    int sav35_nb_tmps_target = irdata->nb_tmps_target;
+    int sav35_nb_refs_target = irdata->nb_refs_target;
+    char *def_saisie = irdata->def_saisie;
+    double *saisie = irdata->saisie;
+    char *def_calculee = irdata->def_calculee;
+    double *calculee = irdata->calculee;
+    char *def_base = irdata->def_base;
+    double *base = irdata->base;
+    T_var_space var_space = irdata->var_space_courant;
+    irdata->nb_tmps_target = 0;
+    irdata->nb_refs_target = 0;
+    
+    {
+      char cond36_def;
+      double cond36_val;
+      {
+        register int int0;
+        cond36_def = (def_saisie[0/*X*/]);
+        if (cond36_def) {
+          int0 = (GT_E(((saisie[0/*X*/])),(0.0)));
+          cond36_val = ((def_saisie[0/*X*/]) ? int0 : 0);
+        } else cond36_val = 0.0;
+      }
+      if (cond36_def && cond36_val != 0.0) {
+        {
+          (def_calculee[0/*Z*/]) = 1;
+          (calculee[0/*Z*/]) = 1.0;
+        }
+      } else if (cond36_def) {
+        {
+          (def_calculee[0/*Z*/]) = 1;
+          (calculee[0/*Z*/]) = 0.0;
+        }
+      }
+    }
+    label_cond: ;
+    
+    irdata->nb_refs_target = sav35_nb_refs_target;
+    irdata->nb_tmps_target = sav35_nb_tmps_target;
+    return irdata->discords;
+  }
+  
+  $ gcc -c output/*.c -Ioutput -lm -DTARGET=cond
+  $ gcc *.o -Ioutput -o ./cal -lm
+  $ ./cal -mode primitif test_condition1.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test_condition1.irj"
+  IACT006 | "test_condition1.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
+  $ ./cal -mode primitif test_condition2.irj
+  IACT003 | tests IRJ
+  DLDC002 | année par défaut (année revenu + 1: 2021)
+  IACT005 | traitement du fichier "test_condition2.irj"
+  IACT006 | "test_condition2.irj" OK
+  IACT009 | 1/1 fichier correct
+  IACT010 | 0/1 fichiers incorrects
+  IACT011 | 0/1 fichiers invalides
