@@ -128,98 +128,94 @@ let str_escape str =
   aux 0
 
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
-  let set_vars, idx_def, idx_val =
-    let e_idx = generate_c_expr p m_idx in
-    (e_idx.set_vars, e_idx.def_test, e_idx.value_comp)
-  in
-  let d_fun =
-    D.dfun_with_ptr "lis_tabaccess" (fun ~ptrdef ~ptrval ->
-        [
-          C.irdata;
-          C.(Varspace_of (m_sp_opt, v));
-          C.Lit (float_of_int (Com.Var.loc_tab_idx v));
-          D.def_expr_to_constr idx_def;
-          idx_val;
-          ptrdef;
-          ptrval;
-        ])
-  in
-  { d_fun with set_vars = set_vars @ d_fun.set_vars }
+  let e_idx = generate_c_expr p m_idx in
+  D.make_let e_idx (fun vardef varval ->
+      D.atomic
+      @@ D.dfun_with_ptr "lis_tabaccess" (fun ~ptrdef ~ptrval ->
+          [
+            C.irdata;
+            C.(Varspace_of (m_sp_opt, v));
+            C.Lit (float_of_int (Com.Var.loc_tab_idx v));
+            D.def_expr_to_constr vardef;
+            varval;
+            ptrdef;
+            ptrval;
+          ]))
 
 and code_access (p : Mir.program) m_acc =
   match m_acc with
-  | Com.VarAccess (_, v) -> ([], C.Varinfo v)
+  | Com.VarAccess (_, v) ->
+      D.atomic
+        { set_vars = []; def_test = D.DE.detrue; value_comp = C.Varinfo v }
   | Com.TabAccess ((_, v), m_i) ->
-      let ei = generate_c_expr p m_i in
-      ( ei.set_vars,
-        C.Varinfo_tab (v, D.def_expr_to_constr ei.def_test, ei.value_comp) )
+      D.make_let (generate_c_expr p m_i) (fun vardef varval ->
+          D.atomic
+            {
+              set_vars = [];
+              def_test = vardef;
+              value_comp = C.Varinfo_tab (v, D.def_expr_to_constr vardef, varval);
+            })
   | Com.FieldAccess (_, ie, f, _) ->
-      let e = generate_c_expr p ie in
-      ( e.set_vars,
-        C.Varinfo_field
-          (D.def_expr_to_constr e.def_test, e.value_comp, Pos.unmark f) )
+      D.make_let (generate_c_expr p ie) (fun vardef varval ->
+          D.atomic
+            {
+              set_vars = [];
+              def_test = vardef;
+              value_comp =
+                C.Varinfo_field
+                  (D.def_expr_to_constr vardef, varval, Pos.unmark f);
+            })
 
 and access p acc =
   match acc with
   | Com.VarAccess (m_sp_opt, var) ->
       let def_test = D.DE.devar @@ C.M (m_sp_opt, var, Def) in
       let value_comp = C.M (m_sp_opt, var, Val) in
-      D.{ set_vars = []; def_test; value_comp }
+      D.atomic { set_vars = []; def_test; value_comp }
   | TabAccess ((m_sp_opt, v), m_idx) -> lis_tabaccess p m_sp_opt v m_idx
   | FieldAccess (m_sp_opt, me, f, _) ->
       let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
-      let set_vars, arg_exprs =
-        let e = generate_c_expr p me in
-        (e.set_vars, [ D.def_expr_to_constr e.def_test; e.value_comp ])
-      in
-      let d_fun =
-        D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
-            [ C.irdata; C.Varspace_current m_sp_opt; ptrdef; ptrval ]
-            @ arg_exprs)
-      in
-      { d_fun with set_vars = set_vars @ d_fun.set_vars }
+      D.make_let (generate_c_expr p me) (fun vardef varval ->
+          let arg_exprs = [ D.def_expr_to_constr vardef; varval ] in
+          let d_fun =
+            D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+                [ C.irdata; C.Varspace_current m_sp_opt; ptrdef; ptrval ]
+                @ arg_exprs)
+          in
+          D.atomic
+          @@ { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
 
 and generate_test_in_set p positive e0 values =
-  let se0 = generate_c_expr p e0 in
-  let ldef, lval = C.locals_from_m () in
-  let sle0 =
-    {
-      D.set_vars = [];
-      D.def_test = D.DE.devar @@ C.Local ldef;
-      D.value_comp = C.Local lval;
-    }
-  in
-  let declare_local constr =
-    C.Let_local
-      ( ldef,
-        D.def_expr_to_constr se0.def_test,
-        C.Let_local (lval, se0.value_comp, constr) )
-  in
-  let or_chain =
-    List.fold_left
-      (fun or_chain set_value ->
-        let equal_test =
-          match set_value with
-          | Com.VarValue acc ->
-              D.comparison (Pos.without Com.Eq) sle0 (access p (Pos.unmark acc))
-          | Com.FloatValue i ->
-              D.comparison (Pos.without Com.Eq) sle0 (D.elit (Pos.unmark i))
-          | Com.IntervalValue (bn, en) ->
-              let s_bn = bn |> Pos.unmark |> float_of_int |> D.elit
-              and s_en = en |> Pos.unmark |> float_of_int |> D.elit in
-              D.binop (Pos.without Com.And)
-                (D.comparison (Pos.without Com.Gte) sle0 s_bn)
-                (D.comparison (Pos.without Com.Lte) sle0 s_en)
-        in
-        D.binop (Pos.without Com.Or) or_chain equal_test)
-      (D.eundefined ()) values
-  in
-  let se = if positive then or_chain else D.unop Com.Not or_chain in
-  {
-    D.set_vars = se0.set_vars @ se.set_vars;
-    D.def_test = D.DE.devar (declare_local (D.def_expr_to_constr se.def_test));
-    D.value_comp = declare_local se.value_comp;
-  }
+  D.make_let (generate_c_expr p e0) (fun vardef varval ->
+      let varval_expr =
+        D.atomic { set_vars = []; def_test = vardef; value_comp = varval }
+      in
+      let or_chain =
+        List.fold_left
+          (fun or_chain set_value ->
+            let equal_test =
+              match set_value with
+              | Com.VarValue acc ->
+                  D.comparison (Pos.without Com.Eq) varval_expr
+                    (access p (Pos.unmark acc))
+              | Com.FloatValue i ->
+                  D.comparison (Pos.without Com.Eq) varval_expr
+                    D.(atomic @@ elit @@ Pos.unmark i)
+              | Com.IntervalValue (bn, en) ->
+                  let s_bn =
+                    bn |> Pos.unmark |> float_of_int |> D.elit |> D.atomic
+                  and s_en =
+                    en |> Pos.unmark |> float_of_int |> D.elit |> D.atomic
+                  in
+                  D.binop (Pos.without Com.And)
+                    (D.comparison (Pos.without Com.Gte) varval_expr s_bn)
+                    (D.comparison (Pos.without Com.Lte) varval_expr s_en)
+            in
+            D.binop (Pos.without Com.Or) or_chain equal_test)
+          (D.atomic @@ { (D.eundefined ()) with def_test = vardef })
+          values
+      in
+      if positive then or_chain else D.unop Com.Not or_chain)
 
 and funcall p f args =
   match (f, args) with
@@ -244,46 +240,55 @@ and funcall p f args =
   | _ -> assert false (* should not happen *)
 
 and attribute p acc attr =
-  let set_vars, varinfo = code_access p acc in
-  let def_test = D.DE.devar @@ C.Fun (Pp.spr "attribut_%s_def" attr, [ varinfo ])
-  and value_comp = C.Fun (Pp.spr "attribut_%s" attr, [ varinfo ]) in
-  D.build_transitive_composition { set_vars; def_test; value_comp }
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let def_test =
+        D.DE.deand
+          [
+            vardef;
+            D.DE.devar @@ C.Fun (Pp.spr "attribut_%s_def" attr, [ varval ]);
+          ]
+      and value_comp = C.Fun (Pp.spr "attribut_%s" attr, [ varval ]) in
+      D.(
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test; value_comp }))
 
 and size p acc =
-  let set_vars, varinfo = code_access p acc in
-  let d_fun =
-    D.dfun_with_ptr "size_varinfo" (fun ~ptrdef ~ptrval ->
-        [ varinfo; ptrdef; ptrval ])
-  in
-  { d_fun with set_vars = set_vars @ d_fun.set_vars }
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let f =
+        D.dfun_with_ptr "size_varinfo" (fun ~ptrdef ~ptrval ->
+            [ varval; ptrdef; ptrval ])
+      in
+      D.atomic { f with def_test = D.DE.deand [ vardef; f.def_test ] })
 
 and is_type p acc typ =
-  let set_vars0, evt_d_fun0 = code_access p acc in
-  let d_fun =
-    D.dfun_with_ptr "est_type" (fun ~ptrdef ~ptrval ->
-        [ evt_d_fun0; C.Typ typ; ptrdef; ptrval ])
-  in
-  { d_fun with set_vars = set_vars0 @ d_fun.set_vars }
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let d_fun =
+        D.dfun_with_ptr "est_type" (fun ~ptrdef ~ptrval ->
+            [ varval; C.Typ typ; ptrdef; ptrval ])
+      in
+      D.atomic { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
 
 and same_variable p acc0 acc1 =
-  let set_vars0, evt_d_fun0 = code_access p acc0 in
-  let set_vars1, evt_d_fun1 = code_access p acc1 in
-  let d_fun =
-    D.dfun_with_ptr "meme_variable" (fun ~ptrdef ~ptrval ->
-        [ evt_d_fun0; evt_d_fun1; ptrdef; ptrval ])
-  in
-  { d_fun with set_vars = set_vars0 @ set_vars1 @ d_fun.set_vars }
+  D.make_let (code_access p acc0) (fun d0 v0 ->
+      D.make_let (code_access p acc1) (fun d1 v1 ->
+          let d_fun =
+            D.dfun_with_ptr "meme_variable" (fun ~ptrdef ~ptrval ->
+                [ v0; v1; ptrdef; ptrval ])
+          in
+          D.atomic
+            { d_fun with def_test = D.DE.deand [ d0; d1; d_fun.def_test ] }))
 
 and in_domain (p : Mir.program) acc cvm =
   assert (Com.CatVar.Map.cardinal cvm = 1);
   let cv = fst @@ Com.CatVar.Map.min_binding cvm in
   let id_cv = (Com.CatVar.Map.find cv p.program_var_categories).id_int in
-  let set_vars, varinfo = code_access p acc in
-  let d_fun =
-    D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
-        [ varinfo; C.Lit (float_of_int id_cv); ptrdef; ptrval ])
-  in
-  { d_fun with set_vars = set_vars @ d_fun.set_vars }
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let d_fun =
+        D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
+            [ varval; C.Lit (float_of_int id_cv); ptrdef; ptrval ])
+      in
+      D.atomic { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
 
 and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
     D.expression_composition =
@@ -306,15 +311,14 @@ and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
         match f_opt with
         | None ->
             (* todo: check if necessary *)
-            D.{ set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
+            D.atomic
+              { set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
         | Some f -> generate_c_expr p f
       in
       D.conditional cond thenval elseval
   | FuncCall (f, args) -> funcall p (Pos.unmark f) args
-  | Literal { lit = Float f; _ } ->
-      { set_vars = []; def_test = D.DE.detrue; value_comp = C.Lit f }
-  | Literal { lit = Undefined; _ } ->
-      { set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
+  | Literal { lit = Float f; _ } -> D.atomic @@ D.elit f
+  | Literal { lit = Undefined; _ } -> D.atomic @@ D.eundefined ()
   | Var acc -> access p acc
   | Attribut (m_acc, a) -> attribute p (Pos.unmark m_acc) (Pos.unmark a)
   | Size m_acc -> size p @@ Pos.unmark m_acc

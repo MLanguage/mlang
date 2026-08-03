@@ -69,6 +69,10 @@ let ands l =
 
 let ors l = match l with [] -> DEor [] | hd :: tl -> List.fold_left or_ hd tl
 
+let is_true t = t = true_
+
+let is_false t = t = false_
+
 let compare_atom = Int.compare
 
 module AtomMap = Map.Make (Int)

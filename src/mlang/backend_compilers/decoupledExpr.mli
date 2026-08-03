@@ -65,7 +65,7 @@ val def_expr_to_constr : DE.t -> Constr.t
     following represents complete and optimized expressions for M computations
 *)
 
-type expression_composition = {
+type atomic_expression_composition = {
   set_vars : (dflag * string * Constr.t) list;
   def_test : DE.t;
   value_comp : Constr.t;
@@ -73,19 +73,29 @@ type expression_composition = {
 (** Representation of an M computation in construction. [def_test] for the
     defineness flag, and [value_comp] for the actual valuation. *)
 
+type expression_composition
+
+val atomic : atomic_expression_composition -> expression_composition
+
+val make_let :
+  expression_composition ->
+  (DE.t -> Constr.t -> expression_composition) ->
+  expression_composition
+
 val build_transitive_composition :
-  ?safe_def:bool -> expression_composition -> expression_composition
+  safe_def:bool ->
+  atomic_expression_composition ->
+  atomic_expression_composition
 (** Refine an expression composition to enfore M invariants. Mainly the fact
     that undefined value are valuated to zero. [value_comp] of the argument is
-    expected to be defined assuming the expression {i is} defined. [safe_def],
-    which defaults to [false], can be set when the defined [value_comp]
-    computation will evaluate to zero if [def_test] do, allowing the guard to be
-    optimized away. *)
+    expected to be defined assuming the expression {i is} defined. [safe_def]
+    defines if [value_comp] computation will evaluate to zero if [def_test] do,
+    allowing the guard to be optimized away. *)
 
-val eundefined : unit -> expression_composition
+val eundefined : unit -> atomic_expression_composition
 (** The representation of undefined *)
 
-val elit : float -> expression_composition
+val elit : float -> atomic_expression_composition
 (** Literals have a simple enough representation they can be written as an
     expression composition without relying on constructions. *)
 
@@ -112,7 +122,7 @@ val conditional :
 val dfun_with_ptr :
   string ->
   (ptrdef:Constr.t -> ptrval:Constr.t -> Constr.t list) ->
-  expression_composition
+  atomic_expression_composition
 (** [dfun_with_ptr fn args]
 
     Some functions use pointers to save the definition status & the value of a

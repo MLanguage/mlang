@@ -117,11 +117,11 @@ module ANSITerminal = struct
       in
       let _ = Thread.create timer () in
       ( (fun current_progress_msg ->
-          msg := Format.sprintf "%s: %s" task current_progress_msg),
+          msg := Format.sprintf "%s: %s\n" task current_progress_msg),
         fun finish_msg ->
           stop := true;
           result_marker ();
-          Format.printf "%s: %s" task finish_msg;
+          Format.printf "%s: %s@." task finish_msg;
           ANSITerminal.erase ANSITerminal.Below;
           ANSITerminal.move_bol ();
           Format.printf "\n";
@@ -135,7 +135,7 @@ module ANSITerminal = struct
       Format.kasprintf
         (fun str ->
           debug_marker ();
-          Format.printf "%s\n@?" str)
+          Format.printf "%s\n@." str)
         ppf
     else Format.ifprintf Format.std_formatter ppf
 

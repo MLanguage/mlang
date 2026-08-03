@@ -27,6 +27,10 @@ type def_expr =
   | DEnot of def_expr
   | DEatom of atom
 
+val is_true : def_expr -> bool
+
+val is_false : def_expr -> bool
+
 (** Module signature of expressions whose atoms are generic expressions. Generic
     expressions are replaced by atoms, and a map keeps the correspondance
     between expressions and atoms. If the same expression is used twice, it will

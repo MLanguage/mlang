@@ -469,11 +469,75 @@ let rec make_constr : Constr.t -> builder = function
   | It0 (c, t) -> it0 (make_constr c) (make_constr t)
   | Let_local (lv, e, i) -> let_local lv (make_constr e) (make_constr i)
 
-type expression_composition = {
+type atomic_expression_composition = {
   set_vars : (dflag * string * Constr.t) list;
   def_test : DE.t;
   value_comp : Constr.t;
 }
+
+type expression_composition =
+  | AtomicExpr of atomic_expression_composition
+  | Cond of
+      expression_composition * expression_composition * expression_composition
+  | Let of {
+      vardef : string;
+      varval : string;
+      body : expression_composition;
+      followup : expression_composition;
+    }
+
+let atomic e = AtomicExpr e
+
+let make_generic_let =
+  let fresh_name =
+    let cpt = ref 0 in
+    fun () ->
+      let vardef = Format.sprintf "vardef%i" !cpt
+      and varval = Format.sprintf "varval%i" !cpt in
+      incr cpt;
+      (vardef, varval)
+  in
+  fun f ->
+    let vardef, varval = fresh_name () in
+    f vardef varval
+
+let make_let body followup =
+  match body with
+  | AtomicExpr e -> begin
+      match followup e.def_test e.value_comp with
+      | AtomicExpr e' ->
+          atomic @@ { e' with set_vars = e.set_vars @ e'.set_vars }
+      | _ ->
+          make_generic_let (fun vardef varval ->
+              Let
+                {
+                  vardef;
+                  varval;
+                  body;
+                  followup =
+                    followup
+                      (DE.devar @@ Constr.Instr vardef)
+                      (Constr.Instr varval);
+                })
+    end
+  | _ ->
+      make_generic_let (fun vardef varval ->
+          Let
+            {
+              vardef;
+              varval;
+              body;
+              followup =
+                followup (DE.devar @@ Constr.Instr vardef) (Constr.Instr varval);
+            })
+
+let make_lets (bodys : expression_composition list)
+    (followup : (DE.t * Constr.t) list -> expression_composition) =
+  let rec loop acc = function
+    | [] -> followup (List.rev acc)
+    | body :: tl -> make_let body (fun d v -> loop ((d, v) :: acc) tl)
+  in
+  loop [] bodys
 
 let def_expr_to_constr e =
   let map = DE.get_assoc e in
@@ -502,9 +566,9 @@ let def_expr_to_constr e =
   in
   loop def_expr
 
-let build_transitive_composition ?(safe_def = false)
-    ({ set_vars; def_test; value_comp } : expression_composition) :
-    expression_composition =
+let build_transitive_composition ~safe_def
+    ({ set_vars; def_test; value_comp } : atomic_expression_composition) :
+    atomic_expression_composition =
   (* `safe_def` can be set on call when we are sure that `value_comp` will
      always happen to be zero when `def_test` ends up false. E.g. arithmetic
      operation have such semantic property (funny question is what's the
@@ -518,7 +582,7 @@ let build_transitive_composition ?(safe_def = false)
 
 let dfun_with_ptr (f : string)
     (args : ptrdef:Constr.t -> ptrval:Constr.t -> Constr.t list) :
-    expression_composition =
+    atomic_expression_composition =
   let res = fresh_c_local "res" in
   let res_def = Pp.spr "%s_def" res in
   let res_val = Pp.spr "%s_val" res in
@@ -535,7 +599,8 @@ let dfun_with_ptr (f : string)
   in
   let def_test = DE.devar @@ Instr res_def in
   let value_comp = Constr.Instr res_val in
-  build_transitive_composition { set_vars; def_test; value_comp }
+  build_transitive_composition ~safe_def:false
+    { set_vars; def_test; value_comp }
 
 let eundefined () =
   { set_vars = []; def_test = DE.defalse; value_comp = Lit 0. }
@@ -552,7 +617,7 @@ type local_decls = {
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
    further construction. *)
-let build_expression (expr_comp : expression_composition) :
+let build_atomic_expression (expr_comp : atomic_expression_composition) :
     local_decls * (dflag * string * t) list * t * t =
   let empty_stacks =
     { def_top = 0; val_top = 0; var_top = 0; spa_top = 0; var_substs = [] }
@@ -597,6 +662,13 @@ let build_expression (expr_comp : expression_composition) :
       (set_locals @ def_locals @ value_locals)
   in
   (stacks_size, set_tests, def_test, value_comp)
+
+let rec build_expression = function
+  | AtomicExpr e -> `Atom (build_atomic_expression e)
+  | Cond (c, t, e) ->
+      `Cond (build_expression c, build_expression t, build_expression e)
+  | Let { vardef; varval; body; followup } ->
+      `Let (vardef, varval, build_expression body, build_expression followup)
 
 let format_slot fmt ({ kind; depth } : stack_slot) =
   let kind =
@@ -747,197 +819,230 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
 
 (* Building basic expressions *)
 
-let comparison op se1 se2 =
-  let safe_def = false in
-  let set_vars = se1.set_vars @ se2.set_vars in
-  let def_test = DE.deand [ se1.def_test; se2.def_test ] in
-  let value_comp =
-    let op =
-      let open Com in
-      match Pos.unmark op with
-      | Gt -> ">"
-      | Gte -> ">="
-      | Lt -> "<"
-      | Lte -> "<="
-      | Eq -> "=="
-      | Neq -> "!="
-    in
-    Constr.Comp (op, se1.value_comp, se2.value_comp)
-  in
-  build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
+let comparison op (se1 : expression_composition) (se2 : expression_composition)
+    =
+  make_let se1 (fun d1 v1 ->
+      make_let se2 (fun d2 v2 ->
+          let safe_def = false in
+          let def_test = DE.deand [ d1; d2 ] in
+          let value_comp =
+            let op =
+              let open Com in
+              match Pos.unmark op with
+              | Gt -> ">"
+              | Gte -> ">="
+              | Lt -> "<"
+              | Lte -> "<="
+              | Eq -> "=="
+              | Neq -> "!="
+            in
+            Constr.Comp (op, v1, v2)
+          in
+          AtomicExpr
+            (build_transitive_composition ~safe_def
+               { set_vars = []; def_test; value_comp })))
 
-let binop op se1 se2 =
-  let set_vars = se1.set_vars @ se2.set_vars in
-  let def_test =
-    match Pos.unmark op with
-    | Com.And | Com.Mul | Com.Div | Com.Mod ->
-        DE.deand [ se1.def_test; se2.def_test ]
-    | Com.Or | Com.Add | Com.Sub -> DE.deor [ se1.def_test; se2.def_test ]
-  in
-  let op e1 e2 =
-    match Pos.unmark op with
-    | Com.And -> Constr.And (e1, e2)
-    | Com.Or -> Or (e1, e2)
-    | Com.Add -> Plus (e1, e2)
-    | Com.Sub -> Sub (e1, e2)
-    | Com.Mul -> Mult (e1, e2)
-    | Com.Div -> Ite (e2, Div (e1, e2), Lit 0.)
-    | Com.Mod -> Ite (e2, Modulo (e1, e2), Lit 0.)
-  in
-  let value_comp = op se1.value_comp se2.value_comp in
-  build_transitive_composition ~safe_def:true { set_vars; def_test; value_comp }
+let binop op (se1 : expression_composition) (se2 : expression_composition) =
+  make_let se1 (fun d1 v1 ->
+      make_let se2 (fun d2 v2 ->
+          let safe_def = true in
+          let def_test =
+            match Pos.unmark op with
+            | Com.And | Com.Mul | Com.Div | Com.Mod -> DE.deand [ d1; d2 ]
+            | Com.Or | Com.Add | Com.Sub -> DE.deor [ d1; d2 ]
+          in
+          let op e1 e2 =
+            match Pos.unmark op with
+            | Com.And -> Constr.And (e1, e2)
+            | Com.Or -> Or (e1, e2)
+            | Com.Add -> Plus (e1, e2)
+            | Com.Sub -> Sub (e1, e2)
+            | Com.Mul -> Mult (e1, e2)
+            | Com.Div -> Ite (e2, Div (e1, e2), Lit 0.)
+            | Com.Mod -> Ite (e2, Modulo (e1, e2), Lit 0.)
+          in
+          let value_comp = op v1 v2 in
+          AtomicExpr
+            (build_transitive_composition ~safe_def
+               { set_vars = []; def_test; value_comp })))
 
 let unop op se =
-  let set_vars = se.set_vars in
-  let def_test = se.def_test in
   let op, safe_def =
     match op with
     | Com.Not -> ((fun e -> Constr.Not e), false)
     | Com.Minus -> ((fun e -> Minus e), true)
   in
-  let value_comp = op se.value_comp in
-  build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
+  make_let se (fun vardef varval ->
+      let value_comp = op varval in
+      let def_test = vardef in
+      AtomicExpr
+        (build_transitive_composition ~safe_def
+           { set_vars = []; def_test; value_comp }))
 
 let conditional cond thenval elseval =
-  let set_vars = cond.set_vars @ thenval.set_vars @ elseval.set_vars in
-  let def_test =
-    DE.deand
-      [
-        cond.def_test;
-        DE.deite (DE.devar cond.value_comp) thenval.def_test elseval.def_test;
-      ]
-  in
-  let value_comp =
-    Constr.Ite (cond.value_comp, thenval.value_comp, elseval.value_comp)
-  in
-  build_transitive_composition { set_vars; def_test; value_comp }
+  (* make_let cond (fun dc vc -> *)
+  (*     make_let thenval (fun dt vt -> *)
+  (*         make_let elseval (fun de ve -> *)
+  (*             let def_test = DE.deand [ dc; DE.deite (DE.devar vc) dt de ] in *)
+  (*             let value_comp = Constr.Ite (vc, vt, ve) in *)
+  (*             AtomicExpr *)
+  (*               (build_transitive_composition ~safe_def:false *)
+  (*                  { set_vars = []; def_test; value_comp })))) *)
+
+  (* let set_vars = cond.set_vars @ thenval.set_vars @ elseval.set_vars in *)
+  (* let def_test = *)
+  (*   DE.deand *)
+  (*     [ *)
+  (*       cond.def_test; *)
+  (*       DE.deite (DE.devar cond.value_comp) thenval.def_test elseval.def_test; *)
+  (*     ] *)
+  (* in *)
+  (* let value_comp = *)
+  (*   Constr.Ite (cond.value_comp, thenval.value_comp, elseval.value_comp) *)
+  (* in *)
+  (* build_transitive_composition { set_vars; def_test; value_comp } *)
+  Cond (cond, thenval, elseval)
 
 module Func = struct
   let supzero se =
-    let def_test : DE.t =
-      DE.(deand [ se.def_test; devar (Comp (">", se.value_comp, Lit 0.0)) ])
-    in
-    build_transitive_composition { se with def_test }
+    make_let se (fun vardef varval ->
+        let def_test : DE.t =
+          DE.(deand [ vardef; devar (Comp (">", varval, Lit 0.0)) ])
+        in
+        atomic
+        @@ build_transitive_composition ~safe_def:false
+             { set_vars = []; def_test; value_comp = varval })
 
+  (* TODO: this code calculates the value of the expression before checking its
+     definition. There may be a way to only calculate the definition. *)
   let present se =
-    let set_vars = se.set_vars in
-    let def_test = DE.detrue in
-    let value_comp = def_expr_to_constr se.def_test in
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se (fun vardef _varval ->
+        let def_test = DE.detrue in
+        let value_comp = def_expr_to_constr vardef in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test; value_comp })
 
   let null se =
-    let set_vars = se.set_vars in
-    let def_test = se.def_test in
-    let value_comp =
-      Constr.And
-        (def_expr_to_constr def_test, Comp ("==", se.value_comp, Lit 0.0))
-    in
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se (fun vardef varval ->
+        (* S: Checking if expr is defined in expression is probably useless *)
+        let value_comp =
+          Constr.And (def_expr_to_constr vardef, Comp ("==", varval, Lit 0.0))
+        in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
 
   let arr se =
-    let set_vars = se.set_vars in
-    let def_test = se.def_test in
-    let value_comp = Constr.Fun ("my_arr", [ se.value_comp ]) in
-    (* Here we boldly assume that rounding value of `undef` will give zero,
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("my_arr", [ varval ]) in
+        (* Here we boldly assume that rounding value of `undef` will give zero,
        given the invariant. Pretty sure that not true, in case of doubt, turn
        `safe_def` to false *)
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
 
   let inf se =
-    let set_vars = se.set_vars in
-    let def_test = se.def_test in
-    let value_comp = Constr.Fun ("my_floor", [ se.value_comp ]) in
-    (* same as above *)
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("my_floor", [ varval ]) in
+        (* same as above *)
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
 
   let abs se =
-    let set_vars = se.set_vars in
-    let def_test = se.def_test in
-    let value_comp = Constr.Fun ("fabs", [ se.value_comp ]) in
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("fabs", [ varval ]) in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
 
   let max se1 se2 =
-    let set_vars = se1.set_vars @ se2.set_vars in
-    let def_test = DE.deor [ se1.def_test; se2.def_test ] in
-    let value_comp = Constr.Fun ("max", [ se1.value_comp; se2.value_comp ]) in
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se1 (fun d1 v1 ->
+        make_let se2 (fun d2 v2 ->
+            let def_test = DE.deor [ d1; d2 ] in
+            let value_comp = Constr.Fun ("max", [ v1; v2 ]) in
+            atomic
+            @@ build_transitive_composition ~safe_def:true
+                 { set_vars = []; def_test; value_comp }))
 
   let min se1 se2 =
-    let set_vars = se1.set_vars @ se2.set_vars in
-    let def_test = DE.deor [ se1.def_test; se2.def_test ] in
-    let value_comp = Constr.Fun ("min", [ se1.value_comp; se2.value_comp ]) in
-    build_transitive_composition ~safe_def:true
-      { set_vars; def_test; value_comp }
+    make_let se1 (fun d1 v1 ->
+        make_let se2 (fun d2 v2 ->
+            let def_test = DE.deor [ d1; d2 ] in
+            let value_comp = Constr.Fun ("min", [ v1; v2 ]) in
+            atomic
+            @@ build_transitive_composition ~safe_def:true
+                 { set_vars = []; def_test; value_comp }))
 
-  let multimax e (m_sp_opt, v) =
+  let multimax (e : expression_composition) (m_sp_opt, v) =
     let ptr = VID.gen_info_ptr v in
-    let d_fun =
-      dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
-          [
-            Constr.irdata;
-            Direct (Instr (VID.gen_var_space_id m_sp_opt v));
-            Direct (Instr ptr);
-            def_expr_to_constr e.def_test;
-            e.value_comp;
-            ptrdef;
-            ptrval;
-          ])
-    in
-    { d_fun with set_vars = e.set_vars @ d_fun.set_vars }
+    make_let e (fun vardef varval ->
+        let d_fun =
+          dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
+              [
+                Constr.irdata;
+                Direct (Instr (VID.gen_var_space_id m_sp_opt v));
+                Direct (Instr ptr);
+                def_expr_to_constr vardef;
+                varval;
+                ptrdef;
+                ptrval;
+              ])
+        in
+        atomic @@ build_transitive_composition ~safe_def:true d_fun)
 
   let nb_events () =
     let def_test = DE.detrue in
     let value_comp = Constr.Fun ("nb_evenements", [ Constr.irdata ]) in
-    build_transitive_composition { set_vars = []; def_test; value_comp }
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
 
   let nb_anomalies () =
     let def_test = DE.detrue in
     let value_comp = Constr.Fun ("nb_anomalies", [ Constr.irdata ]) in
-    build_transitive_composition { set_vars = []; def_test; value_comp }
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
 
   let nb_discordances () =
     let def_test = DE.detrue in
     let value_comp = Constr.Fun ("nb_discordances", [ Constr.irdata ]) in
-    build_transitive_composition { set_vars = []; def_test; value_comp }
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
 
   let nb_informatives () =
     let def_test = DE.detrue in
     let value_comp = Constr.Fun ("nb_informatives", [ Constr.irdata ]) in
-    build_transitive_composition { set_vars = []; def_test; value_comp }
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
 
   let nb_bloquantes () =
     let def_test = DE.detrue in
     let value_comp = Constr.Fun ("nb_bloquantes", [ Constr.irdata ]) in
-    build_transitive_composition { set_vars = []; def_test; value_comp }
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
 
   let call fn args =
-    let set_vars, arg_exprs =
-      let rec aux (set_vars, arg_exprs) = function
-        | [] -> (List.rev set_vars, List.rev arg_exprs)
-        | e :: la ->
-            let set_vars = List.rev e.set_vars @ set_vars in
-            let arg_exprs =
-              e.value_comp :: def_expr_to_constr e.def_test :: arg_exprs
-            in
-            aux (set_vars, arg_exprs) la
-      in
-      aux ([], []) args
+    let d_fun args =
+      atomic
+      @@ dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+          Constr.irdata :: ptrdef :: ptrval :: args)
     in
-    let d_fun =
-      dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
-          Constr.irdata :: ptrdef :: ptrval :: arg_exprs)
-    in
-    { d_fun with set_vars = set_vars @ d_fun.set_vars }
+    make_lets args (fun l ->
+        let args =
+          List.flatten @@ List.map (fun (d, v) -> [ def_expr_to_constr d; v ]) l
+        in
+        d_fun args)
 end
 
-let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value)
-    =
+let write_atomic_decoupled_expr dgfip_flags oc res_def res_val
+    (locals, set, def, value) =
   let pr form = Format.fprintf oc form in
   if is_always_true def then
     pr "@;@[<v 2>{%a%a%a%a@]@;}" format_local_declarations locals
@@ -956,6 +1061,39 @@ let write_decoupled_expr dgfip_flags oc res_def res_val (locals, set, def, value
       def res_def
       (format_assign dgfip_flags res_val)
       value res_val
+
+let fresh_cond_vars =
+  let cpt = ref 0 in
+  fun () ->
+    let res_def = Format.sprintf "cond_def%i" !cpt
+    and res_val = Format.sprintf "cond_val%i" !cpt in
+    incr cpt;
+    (res_def, res_val)
+
+let rec write_decoupled_expr dgfip_flags oc =
+  let pr form = Format.fprintf oc form in
+  fun res_def res_val -> function
+    | `Atom a -> write_atomic_decoupled_expr dgfip_flags oc res_def res_val a
+    | `Cond (c, t, e) ->
+        let d, v = fresh_cond_vars () in
+        pr "@;{@[<v 2>";
+        pr "@;int %s;" d;
+        pr "@;double %s;" v;
+        write_decoupled_expr dgfip_flags oc d v c;
+        pr "@;if(%s == 0) {%s = 0; %s = 0.0;}" d res_def res_val;
+        pr "@;else if (EQ_E(%s,0.0)) {@;@[<v 2>" v;
+        write_decoupled_expr dgfip_flags oc res_def res_val e;
+        pr "@;}@] else {@;@[<v 2>";
+        write_decoupled_expr dgfip_flags oc res_def res_val t;
+        pr "@;}@]";
+        pr "@;}@]"
+    | `Let (vardef, varval, body, followup) ->
+        pr "@;{@[<v 2>";
+        pr "@;int %s;" vardef;
+        pr "@;double %s;" varval;
+        write_decoupled_expr dgfip_flags oc vardef varval body;
+        write_decoupled_expr dgfip_flags oc res_def res_val followup;
+        pr "@;}@]"
 
 let write_c_expr dgfip_flags oc res_def res_val expr =
   expr |> build_expression
