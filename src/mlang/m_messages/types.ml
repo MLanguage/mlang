@@ -84,6 +84,10 @@ module type LANG = sig
 
     val incomplete_attr_list : string
 
+    val missing_colon : string
+
+    val missing_endif : string
+
     val missing_value_after_equal : string
 
     val syntax_error : code:int -> string

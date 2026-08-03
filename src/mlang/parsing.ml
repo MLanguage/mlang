@@ -82,7 +82,7 @@ let parse_lexbuf filebuf source_file =
       let err msg = Errors.raise_spanned_error msg pos in
       match
         String.trim (Syntax_messages.message s)
-        |> M_messages.select_parse_error_message
+        |> M_messages.select_parse_error_message ~code:s
       with
       | exception Not_found -> err M_messages.Parser.unexpected_syntax_error
       | "<YOUR SYNTAX ERROR MESSAGE HERE>" ->

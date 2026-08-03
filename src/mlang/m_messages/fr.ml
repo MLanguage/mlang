@@ -113,6 +113,10 @@ module Fr : LANG = struct
       "Liste d'attributs incomplète. Avez-vous oublié de terminer la liste \
        avec ':' ?"
 
+    let missing_colon = "Symbole ':' manquant."
+
+    let missing_endif = "Si-alors-sinon incomplet. Avez-vous oublié un 'finsi'?"
+
     let missing_value_after_equal = "Valeur manquante après le symbole '='."
 
     let syntax_error ~code = Format.sprintf "Erreur de syntaxe (code %i)." code

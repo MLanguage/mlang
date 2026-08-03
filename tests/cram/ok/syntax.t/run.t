@@ -111,3 +111,46 @@ Dans cet exemple, il manque la définition de l'attribut de Z
   
   Fatal error: exception Utils.Errors.StructuredError(_)
   [2]
+
+Dans cet exemple, il manque 'finsi' à l'instruction conditionnelle.
+  $ mlang missing_endif.m --mpp_function cond -A app --without_dfgip_m  --no_nondet_display
+  [ERROR] Si-alors-sinon incomplet. Avez-vous oublié un 'finsi'?
+  
+    --> missing_endif.m
+     | 
+  11 | 
+  
+  Fatal error: exception Utils.Errors.StructuredError(_)
+  [2]
+  $ LANG="en" mlang missing_endif.m --mpp_function cond -A app --without_dfgip_m  --no_nondet_display
+  [ERROR] Unclosed if-then-else. Did you forget 'finsi'?
+  
+    --> missing_endif.m
+     | 
+  11 | 
+  
+  Fatal error: exception Utils.Errors.StructuredError(_)
+  [2]
+
+
+Dans cet exemple, il manque ':' dans la règle, a la selection de l'application.
+  $ mlang missing_colon.m --mpp_function addition -A app --without_dfgip_m  --no_nondet_display
+  [ERROR] Symbole ':' manquant.
+  
+    --> missing_colon.m
+     | 
+  14 | application app;
+     |             ^^^
+  
+  Fatal error: exception Utils.Errors.StructuredError(_)
+  [2]
+  $ LANG="en" mlang missing_colon.m --mpp_function addition -A app --without_dfgip_m  --no_nondet_display
+  [ERROR] Missing ':'.
+  
+    --> missing_colon.m
+     | 
+  14 | application app;
+     |             ^^^
+  
+  Fatal error: exception Utils.Errors.StructuredError(_)
+  [2]
