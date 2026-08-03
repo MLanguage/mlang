@@ -27,7 +27,7 @@ module Types = Types
 
 include Types.LANG
 
-val select_parse_error_message : string -> string
+val select_parse_error_message : code:int -> string -> string
 (** When failing, the parser raises a [Mparser.Error] with an integer error
     code. Each code is associated to a error message in the
     [M_frontend.Syntax_messages] module. Note that this module does not define

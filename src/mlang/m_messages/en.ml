@@ -75,6 +75,10 @@ module En : LANG = struct
     let incomplete_attr_list =
       "Incomplete attribute list. Did you forget to end the list with ':'?"
 
+    let missing_colon = "Missing ':'."
+
+    let missing_endif = "Unclosed if-then-else. Did you forget 'finsi'?"
+
     let missing_value_after_equal = "Missing value after symbol '='."
 
     let syntax_error ~code = Format.sprintf "Syntax error (code %i)." code

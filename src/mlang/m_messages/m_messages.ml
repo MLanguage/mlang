@@ -31,17 +31,18 @@ include Main
     translation. If the ["name_of_the_method"] is an unknown code, this function
     will return [`Unknown_code]. At last, if the input string is not properly
     formatted, returns [`Not_a_code]. *)
-let select_parse_error_message parse_error_message =
+let select_parse_error_message ~code parse_error_message =
   let open Parser in
   try
     Scanf.sscanf parse_error_message "Lang:%s" @@ function
     | "incomplete_attr_definition" -> incomplete_attr_definition
     | "incomplete_attr_list" -> incomplete_attr_list
+    | "missing_colon" -> missing_colon
+    | "missing_endif" -> missing_endif
     | "missing_value_after_equal" -> missing_value_after_equal
     | "unexpected_symbol" -> unexpected_symbol
     | s -> "Code " ^ s
-  with Scanf.Scan_failure _ ->
-    Format.sprintf "%s : %s" unexpected_syntax_error parse_error_message
+  with Scanf.Scan_failure _ -> Format.sprintf "%s" (syntax_error ~code)
 
 (* let print_validator_warning (v : M_frontend.Validator.Warning.t) = *)
 (*   let open Validator.Warning in *)
