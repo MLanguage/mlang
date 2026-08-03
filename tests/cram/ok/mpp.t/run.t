@@ -457,7 +457,9 @@
   [RESULT] Aucun echec!
   [RESULT] Test exécuté!
   $ mlang conditions.m --mpp_function cond -A app --income-year=2020 --dgfip_options="-m2020,-X" --backend dgfip_c --output output/conditions.c
-  [RESULT] Parsing: completed!
+  [RESULT] Parsing: conditions.m
+  Parsing: completed!
+  
   $ cat output/m_conditions.c
   #include "mlang.h" 
   
