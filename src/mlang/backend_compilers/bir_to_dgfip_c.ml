@@ -1,19 +1,19 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2020 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
-
+module C = Constr
 module D = DecoupledExpr
 module VID = Dgfip_varid
 
@@ -127,708 +127,213 @@ let str_escape str =
   in
   aux 0
 
-let fresh_c_local =
-  let c = ref 0 in
-  fun name ->
-    let s = name ^ string_of_int !c in
-    incr c;
-    s
-
 let rec lis_tabaccess (p : Mir.program) m_sp_opt v m_idx =
-  let d_irdata = D.ddirect @@ D.dinstr "irdata" in
-  let set_vars, idx_def, idx_val =
-    let e_idx = generate_c_expr p m_idx in
-    (e_idx.set_vars, e_idx.def_test, e_idx.value_comp)
-  in
-  let res = fresh_c_local "res" in
-  let res_def = Pp.spr "%s_def" res in
-  let res_val = Pp.spr "%s_val" res in
-  let d_fun =
-    D.dfun "lis_tabaccess"
-      [
-        d_irdata;
-        D.ddirect @@ D.dinstr @@ VID.gen_var_space_id m_sp_opt v;
-        D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-        idx_def;
-        idx_val;
-        D.ddirect @@ D.dinstr @@ Pp.spr "&%s" res_def;
-        D.ddirect @@ D.dinstr @@ Pp.spr "&%s" res_val;
-      ]
-  in
-  let set_vars =
-    set_vars
-    @ [
-        (D.Def, res_def, d_fun); (D.Val, res_val, D.ddirect @@ D.dinstr res_val);
-      ]
-  in
-  let def_test = D.dinstr res_def in
-  let value_comp = D.dinstr res_val in
-  D.build_transitive_composition { set_vars; def_test; value_comp }
+  let e_idx = generate_c_expr p m_idx in
+  D.make_let e_idx (fun vardef varval ->
+      D.atomic
+      @@ D.dfun_with_ptr "lis_tabaccess" (fun ~ptrdef ~ptrval ->
+          [
+            C.irdata;
+            C.(Varspace_of (m_sp_opt, v));
+            C.Lit (float_of_int (Com.Var.loc_tab_idx v));
+            D.def_expr_to_constr vardef;
+            varval;
+            ptrdef;
+            ptrval;
+          ]))
 
-and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
-    D.expression_composition =
-  let comparison op se1 se2 =
-    let safe_def = false in
-    let set_vars = se1.D.set_vars @ se2.D.set_vars in
-    let def_test = D.dand se1.D.def_test se2.D.def_test in
-    let value_comp =
-      let op =
-        let open Com in
-        match Pos.unmark op with
-        | Gt -> ">"
-        | Gte -> ">="
-        | Lt -> "<"
-        | Lte -> "<="
-        | Eq -> "=="
-        | Neq -> "!="
-      in
-      D.comp op se1.value_comp se2.value_comp
-    in
-    D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
-  in
-  let binop op se1 se2 =
-    match Pos.unmark op with
-    | _ ->
-        let set_vars = se1.D.set_vars @ se2.D.set_vars in
-        let def_test =
-          match Pos.unmark op with
-          | Com.And | Com.Mul | Com.Div | Com.Mod ->
-              D.dand se1.def_test se2.def_test
-          | Com.Or | Com.Add | Com.Sub -> D.dor se1.def_test se2.def_test
-        in
-        let op e1 e2 =
-          match Pos.unmark op with
-          | Com.And -> D.dand e1 e2
-          | Com.Or -> D.dor e1 e2
-          | Com.Add -> D.plus e1 e2
-          | Com.Sub -> D.sub e1 e2
-          | Com.Mul -> D.mult e1 e2
-          | Com.Div -> D.ite e2 (D.div e1 e2) (D.lit 0.)
-          | Com.Mod -> D.ite e2 (D.modulo e1 e2) (D.lit 0.)
-        in
-        let value_comp = op se1.value_comp se2.value_comp in
-        D.build_transitive_composition ~safe_def:true
-          { set_vars; def_test; value_comp }
-  in
-  let unop op se =
-    let set_vars = se.D.set_vars in
-    let def_test = se.def_test in
-    let op, safe_def =
-      match op with Com.Not -> (D.dnot, false) | Com.Minus -> (D.minus, true)
-    in
-    let value_comp = op se.value_comp in
-    D.build_transitive_composition ~safe_def { set_vars; def_test; value_comp }
-  in
-  match Pos.unmark e with
-  | Com.TestInSet (positive, e0, values) ->
-      let se0 = generate_c_expr p e0 in
-      let ldef, lval = D.locals_from_m () in
-      let sle0 =
-        {
-          D.set_vars = [];
-          D.def_test = D.local_var ldef;
-          D.value_comp = D.local_var lval;
-        }
-      in
-      let declare_local constr =
-        D.let_local ldef se0.def_test (D.let_local lval se0.value_comp constr)
+and code_access (p : Mir.program) m_acc =
+  match m_acc with
+  | Com.VarAccess (_, v) ->
+      D.atomic
+        { set_vars = []; def_test = D.DE.detrue; value_comp = C.Varinfo v }
+  | Com.TabAccess ((_, v), m_i) ->
+      D.make_let (generate_c_expr p m_i) (fun vardef varval ->
+          D.atomic
+            {
+              set_vars = [];
+              def_test = vardef;
+              value_comp = C.Varinfo_tab (v, D.def_expr_to_constr vardef, varval);
+            })
+  | Com.FieldAccess (_, ie, f, _) ->
+      D.make_let (generate_c_expr p ie) (fun vardef varval ->
+          D.atomic
+            {
+              set_vars = [];
+              def_test = vardef;
+              value_comp =
+                C.Varinfo_field
+                  (D.def_expr_to_constr vardef, varval, Pos.unmark f);
+            })
+
+and access p acc =
+  match acc with
+  | Com.VarAccess (m_sp_opt, var) ->
+      let def_test = D.DE.devar @@ C.M (m_sp_opt, var, Def) in
+      let value_comp = C.M (m_sp_opt, var, Val) in
+      D.atomic { set_vars = []; def_test; value_comp }
+  | TabAccess ((m_sp_opt, v), m_idx) -> lis_tabaccess p m_sp_opt v m_idx
+  | FieldAccess (m_sp_opt, me, f, _) ->
+      let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
+      D.make_let (generate_c_expr p me) (fun vardef varval ->
+          let arg_exprs = [ D.def_expr_to_constr vardef; varval ] in
+          let d_fun =
+            D.dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+                [ C.irdata; C.Varspace_current m_sp_opt; ptrdef; ptrval ]
+                @ arg_exprs)
+          in
+          D.atomic
+          @@ { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
+
+and generate_test_in_set p positive e0 values =
+  D.make_let (generate_c_expr p e0) (fun vardef varval ->
+      let varval_expr =
+        D.atomic { set_vars = []; def_test = vardef; value_comp = varval }
       in
       let or_chain =
         List.fold_left
           (fun or_chain set_value ->
             let equal_test =
               match set_value with
-              | Com.VarValue (Pos.Mark (VarAccess (m_sp_opt, v), _)) ->
-                  let s_v =
-                    let def_test = D.m_var m_sp_opt v Def in
-                    let value_comp = D.m_var m_sp_opt v Val in
-                    D.{ set_vars = []; def_test; value_comp }
-                  in
-                  comparison (Pos.without Com.Eq) sle0 s_v
-              | Com.VarValue (Pos.Mark (TabAccess (m_sp_opt, v, m_i), _)) ->
-                  let s_v = lis_tabaccess p m_sp_opt v m_i in
-                  comparison (Pos.without Com.Eq) sle0 s_v
-              | Com.VarValue (Pos.Mark (FieldAccess (m_sp_opt, me, f, _), _)) ->
-                  let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
-                  let res = fresh_c_local "result" in
-                  let res_def = Pp.spr "%s_def" res in
-                  let res_val = Pp.spr "%s_val" res in
-                  let res_def_ptr = Pp.spr "&%s" res_def in
-                  let res_val_ptr = Pp.spr "&%s" res_val in
-                  let set_vars, arg_exprs =
-                    let e = generate_c_expr p me in
-                    (e.set_vars, [ e.def_test; e.value_comp ])
-                  in
-                  let var_space_id = VID.gen_var_space_id_opt m_sp_opt in
-                  let d_fun =
-                    D.dfun fn
-                      ([
-                         D.ddirect @@ D.dinstr "irdata";
-                         D.ddirect @@ D.dinstr var_space_id;
-                         D.ddirect @@ D.dinstr res_def_ptr;
-                         D.ddirect @@ D.dinstr res_val_ptr;
-                       ]
-                      @ arg_exprs)
-                  in
-                  let set_vars =
-                    set_vars
-                    @ [
-                        (D.Def, res_def, d_fun);
-                        (D.Val, res_val, D.ddirect (D.dinstr res_val));
-                      ]
-                  in
-                  let def_test = D.dinstr res_def in
-                  let value_comp = D.dinstr res_val in
-                  let s_f = D.{ set_vars; def_test; value_comp } in
-                  comparison (Pos.without Com.Eq) sle0 s_f
+              | Com.VarValue acc ->
+                  D.comparison (Pos.without Com.Eq) varval_expr
+                    (access p (Pos.unmark acc))
               | Com.FloatValue i ->
-                  let s_i =
-                    {
-                      D.set_vars = [];
-                      D.def_test = D.dtrue;
-                      D.value_comp = D.lit (Pos.unmark i);
-                    }
-                  in
-                  comparison (Pos.without Com.Eq) sle0 s_i
+                  D.comparison (Pos.without Com.Eq) varval_expr
+                    D.(atomic @@ elit @@ Pos.unmark i)
               | Com.IntervalValue (bn, en) ->
                   let s_bn =
-                    let bn' = float_of_int (Pos.unmark bn) in
-                    D.{ set_vars = []; def_test = dtrue; value_comp = lit bn' }
+                    bn |> Pos.unmark |> float_of_int |> D.elit |> D.atomic
+                  and s_en =
+                    en |> Pos.unmark |> float_of_int |> D.elit |> D.atomic
                   in
-                  let s_en =
-                    let en' = float_of_int (Pos.unmark en) in
-                    D.{ set_vars = []; def_test = dtrue; value_comp = lit en' }
-                  in
-                  binop (Pos.without Com.And)
-                    (comparison (Pos.without Com.Gte) sle0 s_bn)
-                    (comparison (Pos.without Com.Lte) sle0 s_en)
+                  D.binop (Pos.without Com.And)
+                    (D.comparison (Pos.without Com.Gte) varval_expr s_bn)
+                    (D.comparison (Pos.without Com.Lte) varval_expr s_en)
             in
-            binop (Pos.without Com.Or) or_chain equal_test)
-          D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
+            D.binop (Pos.without Com.Or) or_chain equal_test)
+          (D.atomic @@ { (D.eundefined ()) with def_test = vardef })
           values
       in
-      let se = if positive then or_chain else unop Com.Not or_chain in
-      {
-        D.set_vars = se0.set_vars @ se.set_vars;
-        D.def_test = declare_local se.def_test;
-        D.value_comp = declare_local se.value_comp;
-      }
+      if positive then or_chain else D.unop Com.Not or_chain)
+
+and funcall p f args =
+  match (f, args) with
+  | Com.Supzero, [ arg ] -> D.Func.supzero @@ generate_c_expr p arg
+  | PresentFunc, [ arg ] -> D.Func.present @@ generate_c_expr p arg
+  | NullFunc, [ arg ] -> D.Func.null @@ generate_c_expr p arg
+  | ArrFunc, [ arg ] -> D.Func.arr @@ generate_c_expr p arg
+  | InfFunc, [ arg ] -> D.Func.inf @@ generate_c_expr p arg
+  | AbsFunc, [ arg ] -> D.Func.abs @@ generate_c_expr p arg
+  | MaxFunc, [ e1; e2 ] ->
+      let se1 = generate_c_expr p e1 in
+      let se2 = generate_c_expr p e2 in
+      D.Func.max se1 se2
+  | MinFunc, [ e1; e2 ] ->
+      let se1 = generate_c_expr p e1 in
+      let se2 = generate_c_expr p e2 in
+      D.Func.min se1 se2
+  | Multimax, [ e1; Pos.Mark (Com.Var (VarAccess v), _) ] ->
+      D.Func.multimax (generate_c_expr p e1) v
+  | NbEvents, _ -> D.Func.nb_events () (* should expect strictly no argument *)
+  | Func fn, args -> D.Func.call fn @@ List.map (generate_c_expr p) args
+  | _ -> assert false (* should not happen *)
+
+and attribute p acc attr =
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let def_test =
+        D.DE.deand
+          [
+            vardef;
+            D.DE.devar @@ C.Fun (Pp.spr "attribut_%s_def" attr, [ varval ]);
+          ]
+      and value_comp = C.Fun (Pp.spr "attribut_%s" attr, [ varval ]) in
+      D.(
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test; value_comp }))
+
+and size p acc =
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let f =
+        D.dfun_with_ptr "size_varinfo" (fun ~ptrdef ~ptrval ->
+            [ varval; ptrdef; ptrval ])
+      in
+      D.atomic { f with def_test = D.DE.deand [ vardef; f.def_test ] })
+
+and is_type p acc typ =
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let d_fun =
+        D.dfun_with_ptr "est_type" (fun ~ptrdef ~ptrval ->
+            [ varval; C.Typ typ; ptrdef; ptrval ])
+      in
+      D.atomic { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
+
+and same_variable p acc0 acc1 =
+  D.make_let (code_access p acc0) (fun d0 v0 ->
+      D.make_let (code_access p acc1) (fun d1 v1 ->
+          let d_fun =
+            D.dfun_with_ptr "meme_variable" (fun ~ptrdef ~ptrval ->
+                [ v0; v1; ptrdef; ptrval ])
+          in
+          D.atomic
+            { d_fun with def_test = D.DE.deand [ d0; d1; d_fun.def_test ] }))
+
+and in_domain (p : Mir.program) acc cvm =
+  assert (Com.CatVar.Map.cardinal cvm = 1);
+  let cv = fst @@ Com.CatVar.Map.min_binding cvm in
+  let id_cv = (Com.CatVar.Map.find cv p.program_var_categories).id_int in
+  D.make_let (code_access p acc) (fun vardef varval ->
+      let d_fun =
+        D.dfun_with_ptr "dans_domaine" (fun ~ptrdef ~ptrval ->
+            [ varval; C.Lit (float_of_int id_cv); ptrdef; ptrval ])
+      in
+      D.atomic { d_fun with def_test = D.DE.deand [ vardef; d_fun.def_test ] })
+
+and generate_c_expr (p : Mir.program) (e : Mir.expression Pos.marked) :
+    D.expression_composition =
+  match Pos.unmark e with
+  | Com.TestInSet (positive, e0, values) ->
+      generate_test_in_set p positive e0 values
   | Comparison (op, e1, e2) ->
       let se1 = generate_c_expr p e1 in
       let se2 = generate_c_expr p e2 in
-      comparison op se1 se2
+      D.comparison op se1 se2
   | Binop (op, e1, e2) ->
       let se1 = generate_c_expr p e1 in
       let se2 = generate_c_expr p e2 in
-      binop op se1 se2
-  | Unop (op, e) -> unop op @@ generate_c_expr p e
+      D.binop op se1 se2
+  | Unop (op, e) -> D.unop op @@ generate_c_expr p e
   | Conditional (c, t, f_opt) ->
       let cond = generate_c_expr p c in
       let thenval = generate_c_expr p t in
       let elseval =
         match f_opt with
-        | None -> D.{ set_vars = []; def_test = dfalse; value_comp = lit 0. }
+        | None ->
+            (* todo: check if necessary *)
+            D.atomic
+              { set_vars = []; def_test = D.DE.defalse; value_comp = C.Lit 0. }
         | Some f -> generate_c_expr p f
       in
-      let set_vars =
-        cond.D.set_vars @ thenval.D.set_vars @ elseval.D.set_vars
-      in
-      let def_test =
-        D.dand cond.def_test
-          (D.ite cond.value_comp thenval.def_test elseval.def_test)
-      in
-      let value_comp =
-        D.ite cond.value_comp thenval.value_comp elseval.value_comp
-      in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (Supzero, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let cond = D.dand se.def_test (D.comp ">=" se.value_comp (D.lit 0.0)) in
-      let def_test = D.ite cond D.dfalse se.def_test in
-      let value_comp = D.ite cond (D.lit 0.0) se.value_comp in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (PresentFunc, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let def_test = D.dtrue in
-      let value_comp = se.def_test in
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (NullFunc, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let def_test = se.def_test in
-      let value_comp =
-        D.dand def_test (D.comp "==" se.value_comp (D.lit 0.0))
-      in
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (ArrFunc, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let def_test = se.def_test in
-      let value_comp = D.dfun "my_arr" [ se.value_comp ] in
-      (* Here we boldly assume that rounding value of `undef` will give zero,
-         given the invariant. Pretty sure that not true, in case of doubt, turn
-         `safe_def` to false *)
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (InfFunc, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let def_test = se.def_test in
-      let value_comp = D.dfun "my_floor" [ se.value_comp ] in
-      (* same as above *)
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (AbsFunc, _), [ arg ]) ->
-      let se = generate_c_expr p arg in
-      let set_vars = se.D.set_vars in
-      let def_test = se.def_test in
-      let value_comp = D.dfun "fabs" [ se.value_comp ] in
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (MaxFunc, _), [ e1; e2 ]) ->
-      let se1 = generate_c_expr p e1 in
-      let se2 = generate_c_expr p e2 in
-      let set_vars = se1.D.set_vars @ se2.D.set_vars in
-      let def_test = D.dor se1.def_test se2.def_test in
-      let value_comp = D.dfun "max" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (MinFunc, _), [ e1; e2 ]) ->
-      let se1 = generate_c_expr p e1 in
-      let se2 = generate_c_expr p e2 in
-      let set_vars = se1.D.set_vars @ se2.D.set_vars in
-      let def_test = D.dor se1.def_test se2.def_test in
-      let value_comp = D.dfun "min" [ se1.value_comp; se2.value_comp ] in
-      D.build_transitive_composition ~safe_def:true
-        { set_vars; def_test; value_comp }
-  | FuncCall (Pos.Mark (Multimax, _), [ e1; Pos.Mark (Var m_acc, _) ]) -> (
-      match m_acc with
-      | VarAccess (m_sp_opt, v) ->
-          let ptr = VID.gen_info_ptr v in
-          let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let set_vars, bound_def, bound_val =
-            let bound = generate_c_expr p e1 in
-            (bound.set_vars, bound.def_test, bound.value_comp)
-          in
-          let res = fresh_c_local "res" in
-          let res_def = Pp.spr "%s_def" res in
-          let res_val = Pp.spr "%s_val" res in
-          let res_def_ptr = Pp.spr "&%s" res_def in
-          let res_val_ptr = Pp.spr "&%s" res_val in
-          let d_fun =
-            D.dfun "multimax_varinfo"
-              [
-                d_irdata;
-                D.ddirect @@ D.dinstr @@ VID.gen_var_space_id m_sp_opt v;
-                D.ddirect @@ D.dinstr ptr;
-                bound_def;
-                bound_val;
-                D.ddirect @@ D.dinstr res_def_ptr;
-                D.ddirect @@ D.dinstr res_val_ptr;
-              ]
-          in
-          let set_vars =
-            set_vars
-            @ [
-                (D.Def, res_def, d_fun);
-                (D.Val, res_val, D.ddirect @@ D.dinstr res_val);
-              ]
-          in
-          let def_test = D.dinstr res_def in
-          let value_comp = D.dinstr res_val in
-          D.build_transitive_composition { set_vars; def_test; value_comp }
-      | TabAccess _ | FieldAccess _ -> assert false)
-  | FuncCall (Pos.Mark (NbEvents, _), _) ->
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_evenements(irdata)" in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | FuncCall (Pos.Mark (Func fn, _), args) ->
-      let res = fresh_c_local "result" in
-      let res_def = Pp.spr "%s_def" res in
-      let res_val = Pp.spr "%s_val" res in
-      let res_def_ptr = Pp.spr "&%s" res_def in
-      let res_val_ptr = Pp.spr "&%s" res_val in
-      let set_vars, arg_exprs =
-        let rec aux (set_vars, arg_exprs) = function
-          | [] -> (List.rev set_vars, List.rev arg_exprs)
-          | a :: la ->
-              let e = generate_c_expr p a in
-              let set_vars = List.rev e.set_vars @ set_vars in
-              let arg_exprs = e.value_comp :: e.def_test :: arg_exprs in
-              aux (set_vars, arg_exprs) la
-        in
-        aux ([], []) args
-      in
-      let d_fun =
-        D.dfun fn
-          ([
-             D.ddirect (D.dinstr "irdata");
-             D.ddirect (D.dinstr res_def_ptr);
-             D.ddirect (D.dinstr res_val_ptr);
-           ]
-          @ arg_exprs)
-      in
-      let set_vars =
-        set_vars
-        @ [
-            (D.Def, res_def, d_fun);
-            (D.Val, res_val, D.ddirect (D.dinstr res_val));
-          ]
-      in
-      let def_test = D.dinstr res_def in
-      let value_comp = D.dinstr res_val in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
-  | FuncCall _ -> assert false (* should not happen *)
-  | Literal (Float f) ->
-      { set_vars = []; def_test = D.dtrue; value_comp = D.lit f }
-  | Literal Undefined ->
-      { set_vars = []; def_test = D.dfalse; value_comp = D.lit 0. }
-  | Var (VarAccess (m_sp_opt, var)) ->
-      let def_test = D.m_var m_sp_opt var Def in
-      let value_comp = D.m_var m_sp_opt var Val in
-      { set_vars = []; def_test; value_comp }
-  | Var (TabAccess (m_sp_opt, v, m_idx)) -> lis_tabaccess p m_sp_opt v m_idx
-  | Var (FieldAccess (m_sp_opt, me, f, _)) ->
-      let fn = Pp.spr "event_field_%s" (Pos.unmark f) in
-      let res = fresh_c_local "result" in
-      let res_def = Pp.spr "%s_def" res in
-      let res_val = Pp.spr "%s_val" res in
-      let res_def_ptr = Pp.spr "&%s" res_def in
-      let res_val_ptr = Pp.spr "&%s" res_val in
-      let set_vars, arg_exprs =
-        let e = generate_c_expr p me in
-        (e.set_vars, [ e.def_test; e.value_comp ])
-      in
-      let d_fun =
-        D.dfun fn
-          ([
-             D.ddirect @@ D.dinstr "irdata";
-             D.ddirect @@ D.dinstr @@ VID.gen_var_space_id_opt m_sp_opt;
-             D.ddirect @@ D.dinstr res_def_ptr;
-             D.ddirect @@ D.dinstr res_val_ptr;
-           ]
-          @ arg_exprs)
-      in
-      let set_vars =
-        set_vars
-        @ [
-            (D.Def, res_def, d_fun);
-            (D.Val, res_val, D.ddirect (D.dinstr res_val));
-          ]
-      in
-      let def_test = D.dinstr res_def in
-      let value_comp = D.dinstr res_val in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
-  | Attribut (m_acc, a) -> (
-      let attr = Pos.unmark a in
-      match Pos.unmark m_acc with
-      | VarAccess (_, v) | TabAccess (_, v, _) ->
-          let ptr = VID.gen_info_ptr v in
-          let def_test =
-            D.dinstr (Pp.spr "attribut_%s_def((T_varinfo *)%s)" attr ptr)
-          in
-          let value_comp =
-            D.dinstr (Pp.spr "attribut_%s((T_varinfo *)%s)" attr ptr)
-          in
-          D.build_transitive_composition { set_vars = []; def_test; value_comp }
-      | FieldAccess (_, ie, f, _) ->
-          let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let set_vars, evt_d_fun =
-            let e = generate_c_expr p ie in
-            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
-          in
-          let def_test =
-            D.dfun (Pp.spr "attribut_%s_def" attr) [ D.ddirect evt_d_fun ]
-          in
-          let value_comp =
-            D.dfun (Pp.spr "attribut_%s" attr) [ D.ddirect evt_d_fun ]
-          in
-          D.build_transitive_composition { set_vars; def_test; value_comp })
-  | Size m_acc -> (
-      match Pos.unmark m_acc with
-      | VarAccess (_, v) ->
-          let ptr = VID.gen_info_ptr v in
-          let def_test = D.dinstr "1.0" in
-          let value_comp = D.dinstr (Format.sprintf "(%s->size)" ptr) in
-          D.build_transitive_composition { set_vars = []; def_test; value_comp }
-      | TabAccess _ ->
-          let def_test = D.dinstr "1.0" in
-          let value_comp = D.dinstr "1.0" in
-          D.build_transitive_composition { set_vars = []; def_test; value_comp }
-      | FieldAccess (_, ie, f, _) ->
-          let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let set_vars, evt_d_fun =
-            let e = generate_c_expr p ie in
-            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
-          in
-          let res = fresh_c_local "res" in
-          let res_def = Pp.spr "%s_def" res in
-          let res_val = Pp.spr "%s_val" res in
-          let res_def_ptr = Pp.spr "&%s" res_def in
-          let res_val_ptr = Pp.spr "&%s" res_val in
-          let d_fun =
-            D.dfun "size_varinfo"
-              [
-                D.ddirect evt_d_fun;
-                D.ddirect (D.dinstr res_def_ptr);
-                D.ddirect (D.dinstr res_val_ptr);
-              ]
-          in
-          let set_vars =
-            set_vars
-            @ [
-                (D.Def, res_def, d_fun);
-                (D.Val, res_val, D.ddirect (D.dinstr res_val));
-              ]
-          in
-          let def_test = D.dinstr res_def in
-          let value_comp = D.dinstr res_val in
-          D.build_transitive_composition { set_vars; def_test; value_comp })
-  | Type (m_acc, m_typ) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
-      let set_vars0, evt_d_fun0 =
-        match Pos.unmark m_acc with
-        | Com.VarAccess (_, v) ->
-            ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
-        | Com.TabAccess (_, v, m_i) ->
-            let ei = generate_c_expr p m_i in
-            let d_fun =
-              D.dfun "lis_tabaccess_varinfo"
-                [
-                  d_irdata;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-                  ei.def_test;
-                  ei.value_comp;
-                ]
-            in
-            (ei.set_vars, D.ddirect @@ d_fun)
-        | Com.FieldAccess (_, ie, f, _) ->
-            let e = generate_c_expr p ie in
-            let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
-            (e.set_vars, D.ddirect d_fun)
-      in
-      let c_type =
-        match Pos.unmark m_typ with
-        | Boolean -> "TYPE_BOOLEEN"
-        | DateYear -> "TYPE_DATE_AAAA"
-        | DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
-        | DateMonth -> "TYPE_DATE_MM"
-        | Integer -> "TYPE_ENTIER"
-        | Real -> "TYPE_REEL"
-      in
-      let res = fresh_c_local "res" in
-      let res_def = Pp.spr "%s_def" res in
-      let res_val = Pp.spr "%s_val" res in
-      let res_def_ptr = Pp.spr "&%s" res_def in
-      let res_val_ptr = Pp.spr "&%s" res_val in
-      let d_fun =
-        D.dfun "est_type"
-          [
-            evt_d_fun0;
-            D.ddirect @@ D.dinstr c_type;
-            D.ddirect @@ D.dinstr res_def_ptr;
-            D.ddirect @@ D.dinstr res_val_ptr;
-          ]
-      in
-      let set_vars =
-        set_vars0
-        @ [
-            (D.Def, res_def, d_fun);
-            (D.Val, res_val, D.ddirect (D.dinstr res_val));
-          ]
-      in
-      let def_test = D.dinstr res_def in
-      let value_comp = D.dinstr res_val in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
+      D.conditional cond thenval elseval
+  | FuncCall (f, args) -> funcall p (Pos.unmark f) args
+  | Literal { lit = Float f; _ } -> D.atomic @@ D.elit f
+  | Literal { lit = Undefined; _ } -> D.atomic @@ D.eundefined ()
+  | Var acc -> access p acc
+  | Attribut (m_acc, a) -> attribute p (Pos.unmark m_acc) (Pos.unmark a)
+  | Size m_acc -> size p @@ Pos.unmark m_acc
+  | Type (m_acc, m_typ) -> is_type p (Pos.unmark m_acc) (Pos.unmark m_typ)
   | SameVariable (m_acc0, m_acc1) ->
-      let d_irdata = D.ddirect (D.dinstr "irdata") in
-      let code_access m_acc =
-        match Pos.unmark m_acc with
-        | Com.VarAccess (_, v) ->
-            ([], D.ddirect @@ D.dinstr @@ VID.gen_info_ptr v)
-        | Com.TabAccess (_, v, m_i) ->
-            let ei = generate_c_expr p m_i in
-            let d_fun =
-              D.dfun "lis_tabaccess_varinfo"
-                [
-                  d_irdata;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-                  ei.def_test;
-                  ei.value_comp;
-                ]
-            in
-            (ei.set_vars, D.ddirect @@ d_fun)
-        | Com.FieldAccess (_, ie, f, _) ->
-            let e = generate_c_expr p ie in
-            let fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            let d_fun = D.dfun fn [ d_irdata; e.def_test; e.value_comp ] in
-            (e.set_vars, D.ddirect d_fun)
-      in
-      let set_vars0, evt_d_fun0 = code_access m_acc0 in
-      let set_vars1, evt_d_fun1 = code_access m_acc1 in
-      let res = fresh_c_local "res" in
-      let res_def = Pp.spr "%s_def" res in
-      let res_val = Pp.spr "%s_val" res in
-      let res_def_ptr = Pp.spr "&%s" res_def in
-      let res_val_ptr = Pp.spr "&%s" res_val in
-      let d_fun =
-        D.dfun "meme_variable"
-          [
-            evt_d_fun0;
-            evt_d_fun1;
-            D.ddirect @@ D.dinstr res_def_ptr;
-            D.ddirect @@ D.dinstr res_val_ptr;
-          ]
-      in
-      let set_vars =
-        set_vars0 @ set_vars1
-        @ [
-            (D.Def, res_def, d_fun);
-            (D.Val, res_val, D.ddirect (D.dinstr res_val));
-          ]
-      in
-      let def_test = D.dinstr res_def in
-      let value_comp = D.dinstr res_val in
-      D.build_transitive_composition { set_vars; def_test; value_comp }
-  | InDomain (m_acc, cvm) -> (
-      assert (Com.CatVar.Map.cardinal cvm = 1);
-      let cv = fst @@ Com.CatVar.Map.min_binding cvm in
-      let id_cv = (Com.CatVar.Map.find cv p.program_var_categories).id_int in
-      match Pos.unmark m_acc with
-      | VarAccess (_, v) ->
-          let ptr = VID.gen_info_ptr v in
-          let res = fresh_c_local "res" in
-          let res_def = Pp.spr "%s_def" res in
-          let res_val = Pp.spr "%s_val" res in
-          let res_def_ptr = Pp.spr "&%s" res_def in
-          let res_val_ptr = Pp.spr "&%s" res_val in
-          let d_fun =
-            D.dfun "dans_domaine"
-              [
-                D.ddirect @@ D.dinstr ptr;
-                D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-                D.ddirect @@ D.dinstr res_def_ptr;
-                D.ddirect @@ D.dinstr res_val_ptr;
-              ]
-          in
-          let set_vars =
-            [
-              (D.Def, res_def, d_fun);
-              (D.Val, res_val, D.ddirect (D.dinstr res_val));
-            ]
-          in
-          let def_test = D.dinstr res_def in
-          let value_comp = D.dinstr res_val in
-          D.build_transitive_composition { set_vars; def_test; value_comp }
-      | TabAccess (_, v, m_i) ->
-          let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let res = fresh_c_local "res" in
-          let res_def = Pp.spr "%s_def" res in
-          let res_val = Pp.spr "%s_val" res in
-          let res_def_ptr = Pp.spr "&%s" res_def in
-          let res_val_ptr = Pp.spr "&%s" res_val in
-          let set_vars, d_fun =
-            let ei = generate_c_expr p m_i in
-            let d_fun =
-              D.dfun "dans_domaine_tabaccess"
-                [
-                  d_irdata;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" (Com.Var.loc_tab_idx v);
-                  ei.def_test;
-                  ei.value_comp;
-                  D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-                  D.ddirect @@ D.dinstr res_def_ptr;
-                  D.ddirect @@ D.dinstr res_val_ptr;
-                ]
-            in
-            (ei.set_vars, d_fun)
-          in
-          let set_vars =
-            set_vars
-            @ [
-                (D.Def, res_def, d_fun);
-                (D.Val, res_val, D.ddirect (D.dinstr res_val));
-              ]
-          in
-          let def_test = D.dinstr res_def in
-          let value_comp = D.dinstr res_val in
-          D.build_transitive_composition { set_vars; def_test; value_comp }
-      | FieldAccess (_, ie, f, _) ->
-          let d_irdata = D.ddirect (D.dinstr "irdata") in
-          let set_vars, evt_d_fun =
-            let e = generate_c_expr p ie in
-            let evt_fn = Pp.spr "event_field_%s_var" (Pos.unmark f) in
-            (e.set_vars, D.dfun evt_fn [ d_irdata; e.def_test; e.value_comp ])
-          in
-          let res = fresh_c_local "res" in
-          let res_def = Pp.spr "%s_def" res in
-          let res_val = Pp.spr "%s_val" res in
-          let res_def_ptr = Pp.spr "&%s" res_def in
-          let res_val_ptr = Pp.spr "&%s" res_val in
-          let d_fun =
-            D.dfun "dans_domaine"
-              [
-                D.ddirect evt_d_fun;
-                D.ddirect @@ D.dinstr @@ Pp.spr "%d" id_cv;
-                D.ddirect @@ D.dinstr res_def_ptr;
-                D.ddirect @@ D.dinstr res_val_ptr;
-              ]
-          in
-          let set_vars =
-            set_vars
-            @ [
-                (D.Def, res_def, d_fun);
-                (D.Val, res_val, D.ddirect (D.dinstr res_val));
-              ]
-          in
-          let def_test = D.dinstr res_def in
-          let value_comp = D.dinstr res_val in
-          D.build_transitive_composition { set_vars; def_test; value_comp })
-  | NbAnomalies ->
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_anomalies(irdata)" in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | NbDiscordances ->
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_discordances(irdata)" in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | NbInformatives ->
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_informatives(irdata)" in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
-  | NbBloquantes ->
-      let def_test = D.dinstr "1.0" in
-      let value_comp = D.dinstr "nb_bloquantes(irdata)" in
-      D.build_transitive_composition { set_vars = []; def_test; value_comp }
+      same_variable p (Pos.unmark m_acc0) (Pos.unmark m_acc1)
+  | InDomain (m_acc, cvm) -> in_domain p (Pos.unmark m_acc) cvm
+  | NbAnomalies -> D.Func.nb_anomalies ()
+  | NbDiscordances -> D.Func.nb_discordances ()
+  | NbInformatives -> D.Func.nb_informatives ()
+  | NbBloquantes -> D.Func.nb_bloquantes ()
   | NbCategory _ | FuncCallLoop _ | Loop _ -> assert false
 
 let generate_expr_with_res_in p dgfip_flags oc res_def res_val expr =
-  let pr form = Format.fprintf oc form in
-  let locals, set, def, value = D.build_expression @@ generate_c_expr p expr in
-  if D.is_always_true def then
-    pr "@;@[<v 2>{%a%a%a%a@]@;}" D.format_local_declarations locals
-      (D.format_set_vars dgfip_flags)
-      set
-      (D.format_assign dgfip_flags res_def)
-      def
-      (D.format_assign dgfip_flags res_val)
-      value
-  else
-    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
-      D.format_local_declarations locals
-      (D.format_set_vars dgfip_flags)
-      set
-      (D.format_assign dgfip_flags res_def)
-      def res_def
-      (D.format_assign dgfip_flags res_val)
-      value res_val
+  generate_c_expr p expr |> D.write_c_expr dgfip_flags oc res_def res_val
 
 let generate_m_assign (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) (oc : Format.formatter)
@@ -854,14 +359,14 @@ let generate_var_def_tab (p : Mir.program) (dgfip_flags : Dgfip_options.flags)
   pr "@;@[<v 2>{";
   let idx_tab = Com.Var.loc_tab_idx var in
   pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
-  let idx = fresh_c_local "idx" in
+  let idx = D.fresh_c_local "idx" in
   let idx_def = idx ^ "_def" in
   let idx_val = idx ^ "_val" in
   pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
   generate_expr_with_res_in p dgfip_flags oc idx_def idx_val vidx;
   pr "@;%s = (int)%s;" idx idx_val;
   pr "@;@[<v 2>if (%s && 0 <= %s && %s < info->size) {" idx_def idx idx;
-  let res = fresh_c_local "res" in
+  let res = D.fresh_c_local "res" in
   let res_def = res ^ "_def" in
   let res_val = res ^ "_val" in
   pr "@;char %s;@;double %s;" res_def res_val;
@@ -879,14 +384,14 @@ let generate_event_field_def (p : Mir.program)
     (expr : Mir.expression Pos.marked) (oc : Format.formatter) : unit =
   let pr form = Format.fprintf oc form in
   pr "@;@[<v 2>{";
-  let idx = fresh_c_local "idx" in
+  let idx = D.fresh_c_local "idx" in
   let idx_def = idx ^ "_def" in
   let idx_val = idx ^ "_val" in
   pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
   generate_expr_with_res_in p dgfip_flags oc idx_def idx_val idx_expr;
   pr "@;%s = (int)%s;" idx idx_val;
   pr "@;@[<v 2>if (%s && 0 <= %s && %s < irdata->nb_events) {" idx_def idx idx;
-  let res = fresh_c_local "res" in
+  let res = D.fresh_c_local "res" in
   let res_def = res ^ "_def" in
   let res_val = res ^ "_val" in
   pr "@;char %s;@;double %s;" res_def res_val;
@@ -900,7 +405,7 @@ let generate_event_field_def (p : Mir.program)
           (VID.gen_var_space_id_opt m_sp_opt)
           idx field res_def res_val
     | Some ei ->
-        let i = fresh_c_local "i" in
+        let i = D.fresh_c_local "i" in
         let i_def = i ^ "_def" in
         let i_val = i ^ "_val" in
         pr "@;char %s;@;double %s;@;int %s;" i_def i_val i;
@@ -923,7 +428,7 @@ let generate_event_field_ref (p : Mir.program)
     (field : string) (var : Com.Var.t) (oc : Format.formatter) : unit =
   if (StrMap.find field p.program_event_fields).is_var then (
     let pr form = Format.fprintf oc form in
-    let idx = fresh_c_local "idx" in
+    let idx = D.fresh_c_local "idx" in
     let idx_def = idx ^ "_def" in
     let idx_val = idx ^ "_val" in
     let var_info_ptr = VID.gen_info_ptr var in
@@ -944,7 +449,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       match Pos.unmark m_acc with
       | VarAccess (m_sp_opt, v) ->
           generate_var_def p dgfip_flags m_sp_opt v expr oc
-      | TabAccess (m_sp_opt, v, m_idx) ->
+      | TabAccess ((m_sp_opt, v), m_idx) ->
           generate_var_def_tab p dgfip_flags m_sp_opt v m_idx expr oc
       | FieldAccess (m_sp_opt, i, f, _) ->
           let fn = Pos.unmark f in
@@ -955,7 +460,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
   | Affectation (Pos.Mark (MultipleFormulaes _, _)) -> assert false
   | IfThenElse (cond_expr, iftrue, iffalse) ->
       pr "@;@[<v 2>{";
-      let cond = fresh_c_local "cond" in
+      let cond = D.fresh_c_local "cond" in
       let cond_def = cond ^ "_def" in
       let cond_val = cond ^ "_val" in
       pr "@;char %s;@;double %s;" cond_def cond_val;
@@ -968,7 +473,6 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@]@;}";
       pr "@]@;}"
   | Switch (e, l) ->
-      pr "@;@[<v 2>{";
       (* Undef & Default should be unique, but just in case we take them all *)
       let undef_branches, default_branches, other_branches =
         List.fold_left
@@ -976,58 +480,102 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
             List.fold_left
               (fun (und, def, oth) c ->
                 match c with
-                | Com.Default -> (und, l :: def, oth)
-                | Com.(Value Undefined) -> (l :: und, def, oth)
-                | Com.(Value (Float f)) -> (und, def, (f, l) :: oth))
+                | Com.CDefault -> (und, l :: def, oth)
+                | Com.(CValue Undefined) -> (l :: und, def, oth)
+                | Com.(CValue (Float f)) -> (und, def, (`Float f, l) :: oth)
+                | Com.CVar v -> (und, def, (`Var v, l) :: oth))
               acc cl)
           ([], [], []) l
       in
       let undef_branches = List.rev undef_branches
       and default_branches = List.rev default_branches
       and other_branches = List.rev other_branches in
-      let exp = fresh_c_local "exp" in
+      let exp = D.fresh_c_local "exp" in
       let exp_def = exp ^ "_def" in
       let exp_val = exp ^ "_val" in
+      let is_var_switch =
+        match e with SESameVariable _ -> true | SEValue _ -> false
+      in
+      let var_of_switch () =
+        assert is_var_switch;
+        match e with SESameVariable e -> e | _ -> assert false
+      in
+      pr "@;@[<v 2>{";
       pr "@;char %s;@;double %s;" exp_def exp_val;
-      generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
-      pr "@;@[<v 2>if (%s) {" exp_def;
-      pr "@;";
+      let () =
+        (* Check is def if necessary *)
+        match e with
+        | SESameVariable _ -> pr "{@;"
+        | SEValue e ->
+            generate_expr_with_res_in p dgfip_flags oc exp_def exp_val e;
+            pr "@;@[<v 2>if (%s) {@;" exp_def
+      in
+      pr "/* Switch cases  */@;";
       (* Expression is defined *)
       let () =
+        let pp_case (v, br) =
+          match v with
+          | `Float v ->
+              assert (not is_var_switch);
+              pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
+                (generate_stmts env dgfip_flags p)
+                br
+          | `Var v ->
+              assert is_var_switch;
+              let e = var_of_switch () in
+              let compared_var = Pos.unmark e in
+              let is_same = D.fresh_c_local "is_same_var" in
+              let is_same_def = is_same ^ "_def" in
+              let is_same_val = is_same ^ "_val" in
+              pr "@;char %s;@;double %s;" is_same_def is_same_val;
+              let ex =
+                Pos.same (Com.SameVariable (v, Pos.same compared_var e)) e
+              in
+              generate_expr_with_res_in p dgfip_flags oc is_same_def is_same_val
+                ex;
+              pr "if (%s) {@;@[<v 2>%a@]@;}" is_same_val
+                (generate_stmts env dgfip_flags p)
+                br
+        in
+        let rec loop_else = function
+          | [] -> (
+              (* Default branch *)
+              match (default_branches, other_branches) with
+              | [], _ -> ()
+              | hd :: _, [] ->
+                  pr "/* Default switch case */@;";
+                  pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
+              | hd :: _, _ ->
+                  pr "/* Default switch case */@;";
+                  pr "@;else {@[<v 2>%a@]@;}"
+                    (generate_stmts env dgfip_flags p)
+                    hd)
+          | c :: tl ->
+              pr "else {@;@[<v 2>  ";
+              pp_case c;
+              loop_else tl;
+              pr "@]@;}@;"
+        in
         match other_branches with
         | [] -> ()
-        | (v, br) :: tl ->
-            pr "if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val v
-              (generate_stmts env dgfip_flags p)
-              br;
-            List.iter
-              (fun (v, br) ->
-                pr "@; else if (EQ_E((%s),(%#.19g))) {@;@[<v 2>%a@]@;}" exp_val
-                  v
-                  (generate_stmts env dgfip_flags p)
-                  br)
-              tl
+        | c :: tl ->
+            pp_case c;
+            loop_else tl
       in
-      let () =
-        match (default_branches, other_branches) with
-        | [], _ -> ()
-        | hd :: _, [] ->
-            pr "@;@[<v 2>%a@]" (generate_stmts env dgfip_flags p) hd
-        | hd :: _, _ ->
-            pr "@;else {@[<v 2>%a@]@;}" (generate_stmts env dgfip_flags p) hd
-      in
-      pr "@;}";
+      pr "}@;/* End of switch cases & default */@;";
       (* Expression is undefined *)
       let () =
         match undef_branches with
         | [] -> ()
-        | hd :: _ -> pr " else %a" (generate_stmts env dgfip_flags p) hd
+        | hd :: _ ->
+            pr "/* Undefined switch case */@;";
+            pr " else %a" (generate_stmts env dgfip_flags p) hd
       in
-      pr "@]@;}@]"
+      pr "@]}"
   | WhenDoElse (wdl, ed) ->
-      let goto_label = fresh_c_local "when_do_block" in
-      let fin_label = fresh_c_local "when_do_end" in
-      let cond = fresh_c_local "when_do_cond" in
+      let goto_label = D.fresh_c_local "when_do_block" in
+      let fin_label = D.fresh_c_local "when_do_end" in
+      let cond = D.fresh_c_local "when_do_cond" in
       let cond_def = cond ^ "_def" in
       let cond_val = cond ^ "_val" in
       pr "@;@[<v 2>{";
@@ -1049,7 +597,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@;%s:{}" fin_label;
       pr "@]@;}"
   | VerifBlock stmts ->
-      let goto_label = fresh_c_local "verif_block" in
+      let goto_label = D.fresh_c_local "verif_block" in
       pr "@;@[<v 2>{";
       pr "@;if (setjmp(irdata->jmp_bloq) != 0) goto %s;" goto_label;
       pr "%a" (generate_stmts env dgfip_flags p) stmts;
@@ -1061,7 +609,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         | StdOut -> ("stdout", "&(irdata->ctx_pr_out)")
         | StdErr -> ("stderr", "&(irdata->ctx_pr_err)")
       in
-      let print = fresh_c_local "print" in
+      let print = D.fresh_c_local "print" in
       let print_def = print ^ "_def" in
       let print_val = print ^ "_val" in
       pr "@;@[<v 2>{";
@@ -1073,14 +621,9 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@;print_string(%s, %s, \"%s\");" print_std pr_ctx
                 (str_escape s)
           | PrintAccess (info, m_a) -> (
-              let pr_sp m_sp_opt v_opt =
-                let vsd_id =
-                  match v_opt with
-                  | Some v -> VID.gen_var_space_id m_sp_opt v
-                  | None -> VID.gen_var_space_id_opt m_sp_opt
-                in
-                let vsd = Pp.spr "irdata->var_spaces[%s]" vsd_id in
-                let vsd0 = Pp.spr "irdata->var_spaces[irdata->var_space]" in
+              let pr_sp m_sp_opt _v_opt =
+                let vsd = VID.gen_var_space m_sp_opt in
+                let vsd0 = VID.gen_var_space None in
                 pr "@;@[<v 2>if (%s.id != %s.id) {" vsd vsd0;
                 pr "@;print_string(%s, %s, %s.name);" print_std pr_ctx vsd;
                 pr "@;print_string(%s, %s, \".\");" print_std pr_ctx;
@@ -1094,7 +637,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                     match info with Com.Name -> "name" | Com.Alias -> "alias"
                   in
                   pr "@;print_string(%s, %s, %s->%s);" print_std pr_ctx ptr fld
-              | TabAccess (m_sp_opt, v, m_idx) ->
+              | TabAccess ((m_sp_opt, v), m_idx) ->
                   pr_sp m_sp_opt (Some v);
                   pr "@;@[<v 2>{";
                   pr "T_varinfo *info;";
@@ -1168,11 +711,11 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                 pr "@;%s = %s;" ref_val (VID.gen_val_ptr m_sp_opt var);
                 pr "@]@;}";
                 set_args (n + 1) vl' al'
-            | Com.TabAccess (m_sp_opt, var, vidx) ->
+            | Com.TabAccess ((m_sp_opt, var), vidx) ->
                 pr "@;@[<v 2>if (must_exec) {";
                 let idx_tab = Com.Var.loc_tab_idx var in
                 pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
-                let idx = fresh_c_local "idx" in
+                let idx = D.fresh_c_local "idx" in
                 let idx_def = idx ^ "_def" in
                 let idx_val = idx ^ "_val" in
                 pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1193,7 +736,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
                 set_args (n + 1) vl' al'
             | Com.FieldAccess (m_sp_opt, e, Pos.Mark (f, _), _) ->
                 pr "@;@[<v 2>if (must_exec) {";
-                let idx = fresh_c_local "idx" in
+                let idx = D.fresh_c_local "idx" in
                 let idx_def = idx ^ "_def" in
                 let idx_val = idx ^ "_val" in
                 pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1217,7 +760,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       set_args 0 target.target_args targs;
       (match m_sp_opt with
       | None -> ()
-      | Some (_, vs_id) -> pr "@;irdata->var_space = %d;" vs_id);
+      | Some (_, vs_id) -> pr "@;change_var_space_courant(irdata, %d);" vs_id);
       (match targs with
       | [] -> pr "@;%s(irdata);" tn
       | _ ->
@@ -1226,14 +769,19 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           pr "@]@;}@;");
       (match m_sp_opt with
       | None -> ()
-      | Some _ -> pr "@;irdata->var_space = var_space_sav;");
-      pr "@;if (irdata->abandon) {@;@[<v 2>";
-      sanitize ~up_to:`Bottom env;
-      pr "@;goto %s;" env.quit_label;
-      pr "@]@;}@;";
+      | Some _ -> pr "@;change_var_space_courant(irdata, var_space_sav);");
+      if
+        (not (Utils.Config.optim_no_check_unstoppable ()))
+        || target.target_stoppable
+      then begin
+        pr "@;if (irdata->abandon) {@;@[<v 2>";
+        sanitize ~up_to:`Bottom env;
+        pr "@;goto %s;" env.quit_label;
+        pr "@]@;}@;"
+      end;
       pr "@]@;}@;"
   | Iterate (var, al, var_params, stmts) ->
-      let it_name = fresh_c_local "iterate" in
+      let it_name = D.fresh_c_local "iterate" in
       let ref_name = VID.gen_ref_name_ptr var in
       let ref_info = VID.gen_info_ptr var in
       let ref_space = VID.gen_ref_var_space_ptr var in
@@ -1254,11 +802,11 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@;%s = %s;" ref_val (VID.gen_val_ptr m_sp_opt v);
               pr "%a" (generate_stmts env dgfip_flags p) stmts;
               pr "@]@;}"
-          | Com.TabAccess (m_sp_opt, var, vidx) ->
+          | Com.TabAccess ((m_sp_opt, var), vidx) ->
               pr "@;@[<v 2>{";
               let idx_tab = Com.Var.loc_tab_idx var in
               pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
-              let idx = fresh_c_local "idx" in
+              let idx = D.fresh_c_local "idx" in
               let idx_def = idx ^ "_def" in
               let idx_val = idx ^ "_val" in
               pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1279,7 +827,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}"
           | Com.FieldAccess (m_sp_opt, e, Pos.Mark (f, _), _) ->
               pr "@;@[<v 2>{";
-              let idx = fresh_c_local "idx" in
+              let idx = D.fresh_c_local "idx" in
               let idx_def = idx ^ "_def" in
               let idx_val = idx ^ "_val" in
               pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1304,7 +852,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               let vcd = Com.CatVar.Map.find vc p.program_var_categories in
               let ref_sp = VID.gen_var_space_id_opt m_sp_opt in
               let ref_tab = VID.gen_tab vcd.loc in
-              let cond = fresh_c_local "cond" in
+              let cond = D.fresh_c_local "cond" in
               let cond_def = cond ^ "_def" in
               let cond_val = cond ^ "_val" in
               pr "@;@[<v 2>{";
@@ -1338,7 +886,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       (* !!! *)
       let itval_val = VID.gen_val None var in
       (* !!! *)
-      let postfix = fresh_c_local "" in
+      let postfix = D.fresh_c_local "" in
       let i_val = Format.sprintf "i_val%s" postfix in
       let e0_def = Format.sprintf "e0_def%s" postfix in
       let e0_val = Format.sprintf "e0_val%s" postfix in
@@ -1374,13 +922,13 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         var_intervals;
       pr "@;@]%s:;} /* End of scope %s */" id id
   | ArrangeEvents (sort, filter, add, stmts) ->
-      let events_sav = fresh_c_local "events_sav" in
-      let events_tmp = fresh_c_local "events_tmp" in
-      let nb_events_sav = fresh_c_local "nb_events_sav" in
-      let nb_add = fresh_c_local "nb_add" in
-      let cpt_i = fresh_c_local "i" in
-      let cpt_j = fresh_c_local "j" in
-      let evt = fresh_c_local "evt" in
+      let events_sav = D.fresh_c_local "events_sav" in
+      let events_tmp = D.fresh_c_local "events_tmp" in
+      let nb_events_sav = D.fresh_c_local "nb_events_sav" in
+      let nb_add = D.fresh_c_local "nb_add" in
+      let cpt_i = D.fresh_c_local "i" in
+      let cpt_j = D.fresh_c_local "j" in
+      let evt = D.fresh_c_local "evt" in
       let pp_sanitize () =
         pr "@;free(irdata->events);";
         pr "@;irdata->events = %s;" events_sav;
@@ -1397,7 +945,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       (match add with
       | Some expr ->
           pr "@;@[<v 2>{";
-          let cond = fresh_c_local "cond" in
+          let cond = D.fresh_c_local "cond" in
           let cond_def = cond ^ "_def" in
           let cond_val = cond ^ "_val" in
           pr "@;char %s;@;double %s;" cond_def cond_val;
@@ -1405,7 +953,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           pr "@;%s = (int)%s;" nb_add cond_val;
           pr "@;if (%s < 0) %s = 0;" nb_add nb_add;
           pr "@;@[<v 2>if (%s && 0 < %s) {" cond_def nb_add;
-          let cpt_k = fresh_c_local "k" in
+          let cpt_k = D.fresh_c_local "k" in
           pr "@;int %s = 0;" cpt_k;
           pr "@;%s = (T_event **)malloc((%s + %s) * (sizeof (T_event *)));"
             events_tmp nb_events_sav nb_add;
@@ -1439,7 +987,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           (* !!! *)
           let ref_val = VID.gen_val None var in
           (* !!! *)
-          let cond = fresh_c_local "cond" in
+          let cond = D.fresh_c_local "cond" in
           let cond_def = cond ^ "_def" in
           let cond_val = cond ^ "_val" in
           pr "@;char %s;@;double %s;" cond_def cond_val;
@@ -1502,8 +1050,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
           (* !!! *)
           let ref1_val = VID.gen_val None var1 in
           (* !!! *)
-          let cmp_def = fresh_c_local "cmp_def" in
-          let cmp_val = fresh_c_local "cmp_val" in
+          let cmp_def = D.fresh_c_local "cmp_def" in
+          let cmp_val = D.fresh_c_local "cmp_val" in
           pr "@;char %s;@;double %s;" cmp_def cmp_val;
           pr "@;%s = 1;" ref0_def;
           pr "@;%s = (double)i;" ref0_val;
@@ -1535,8 +1083,8 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
       pr "@]@;}"
   | Restore (al, var_params, evts, evtfs, stmts) ->
       pr "@;@[<v 2>{";
-      let rest_name = fresh_c_local "restore" in
-      let rest_evt_name = fresh_c_local "restore_evt" in
+      let rest_name = D.fresh_c_local "restore" in
+      let rest_evt_name = D.fresh_c_local "restore_evt" in
       let pp_sanitize () =
         pr "@;env_restaurer(&%s);@;" rest_name;
         pr "@;env_restaurer_evt(&%s);@;" rest_evt_name
@@ -1553,11 +1101,11 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               let sz = VID.gen_size var in
               pr "@;env_sauvegarder(&%s, %s, %s, %s);" rest_name def_ptr val_ptr
                 sz
-          | Com.TabAccess (m_sp_opt, var, vidx) ->
+          | Com.TabAccess ((m_sp_opt, var), vidx) ->
               pr "@;@[<v 2>{";
               let idx_tab = Com.Var.loc_tab_idx var in
               pr "@;T_varinfo *info = tab_varinfo[%d];" idx_tab;
-              let idx = fresh_c_local "idx" in
+              let idx = D.fresh_c_local "idx" in
               let idx_def = idx ^ "_def" in
               let idx_val = idx ^ "_val" in
               pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1577,7 +1125,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               pr "@]@;}"
           | Com.FieldAccess (m_sp_opt, e, Pos.Mark (f, _), _) ->
               pr "@;@[<v 2>{";
-              let idx = fresh_c_local "idx" in
+              let idx = D.fresh_c_local "idx" in
               let idx_def = idx ^ "_def" in
               let idx_val = idx ^ "_val" in
               pr "@;char %s;@;double %s;@;int %s;" idx_def idx_val idx;
@@ -1597,7 +1145,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         al;
       List.iter
         (fun (var, vcs, expr, m_sp_opt) ->
-          let it_name = fresh_c_local "iterate" in
+          let it_name = D.fresh_c_local "iterate" in
           Com.CatVar.Map.iter
             (fun vc _ ->
               let vcd = Com.CatVar.Map.find vc p.program_var_categories in
@@ -1607,7 +1155,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
               let ref_info = VID.gen_info_ptr var in
               let ref_def = VID.gen_def_ptr None var in
               let ref_val = VID.gen_val_ptr None var in
-              let cond = fresh_c_local "cond" in
+              let cond = D.fresh_c_local "cond" in
               let cond_def = cond ^ "_def" in
               let cond_val = cond ^ "_val" in
               pr "@;@[<v 2>{";
@@ -1635,7 +1183,7 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         var_params;
       List.iter
         (fun expr ->
-          let idx = fresh_c_local "idx" in
+          let idx = D.fresh_c_local "idx" in
           let idx_def = idx ^ "_def" in
           let idx_val = idx ^ "_val" in
           pr "@;@[<v 2>{";
@@ -1652,12 +1200,12 @@ let rec generate_stmt (env : env) (dgfip_flags : Dgfip_options.flags)
         evts;
       List.iter
         (fun (var, expr) ->
-          let idx = fresh_c_local "idx" in
+          let idx = D.fresh_c_local "idx" in
           let ref_def = VID.gen_def None var in
           (* !!! *)
           let ref_val = VID.gen_val None var in
           (* !!! *)
-          let cond = fresh_c_local "cond" in
+          let cond = D.fresh_c_local "cond" in
           let cond_def = cond ^ "_def" in
           let cond_val = cond ^ "_val" in
           pr "@;@[<v 2>{";
@@ -1785,7 +1333,7 @@ let generate_function (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
   let pr fmt = Format.fprintf oc fmt in
   let fd = StrMap.find fn p.program_functions in
   pr "@.@[<v 2>%a {" (generate_function_prototype false) fd;
-  let sav = fresh_c_local "sav" in
+  let sav = D.fresh_c_local "sav" in
   let sav_nb_tmps = Pp.spr "%s_nb_tmps_target" sav in
   let sav_nb_refs = Pp.spr "%s_nb_refs_target" sav in
   pr "@;int %s = irdata->nb_tmps_target;" sav_nb_tmps;
@@ -1855,11 +1403,22 @@ let generate_target (dgfip_flags : Dgfip_options.flags) (p : Mir.program)
   let pr fmt = Format.fprintf oc fmt in
   let tf = StrMap.find f p.program_targets in
   pr "@.@[<v 2>%a {" (generate_target_prototype false) f;
-  let sav = fresh_c_local "sav" in
+  let sav = D.fresh_c_local "sav" in
   let sav_nb_tmps = Pp.spr "%s_nb_tmps_target" sav in
   let sav_nb_refs = Pp.spr "%s_nb_refs_target" sav in
   pr "@;int %s = irdata->nb_tmps_target;" sav_nb_tmps;
   pr "@;int %s = irdata->nb_refs_target;" sav_nb_refs;
+  (* Adding pointers to current space. These variable names match the ones
+     generated by Dgfip_varid.gen_tgv_def/gen_tgv_val. *)
+  if Utils.Config.optim_local_var_for_arrays () then begin
+    pr "@;char *def_saisie = irdata->def_saisie;";
+    pr "@;double *saisie = irdata->saisie;";
+    pr "@;char *def_calculee = irdata->def_calculee;";
+    pr "@;double *calculee = irdata->calculee;";
+    pr "@;char *def_base = irdata->def_base;";
+    pr "@;double *base = irdata->base;"
+  end;
+  pr "@;T_var_space var_space = irdata->var_space_courant;";
   pr "%a" generate_cible_tmp_decls tf;
   pr "@;irdata->nb_tmps_target = %d;"
     (StrMap.fold (fun _ v n -> n + Com.Var.size v) tf.target_tmp_vars 0);

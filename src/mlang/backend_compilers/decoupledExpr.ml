@@ -1,4 +1,26 @@
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2022 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
+
 module VID = Dgfip_varid
+
+let fresh_c_local =
+  let c = ref 0 in
+  fun name ->
+    let s = name ^ string_of_int !c in
+    incr c;
+    s
 
 let generate_variable ?(def_flag = false) ?(trace_flag = false)
     (m_sp_opt : Com.var_space) (var : Com.Var.t) : string =
@@ -18,13 +40,9 @@ let generate_variable ?(def_flag = false) ?(trace_flag = false)
       (Format.asprintf "Variable %s not found in TGV"
          (Pos.unmark var.Com.Var.name))
 
-type local_var =
-  | Anon (* inlined sub-expression, not intended for reuse *)
-  | Refered of int
-(* declared local variable, either M local or locally bound in the constructors
-   below *)
+type dflag = Constr.dflag = Def | Val | VarInfo | VarSpace
 
-type dflag = Def | Val (* distinguish C types int and double *)
+type local_var = Constr.local_var
 
 type stack_slot = { kind : dflag; depth : int }
 
@@ -33,6 +51,8 @@ type stack_assignment = { slot : stack_slot; subexpr : expr }
 and local_stacks = {
   def_top : int;
   val_top : int;
+  var_top : int;
+  spa_top : int;
   var_substs : (int * (expr * dflag)) list;
 }
 
@@ -43,28 +63,37 @@ and expr =
   | Dfalse
   | Dlit of float
   | Dvar of expr_var
-  | Dand of expr * expr
-  | Dor of expr * expr
+  | Dvarinfo of varinfo_access
+  | Dvarspace of Com.var_space * Com.Var.t option
+    (* If var is a ref, using it to get the var space *)
+  | Dand of expr list
+  | Dor of expr list
   | Dunop of string * expr
   | Dbinop of string * expr * expr
   | Dfun of string * expr list
   | Dite of expr * expr * expr
+  | Dtyp of Com.value_typ
   | Dinstr of string
   | Ddirect of expr
+
+and varinfo_access =
+  | VIvar of Com.Var.t
+  | VItab of Com.Var.t * expr * expr (* variable, var_def, var_val *)
+  | VIfield of expr * expr * string (* var_def, var_val, field *)
 
 and expr_var = Local of stack_slot | M of Com.var_space * Com.Var.t * dflag
 
 and t = expr * dflag * local_vars
 
-and constr = local_stacks -> local_vars -> t
-
-type expression_composition = {
-  set_vars : (dflag * string * constr) list;
-  def_test : constr;
-  value_comp : constr;
-}
+and builder = local_stacks -> local_vars -> t
 
 type stack_position = Not_to_stack | Must_be_pushed | On_top of dflag
+
+(* let dflag_id = function Def -> 0 | Val -> 1 | VarInfo -> 2 | VarSpace -> 3 *)
+
+let pp_local_var fmt = function
+  | Constr.Anon -> Format.fprintf fmt "--anon--"
+  | Refered v -> Format.fprintf fmt "var-%i" v
 
 let is_always_true ((expr, _kind, _lv) : t) = expr = Dtrue
 
@@ -75,6 +104,12 @@ let cast (kind : dflag) (expr : expr) =
   | Dlit 0., Def -> Dfalse
   | Dlit _, Def -> Dtrue
   | _, Def -> Dbinop ("!=", expr, Dlit 0.)
+  | Dvarinfo _, VarInfo -> expr
+  | Dvarspace _, VarSpace -> expr
+  | Dvarinfo _, _ -> failwith "Invalid cast of varinfo"
+  | _, VarInfo -> failwith "Invalid cast to varinfo"
+  | Dvarspace _, _ -> failwith "Invalid cast of varspace"
+  | _, VarSpace -> failwith "Invalid cast to varspace"
   | _, Val -> expr
 
 (** local stacks operations *)
@@ -83,6 +118,8 @@ let bump_stack (kind : dflag) (st : local_stacks) =
   match kind with
   | Def -> { st with def_top = st.def_top + 1 }
   | Val -> { st with val_top = st.val_top + 1 }
+  | VarInfo -> { st with var_top = st.var_top + 1 }
+  | VarSpace -> { st with spa_top = st.spa_top + 1 }
 
 let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
     (expr : expr) =
@@ -91,17 +128,21 @@ let add_substitution (st : local_stacks) (v : local_var) (kind : dflag)
   | Refered v -> { st with var_substs = (v, (expr, kind)) :: st.var_substs }
 
 let stack_top (kind : dflag) (st : local_stacks) =
-  match kind with Def -> st.def_top | Val -> st.val_top
+  match kind with
+  | Def -> st.def_top
+  | Val -> st.val_top
+  | VarInfo -> st.var_top
+  | VarSpace -> st.spa_top
 
 let is_in_stack_scope ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth < st.def_top | Val -> depth < st.val_top
+  depth < stack_top kind st
 
 let is_on_top ({ kind; depth } : stack_slot) (st : local_stacks) =
-  match kind with Def -> depth = st.def_top | Val -> depth = st.val_top
+  depth = stack_top kind st
 
 let rec expr_position (expr : expr) (st : local_stacks) =
   match expr with
-  | Dtrue | Dfalse | Dlit _ | Dvar (M _) -> Not_to_stack
+  | Dtrue | Dfalse | Dlit _ | Dvar (M _) | Dtyp _ -> Not_to_stack
   | Dvar (Local slot) ->
       if is_in_stack_scope slot st then Not_to_stack
       else if is_on_top slot st then On_top slot.kind
@@ -116,7 +157,9 @@ let rec expr_position (expr : expr) (st : local_stacks) =
       | _, _ -> Not_to_stack (* Either already stored, or duplicatable *)
     end
   | Ddirect _ -> Not_to_stack
-  | _ -> Must_be_pushed
+  | Dbinop _ | Dand _ | Dor _ | Dunop _ | Dfun _ | Dite _ | Dinstr _
+  | Dvarinfo _ | Dvarspace _ ->
+      Must_be_pushed
 
 (* allocate to local variable if necessary *)
 let store_local (stacks : local_stacks) (ctx : local_vars) (v : local_var)
@@ -140,63 +183,37 @@ let store_local (stacks : local_stacks) (ctx : local_vars) (v : local_var)
 (* the following functions resolve [constr] values by applying them to a given
    context (both stacks state and existing local allocations) *)
 
-let collapse_constr (stacks : local_stacks) (ctx : local_vars) (constr : constr)
-    =
-  let expr, kind, lv = constr stacks ctx in
+let collapse_builder (stacks : local_stacks) (ctx : local_vars)
+    (builder : builder) =
+  let expr, kind, lv = builder stacks ctx in
   (expr, kind, lv @ ctx)
 
 (* eval and store with enforced kind *)
 let push_with_kind (stacks : local_stacks) (ctx : local_vars) (kind : dflag)
-    (constr : constr) =
-  let expr, ekind, lv = constr stacks ctx in
+    (builder : builder) =
+  let expr, ekind, lv = builder stacks ctx in
   let expr = if kind = ekind then expr else cast kind expr in
-  let stacks, lv, expr = store_local stacks lv Anon kind expr in
+  let stacks, lv, expr = store_local stacks lv Constr.anon kind expr in
   (stacks, lv, expr)
 
 (* eval and store without enforcing kind *)
-let push (stacks : local_stacks) (ctx : local_vars) (constr : constr) =
-  let expr, kind, lv = constr stacks ctx in
-  let stacks, lv, expr = store_local stacks lv Anon kind expr in
+let push (stacks : local_stacks) (ctx : local_vars) (builder : builder) =
+  let expr, kind, lv = builder stacks ctx in
+  let stacks, lv, expr = store_local stacks lv Constr.anon kind expr in
   (stacks, lv, expr, kind)
 
-(** smart constructors *)
+module DE = Def_expr.Make (Constr)
 
-let locals_from_m =
-  let counter = ref 0 in
-  let fresh_id () =
-    let v = !counter in
-    counter := !counter + 1;
-    v
-  in
-  fun () ->
-    let lvar_id = fresh_id () in
-    (Refered (-(2 * lvar_id)), Refered (-((2 * lvar_id) + 1)))
+let true_ _ _ = (Dtrue, Constr.Def, [])
 
-let new_local : unit -> local_var =
-  let c = ref 0 in
-  fun () ->
-    let i = !c in
-    incr c;
-    Refered i
+let false_ _ _ = (Dfalse, Constr.Def, [])
 
-let let_local (v : local_var) (bound : constr) (body : constr)
-    (stacks : local_stacks) (ctx : local_vars) =
-  let bound, kind, lv = collapse_constr stacks ctx bound in
-  let stacks, ctx, _ = store_local stacks lv v kind bound in
-  collapse_constr stacks ctx body
+let lit f _ _ = (Dlit f, Constr.Val, [])
 
-let dtrue _stacks _lv : t = (Dtrue, Def, [])
-
-let dfalse _stacks _lv : t = (Dfalse, Def, [])
-
-let lit (f : float) _stacks _lv : t = (Dlit f, Val, [])
-
-let m_var (m_sp_opt : Com.var_space) (v : Com.Var.t) (df : dflag) _stacks _lv :
-    t =
+let m_var (m_sp_opt : Com.var_space) (v : Com.Var.t) (df : dflag) _ _ =
   (Dvar (M (m_sp_opt, v, df)), df, [])
 
-let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
-    =
+let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) =
   match lvar with
   | Anon -> Errors.raise_error "Tried to access anonymous local variable"
   | Refered v -> (
@@ -205,16 +222,21 @@ let local_var (lvar : local_var) (stacks : local_stacks) (ctx : local_vars) : t
       | None -> (
           match List.assoc_opt lvar ctx with
           | Some { slot; _ } -> (Dvar (Local slot), slot.kind, [])
-          | None -> Errors.raise_error "Local variable not found in context"))
+          | None ->
+              Format.kasprintf Errors.raise_error
+                "Local variable %i not found in context. Local vars: [%a]; \
+                 stacks subst: [%a]"
+                v
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt _ -> Format.fprintf fmt ",")
+                   pp_local_var)
+                (List.map fst ctx)
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt _ -> Format.fprintf fmt ",")
+                   (fun fmt (i, _) -> Format.fprintf fmt "%i" i))
+                stacks.var_substs))
 
-(* Note on constructors with several subexpressions. To correctly allocate
-   subvalues in the stacks, the stacks state must flow through all constructor
-   arguments to increment "pointers" accordingly. The state at entry represents
-   the point at which the constructed expression is expected to be allocated (if
-   needed). *)
-
-let dand (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
-    : t =
+let and_ e1 e2 stacks ctx =
   let stacks', lv1, e1 = push_with_kind stacks ctx Def e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Def e2 in
   match (e1, e2) with
@@ -222,10 +244,13 @@ let dand (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   | _, Dtrue -> (e1, Def, lv1)
   | Dfalse, _ | _, Dfalse -> (Dfalse, Def, [])
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dand (e1, e2), Def, lv2 @ lv1)
+  | Dand l1, Dand l2 -> (Dand (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dand l -> (Dand (e1 :: l), Def, lv2 @ lv1)
+  | Dand l, _ -> (Dand (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Dand [ e1; e2 ], Def, lv2 @ lv1)
 
-let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
-    t =
+let or_ (e1 : builder) (e2 : builder) (stacks : local_stacks) (ctx : local_vars)
+    =
   let stacks', lv1, e1 = push_with_kind stacks ctx Def e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Def e2 in
   match (e1, e2) with
@@ -233,9 +258,12 @@ let dor (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
   | Dfalse, _ -> (e2, Def, lv2)
   | _, Dfalse -> (e1, Def, lv1)
   | Dvar v1, Dvar v2 when v1 = v2 -> (e1, Def, lv1)
-  | _ -> (Dor (e1, e2), Def, lv2 @ lv1)
+  | Dor l1, Dor l2 -> (Dor (l1 @ l2), Def, lv2 @ lv1)
+  | _, Dor l -> (Dor (e1 :: l), Def, lv2 @ lv1)
+  | Dor l, _ -> (Dor (l @ [ e2 ]), Def, lv2 @ lv1)
+  | _, _ -> (Dor [ e1; e2 ], Def, lv2 @ lv1)
 
-let dnot (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
+let not_ (e : builder) (stacks : local_stacks) (ctx : local_vars) =
   let _, lv, e = push_with_kind stacks ctx Def e in
   match e with
   | Dtrue -> (Dfalse, Def, [])
@@ -243,15 +271,15 @@ let dnot (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
   | Dunop ("!", e) -> (e, Def, lv)
   | _ -> (Dunop ("!", e), Def, lv)
 
-let minus (e : constr) (stacks : local_stacks) (ctx : local_vars) : t =
+let minus (e : builder) (stacks : local_stacks) (ctx : local_vars) =
   let _, lv, e = push_with_kind stacks ctx Val e in
   match e with
   | Dlit f -> (Dlit (-.f), Val, [])
   | Dunop ("-", e) -> (e, Val, lv)
   | _ -> (Dunop ("-", e), Val, lv)
 
-let plus (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
-    : t =
+let plus (e1 : builder) (e2 : builder) (stacks : local_stacks)
+    (ctx : local_vars) =
   (* This optimisation causes some valuation to end at -0.0 where +0.0 was
      expected. Staying conservative for now *)
   let reduce_zero_add = false in
@@ -263,8 +291,8 @@ let plus (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   | Dlit f1, Dlit f2 -> (Dlit (f1 +. f2), Val, [])
   | _ -> (Dbinop ("+", e1, e2), Val, lv2 @ lv1)
 
-let sub (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
-    t =
+let sub (e1 : builder) (e2 : builder) (stacks : local_stacks) (ctx : local_vars)
+    =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
   match (e1, e2) with
@@ -273,8 +301,8 @@ let sub (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
   | Dlit f1, Dlit f2 -> (Dlit (f1 -. f2), Val, [])
   | _ -> (Dbinop ("-", e1, e2), Val, lv2 @ lv1)
 
-let mult (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
-    : t =
+let mult (e1 : builder) (e2 : builder) (stacks : local_stacks)
+    (ctx : local_vars) =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
   match (e1, e2) with
@@ -284,8 +312,8 @@ let mult (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars)
   | Dlit f1, Dlit f2 -> (Dlit (f1 *. f2), Val, [])
   | _ -> (Dbinop ("*", e1, e2), Val, lv2 @ lv1)
 
-let div (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
-    t =
+let div (e1 : builder) (e2 : builder) (stacks : local_stacks) (ctx : local_vars)
+    =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
   match (e1, e2) with
@@ -295,8 +323,8 @@ let div (e1 : constr) (e2 : constr) (stacks : local_stacks) (ctx : local_vars) :
       (Dlit f, Val, [])
   | _ -> (Dbinop ("/", e1, e2), Val, lv2 @ lv1)
 
-let modulo (e1 : constr) (e2 : constr) (stacks : local_stacks)
-    (ctx : local_vars) : t =
+let modulo (e1 : builder) (e2 : builder) (stacks : local_stacks)
+    (ctx : local_vars) =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
   match (e1, e2) with
@@ -306,18 +334,14 @@ let modulo (e1 : constr) (e2 : constr) (stacks : local_stacks)
       (Dlit f, Val, [])
   | _ -> (Dfun ("fmod", [ e1; e2 ]), Val, lv2 @ lv1)
 
-let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
-    (ctx : local_vars) : t =
+let comp op (e1 : builder) (e2 : builder) (stacks : local_stacks)
+    (ctx : local_vars) =
   let stacks', lv1, e1 = push_with_kind stacks ctx Val e1 in
   let _, lv2, e2 = push_with_kind stacks' ctx Val e2 in
   let comp (o : Com.comp_op) =
     match (e1, e2) with
     | Dlit f1, Dlit f2 ->
-        if
-          Mir_interpreter.FloatDefInterp.compare_numbers o
-            (Mir_number.RegularFloatNumber.of_float f1)
-            (Mir_number.RegularFloatNumber.of_float f2)
-        then Dtrue
+        if M_ir.Mir_number.RegularFloatNumber.compare o f1 f2 then Dtrue
         else Dfalse
     | Dvar v1, Dvar v2 ->
         if String.equal op "==" && v1 = v2 then Dtrue else Dbinop (op, e1, e2)
@@ -335,27 +359,44 @@ let comp op (e1 : constr) (e2 : constr) (stacks : local_stacks)
   in
   (e, Def, lv2 @ lv1)
 
-let dfun (f : string) (args : constr list) (stacks : local_stacks)
-    (ctx : local_vars) : t =
+let fun_ (f : string) (args : builder list) (stacks : local_stacks)
+    (ctx : local_vars) =
   let (_, lv), args =
     List.fold_left_map
       (fun (stacks, lv) e ->
-        let stacks, lv', e = push_with_kind stacks ctx Val e in
+        let stacks, lv', e, _ = push stacks ctx e in
         ((stacks, lv' @ lv), e))
       (stacks, []) args
   in
   (* TODO : distinguish kinds *)
   (Dfun (f, args), Val, lv)
 
-let dinstr (i : string) (_stacks : local_stacks) (_ctx : local_vars) : t =
-  (Dinstr i, Val, [])
+let varinfo v _ _ = (Dvarinfo (VIvar v), VarInfo, [])
 
-let ddirect (c : constr) (stacks : local_stacks) (ctx : local_vars) : t =
-  let expr, flags, ctx = c stacks ctx in
-  (Ddirect expr, flags, ctx)
+let varinfo_tab ~tab ~def ~value stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VItab (tab, def, value)), VarInfo, lv @ lv')
 
-let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
-    (ctx : local_vars) : t =
+let varinfo_field ~def ~value ~field stacks ctx =
+  let stacks, lv, def = push_with_kind stacks ctx Def def in
+  let _stacks, lv', value = push_with_kind stacks ctx Val value in
+  (Dvarinfo (VIfield (def, value, field)), VarInfo, lv @ lv')
+
+let varspace_current m _ _ = (Dvarspace (m, None), VarSpace, [])
+
+let varspace_of m v _ _ = (Dvarspace (m, Some v), VarSpace, [])
+
+let typ t _ _ = (Dtyp t, Def, [])
+
+let instr i _ _ = (Dinstr i, Val, [])
+
+let direct c stacks ctx =
+  let e, d, ctx = c stacks ctx in
+  (Ddirect e, d, ctx)
+
+let ite (c : builder) (t : builder) (e : builder) (stacks : local_stacks)
+    (ctx : local_vars) =
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
   let stacks', lvt, t, tkind = push stacks' ctx t in
   let _, lve, e, ekind = push stacks' ctx e in
@@ -368,72 +409,275 @@ let ite (c : constr) (t : constr) (e : constr) (stacks : local_stacks)
   | Dfalse, _, _ -> (e, ekind, lve)
   | _, Dtrue, Dtrue | _, Dfalse, Dfalse -> (t, tkind, lvt)
   | _, Dlit 1., Dlit 0. -> (c, Def, lvc)
+  | _, Dlit 0., Dlit 1. -> (Dunop ("!", c), Def, lvc)
   | _, Dlit f, Dlit f' when f = f' -> (Dlit f, ite_kind, [])
   | _ -> (Dite (c, t, e), ite_kind, lve @ lvt @ lvc)
 
-let it0 (c : constr) (t : constr) (stacks : local_stacks) (ctx : local_vars) : t
-    =
+let it0 (c : builder) (t : builder) (stacks : local_stacks) (ctx : local_vars) =
   (* Version of [ite] where the else is zero with kind matching the then to
      avoid casting later *)
   let stacks', lvc, c = push_with_kind stacks ctx Def c in
   let _, lvt, t, tkind = push stacks' ctx t in
-  let e, ekind =
-    match tkind with Def -> (Dfalse, Def) | Val -> (Dlit 0., Val)
+  let e =
+    match tkind with
+    | Def -> Dfalse
+    | Val -> Dlit 0.
+    | VarInfo -> failwith "Cannot make an IT with a VarInfo"
+    | VarSpace -> failwith "Cannot make an IT with a VarSpace"
   in
   match (c, t) with
   | Dtrue, _ -> (t, tkind, lvt)
-  | Dfalse, _ -> (e, ekind, [])
+  | Dfalse, _ -> (e, tkind, [])
   | _, (Dlit 1. | Dtrue) -> (c, Def, lvc)
   | _, (Dlit 0. | Dfalse) -> (t, tkind, [])
   | _ -> (Dite (c, t, e), tkind, lvt @ lvc)
 
-let build_transitive_composition ?(safe_def = false)
-    ({ set_vars; def_test; value_comp } : expression_composition) :
-    expression_composition =
+let let_local (v : local_var) (bound : builder) (body : builder)
+    (stacks : local_stacks) (ctx : local_vars) =
+  let bound, kind, lv = collapse_builder stacks ctx bound in
+  let stacks, ctx, _ = store_local stacks lv v kind bound in
+  collapse_builder stacks ctx body
+
+let rec make_constr : Constr.t -> builder = function
+  | True -> true_
+  | False -> false_
+  | Lit f -> lit f
+  | M (vs, v, d) -> m_var vs v d
+  | Local lv -> local_var lv
+  | And (e1, e2) -> and_ (make_constr e1) (make_constr e2)
+  | Or (e1, e2) -> or_ (make_constr e1) (make_constr e2)
+  | Not e -> not_ (make_constr e)
+  | Minus e -> minus (make_constr e)
+  | Plus (e1, e2) -> plus (make_constr e1) (make_constr e2)
+  | Sub (e1, e2) -> sub (make_constr e1) (make_constr e2)
+  | Mult (e1, e2) -> mult (make_constr e1) (make_constr e2)
+  | Div (e1, e2) -> div (make_constr e1) (make_constr e2)
+  | Modulo (e1, e2) -> modulo (make_constr e1) (make_constr e2)
+  | Comp (s, e1, e2) -> comp s (make_constr e1) (make_constr e2)
+  | Fun (s, l) -> fun_ s (List.map make_constr l)
+  | Varinfo v -> varinfo v
+  | Varinfo_tab (tab, d, v) ->
+      varinfo_tab ~tab ~def:(make_constr d) ~value:(make_constr v)
+  | Varinfo_field (d, v, field) ->
+      varinfo_field ~def:(make_constr d) ~value:(make_constr v) ~field
+  | Varspace_current vs -> varspace_current vs
+  | Varspace_of (m, v) -> varspace_of m v
+  | Typ t -> typ t
+  | Instr i -> instr i
+  | Direct e -> direct (make_constr e)
+  | Ite (c, t, e) -> ite (make_constr c) (make_constr t) (make_constr e)
+  | It0 (c, t) -> it0 (make_constr c) (make_constr t)
+  | Let_local (lv, e, i) -> let_local lv (make_constr e) (make_constr i)
+
+type atomic_expression_composition = {
+  set_vars : (dflag * string * Constr.t) list;
+  def_test : DE.t;
+  value_comp : Constr.t;
+}
+
+type expression_composition =
+  | AtomicExpr of atomic_expression_composition
+  | Cond of
+      expression_composition * expression_composition * expression_composition
+  | Let of {
+      vardef : string;
+      varval : string;
+      body : expression_composition;
+      followup : expression_composition;
+    }
+
+let atomic e = AtomicExpr e
+
+let make_generic_let =
+  let fresh_name =
+    let cpt = ref 0 in
+    fun () ->
+      let vardef = Format.sprintf "vardef%i" !cpt
+      and varval = Format.sprintf "varval%i" !cpt in
+      incr cpt;
+      (vardef, varval)
+  in
+  fun f ->
+    let vardef, varval = fresh_name () in
+    f vardef varval
+
+let make_let body followup =
+  match body with
+  | AtomicExpr e -> begin
+      match followup e.def_test e.value_comp with
+      | AtomicExpr e' ->
+          atomic @@ { e' with set_vars = e.set_vars @ e'.set_vars }
+      | _ ->
+          make_generic_let (fun vardef varval ->
+              Let
+                {
+                  vardef;
+                  varval;
+                  body;
+                  followup =
+                    followup
+                      (DE.devar @@ Constr.Instr vardef)
+                      (Constr.Instr varval);
+                })
+    end
+  | _ ->
+      make_generic_let (fun vardef varval ->
+          Let
+            {
+              vardef;
+              varval;
+              body;
+              followup =
+                followup (DE.devar @@ Constr.Instr vardef) (Constr.Instr varval);
+            })
+
+let make_lets (bodys : expression_composition list)
+    (followup : (DE.t * Constr.t) list -> expression_composition) =
+  let rec loop acc = function
+    | [] -> followup (List.rev acc)
+    | body :: tl -> make_let body (fun d v -> loop ((d, v) :: acc) tl)
+  in
+  loop [] bodys
+
+let def_expr_to_constr e =
+  let map = DE.get_assoc e in
+  let rec loop = function
+    | Def_expr.DEand [] -> Constr.True
+    | DEand (hd :: tl) ->
+        List.fold_left
+          (fun acc e ->
+            let c = loop e in
+            Constr.And (acc, c))
+          (loop hd) tl
+    | DEor [] -> False
+    | DEor (hd :: tl) ->
+        List.fold_left
+          (fun acc e ->
+            let c = loop e in
+            Constr.Or (acc, c))
+          (loop hd) tl
+    | DEnot e -> Not (loop e)
+    | DEatom v -> Def_expr.AtomMap.find v map
+  in
+  let def_expr = DE.get_expr e in
+  let def_expr =
+    if Config.optim_shorten_def () then Def_expr.Shorten_def.apply def_expr
+    else def_expr
+  in
+  loop def_expr
+
+let build_transitive_composition ~safe_def
+    ({ set_vars; def_test; value_comp } : atomic_expression_composition) :
+    atomic_expression_composition =
   (* `safe_def` can be set on call when we are sure that `value_comp` will
      always happen to be zero when `def_test` ends up false. E.g. arithmetic
      operation have such semantic property (funny question is what's the
      causality ?). This allows to remove a check to the definition flag when we
      compute the value, avoiding a lot of unnecessary code. *)
-  let value_comp = if safe_def then value_comp else it0 def_test value_comp in
+  let value_comp =
+    if safe_def then value_comp
+    else It0 (def_expr_to_constr def_test, value_comp)
+  in
   { set_vars; def_test; value_comp }
 
-type local_decls = int * int (* in practice, stacks sizes *)
+let dfun_with_ptr (f : string)
+    (args : ptrdef:Constr.t -> ptrval:Constr.t -> Constr.t list) :
+    atomic_expression_composition =
+  let res = fresh_c_local "res" in
+  let res_def = Pp.spr "%s_def" res in
+  let res_val = Pp.spr "%s_val" res in
+  let res_def_ptr = Pp.spr "&%s" res_def in
+  let res_val_ptr = Pp.spr "&%s" res_val in
+  let d_fun =
+    Constr.Fun
+      ( f,
+        args ~ptrdef:(Direct (Instr res_def_ptr))
+          ~ptrval:(Direct (Instr res_val_ptr)) )
+  in
+  let set_vars =
+    [ (Def, res_def, d_fun); (Val, res_val, Direct (Instr res_val)) ]
+  in
+  let def_test = DE.devar @@ Instr res_def in
+  let value_comp = Constr.Instr res_val in
+  build_transitive_composition ~safe_def:false
+    { set_vars; def_test; value_comp }
+
+let eundefined () =
+  { set_vars = []; def_test = DE.defalse; value_comp = Lit 0. }
+
+let elit f = { set_vars = []; def_test = DE.detrue; value_comp = Lit f }
+
+type local_decls = {
+  def_stk_size : int;
+  val_stk_size : int;
+  var_stk_size : int;
+  var_spa_size : int;
+}
+(* in practice, stacks sizes *)
 
 (* evaluate a complete (AKA, context free) expression. Not to be used for
    further construction. *)
-let build_expression (expr_comp : expression_composition) :
+let build_atomic_expression (expr_comp : atomic_expression_composition) :
     local_decls * (dflag * string * t) list * t * t =
-  let empty_stacks = { def_top = 0; val_top = 0; var_substs = [] } in
+  let empty_stacks =
+    { def_top = 0; val_top = 0; var_top = 0; spa_top = 0; var_substs = [] }
+  in
+  let empty_local_decls =
+    {
+      def_stk_size = -1;
+      val_stk_size = -1;
+      var_stk_size = -1;
+      var_spa_size = -1;
+    }
+  in
   let empty_locals = [] in
   let set_tests =
     List.map
-      (fun (kd, vn, constr) ->
-        (kd, vn, collapse_constr empty_stacks empty_locals constr))
+      (fun (kd, vn, builder) ->
+        ( kd,
+          vn,
+          collapse_builder empty_stacks empty_locals (make_constr builder) ))
       expr_comp.set_vars
   in
   let set_locals =
     List.concat (List.map (fun (_, _, (_, _, locals)) -> locals) set_tests)
   in
   let ((_, _, def_locals) as def_test) =
-    collapse_constr empty_stacks empty_locals expr_comp.def_test
+    collapse_builder empty_stacks empty_locals
+      (make_constr @@ def_expr_to_constr expr_comp.def_test)
   in
   let ((_, _, value_locals) as value_comp) =
-    collapse_constr empty_stacks empty_locals expr_comp.value_comp
+    collapse_builder empty_stacks empty_locals
+      (make_constr expr_comp.value_comp)
   in
   let stacks_size =
     List.fold_left
-      (fun (def_s, val_s) (_, { slot; _ }) ->
+      (fun ld (_, { slot; _ }) ->
         match slot.kind with
-        | Def -> (max slot.depth def_s, val_s)
-        | Val -> (def_s, max slot.depth val_s))
-      (-1, -1)
+        | Def -> { ld with def_stk_size = max slot.depth ld.def_stk_size }
+        | Val -> { ld with val_stk_size = max slot.depth ld.val_stk_size }
+        | VarInfo -> { ld with var_stk_size = max slot.depth ld.var_stk_size }
+        | VarSpace -> { ld with var_spa_size = max slot.depth ld.var_spa_size })
+      empty_local_decls
       (set_locals @ def_locals @ value_locals)
   in
   (stacks_size, set_tests, def_test, value_comp)
 
+let rec build_expression = function
+  | AtomicExpr e -> `Atom (build_atomic_expression e)
+  | Cond (c, t, e) ->
+      `Cond (build_expression c, build_expression t, build_expression e)
+  | Let { vardef; varval; body; followup } ->
+      `Let (vardef, varval, build_expression body, build_expression followup)
+
 let format_slot fmt ({ kind; depth } : stack_slot) =
-  let kind = match kind with Def -> "int" | Val -> "real" in
+  let kind =
+    match kind with
+    | Def -> "int"
+    | Val -> "real"
+    | VarInfo -> "varinfo"
+    | VarSpace -> "space"
+  in
   Format.fprintf fmt "%s%d" kind depth
 
 let format_expr_var (dgfip_flags : Dgfip_options.flags) fmt (ev : expr_var) =
@@ -459,12 +703,20 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
           (* Print literal floats as precisely as possible *)
           Format.fprintf fmt "%#.19g" f)
   | Dvar evar -> format_expr_var dgfip_flags fmt evar
-  | Dand (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ && %a@])" format_dexpr de1 format_dexpr
-        de2
-  | Dor (de1, de2) ->
-      Format.fprintf fmt "@[<hov 2>(%a@ || %a@])" format_dexpr de1 format_dexpr
-        de2
+  | Dand l ->
+      let sep = if Config.optim_simple_binary_op () then " & " else " && " in
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt sep)
+           format_dexpr)
+        l
+  | Dor l ->
+      let sep = if Config.optim_simple_binary_op () then " | " else " || " in
+      Format.fprintf fmt "@[<hov 2>(%a)@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt _ -> Format.pp_print_string fmt sep)
+           format_dexpr)
+        l
   | Dunop (op, de) -> Format.fprintf fmt "@[<hov 2>(%s%a@])" op format_dexpr de
   | Dbinop (op, de1, de2) -> begin
       match op with
@@ -496,21 +748,42 @@ let rec format_dexpr (dgfip_flags : Dgfip_options.flags) fmt (de : expr) =
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ")
            format_dexpr)
         des
+  | Dvarinfo v -> format_varinfo dgfip_flags fmt v
+  | Dvarspace (m_sp_opt, v_opt) ->
+      Format.fprintf fmt "@[%s@]"
+        (match v_opt with
+        | Some v -> VID.gen_var_space_id m_sp_opt v
+        | None -> VID.gen_var_space_id_opt m_sp_opt)
+  | Dtyp t -> Format.fprintf fmt "@[%s@]" @@ VID.gen_typ t
   | Dinstr instr -> Format.fprintf fmt "%s" instr
   | Ddirect expr -> format_dexpr fmt expr
   | Dite (dec, det, dee) ->
       Format.fprintf fmt "@[<hov 2>(%a ?@ %a@ : %a@])" format_dexpr dec
         format_dexpr det format_dexpr dee
 
-let rec format_local_declarations fmt
-    ((def_stk_size, val_stk_size) : local_decls) =
-  if def_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" def_stk_size;
-    format_local_declarations fmt (def_stk_size - 1, val_stk_size))
-  else if val_stk_size >= 0 then (
-    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" val_stk_size;
-    format_local_declarations fmt (def_stk_size, val_stk_size - 1))
-  else ()
+and format_varinfo dgfip_flags fmt : varinfo_access -> unit = function
+  | VIvar v -> Format.fprintf fmt "%s" (VID.gen_info_ptr v)
+  | VItab (v, def, value) ->
+      Format.fprintf fmt "@[lis_tabaccess_varinfo(irdata, %d, %a, %a)@]"
+        (Com.Var.loc_tab_idx v) (format_dexpr dgfip_flags) def
+        (format_dexpr dgfip_flags) value
+  | VIfield (def, value, field) ->
+      Format.fprintf fmt "@[event_field_%s_var(irdata, %a, %a)@]" field
+        (format_dexpr dgfip_flags) def (format_dexpr dgfip_flags) value
+
+let format_local_declarations fmt (ld : local_decls) =
+  for i = 0 to ld.def_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register int int%d;@]" i
+  done;
+  for i = 0 to ld.val_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>register double real%d;@]" i
+  done;
+  for i = 0 to ld.var_stk_size do
+    Format.fprintf fmt "@;@[<hov 2>T_varinfo* varinfo%d;@]" i
+  done;
+  for i = 0 to ld.var_spa_size do
+    Format.fprintf fmt "@;@[<hov 2>int space%d;@]" i
+  done
 
 let format_local_vars_defs (dgfip_flags : Dgfip_options.flags) fmt
     (lv : local_vars) =
@@ -531,9 +804,297 @@ let format_set_vars (dgfip_flags : Dgfip_options.flags) fmt
     (set_vars : (dflag * string * t) list) =
   List.iter
     (fun ((kd, vn, _expr) : dflag * string * t) ->
-      Pp.fpr fmt "@;%s %s;" (match kd with Def -> "char" | Val -> "double") vn)
+      Pp.fpr fmt "@;%s %s;"
+        (match kd with
+        | Def -> "char"
+        | Val -> "double"
+        | VarInfo -> "T_varinfo*"
+        | VarSpace -> "int")
+        vn)
     set_vars;
   List.iter
     (fun ((_kd, vn, expr) : dflag * string * t) ->
       format_assign dgfip_flags vn fmt expr)
     set_vars
+
+(* Building basic expressions *)
+
+let comparison op (se1 : expression_composition) (se2 : expression_composition)
+    =
+  make_let se1 (fun d1 v1 ->
+      make_let se2 (fun d2 v2 ->
+          let safe_def = false in
+          let def_test = DE.deand [ d1; d2 ] in
+          let value_comp =
+            let op =
+              let open Com in
+              match Pos.unmark op with
+              | Gt -> ">"
+              | Gte -> ">="
+              | Lt -> "<"
+              | Lte -> "<="
+              | Eq -> "=="
+              | Neq -> "!="
+            in
+            Constr.Comp (op, v1, v2)
+          in
+          AtomicExpr
+            (build_transitive_composition ~safe_def
+               { set_vars = []; def_test; value_comp })))
+
+let binop op (se1 : expression_composition) (se2 : expression_composition) =
+  make_let se1 (fun d1 v1 ->
+      make_let se2 (fun d2 v2 ->
+          let safe_def = true in
+          let def_test =
+            match Pos.unmark op with
+            | Com.And | Com.Mul | Com.Div | Com.Mod -> DE.deand [ d1; d2 ]
+            | Com.Or | Com.Add | Com.Sub -> DE.deor [ d1; d2 ]
+          in
+          let op e1 e2 =
+            match Pos.unmark op with
+            | Com.And -> Constr.And (e1, e2)
+            | Com.Or -> Or (e1, e2)
+            | Com.Add -> Plus (e1, e2)
+            | Com.Sub -> Sub (e1, e2)
+            | Com.Mul -> Mult (e1, e2)
+            | Com.Div -> Ite (e2, Div (e1, e2), Lit 0.)
+            | Com.Mod -> Ite (e2, Modulo (e1, e2), Lit 0.)
+          in
+          let value_comp = op v1 v2 in
+          AtomicExpr
+            (build_transitive_composition ~safe_def
+               { set_vars = []; def_test; value_comp })))
+
+let unop op se =
+  let op, safe_def =
+    match op with
+    | Com.Not -> ((fun e -> Constr.Not e), false)
+    | Com.Minus -> ((fun e -> Minus e), true)
+  in
+  make_let se (fun vardef varval ->
+      let value_comp = op varval in
+      let def_test = vardef in
+      AtomicExpr
+        (build_transitive_composition ~safe_def
+           { set_vars = []; def_test; value_comp }))
+
+let conditional cond thenval elseval =
+  (* make_let cond (fun dc vc -> *)
+  (*     make_let thenval (fun dt vt -> *)
+  (*         make_let elseval (fun de ve -> *)
+  (*             let def_test = DE.deand [ dc; DE.deite (DE.devar vc) dt de ] in *)
+  (*             let value_comp = Constr.Ite (vc, vt, ve) in *)
+  (*             AtomicExpr *)
+  (*               (build_transitive_composition ~safe_def:false *)
+  (*                  { set_vars = []; def_test; value_comp })))) *)
+
+  (* let set_vars = cond.set_vars @ thenval.set_vars @ elseval.set_vars in *)
+  (* let def_test = *)
+  (*   DE.deand *)
+  (*     [ *)
+  (*       cond.def_test; *)
+  (*       DE.deite (DE.devar cond.value_comp) thenval.def_test elseval.def_test; *)
+  (*     ] *)
+  (* in *)
+  (* let value_comp = *)
+  (*   Constr.Ite (cond.value_comp, thenval.value_comp, elseval.value_comp) *)
+  (* in *)
+  (* build_transitive_composition { set_vars; def_test; value_comp } *)
+  Cond (cond, thenval, elseval)
+
+module Func = struct
+  let supzero se =
+    make_let se (fun vardef varval ->
+        let def_test : DE.t =
+          DE.(deand [ vardef; devar (Comp (">", varval, Lit 0.0)) ])
+        in
+        atomic
+        @@ build_transitive_composition ~safe_def:false
+             { set_vars = []; def_test; value_comp = varval })
+
+  (* TODO: this code calculates the value of the expression before checking its
+     definition. There may be a way to only calculate the definition. *)
+  let present se =
+    make_let se (fun vardef _varval ->
+        let def_test = DE.detrue in
+        let value_comp = def_expr_to_constr vardef in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test; value_comp })
+
+  let null se =
+    make_let se (fun vardef varval ->
+        (* S: Checking if expr is defined in expression is probably useless *)
+        let value_comp =
+          Constr.And (def_expr_to_constr vardef, Comp ("==", varval, Lit 0.0))
+        in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
+
+  let arr se =
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("my_arr", [ varval ]) in
+        (* Here we boldly assume that rounding value of `undef` will give zero,
+       given the invariant. Pretty sure that not true, in case of doubt, turn
+       `safe_def` to false *)
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
+
+  let inf se =
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("my_floor", [ varval ]) in
+        (* same as above *)
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
+
+  let abs se =
+    make_let se (fun vardef varval ->
+        let value_comp = Constr.Fun ("fabs", [ varval ]) in
+        atomic
+        @@ build_transitive_composition ~safe_def:true
+             { set_vars = []; def_test = vardef; value_comp })
+
+  let max se1 se2 =
+    make_let se1 (fun d1 v1 ->
+        make_let se2 (fun d2 v2 ->
+            let def_test = DE.deor [ d1; d2 ] in
+            let value_comp = Constr.Fun ("max", [ v1; v2 ]) in
+            atomic
+            @@ build_transitive_composition ~safe_def:true
+                 { set_vars = []; def_test; value_comp }))
+
+  let min se1 se2 =
+    make_let se1 (fun d1 v1 ->
+        make_let se2 (fun d2 v2 ->
+            let def_test = DE.deor [ d1; d2 ] in
+            let value_comp = Constr.Fun ("min", [ v1; v2 ]) in
+            atomic
+            @@ build_transitive_composition ~safe_def:true
+                 { set_vars = []; def_test; value_comp }))
+
+  let multimax (e : expression_composition) (m_sp_opt, v) =
+    let ptr = VID.gen_info_ptr v in
+    make_let e (fun vardef varval ->
+        let d_fun =
+          dfun_with_ptr "multimax_varinfo" (fun ~ptrdef ~ptrval ->
+              [
+                Constr.irdata;
+                Direct (Instr (VID.gen_var_space_id m_sp_opt v));
+                Direct (Instr ptr);
+                def_expr_to_constr vardef;
+                varval;
+                ptrdef;
+                ptrval;
+              ])
+        in
+        atomic @@ build_transitive_composition ~safe_def:true d_fun)
+
+  let nb_events () =
+    let def_test = DE.detrue in
+    let value_comp = Constr.Fun ("nb_evenements", [ Constr.irdata ]) in
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
+
+  let nb_anomalies () =
+    let def_test = DE.detrue in
+    let value_comp = Constr.Fun ("nb_anomalies", [ Constr.irdata ]) in
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
+
+  let nb_discordances () =
+    let def_test = DE.detrue in
+    let value_comp = Constr.Fun ("nb_discordances", [ Constr.irdata ]) in
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
+
+  let nb_informatives () =
+    let def_test = DE.detrue in
+    let value_comp = Constr.Fun ("nb_informatives", [ Constr.irdata ]) in
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
+
+  let nb_bloquantes () =
+    let def_test = DE.detrue in
+    let value_comp = Constr.Fun ("nb_bloquantes", [ Constr.irdata ]) in
+    atomic
+    @@ build_transitive_composition ~safe_def:true
+         { set_vars = []; def_test; value_comp }
+
+  let call fn args =
+    let d_fun args =
+      atomic
+      @@ dfun_with_ptr fn (fun ~ptrdef ~ptrval ->
+          Constr.irdata :: ptrdef :: ptrval :: args)
+    in
+    make_lets args (fun l ->
+        let args =
+          List.flatten @@ List.map (fun (d, v) -> [ def_expr_to_constr d; v ]) l
+        in
+        d_fun args)
+end
+
+let write_atomic_decoupled_expr dgfip_flags oc res_def res_val
+    (locals, set, def, value) =
+  let pr form = Format.fprintf oc form in
+  if is_always_true def then
+    pr "@;@[<v 2>{%a%a%a%a@]@;}" format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def
+      (format_assign dgfip_flags res_val)
+      value
+  else
+    pr "@;@[<v 2>{%a%a%a@;@[<v 2>if (%s) {%a@]@;} else %s = 0.0;@]@;}"
+      format_local_declarations locals
+      (format_set_vars dgfip_flags)
+      set
+      (format_assign dgfip_flags res_def)
+      def res_def
+      (format_assign dgfip_flags res_val)
+      value res_val
+
+let fresh_cond_vars =
+  let cpt = ref 0 in
+  fun () ->
+    let res_def = Format.sprintf "cond_def%i" !cpt
+    and res_val = Format.sprintf "cond_val%i" !cpt in
+    incr cpt;
+    (res_def, res_val)
+
+let rec write_decoupled_expr dgfip_flags oc =
+  let pr form = Format.fprintf oc form in
+  fun res_def res_val -> function
+    | `Atom a -> write_atomic_decoupled_expr dgfip_flags oc res_def res_val a
+    | `Cond (c, t, e) ->
+        let d, v = fresh_cond_vars () in
+        pr "@;{@[<v 2>";
+        pr "@;int %s;" d;
+        pr "@;double %s;" v;
+        write_decoupled_expr dgfip_flags oc d v c;
+        pr "@;if(%s == 0) {%s = 0; %s = 0.0;}" d res_def res_val;
+        pr "@;else if (EQ_E(%s,0.0)) {@;@[<v 2>" v;
+        write_decoupled_expr dgfip_flags oc res_def res_val e;
+        pr "@;}@] else {@;@[<v 2>";
+        write_decoupled_expr dgfip_flags oc res_def res_val t;
+        pr "@;}@]";
+        pr "@;}@]"
+    | `Let (vardef, varval, body, followup) ->
+        pr "@;{@[<v 2>";
+        pr "@;int %s;" vardef;
+        pr "@;double %s;" varval;
+        write_decoupled_expr dgfip_flags oc vardef varval body;
+        write_decoupled_expr dgfip_flags oc res_def res_val followup;
+        pr "@;}@]"
+
+let write_c_expr dgfip_flags oc res_def res_val expr =
+  expr |> build_expression
+  |> write_decoupled_expr dgfip_flags oc res_def res_val

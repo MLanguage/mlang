@@ -1,18 +1,17 @@
-(* Copyright (C) 2019 Inria, contributor: David Declerck
-   <david.declerck@ocamlpro.com>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 let open_file filename =
   let folder = Filename.dirname !Config.output_file in
@@ -375,11 +374,18 @@ let gen_dbg fmt =
     {|int change_couleur(int couleur, int typographie);
 int get_couleur(void);
 int get_typo(void);
-    
+
 #ifdef FLG_TRACE
+
+#ifdef FLG_API
+#define TRACE_FILE fd_trace_dialog
+#else
+#define TRACE_FILE stderr
+#endif /* FLG_API */
+
 extern int niv_trace;
 
-extern void aff1(char *nom);
+extern void aff1(const char *nom);
 
 extern void aff_val(const char *nom, const T_irdata *irdata, int indice, int niv, const char *chaine, int is_tab, int expr, int maxi);
 
@@ -485,16 +491,19 @@ typedef struct S_ref_var T_ref_var;
   Pp.fpr fmt
     {|
 struct S_irdata {
+  /* Les pointeurs suivants sont mis à jour à chaque changement du champ var_space */   
   char *def_saisie;
   double *saisie;
   char *def_calculee;
   double *calculee;
   char *def_base;
   double *base;
+  T_var_space var_space_courant;
 |};
   IntMap.iter
     (fun _ (vsd : Com.variable_space) ->
       let sp = Pos.unmark vsd.vs_name in
+      Pp.fpr fmt "/* Espace de nom %s  */" sp;
       Pp.fpr fmt "  char *def_saisie_%s;@\n" sp;
       Pp.fpr fmt "  double *saisie_%s;@\n" sp;
       Pp.fpr fmt "  char *def_calculee_%s;@\n" sp;
@@ -659,6 +668,16 @@ let gen_lib fmt (cprog : Mir.program) flags =
 |}
     taille_saisie taille_calculee taille_base taille_totale nb_ench;
 
+  Pp.fpr fmt
+    {|/* pour rétrocompatibilité avec le code C historique */
+#define NB_SAISIE %d
+#define NB_CALCULEE %d
+#define NB_BASE %d
+#define NB_TOTALE %d
+
+|}
+    taille_saisie taille_calculee taille_base taille_totale;
+
   Pp.fpr fmt "#define TAILLE_TMP_VARS %d\n" cprog.program_stats.sz_all_tmps;
   Pp.fpr fmt "#define TAILLE_REFS %d\n" cprog.program_stats.nb_all_refs;
   Pp.fpr fmt "#define TAILLE_TAB_VARINFO %d\n"
@@ -736,15 +755,22 @@ extern void nettoie_erreurs_finalisees _PROTS((T_irdata *irdata ));
 extern void exporte_erreur _PROTS((T_irdata *irdata ));
 
 extern T_irdata *cree_irdata(void);
-extern void init_saisie(T_irdata *irdata, int sp);
-extern void init_calculee(T_irdata *irdata, int sp);
-extern void init_base(T_irdata *irdata, int sp);
+extern void change_var_space_courant(T_irdata *irdata, int var_space);
+extern void init_saisie_spc(T_irdata *irdata, int sp);
+extern void init_calculee_spc(T_irdata *irdata, int sp);
+extern void init_base_spc(T_irdata *irdata, int sp);
+extern void init_saisie(T_irdata *irdata);
+extern void init_calculee(T_irdata *irdata);
+extern void init_base(T_irdata *irdata);
 extern void init_erreur(T_irdata *irdata);
 extern void detruis_irdata(T_irdata *irdata);
 extern void set_max_bloquantes(T_irdata *irdata, const int max_ano);
-extern void recopie_saisie(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
-extern void recopie_calculee(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
-extern void recopie_base(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_saisie_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_calculee_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_base_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst);
+extern void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst);
+extern void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst);
 extern void ecris_saisie(T_irdata *irdata, int idx, char def, double val);
 extern void ecris_calculee(T_irdata *irdata, int idx, char def, double val);
 extern void ecris_base(T_irdata *irdata, int idx, char def, double val);
@@ -873,36 +899,35 @@ let gen_decl_targets fmt (cprog : Mir.program) =
 
 let gen_mlang_h fmt cprog flags stats_varinfos =
   let pr form = Pp.fpr fmt form in
-  pr "/****** LICENCE CECIL *****/\n\n";
-  pr "#ifndef _MLANG_H_\n";
-  pr "#define _MLANG_H_\n";
-  pr "\n";
-  pr "#include <stdlib.h>\n";
-  pr "#include <stdio.h>\n";
-  pr "#include <math.h>\n";
-  pr "#include <string.h>\n";
-  pr "#include <limits.h>\n";
-  pr "#include <setjmp.h>\n";
-  pr "\n";
-  pr "#include \"conf.h\"\n";
-  pr "\n";
-  pr "#define _PROTS(X) X\n";
-  pr "\n";
-  pr "#define ANNEE_REVENU %04d\n" flags.Dgfip_options.annee_revenu;
-  pr "\n";
+  pr "/****** LICENCE CECIL *****/\n@.";
+  pr "#ifndef _MLANG_H_@.";
+  pr "#define _MLANG_H_@.@.";
+  pr "#include <stdlib.h>@.";
+  pr "#include <stdio.h>@.";
+  pr "#include <math.h>@.";
+  pr "#include <string.h>@.";
+  pr "#include <limits.h>@.";
+  pr "#include <setjmp.h>@.";
+  pr "@.";
+  pr "#include \"conf.h\"@.";
+  pr "@.";
+  pr "#define _PROTS(X) X@.";
+  pr "@.";
+  pr "#define ANNEE_REVENU %04d@." flags.Dgfip_options.annee_revenu;
+  pr "@.";
   gen_decl_varinfos fmt cprog stats_varinfos;
-  pr "\n";
+  pr "@.";
   gen_const fmt cprog;
-  pr "\n";
+  pr "@.";
   (* The debug functions need T_irdata to be defined so we put them after *)
   gen_dbg fmt;
-  pr "\n";
+  pr "@.";
   gen_lib fmt cprog flags;
-  pr "\n";
+  pr "@.";
   gen_decl_functions fmt cprog;
-  pr "\n";
+  pr "@.";
   gen_decl_targets fmt cprog;
-  pr "#endif /* _MLANG_H_ */\n\n"
+  pr "@.#endif /* _MLANG_H_ */@."
 
 let gen_mlang_c fmt (cprog : Mir.program) flags =
   Pp.fpr fmt "%s"
@@ -1311,23 +1336,9 @@ static void init_tab(char *p_def, double *p_val, int nb) {
   memset(p_def, 0, nb);
 }
 
-void init_saisie(T_irdata *irdata, int sp) {
-  if (irdata == NULL) return;
-  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
-  if (irdata->var_spaces[sp].saisie == NULL) return;
-  init_tab(irdata->var_spaces[sp].def_saisie, irdata->var_spaces[sp].saisie, TAILLE_SAISIE);
-}
-
 void init_saisie_espace(char *def, double *val) {
   if (def == NULL || val == NULL) return;
   init_tab(def, val, TAILLE_SAISIE);
-}
-
-void init_calculee(T_irdata *irdata, int sp) {
-  if (irdata == NULL) return;
-  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
-  if (irdata->var_spaces[sp].calculee == NULL) return;
-  init_tab(irdata->var_spaces[sp].def_calculee, irdata->var_spaces[sp].calculee, TAILLE_CALCULEE);
 }
 
 void init_calculee_espace(char *def, double *val) {
@@ -1335,16 +1346,42 @@ void init_calculee_espace(char *def, double *val) {
   init_tab(def, val, TAILLE_CALCULEE);
 }
 
-void init_base(T_irdata *irdata, int sp) {
+void init_base_espace(char *def, double *val) {
+  if (def == NULL || val == NULL) return;
+  init_tab(def, val, TAILLE_BASE);
+}
+
+void init_saisie_spc(T_irdata *irdata, int sp) {
+  if (irdata == NULL) return;
+  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
+  if (irdata->var_spaces[sp].saisie == NULL) return;
+  init_tab(irdata->var_spaces[sp].def_saisie, irdata->var_spaces[sp].saisie, TAILLE_SAISIE);
+}
+
+void init_calculee_spc(T_irdata *irdata, int sp) {
+  if (irdata == NULL) return;
+  if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
+  if (irdata->var_spaces[sp].calculee == NULL) return;
+  init_tab(irdata->var_spaces[sp].def_calculee, irdata->var_spaces[sp].calculee, TAILLE_CALCULEE);
+}
+
+void init_base_spc(T_irdata *irdata, int sp) {
   if (irdata == NULL) return;
   if (sp < 0 || NB_ESPACES_VARIABLES <= sp) sp = ESPACE_PAR_DEFAUT;
   if (irdata->var_spaces[sp].base == NULL) return;
   init_tab(irdata->var_spaces[sp].def_base, irdata->var_spaces[sp].base, TAILLE_BASE);
 }
 
-void init_base_espace(char *def, double *val) {
-  if (def == NULL || val == NULL) return;
-  init_tab(def, val, TAILLE_BASE);
+void init_saisie(T_irdata *irdata) {
+  init_saisie_spc(irdata, ESPACE_PAR_DEFAUT);
+}
+
+void init_calculee(T_irdata *irdata) {
+  init_calculee_spc(irdata, ESPACE_PAR_DEFAUT);
+}
+
+void init_base(T_irdata *irdata) {
+  init_base_spc(irdata, ESPACE_PAR_DEFAUT);
 }
 
 void init_erreur(T_irdata *irdata) {
@@ -1423,6 +1460,18 @@ void detruis_irdata(T_irdata *irdata) {
   free(irdata);
 }
 
+void change_var_space_courant (T_irdata *irdata, int var_space){
+  T_var_space var_space_courant = irdata->var_spaces[var_space];
+  irdata->var_space = var_space;
+  irdata->var_space_courant = var_space_courant;
+  irdata->def_saisie = var_space_courant.def_saisie;
+  irdata->saisie = var_space_courant.saisie;
+  irdata->def_calculee = var_space_courant.def_calculee;
+  irdata->calculee = var_space_courant.calculee;
+  irdata->def_base = var_space_courant.def_base;
+  irdata->base = var_space_courant.base;
+}
+     
 T_irdata *cree_irdata(void) {
   T_irdata *irdata = NULL;
   
@@ -1480,7 +1529,7 @@ T_irdata *cree_irdata(void) {
         id sp;
       Pp.fpr fmt "  irdata->var_spaces[%d].base = irdata->base_%s;@\n" id sp)
     cprog.program_var_spaces_idx;
-  Pp.fpr fmt "  irdata->var_space = ESPACE_PAR_DEFAUT;\n";
+  Pp.fpr fmt "   change_var_space_courant(irdata, ESPACE_PAR_DEFAUT);\n";
   Pp.fpr fmt "%s"
     {|  irdata->tmps = NULL;
   if (TAILLE_TMP_VARS > 0) {
@@ -1533,7 +1582,7 @@ void set_max_bloquantes(T_irdata *irdata, const int max_ano) {
   }
 }
 
-void recopie_saisie(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
+void recopie_saisie_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
   if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
   if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
@@ -1552,7 +1601,7 @@ void recopie_saisie(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int 
   );
 }
 
-void recopie_calculee(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
+void recopie_calculee_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
   if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
   if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
@@ -1571,7 +1620,7 @@ void recopie_calculee(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, in
   );
 }
 
-void recopie_base(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
+void recopie_base_spc(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp_dst) {
   if (irdata_src == NULL || irdata_dst == NULL) return;
   if (0 < sp_src || sp_src <= NB_ESPACES_VARIABLES) sp_src = ESPACE_PAR_DEFAUT;
   if (0 < sp_dst || sp_dst <= NB_ESPACES_VARIABLES) sp_dst = ESPACE_PAR_DEFAUT;
@@ -1588,6 +1637,18 @@ void recopie_base(T_irdata *irdata_src, int sp_src, T_irdata *irdata_dst, int sp
     irdata_src->var_spaces[sp_src].def_base,
     TAILLE_BASE
   );
+}
+
+void recopie_saisie(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  recopie_saisie_spc(irdata_src, ESPACE_PAR_DEFAUT, irdata_dst, ESPACE_PAR_DEFAUT);
+}
+
+void recopie_calculee(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  recopie_calculee_spc(irdata_src, ESPACE_PAR_DEFAUT, irdata_dst, ESPACE_PAR_DEFAUT);
+}
+
+void recopie_base(T_irdata *irdata_src, T_irdata *irdata_dst) {
+  recopie_base_spc(irdata_src, ESPACE_PAR_DEFAUT, irdata_dst, ESPACE_PAR_DEFAUT);
 }
 
 static void ecris_tab(char *t_def, double *t_val, int t_nb, int idx, char def, double val) {
@@ -2065,12 +2126,99 @@ double *lis_tabaccess_val_ptr(
   return lis_varinfo_val_ptr(irdata, var_space, info);
 }
 
+void trace_tabaccess(
+  const char *chaine, int niv,
+  T_irdata *irdata, int var_space, int idx_tab,
+  char idx_def, double idx_val
+) {
+#ifdef FLG_TRACE
+  T_varinfo *info = NULL;
+  int idx = (int)idx_val;
+  char res_def = 0;
+  double res_val = 0.0;
+  char *nom = NULL;
+
+  if (irdata == NULL || idx_tab < 0 || TAILLE_TAB_VARINFO <= idx_tab) return;
+  info = tab_varinfo[idx_tab];
+  nom = info->name;
+
+  if (idx_def == 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[undef] %s 0\033[0m\n",
+        color, typo, nom, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[undef] %s 0m\n", nom, chaine);
+#endif /* FLG_COLORS */
+    }
+    return;
+  } else if (idx < 0) {
+    if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s 0\033[0m\n",
+        color, typo, nom, idx, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s 0m\n", nom, idx, chaine);
+#endif /* FLG_COLORS */
+    }
+    return;
+  } else if (idx >= info->size) {
+#ifdef FLG_COLORS
+    fprintf(TRACE_FILE,
+      "\033[%d;%dmerreur: indice (%d) superieur au maximum (%d)\033[0m\n",
+      color, typo, idx, info->size);
+#else
+    fprintf(TRACE_FILE, "erreur: indice (%d) superieur au maximum (%d)\n",
+      idx, info->size);
+#endif /* FLG_COLORS */
+    idx = 0;
+  }
+
+  info = tab_varinfo[idx_tab + idx + 1];
+  lis_varinfo(irdata, var_space, info, &res_def, &res_val);
+  if (res_def == 0) {
+    if (res_val != 0.0) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur undef = %lf\033[0m\n",
+        color, typo, nom, idx, res_val);
+#else
+      fprintf(TRACE_FILE, "%s[%d] : erreur undef = %lf\n", nom, idx, res_val);
+#endif /* FLG_COLORS */
+    } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+      fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s undef\033[0m\n",
+              color, typo, nom, idx, chaine);
+#else
+      fprintf(TRACE_FILE, "%s[%d] %s undef\n", nom, idx, chaine);
+#endif /* FLG_COLORS */
+    }
+  } else if (res_def != 1) {
+#ifdef FLG_COLORS
+    fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] : erreur flag def = %d\033[0m\n",
+            color, typo, nom, idx, res_def);
+#else
+    fprintf(TRACE_FILE, "%s[%d] : erreur flag def = %d\n", nom, idx, res_def);
+#endif /* FLG_COLORS */
+  } else if (niv_trace >= niv) {
+#ifdef FLG_COLORS
+    fprintf(TRACE_FILE, "\033[%d;%dm%s[%d] %s %lf\033[0m\n",
+            color, typo, nom, idx, chaine, res_val);
+#else
+    fprintf(TRACE_FILE, "%s[%d] %s %lf\n", nom, idx, chaine, res_val);
+#endif /* FLG_COLORS */
+  }
+#endif /* FLG_TRACE */
+}
+
 char lis_tabaccess(
   T_irdata *irdata, int var_space, int idx_tab,
   char idx_def, double idx_val,
   char *res_def, double *res_val
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
+#ifdef FLG_TRACE
+  trace_tabaccess(":", 3, irdata, var_space, idx_tab, idx_def, idx_val);
+#endif /* FLG_TRACE */
   int idx = 0;
   if (info == NULL) {
     *res_val = 0.0;
@@ -2106,6 +2254,9 @@ void ecris_tabaccess(
 ) {
   T_varinfo *info = lis_tabaccess_varinfo(irdata, idx_tab, idx_def, idx_val);
   ecris_varinfo(irdata, var_space, info, def, val);
+#ifdef FLG_TRACE
+  trace_tabaccess("<-", 2, irdata, var_space, idx_tab, idx_def, idx_val);
+#endif /* FLG_TRACE */
   /* tableau originel */
   /*ecris_varinfo_tab(irdata, var_space, idx_tab, idx_def, idx_val, def, val);*/
 }
@@ -2205,15 +2356,7 @@ char est_type(T_varinfo *info, int type, char *res_def, double *res_val) {
 
 /* int niv_trace = 3; */
 
-#ifdef FLG_API
-#define TRACE_FILE fd_trace_dialog
-#else
-#define TRACE_FILE stderr
-#endif /* FLG_API */
-
-void aff1(nom)
-char *nom ;
-{
+void aff1(const char *nom) {
 #ifdef FLG_COLORS
 if (niv_trace >= 1) fprintf(stderr, "\033[%d;%dm%s\033[0m", color, typo, nom) ;
 #else

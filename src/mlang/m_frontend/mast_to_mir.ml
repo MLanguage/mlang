@@ -1,18 +1,17 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2019 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** {!module: Mast} to {!module: Mir} translation of M programs. *)
 
@@ -210,6 +209,7 @@ let complete_vars (prog : Validator.program) : Validator.program * Mir.stats =
   in
   (prog, stats)
 
+(* hyp: this function registers tehe variables to the tgv map in program *)
 let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
     Validator.program * Mir.stats =
   let fold _ (t : Validator.target) (prog_dict, max_nb_args) =
@@ -222,6 +222,7 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           IntMap.add var.id var prog_dict
       | None -> prog_dict
     in
+    (* hyp: processing target args *)
     let prog_dict, _ =
       let idx_init =
         if is_f then -t.target_sz_tmps + 1 else -t.target_nb_refs
@@ -234,6 +235,7 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           (prog_dict, n + 1))
         (prog_dict, idx_init) t.target_args
     in
+    (* hyp: processing tmp vars *)
     let prog_dict, _ =
       let idx_init =
         let tmp_sz =
@@ -253,17 +255,14 @@ let complete_target_vars ((prog : Validator.program), (stats : Mir.stats)) :
           (prog_dict, n + Com.Var.size var))
         t.target_tmp_vars (prog_dict, idx_init)
     in
+    (* hyp: processing cells if tmp vars are arrays *)
     let prog_dict =
       StrMap.fold
         (fun _name m_id prog_dict ->
           let var = IntMap.find (Pos.unmark m_id) prog_dict in
           match Com.Var.get_table var with
-          | Some tab ->
-              let table =
-                let map (v : Com.Var.t) = IntMap.find v.id prog_dict in
-                Some (Array.map map tab)
-              in
-              let var = Com.Var.set_table var table in
+          | Some table ->
+              let var = Com.Var.set_table var (Some table) in
               IntMap.add var.id var prog_dict
           | None -> prog_dict)
         t.target_tmp_vars prog_dict
@@ -300,9 +299,8 @@ let complete_tabs ((prog : Validator.program), (stats : Mir.stats)) :
             let rec loop map tab i =
               if i = vsz then (map, tab)
               else
-                let iVar = IntMap.find tab.(i).Com.Var.id prog_dict in
+                let iVar = IntMap.find tab.(i) prog_dict in
                 let map = map_add iVar map in
-                tab.(i) <- iVar;
                 loop map tab (i + 1)
             in
             loop map tab 0
@@ -348,7 +346,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
     and aux_access tdata m_a =
       match Pos.unmark m_a with
       | Com.VarAccess _ -> (0, 0, 0, tdata)
-      | Com.TabAccess (_, _, mi) | Com.FieldAccess (_, mi, _, _) ->
+      | Com.TabAccess (_, mi) | Com.FieldAccess (_, mi, _, _) ->
           aux_expr tdata mi
     and aux_instr tdata (Pos.Mark (instr, _pos)) =
       match instr with
@@ -382,7 +380,7 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nbRef = max nbRefI @@ max nbRefT nbRefE in
           (nb, sz, nbRef, tdata)
       | Com.Switch (expr, l) ->
-          let nbI, szI, nbRefI, tdata = aux_expr tdata expr in
+          let nbI, szI, nbRefI, tdata = aux_switch_expr tdata expr in
           List.fold_left
             (fun (mNb, mSz, mNbRef, tdata) (_, l) ->
               let nb, sz, rbRef, tdata = aux_instrs tdata l in
@@ -527,11 +525,15 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           (0, 0, 0, tdata)
       | Com.ComputeDomain _ | Com.ComputeChaining _ | Com.ComputeVerifs _ ->
           assert false
+    and aux_switch_expr tdata se =
+      match se with
+      | Com.SEValue e -> aux_expr tdata e
+      | Com.SESameVariable m -> aux_access tdata m
     and aux_expr tdata (Pos.Mark (expr, _pos)) =
       match expr with
       | Com.TestInSet (_, me, values) ->
           let fold (nb, sz, nbRef, tdata) = function
-            | Com.VarValue (Pos.Mark (TabAccess (_, _, mei), _))
+            | Com.VarValue (Pos.Mark (TabAccess (_, mei), _))
             | Com.VarValue (Pos.Mark (FieldAccess (_, mei, _, _), _)) ->
                 let nb', sz', nbRef', tdata = aux_expr tdata mei in
                 (max nb nb', max sz sz', max nbRef nbRef', tdata)
@@ -543,26 +545,25 @@ let complete_stats ((prog : Validator.program), (stats : Mir.stats)) :
           let nb'', sz'', nbRef'', tdata = aux_expr tdata me in
           (max nb' nb'', max sz' sz'', max nbRef' nbRef'', tdata)
       | Com.Unop (_, me)
-      | Com.Var (TabAccess (_, _, me))
+      | Com.Var (TabAccess (_, me))
       | Com.Var (FieldAccess (_, me, _, _))
-      | Com.Size (Pos.Mark (TabAccess (_, _, me), _))
+      | Com.Size (Pos.Mark (TabAccess (_, me), _))
       | Com.Size (Pos.Mark (FieldAccess (_, me, _, _), _))
-      | Com.Type (Pos.Mark (TabAccess (_, _, me), _), _)
+      | Com.Type (Pos.Mark (TabAccess (_, me), _), _)
       | Com.Type (Pos.Mark (FieldAccess (_, me, _, _), _), _)
-      | Com.Attribut (Pos.Mark (TabAccess (_, _, me), _), _)
+      | Com.Attribut (Pos.Mark (TabAccess (_, me), _), _)
       | Com.Attribut (Pos.Mark (FieldAccess (_, me, _, _), _), _) ->
           aux_expr tdata me
       | Com.Comparison (_, me0, me1)
       | Com.Binop (_, me0, me1)
       | Com.SameVariable
-          ( Pos.Mark (TabAccess (_, _, me0), _),
-            Pos.Mark (TabAccess (_, _, me1), _) )
+          (Pos.Mark (TabAccess (_, me0), _), Pos.Mark (TabAccess (_, me1), _))
       | Com.SameVariable
-          ( Pos.Mark (TabAccess (_, _, me0), _),
+          ( Pos.Mark (TabAccess (_, me0), _),
             Pos.Mark (FieldAccess (_, me1, _, _), _) )
       | Com.SameVariable
           ( Pos.Mark (FieldAccess (_, me0, _, _), _),
-            Pos.Mark (TabAccess (_, _, me1), _) )
+            Pos.Mark (TabAccess (_, me1), _) )
       | Com.SameVariable
           ( Pos.Mark (FieldAccess (_, me0, _, _), _),
             Pos.Mark (FieldAccess (_, me1, _, _), _) ) ->
@@ -685,13 +686,13 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               Attribut (Pos.mark access' pos, a)
             else
               match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-              | Some l -> Literal (Float (float (Pos.unmark l)))
-              | None -> Literal Undefined)
-        | TabAccess (_, m_id, _) -> (
+              | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+              | None -> Com.mk_lit Undefined)
+        | TabAccess ((_, m_id), _) -> (
             let var = get_var dict m_id in
             match StrMap.find_opt (Pos.unmark a) (Com.Var.attrs var) with
-            | Some l -> Literal (Float (float (Pos.unmark l)))
-            | None -> Literal Undefined)
+            | Some l -> Com.mk_lit (Float (float (Pos.unmark l)))
+            | None -> Com.mk_lit Undefined)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -711,8 +712,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
             if Com.Var.is_ref var then
               let access' = translate_access p dict access in
               Size (Pos.mark access' pos)
-            else Literal (Float (float @@ Com.Var.size var))
-        | TabAccess _ -> Literal (Float 1.0)
+            else Com.mk_lit (Float (float @@ Com.Var.size var))
+        | TabAccess _ -> Com.mk_lit (Float 1.0)
         | FieldAccess (m_sp_opt, e, f, _) ->
             let m_sp_opt' =
               Option.map
@@ -741,8 +742,8 @@ let rec translate_expression (p : Validator.program) (dict : Com.Var.t IntMap.t)
               InDomain (Pos.mark access' pos, cvm)
             else if
               Com.Var.is_tgv var && Com.CatVar.Map.mem (Com.Var.cat var) cvm
-            then Literal (Float 1.0)
-            else Literal (Float 0.0)
+            then Com.mk_lit (Float 1.0)
+            else Com.mk_lit (Float 0.0)
         | _ ->
             let access' = translate_access p dict access in
             InDomain (Pos.mark access' pos, cvm))
@@ -769,16 +770,30 @@ and translate_access (p : Validator.program) (dict : Com.Var.t IntMap.t)
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let v' = get_var dict m_v in
       Com.VarAccess (m_sp_opt', v')
-  | TabAccess (m_sp_opt, m_v, m_i) ->
+  | TabAccess ((m_sp_opt, m_v), m_i) ->
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let v' = get_var dict m_v in
       let m_i' = translate_expression p dict m_i in
-      Com.TabAccess (m_sp_opt', v', m_i')
+      Com.TabAccess ((m_sp_opt', v'), m_i')
   | FieldAccess (m_sp_opt, i, f, _) ->
       let m_sp_opt' = trans_m_sp_opt m_sp_opt in
       let i' = translate_expression p dict i in
       let ef = StrMap.find (Pos.unmark f) p.prog_event_fields in
       Com.FieldAccess (m_sp_opt', i', f, ef.index)
+
+and translate_switch_expression (p : Validator.program)
+    (dict : Com.Var.t IntMap.t) = function
+  | Com.SEValue v -> Com.SEValue (translate_expression p dict v)
+  | SESameVariable v ->
+      SESameVariable (Pos.same (translate_access p dict (Pos.unmark v)) v)
+
+let translate_case (p : Validator.program) (dict : Com.Var.t IntMap.t)
+    (case : int Pos.marked Com.case) : Com.Var.t Com.case =
+  match case with
+  | CDefault -> CDefault
+  | CValue v -> CValue v
+  | CVar (Pos.Mark (acc, pos)) ->
+      CVar (Pos.mark (translate_access p dict acc) pos)
 
 (** {2 Translation of instructions} *)
 
@@ -813,12 +828,13 @@ let rec translate_prog (p : Validator.program) (dict : Com.Var.t IntMap.t)
         let instr' = Com.IfThenElse (expr, prog_then, prog_else) in
         aux (Pos.mark instr' pos :: res, dict) il
     | Pos.Mark (Com.Switch (e, l), pos) :: il ->
-        let e' = translate_expression p dict e in
+        let e' = translate_switch_expression p dict e in
         let revl', dict =
           List.fold_left
             (fun (revl, dict) (c, l) ->
+              let c' = List.map (translate_case p dict) c in
               let l', dict = aux ([], dict) l in
-              ((c, l') :: revl, dict))
+              ((c', l') :: revl, dict))
             ([], dict) l
         in
         let i' = Com.Switch (e', List.rev revl') in
@@ -1038,6 +1054,7 @@ let get_targets (p : Validator.program) (dict : Com.Var.t IntMap.t)
       let target_prog, dict =
         translate_prog p dict ref_depth itval_depth t.target_prog
       in
+      let target_stoppable = t.target_stoppable in
       let target =
         Com.
           {
@@ -1051,6 +1068,7 @@ let get_targets (p : Validator.program) (dict : Com.Var.t IntMap.t)
             target_nb_tmps;
             target_sz_tmps;
             target_nb_refs;
+            target_stoppable;
           }
       in
       (StrMap.add (Pos.unmark target_name) target targets, dict))

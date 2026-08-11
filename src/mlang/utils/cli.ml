@@ -1,18 +1,17 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2019 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** Command-line interface helpers *)
 
@@ -136,6 +135,11 @@ let roundops =
            running on a mainframe. In this case, the size of the long type has \
            to be specified; it can be either 32 or 64.")
 
+let plain_output =
+  Arg.(
+    value & flag
+    & info [ "plain_output" ] ~doc:"Do not print terminal characters.")
+
 let comparison_error_margin_cli =
   Arg.(
     value
@@ -184,13 +188,100 @@ let no_nondet_display =
           "Hides all non deterministic displays (display time, progress bar). \
            Used for cram tests.")
 
+let trace =
+  Arg.(
+    value & flag
+    & info [ "trace" ]
+        ~doc:"Controls whether the interpreter traces the execution")
+
+let trace_output_file =
+  Arg.(
+    value
+    & opt (some string) None
+    & info [ "trace_output_file" ] ~doc:"The file where the trace is stored.")
+
+let message_format_opt =
+  [
+    ("h", Config.ANSI);
+    ("human", Config.ANSI);
+    ("a", Config.ANSI);
+    ("ansi", Config.ANSI);
+    ("g", GNU);
+    ("gnu", GNU);
+  ]
+
+let message_format =
+  Arg.(
+    value
+    & opt (enum message_format_opt) Config.ANSI
+    & info [ "message_format" ] ~docv:""
+        ~doc:"Selects the message format: human/GNU")
+
+let optim_flags =
+  [
+    ("lvfa", Config.Local_vars_for_arrays);
+    ("ncur", No_check_unstoppable_rules);
+    ("nrbf", No_redundant_boolean_formulae);
+    ("sbo", Simple_binary_op);
+    ("sd", Shorten_def);
+    ("*", All_optims);
+  ]
+
+let optims =
+  Arg.(
+    value
+    & opt (list @@ enum optim_flags) [ All_optims ]
+    & info [ "optim"; "O" ] ~docv:"OPTIM"
+        ~doc:
+          "Several optimizations modify the generated C program to make it \
+           more than a simple translation. Here are the different available \
+           optimsizations: \n\
+           - 'lvfa': each rule defines local variables for the irdata accesses \
+           of the TGV;\n\
+           - 'ncur': when a rule is not stopped (because it does not have a \
+           stop instruction), does not add the subsequent check;\n\
+           - 'nrbf': removes redundant boolean formulae from OR and AND \
+           operators (when checking for variable definitions);\n\
+           - 'sbo': replaces binary operators '&&' and '||' by '&' and '|'\n\
+           - 'sd': shortens definition with basic boolean algebra\n\
+           - '*': all of the above (default).")
+
+let test_var_defs =
+  let open Arg in
+  let litteral =
+    let parser s =
+      let litteral_of_string = function
+        | "defaut" -> None
+        | "indefini" -> Some None
+        | sf -> Some (Some (float_of_string sf))
+      in
+      let err s =
+        Pp.spr
+          "@[invalid litteral \'%s\', expected \'defaut\', \'indefini\' or a \
+           float@]"
+          s
+      in
+      try Ok (litteral_of_string s) with Failure _ -> Error (err s)
+    in
+    let pp fmt = function
+      | None -> Format.pp_print_string fmt "default"
+      | Some None -> Format.pp_print_string fmt "indefini"
+      | Some (Some f) -> Format.pp_print_float fmt f
+    in
+    conv' ~docv:"LITTERAL" (parser, pp)
+  in
+  value
+  & opt_all (pair ~sep:'=' string litteral) []
+  & info [ "def"; "D" ] ~doc:"Initialise variables with values"
+
 let mlang_t f =
   Term.(
     const f $ files $ applications $ without_dgfip_m $ debug $ var_info_debug
     $ display_time $ no_print_cycles $ backend $ output $ run_all_tests
     $ dgfip_test_filter $ run_test $ mpp_function $ optimize_unsafe_float
     $ precision $ roundops $ comparison_error_margin_cli $ income_year_cli
-    $ m_clean_calls $ dgfip_options $ no_nondet_display)
+    $ m_clean_calls $ dgfip_options $ no_nondet_display $ plain_output $ trace
+    $ trace_output_file $ message_format $ optims $ test_var_defs)
 
 let info =
   let doc =
@@ -258,132 +349,103 @@ let add_prefix_to_each_line (s : string) (prefix : int -> string) =
     (fun _ -> "\n")
     (String.split_on_char '\n' s)
 
-(**{2 Markers}*)
-
-(** Prints [[INFO]] in blue on the terminal standard output *)
-let var_info_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.blue ] "[VAR INFO] "
-
-let time : float ref = ref (Unix.gettimeofday ())
-
-let initial_time : float ref = ref (Unix.gettimeofday ())
-
-let time_marker () =
-  let new_time = Unix.gettimeofday () in
-  let old_time = !time in
-  time := new_time;
-  let delta = (new_time -. old_time) *. 1000. in
-  if delta > 100. then
-    ANSITerminal.printf
-      [ ANSITerminal.Bold; ANSITerminal.black ]
-      "[TIME] %.0f ms\n" delta
+let indent_number (s : string) : int =
+  try
+    let rec aux (i : int) = if s.[i] = ' ' then aux (i + 1) else i in
+    aux 0
+  with Invalid_argument _ -> String.length s
 
 let format_with_style (styles : ANSITerminal.style list)
     (str : ('a, unit, string) format) =
-  if true (* can depend on a stylr flag *) then ANSITerminal.sprintf styles str
-  else Printf.sprintf str
+  if !Config.plain_output (* can depend on a stylr flag *) then
+    Printf.sprintf str
+  else ANSITerminal.sprintf styles str
 
-(** Prints [[DEBUG]] in purple on the terminal standard output as well as timing
-    since last debug *)
-let debug_marker (f_time : bool) =
-  if f_time then time_marker ();
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.magenta ] "[DEBUG] "
+let format_matched_line pos (line : string) (line_no : int) : string =
+  let line_indent = indent_number line in
+  let error_indicator_style = [ ANSITerminal.red; ANSITerminal.Bold ] in
+  let sline = Pos.get_start_line pos in
+  let eline = Pos.get_end_line pos in
+  let line_start_col =
+    if line_no = sline then Pos.get_start_column pos else 1
+  in
+  let line_end_col =
+    if line_no = eline then Pos.get_end_column pos else String.length line + 1
+  in
+  let line_length = String.length line + 1 in
+  line
+  ^
+  if line_no >= sline && line_no <= eline then
+    "\n"
+    ^
+    if line_no = sline && line_no = eline then
+      format_with_style error_indicator_style "%*s" (line_end_col - 1)
+        (String.make (line_end_col - line_start_col) '^')
+    else if line_no = sline && line_no <> eline then
+      format_with_style error_indicator_style "%*s" (line_length - 1)
+        (String.make (line_length - line_start_col) '^')
+    else if line_no <> sline && line_no <> eline then
+      format_with_style error_indicator_style "%*s%s" line_indent ""
+        (String.make (line_length - line_indent) '^')
+    else if line_no <> sline && line_no = eline then
+      format_with_style error_indicator_style "%*s%*s" line_indent ""
+        (line_end_col - 1 - line_indent)
+        (String.make (line_end_col - line_indent) '^')
+    else assert false (* should not happen *)
+  else ""
 
-(** Prints [[ERROR]] in red on the terminal error output *)
-let error_marker () =
-  ANSITerminal.eprintf [ ANSITerminal.Bold; ANSITerminal.red ] "[ERROR] "
+let format_lines pos lines =
+  let filename = Pos.get_file pos in
+  let sline = Pos.get_start_line pos in
+  let eline = Pos.get_end_line pos in
+  let blue_style = [ ANSITerminal.Bold; ANSITerminal.blue ] in
+  let spaces = int_of_float (log10 (float_of_int eline)) + 1 in
+  let lines =
+    List.mapi (fun i line -> format_matched_line pos line (i + sline)) lines
+  in
+  format_with_style blue_style "%*s--> %s\n%s" spaces "" filename
+    (add_prefix_to_each_line
+       (Printf.sprintf "\n%s" (String.concat "\n" lines))
+       (fun i ->
+         let cur_line = sline + i - 1 in
+         if
+           cur_line >= sline
+           && cur_line <= sline + (2 * (eline - sline))
+           && cur_line mod 2 = sline mod 2
+         then
+           format_with_style blue_style "%*d | " spaces
+             (sline + ((cur_line - sline) / 2))
+         else if cur_line >= sline && cur_line < sline then
+           format_with_style blue_style "%*d | " spaces cur_line
+         else if
+           cur_line <= sline + (2 * (eline - sline)) + 1
+           && cur_line > sline + (2 * (eline - sline)) + 1
+         then
+           format_with_style blue_style "%*d | " spaces
+             (cur_line - (eline - sline + 1))
+         else format_with_style blue_style "%*s | " spaces ""))
 
-(** Prints [[WARNING]] in yellow on the terminal standard output *)
-let warning_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.yellow ] "[WARNING] "
-
-(** Prints [[RESULT]] in green on the terminal standard output *)
-let result_marker () =
-  ANSITerminal.printf [ ANSITerminal.Bold; ANSITerminal.green ] "[RESULT] "
-
-let clocks =
-  Array.of_list [ "🕛"; "🕐"; "🕑"; "🕒"; "🕓"; "🕔"; "🕕"; "🕖"; "🕗"; "🕘"; "🕙"; "🕚" ]
-
-(** Prints [[🕛]] in blue on the terminal standard output *)
-let clock_marker i =
-  let new_time = Unix.gettimeofday () in
-  let initial_time = !initial_time in
-  let delta = new_time -. initial_time in
-  ANSITerminal.printf
-    [ ANSITerminal.Bold; ANSITerminal.blue ]
-    "[%s  %.1f s] "
-    clocks.(i mod Array.length clocks)
-    delta
-
-(**{2 Printers}*)
-
-let debug_print ?(endline = "\n") kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !debug_flag then
-    Format.kasprintf
-      (fun str ->
-        Format.printf "%a%s%s@?"
-          (fun _ -> debug_marker)
-          !Config.display_time str endline)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let var_info_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !Config.var_info_flag then
-    Format.kasprintf
-      (fun str -> Format.printf "%a%s@." (fun _ -> var_info_marker) () str)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let error_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf
-    (fun str -> Format.eprintf "%a%s@." (fun _ -> error_marker) () str)
-    kont
-
-let create_progress_bar (task : string) : (string -> unit) * (string -> unit) =
-  if !Config.no_nondet_display then (ignore, ignore)
+let retrieve_loc_text (pos : Pos.t) : string =
+  let filename = Pos.get_file pos in
+  if filename = "" then "No position information"
   else
-    let step_ticks = 5 in
-    let ticks = ref 0 in
-    let msg = ref task in
-    let stop = ref false in
-    let timer () =
-      while true do
-        if !stop then Thread.exit ();
-        ticks := !ticks + 1;
-        if !Config.display_time then clock_marker (!ticks / step_ticks);
-        Format.printf "%s" !msg;
-        flush_all ();
-        flush_all ();
-        ANSITerminal.erase ANSITerminal.Below;
-        ANSITerminal.move_bol ();
-        Unix.sleepf 0.05
-      done
+    let lines =
+      match !Config.filesystem with
+      | Contents filemap -> begin
+          match StrMap.find_opt filename filemap with
+          | None -> failwith "Pos error"
+          | Some contents ->
+              let lines = String.split_on_char '\n' contents in
+              [ List.nth lines (Pos.get_start_line pos - 1) ]
+        end
+      | Local ->
+          let get_lines =
+            match File.open_file_for_text_extraction pos with
+            | exception Sys_error _ ->
+                Format.ksprintf failwith
+                  "File not found for displaying position : %S" filename
+            | get_lines -> get_lines
+          in
+          get_lines 1
     in
-    let _ = Thread.create timer () in
-    ( (fun current_progress_msg ->
-        msg := Format.sprintf "%s: %s" task current_progress_msg),
-      fun finish_msg ->
-        stop := true;
-        result_marker ();
-        Format.printf "%s: %s" task finish_msg;
-        ANSITerminal.erase ANSITerminal.Below;
-        ANSITerminal.move_bol ();
-        Format.printf "\n";
-        time_marker () )
-
-let warning_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  if !warning_flag then
-    Format.kasprintf
-      (fun str -> Format.printf "%a%s@." (fun _ -> warning_marker) () str)
-      kont
-  else Format.ifprintf Format.std_formatter kont
-
-let result_print kont =
-  ANSITerminal.erase ANSITerminal.Eol;
-  Format.kasprintf
-    (fun str -> Format.printf "%a%s@." (fun _ -> result_marker) () str)
-    kont
+    format_lines pos lines

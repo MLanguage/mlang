@@ -1037,7 +1037,7 @@ finsi
 cible enchainement_primitif:
 application: iliad;
 variables_temporaires: EXPORTE_ERREUR;
-#afficher_erreur "traite_double_liquidation2[\n";
+#afficher_erreur "enchainement_primitif[\n";
 calculer cible trace_in;
 calculer cible ir_verif_saisie_isf;
 finalise_erreurs;
@@ -1053,10 +1053,16 @@ puis_quand nb_anomalies() = 0 faire
   calculer cible ir_verif_famille;
   finalise_erreurs;
 puis_quand nb_anomalies() = 0 faire
-  EXPORTE_ERREUR = 1;
-puis_quand nb_discordances() + nb_informatives() = 0 faire
+#  EXPORTE_ERREUR = 1;
+#puis_quand nb_discordances() + nb_informatives() = 0 faire
+  calculer cible exporte_si_non_bloquantes;
   calculer cible ir_verif_revenu;
   finalise_erreurs;
+#puis_quand nb_anomalies() = 0 faire
+#  calculer cible exporte_si_non_bloquantes;
+#  calculer cible regle_1;
+#  calculer cible verif_saisie_cohe_primitive;
+#  finalise_erreurs;
 puis_quand nb_anomalies() = 0 faire
   calculer cible exporte_si_non_bloquantes;
   calculer cible ir_calcul_primitif_isf;
@@ -1070,7 +1076,7 @@ sinon_faire
   finsi
 finquand
 calculer cible trace_out;
-#afficher_erreur "]traite_double_liquidation2\n";
+#afficher_erreur "]enchainement_primitif\n";
 
 # ???
 

@@ -1,18 +1,17 @@
-(* Copyright (C) 2019-2021 Inria, contributors: Denis Merigoux
-   <denis.merigoux@inria.fr> Raphaël Monat <raphael.monat@lip6.fr>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** Mir (for M Intermediate Representation) programs are built after being
     verified and expanded. The {!M_frontend.Mast.source_file_item}s are replaced
@@ -22,14 +21,13 @@
     - Constants have been inlined.
     - Loops (FunCallLoop, Loop) have been unrolled.
     - Chaining, domain and verification calculations have been unified into
-    Target calculations.
-    This filtering is performed by {!M_frontend.Expander}, {!M_frontend.Validator} and
-    {!M_frontend.Mast_to_mir}.
+      Target calculations. This filtering is performed by
+      {!M_frontend.Expander}, {!M_frontend.Validator} and
+      {!M_frontend.Mast_to_mir}.
 
-    The structural difference between {!M_frontend.Mast} and Mir common types are
-    the replacement of {!Mir.Com.m_var_name} by {!M_ir.Com.Var.t} and
-    {!M_frontend.Mast.error_name} by {!M_ir.Com.Error.t}.
- *)
+    The structural difference between {!M_frontend.Mast} and Mir common types
+    are the replacement of {!Mir.Com.m_var_name} by {!M_ir.Com.Var.t} and
+    {!M_frontend.Mast.error_name} by {!M_ir.Com.Error.t}. *)
 
 type set_value = Com.Var.t Com.set_value
 
@@ -64,8 +62,7 @@ type stats = {
   max_nb_args : int;
   table_map : Com.Var.t IntMap.t;
 }
-(** A set of constants relative to the program and its selected
-    applications. *)
+(** A set of constants relative to the program and its selected applications. *)
 
 type program = {
   program_safe_prefix : string;

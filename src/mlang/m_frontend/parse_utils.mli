@@ -1,27 +1,32 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** Helpers for parsing *)
+
+exception Parsing_error of { msg : string; pos : Pos.t }
 
 (** {1 Frontend variable names}*)
 
 (** A parsed variable can be a regular variable or an integer literal *)
 type parse_val = ParseVar of Com.var_name | ParseInt of int
 
+type loc = Lexing.position * Lexing.position
+
 val mk_position : Lexing.position * Lexing.position -> Pos.t
+
+val make_loc : loc -> loc
 
 val parse_variable : Lexing.position * Lexing.position -> string -> Com.var_name
 (** Checks whether the variable contains parameters *)

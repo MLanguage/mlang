@@ -1,0 +1,170 @@
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
+
+open M_ir
+
+(** Interpretation of BIR programs *)
+
+(**{1 Program values}*)
+
+(**{1 Instrumentation of the interpreter}*)
+
+(** The BIR interpreter can be instrumented to record which program locations
+    have been executed. *)
+
+val repl_debug : bool ref
+(** If set to true, prints the REPL debugger in case of runtime error *)
+
+(** {1 The interpreter functor}*)
+
+(** The intepreter is parametrized by the kind of floating-point values used for
+    the execution *)
+
+(** Signature of the modules produced by the functor *)
+module type S = sig
+  module N : Number.S
+
+  module Tracer : Tracers.S
+
+  type value = N.t Types.value
+
+  type ctx = (N.t, Tracer.ctx) Context.t
+
+  val empty_ctx :
+    ?dbg_info:Dbg_info.t ->
+    ?inputs:Com.literal Com.Var.Map.t ->
+    ?events:(Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
+    Mir.program ->
+    ctx
+  (** Creates an empty interpretation context. *)
+
+  val evaluate_expr : ctx -> Mir.expression Pos.marked -> value
+  (** Evaluates an expression. *)
+
+  val evaluate_program : ctx -> unit
+  (** Evaluates the main target of the program the context was initialized with.
+  *)
+
+  val get_dbg_info : ctx -> Dbg_info.t option
+  (** Returns the tracer debugging information, if relevant. *)
+end
+
+(** The different interpreters, which combine a representation of numbers and
+    rounding operations. The first part of the name corresponds to the
+    representation of numbers, and is one of the following:
+
+    - Float: "regular" IEE754 floating point numbers
+    - MPFR: arbitrary precision floating-point numbers using MPFR
+    - BigInt: fixed-point numbers
+    - Intv: intervals of two IEEE754 floating-point numbers
+    - Rat: rationals
+
+    The second part indicates the rounding operations to use, and is one of the
+    following:
+
+    - Def: use the default rounding operations, those of the PC/single-thread
+      context
+    - Multi: use the rouding operations of the PC/multi-thread context
+    - Mf: use the rounding operations of the mainframe context *)
+
+module Runner : sig
+  module NoTracing : sig
+    module FloatDefInterp : S
+
+    module FloatMultInterp : S
+
+    module FloatMfInterp : S
+
+    module MPFRDefInterp : S
+
+    module MPFRMultInterp : S
+
+    module MPFRMfInterp : S
+
+    module BigIntDefInterp : S
+
+    module BigIntMultInterp : S
+
+    module BigIntMfInterp : S
+
+    module IntvDefInterp : S
+
+    module IntvMultInterp : S
+
+    module IntvMfInterp : S
+
+    module RatDefInterp : S
+
+    module RatMultInterp : S
+
+    module RatMfInterp : S
+  end
+
+  module WithTracing : sig
+    module FloatDefInterp : S
+
+    module FloatMultInterp : S
+
+    module FloatMfInterp : S
+
+    module MPFRDefInterp : S
+
+    module MPFRMultInterp : S
+
+    module MPFRMfInterp : S
+
+    module BigIntDefInterp : S
+
+    module BigIntMultInterp : S
+
+    module BigIntMfInterp : S
+
+    module IntvDefInterp : S
+
+    module IntvMultInterp : S
+
+    module IntvMfInterp : S
+
+    module RatDefInterp : S
+
+    module RatMultInterp : S
+
+    module RatMfInterp : S
+  end
+end
+
+(** {1 Generic interpretation API}*)
+
+val get_interp :
+  Config.value_sort -> Config.round_ops -> trace:bool -> (module S)
+
+val evaluate_program :
+  ?dbg_info:Dbg_info.t ->
+  Mir.program ->
+  Com.literal Com.Var.Map.t ->
+  (Com.literal, Com.Var.t) Com.event_value StrMap.t list ->
+  Config.value_sort ->
+  Config.round_ops ->
+  Com.literal Com.Var.Map.t * Com.Error.Set.t * Dbg_info.t option
+(** Main interpreter function *)
+
+val evaluate_expr :
+  ?dbg_info:Dbg_info.t ->
+  Mir.program ->
+  Mir.expression Pos.marked ->
+  Config.value_sort ->
+  Config.round_ops ->
+  Com.literal
+(** Interprets only an expression *)

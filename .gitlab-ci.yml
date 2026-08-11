@@ -1,0 +1,120 @@
+stages:
+  - build
+  - deploy
+  - release
+
+create-tag:
+  stage: release
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
+  needs: ["build-static"]
+  rules: 
+    - if: '$CI_COMMIT_BRANCH == "master"'
+
+  script:
+    - git config --global --add safe.directory '*'
+    - git fetch --prune --prune-tags origin
+    - git fetch --tags
+    - echo "Latest tag:"
+    - git tag --sort=-creatordate | sed -n '1p'
+    - LATEST_TAG=$(git tag --sort=-creatordate | sed -n '1p')
+    - NEXT_TAG=$((LATEST_TAG + 1))
+    - echo "Creating tag $NEXT_TAG"
+    - curl --request POST --header "PRIVATE-TOKEN:$GITLAB_CI_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags?tag_name=$NEXT_TAG&ref=$CI_COMMIT_SHA" --fail
+    - >
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN"
+      --upload-file mlang-static.exe
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mlang/${NEXT_TAG}/mlang-static-${NEXT_TAG}.exe" --fail
+    - >
+      curl --request POST 
+      --header "PRIVATE-TOKEN: $GITLAB_CI_TOKEN" 
+      --header "Content-Type: application/json" 
+      --data "{
+        \"name\": \"Release $NEXT_TAG\",
+        \"tag_name\": \"$NEXT_TAG\",
+        \"description\": \"Automated release created via GitLab CI.\",
+        \"assets\": {
+          \"links\": [{
+            \"name\": \"mlang-static.exe\",
+            \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mlang-static/${NEXT_TAG}/mlang-static-${NEXT_TAG}.exe\"
+          }]
+        }
+      }" 
+      "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases" --fail
+
+make-doc:
+  stage: deploy
+
+  needs: ["build"]
+
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+  artifacts:
+    paths:
+      - examples/doc
+
+  script:
+    - git config --global --add safe.directory '*'
+    - make doc-deps
+    - make doc
+
+build-static:
+  stage: build
+
+  image: ocaml/opam:alpine-ocaml-4.14 
+  variables:
+    USER: root
+
+  artifacts:
+    paths:
+      - mlang-static.exe
+    expire_in: 1 day
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_MESSAGE =~ /\[build-static\]/'
+
+  script:
+    - sudo apk add --no-cache m4 perl python3 clang git build-base lzip gmp-dev gmp-static mpfr-dev libev-dev openssl-dev openssl-libs-static
+    # Bypass Git's dubious ownership security check for the CI workspace, or else opam will fail
+    - git config --global --add safe.directory '*'
+    - opam update
+    - opam install . --deps-only -y
+    - opam exec -- dune build --profile=static-release src/main_static.exe
+    - cp _build/default/src/main_static.exe mlang-static.exe
+
+build:
+  stage: build
+
+  variables:
+    OCAML_COMPILER: "4.14.2"
+#    ARTIFACTS: "artifacts/$OCAML_COMPILER"
+
+    FF_USE_FASTZIP: "true"
+    # A workaround against a bug in gitlab-runner's default
+    # unzipping implementation, which partially breaks caching for the dune _build cache.
+    # See https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27496 for more details.
+
+  rules:
+    - exists:
+        - dune-project
+
+  image: gitlab.adullact.net:4567/dgfip/impots-nationaux-revenu-patrimoine-particuliers/mlang:4.14
+
+  artifacts:
+    paths:
+      - src
+    when: on_success
+
+  script:
+    # Initialisation
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+    - git submodule init ir-calcul
+    - git submodule update ir-calcul
+    # Installation des dépendances opam
+    # Verification de l'indentation
+    - opam exec -- dune build @fmt
+    # Compilation
+    - make build
+    - make ci_tests

@@ -1,17 +1,17 @@
-(* Copyright (C) 2023-2024 DGFiP, contributor: David Declerck, Mathieu Durero
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2024 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** The Irj_checker Module is a simple entry point to use the Mlang IRJ file
     parser in order to perform syntactic checks on test files or produce other
@@ -23,8 +23,6 @@
 open Cmdliner
 open Irj_utils
 open Utils
-
-type message_format_enum = Human | GNU
 
 type validation_mode_enum = Strict | Corrective | Primitive
 
@@ -38,11 +36,10 @@ let gen_file generator test_data =
   Format.pp_print_newline out_fmt ();
   Format.pp_print_flush out_fmt ()
 
-let irj_check_file (f : string) (message_format : message_format_enum)
-    (validation_mode : validation_mode_enum)
+let irj_check_file (f : string) (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   try
-    let test_data = Irj_file.parse_file f in
+    let test_data = Irj_file.parse_input (Filename f) in
     let test_data =
       match validation_mode with
       | Primitive ->
@@ -59,7 +56,7 @@ let irj_check_file (f : string) (message_format : message_format_enum)
     in
     match transform_target with
     | None ->
-        Cli.result_print "%s: checked as %s with %d primitive codes!"
+        Ppf.result_print "%s: checked as %s with %d primitive codes!"
           test_data.nom
           (match test_data.rapp with
           | Some _ -> "corrective"
@@ -67,34 +64,29 @@ let irj_check_file (f : string) (message_format : message_format_enum)
           (List.length test_data.prim.entrees)
     | PasCalcP -> gen_file Pas_calc.gen_pas_calc_json_primitif test_data.prim
     | PasCalcC -> gen_file Pas_calc.gen_pas_calc_json_correctif test_data
-  with Errors.StructuredError (msg, pos, kont) ->
-    (match message_format with
-    | Human ->
-        Cli.error_print "There has been an error in %S: %a" f
-          Errors.format_structured_error
-    | GNU -> Format.eprintf "%a" Errors.format_structured_error_gnu_format)
-      (msg, pos);
+  with Errors.StructuredError (msg, kont) ->
+    Ppf.error_print "There has been an error in %S: %a" f
+      Ppf.format_structured_message msg;
     (match kont with None -> () | Some kont -> kont ());
     exit 123
 
-let rec irj_checker (f : string) (message_format : message_format_enum)
-    (validation_mode : validation_mode_enum)
+let rec irj_checker (f : string) (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
   if not (Sys.file_exists f) then (
-    Cli.error_print "%s: this path is not a valid file in the filesystem" f;
+    Ppf.error_print "%s: this path is not a valid file in the filesystem" f;
     exit 124);
   if Sys.is_directory f then
     Array.iter
       (fun sub ->
-        irj_checker (Filename.concat f sub) message_format validation_mode
-          transform_target)
+        irj_checker (Filename.concat f sub) validation_mode transform_target)
       (Sys.readdir f)
-  else irj_check_file f message_format validation_mode transform_target
+  else irj_check_file f validation_mode transform_target
 
-let irj_checker (f : string) (message_format : message_format_enum)
+let irj_checker (f : string) (message_format : Config.message_format)
     (validation_mode : validation_mode_enum)
     (transform_target : transformation_target) : unit =
-  irj_checker f message_format validation_mode transform_target
+  Config.message_format := message_format;
+  irj_checker f validation_mode transform_target
 
 let validation_mode_opt =
   [ ("strict", Strict); ("corrective", Corrective); ("primitive", Primitive) ]
@@ -110,12 +102,12 @@ let validation_mode =
            only the corresponding files are accepted, for instance primitive \
            file in corrective mode will raise an error.")
 
-let message_format_opt = [ ("human", Human); ("gnu", GNU) ]
+let message_format_opt = [ ("human", Config.ANSI); ("gnu", GNU) ]
 
 let message_format =
   Arg.(
     value
-    & opt (enum message_format_opt) Human
+    & opt (enum message_format_opt) Config.ANSI
     & info [ "m"; "message-format" ]
         ~doc:
           "Selects the format of error and warning messages emitted by the \

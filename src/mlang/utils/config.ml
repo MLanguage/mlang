@@ -1,3 +1,26 @@
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2025 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
+
+type optim =
+  | All_optims
+  | Local_vars_for_arrays
+  | No_check_unstoppable_rules
+  | No_redundant_boolean_formulae
+  | Simple_binary_op
+  | Shorten_def
+
 type value_sort =
   | RegularFloat
   | MPFR of int (* bitsize of the floats *)
@@ -16,6 +39,38 @@ type execution_mode =
   | Extraction
 
 type files = NonEmpty of string list
+
+type filesystem = Local | Contents of string StrMap.t
+
+type trace_output = Stdout | Stderr | Filename of string
+
+type message_format = ANSI | GNU
+
+module Err = struct
+  type config_err =
+    | Option_mpp_function_required
+    | Invalid_precision_option of string
+    | Invalid_long_size of string
+    | Invalid_message_format of string
+    | Invalid_roundops_option of string
+    | Unspecified_roundops
+    | No_m_files
+    | Cannot_display_time_and_force_nondeterministic_display
+
+  type dgfip_err =
+    | DGFiP_backend_without_DGFiP_options
+    | Invalid_term_in_dgfip_options
+    | Failed_parsing_of_dgfip_options
+    | Uncaught_exception_while_reading_dgfip_options
+
+  type t = Config of config_err | Dgfip of dgfip_err
+
+  exception T of t
+
+  let config t = raise (T (Config t))
+
+  let dgfip t = raise (T (Dgfip t))
+end
 
 (* Flags inherited from the old compiler *)
 
@@ -70,6 +125,34 @@ let comparison_error_margin = ref 0.000001
 
 let income_year = ref 0
 
+let filesystem = ref Local
+
+let plain_output = ref true
+
+let trace = ref false
+
+let trace_output = ref Stdout
+
+let message_format = ref ANSI
+
+let optims = ref [ All_optims ]
+
+let optim_activated o =
+  List.exists (function All_optims -> true | o' -> o = o') !optims
+
+let optim_local_var_for_arrays () = optim_activated Local_vars_for_arrays
+
+let optim_no_check_unstoppable () = optim_activated No_check_unstoppable_rules
+
+let optim_no_redundant_boolean_formulae () =
+  optim_activated No_redundant_boolean_formulae
+
+let optim_simple_binary_op () = optim_activated Simple_binary_op
+
+let optim_shorten_def () = optim_activated Shorten_def
+
+let test_var_defs = ref StrMap.empty
+
 let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (debug_ : bool) (var_info_debug_ : string list) (display_time_ : bool)
     (no_print_cycles_ : bool) (output_file_ : string option)
@@ -78,7 +161,9 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
     (value_sort_ : value_sort) (round_ops_ : round_ops) (backend_ : backend)
     (dgfip_test_filter_ : bool) (mpp_function_ : string)
     (dgfip_flags_ : Dgfip_options.flags) (execution_mode_ : execution_mode)
-    (no_nondet_display_ : bool) =
+    (no_nondet_display_ : bool) (plain_output_ : bool) (trace_ : bool)
+    (trace_output_ : trace_output) (message_format_ : message_format)
+    (optims_ : optim list) (var_defs : (string * float option option) list) =
   source_files := files_;
   application_names := applications_;
   without_dgfip_m := without_dgfip_m_;
@@ -98,13 +183,15 @@ let set_all_arg_refs (files_ : files) applications_ (without_dgfip_m_ : bool)
   mpp_function := mpp_function_;
   dgfip_flags := dgfip_flags_;
   no_nondet_display := no_nondet_display_;
-  match output_file_ with
-  | None -> ()
-  | Some o -> (
-      output_file := o;
-      match comparison_error_margin_ with
-      | None -> ()
-      | Some m -> comparison_error_margin := m)
+  plain_output := plain_output_;
+  trace := trace_;
+  trace_output := trace_output_;
+  Option.iter (( := ) output_file) output_file_;
+  Option.iter (( := ) comparison_error_margin) comparison_error_margin_;
+  message_format := message_format_;
+  optims := optims_;
+  test_var_defs :=
+    List.fold_left (fun r (s, v) -> StrMap.add s v r) StrMap.empty var_defs
 
 let process_dgfip_options (backend : backend) ~(application_names : string list)
     (dgfip_options : string list option) =
@@ -116,18 +203,21 @@ let process_dgfip_options (backend : backend) ~(application_names : string list)
       dgfip_options
   in
   match (backend, opts) with
-  | Dgfip_c, None ->
-      `Error "When using the DGFiP backend, DGFiP options MUST be provided."
+  | Dgfip_c, None -> Err.(dgfip DGFiP_backend_without_DGFiP_options)
   | Dgfip_c, Some (Ok (`Ok v)) -> `Dgfip_options v
   | UnknownBackend, None -> `Dgfip_options Dgfip_options.default_flags
   | UnknownBackend, Some (Ok (`Ok _)) ->
       (* warning_print "Backend unknown, discarding dgfip_options."; *)
       `Dgfip_options Dgfip_options.default_flags
   | _, Some (Ok `Help) | _, Some (Ok `Version) -> `Dgfip_options_version
-  | _, Some (Error `Term) -> `Error "Invalid term in --dgfip_options"
-  | _, Some (Error `Parse) -> `Error "Failed parsing of --dgfip_options"
+  | _, Some (Error `Term) ->
+      Err.dgfip Invalid_term_in_dgfip_options
+      (* `Error "Invalid term in --dgfip_options" *)
+  | _, Some (Error `Parse) -> Err.dgfip Failed_parsing_of_dgfip_options
+  (* `Error "Failed parsing of --dgfip_options" *)
   | _, Some (Error `Exn) ->
-      `Error "Uncaught exception while reading --dgfip_options"
+      Err.dgfip Uncaught_exception_while_reading_dgfip_options
+(* `Error "Uncaught exception while reading --dgfip_options" *)
 
 let set_opts ~(files : string list) ~(application_names : string list)
     ~(without_dgfip_m : bool) ~(debug : bool) ~(var_info_debug : string list)
@@ -138,11 +228,11 @@ let set_opts ~(files : string list) ~(application_names : string list)
     ~(precision : string option) ~(roundops : string option)
     ~(comparison_error_margin : float option) ~(income_year : int)
     ~(m_clean_calls : bool) ~(dgfip_options : string list option)
-    ~(no_nondet_display : bool) :
-    [ `Run | `Displayed_dgfip_help | `Error of string ] =
-  let exception INTERNAL_FAIL of string in
+    ~(no_nondet_display : bool) ~(plain_output : bool) ~(trace : bool)
+    ~(trace_output_file : string option) ~(message_format : message_format)
+    ~(optims : optim list) ~(var_defs : (string * float option option) list) :
+    [ `Run | `Displayed_dgfip_help | `Error of Err.t ] =
   let exception DGFIP_HELP in
-  let err m = Format.kasprintf (fun s -> raise (INTERNAL_FAIL s)) m in
   try
     (* Reading backend first because we need it for parsing dgfip_flags *)
     let backend =
@@ -152,12 +242,11 @@ let set_opts ~(files : string list) ~(application_names : string list)
       match process_dgfip_options backend ~application_names dgfip_options with
       | `Dgfip_options_help -> raise DGFIP_HELP
       | `Dgfip_options_version -> raise DGFIP_HELP
-      | `Error m -> err "%s" m
       | `Dgfip_options f -> f
     in
     let mpp_function =
       match mpp_function with
-      | None -> err "Option --mpp_function required"
+      | None -> Err.config Option_mpp_function_required
       | Some m -> m
     in
     let value_sort =
@@ -179,7 +268,7 @@ let set_opts ~(files : string list) ~(application_names : string list)
             in
             BigInt (int_of_string fixpoint_prec)
           else if precision = "mpq" then Rational
-          else err "Unkown precision option: %s" precision
+          else Err.config (Invalid_precision_option precision)
     in
     let round_ops =
       match roundops with
@@ -193,9 +282,9 @@ let set_opts ~(files : string list) ~(application_names : string list)
             in
             match int_of_string mf_long_size with
             | (32 | 64) as sz -> ROMainframe sz
-            | _ -> err "Invalid long size for mainframe: %s" mf_long_size
-          else err "Unknown roundops option: %s" roundops
-      | None -> err "Unspecified roundops@."
+            | _ -> Err.config (Invalid_long_size mf_long_size)
+          else Err.config (Invalid_roundops_option roundops)
+      | None -> Err.config Unspecified_roundops
     in
     let execution_mode =
       match (run_tests, run_test) with
@@ -205,19 +294,26 @@ let set_opts ~(files : string list) ~(application_names : string list)
     in
     let files =
       match List.length files with
-      | 0 -> err "please provide at least one M source file"
+      | 0 -> Err.config No_m_files
       | _ -> NonEmpty files
     in
     let () =
       if display_time && no_nondet_display then
-        err "Cannot display time and forcing deterministic display"
+        Err.config Cannot_display_time_and_force_nondeterministic_display
+    in
+    let trace_output_file =
+      match trace_output_file with
+      | None | Some "stdout" -> Stdout
+      | Some "stderr" -> Stderr
+      | Some fname -> Filename fname
     in
     set_all_arg_refs files application_names without_dgfip_m debug
       var_info_debug display_time print_cycles output optimize_unsafe_float
       m_clean_calls comparison_error_margin income_year value_sort round_ops
       backend dgfip_test_filter mpp_function dgfip_flags execution_mode
-      no_nondet_display;
+      no_nondet_display plain_output trace trace_output_file message_format
+      optims var_defs;
     `Run
   with
-  | INTERNAL_FAIL m -> `Error m
   | DGFIP_HELP -> `Displayed_dgfip_help
+  | Err.T t -> `Error t

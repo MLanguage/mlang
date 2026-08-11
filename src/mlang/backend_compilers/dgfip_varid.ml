@@ -1,20 +1,21 @@
-(* Copyright (C) 2019 Inria, contributor: David Declerck
-   <david.declerck@ocamlpro.com>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (* TGV variables accessors *)
+
+type varinfo = Com.Var.t
 
 let gen_tab = function
   | Com.CatVar.LocInput -> "saisie"
@@ -28,8 +29,9 @@ let gen_tgv_def (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
       let sp = Com.get_normal_var @@ Pos.unmark m_sp in
       Pp.spr "(irdata->def_%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
   | None ->
-      Pp.spr "(irdata->var_spaces[irdata->var_space].def_%s[%d/*%s*/])" tab
-        l.loc_idx vn
+      if Utils.Config.optim_local_var_for_arrays () then
+        Pp.spr "(def_%s[%d/*%s*/])" tab l.loc_idx vn
+      else Pp.spr "(irdata->def_%s[%d/*%s*/])" tab l.loc_idx vn
 
 let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   let tab = gen_tab l.loc_cat in
@@ -38,8 +40,9 @@ let gen_tgv_val (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
       let sp = Com.get_normal_var @@ Pos.unmark m_sp in
       Pp.spr "(irdata->%s_%s[%d/*%s*/])" tab sp l.loc_idx vn
   | None ->
-      Pp.spr "(irdata->var_spaces[irdata->var_space].%s[%d/*%s*/])" tab
-        l.loc_idx vn
+      if Utils.Config.optim_local_var_for_arrays () then
+        Pp.spr "(%s[%d/*%s*/])" tab l.loc_idx vn
+      else Pp.spr "(irdata->%s[%d/*%s*/])" tab l.loc_idx vn
 
 let gen_tgv_def_ptr (m_sp_opt : Com.var_space) (l : Com.loc_tgv) vn =
   Pp.spr "&%s" (gen_tgv_def m_sp_opt l vn)
@@ -160,6 +163,22 @@ let gen_var_space_id_opt = function
   | None -> "(irdata->var_space)"
   | Some (_, i_sp) -> Pp.spr "%d" i_sp
 
+let gen_var_space = function
+  | None -> "(irdata->current_var_space)"
+  | Some (_, i_sp) -> Pp.spr "irdata->var_spaces[%d]" i_sp
+
+let gen_var_space_var (m_sp_opt : Com.var_space) (v : Com.Var.t) =
+  match v.loc with
+  | LocTgv _ | LocTmp _ -> gen_var_space m_sp_opt
+  | LocRef (_, i) -> (
+      match m_sp_opt with
+      | None ->
+          Pp.spr
+            "(irdata->var_spaces[irdata->refs[irdata->refs_org + \
+             %d].var_space])"
+            i
+      | Some (_, i_sp) -> Pp.spr "irdata->var_spaces[%d]" i_sp)
+
 let gen_var_space_id (m_sp_opt : Com.var_space) (v : Com.Var.t) =
   match v.loc with
   | LocTgv _ | LocTmp _ -> gen_var_space_id_opt m_sp_opt
@@ -167,3 +186,11 @@ let gen_var_space_id (m_sp_opt : Com.var_space) (v : Com.Var.t) =
       match m_sp_opt with
       | None -> Pp.spr "(irdata->refs[irdata->refs_org + %d].var_space)" i
       | Some (_, i_sp) -> Pp.spr "%d" i_sp)
+
+let gen_typ = function
+  | Com.Boolean -> "TYPE_BOOLEEN"
+  | DateYear -> "TYPE_DATE_AAAA"
+  | DateDayMonthYear -> "TYPE_DATE_JJMMAAAA"
+  | DateMonth -> "TYPE_DATE_MM"
+  | Integer -> "TYPE_ENTIER"
+  | Real -> "TYPE_REEL"

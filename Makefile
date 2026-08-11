@@ -38,4 +38,8 @@ clean: FORCE remise_a_zero_versionnage
 	$(call make_in,$(DGFIP_DIR),clean_backend_all)
 	rm -f doc/doc.html
 	rm -rf examples/doc 
+	rm -f $(INTERP_PROGRESS)
+	rm -f $(MLANG_HASH)
 	dune clean
+
+ci_tests: test_cram tests test_irj test_dgfip_c_backend

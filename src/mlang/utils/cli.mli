@@ -1,18 +1,17 @@
-(* Copyright (C) 2019-2021 Inria, contributor: Denis Merigoux
-   <denis.merigoux@inria.fr>
-
-   This program is free software: you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see <https://www.gnu.org/licenses/>. *)
+(******************************************************************************)
+(*                                                                            *)
+(* Droit d'auteur (c) 2021 - 2026 DGFiP - INRIA                               *)
+(*                                                                            *)
+(* Ce programme est distribué sous la licence CeCILL-C: vous pouvez le        *)
+(* redistribuer et/ou le modifier sous les contraintes de celle-ci.           *)
+(*                                                                            *)
+(* L'accessibilité au code source et les droits de copie, de modification et  *)
+(* de redistribution qui découlent de ce contrat ont pour contrepartie de     *)
+(* n'offrir aux utilisateurs qu'une garantie limitée et de ne faire peser sur *)
+(* l'auteur du logiciel, le titulaire des droits patrimoniaux et les          *)
+(* concédants successifs qu'une responsabilité restreinte.                    *)
+(*                                                                            *)
+(******************************************************************************)
 
 (** Command-line interface helpers *)
 
@@ -40,6 +39,12 @@ val mlang_t :
   bool ->
   string list option ->
   bool ->
+  bool ->
+  bool ->
+  string option ->
+  Config.message_format ->
+  Config.optim list ->
+  (string * float option option) list ->
   'a) ->
   'a Cmdliner.Term.t
 (** Mlang binary command-line arguments parsing function *)
@@ -51,25 +56,8 @@ val add_prefix_to_each_line : string -> (int -> string) -> string
 (** [add_prefix_to_each_line msg prefix] will print msg but each line with line
     number [i] starts with the string [prefix i]*)
 
-(**{2 Printers}*)
-
-val format_with_style :
-  ANSITerminal.style list -> ('a, unit, string) format -> 'a
-
-(** All the printers below print their argument after the correct marker *)
-
-val var_info_print : ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val debug_print :
-  ?endline:string -> ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val warning_print : ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val error_print : ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val result_print : ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val create_progress_bar : string -> (string -> unit) * (string -> unit)
-(** Returns two functions: the first one, [current_progress], has to be called
-    during the progress loop and the other one, [finish], has to be called at
-    the end of the progressive task. *)
+val retrieve_loc_text : Pos.t -> string
+(** [retrieve_loc_text pos] reads the source file associated with [pos] and
+    returns a formatted string of the code at that location, with the exact
+    columns highlighted. This is used to display code snippets in error
+    messages. *)
